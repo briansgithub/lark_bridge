@@ -1,0 +1,40 @@
+[21028.881816] Bluetooth: hci0: Frame reassembly failed (-84)
+[21028.881882] Bluetooth: hci0: Frame reassembly failed (-84)
+[21028.881968] Bluetooth: hci0: Frame reassembly failed (-84)
+[21067.461411] Bluetooth: hci0: Frame reassembly failed (-84)
+[21067.461473] Bluetooth: hci0: Frame reassembly failed (-84)
+[21067.461487] Bluetooth: hci0: Frame reassembly failed (-84)
+[21067.461595] Bluetooth: hci0: Frame reassembly failed (-84)
+[21067.461701] Bluetooth: hci0: Frame reassembly failed (-84)
+[21067.461783] Bluetooth: hci0: Frame reassembly failed (-84)
+[21067.461868] Bluetooth: hci0: Frame reassembly failed (-84)
+[21067.461932] Bluetooth: hci0: Frame reassembly failed (-84)
+[21732.320589] Bluetooth: hci0: Frame reassembly failed (-84)
+[21732.320666] Bluetooth: hci0: Frame reassembly failed (-84)
+[21732.320757] Bluetooth: hci0: Frame reassembly failed (-84)
+[21732.320839] Bluetooth: hci0: Frame reassembly failed (-84)
+[21732.320923] Bluetooth: hci0: Frame reassembly failed (-84)
+[21732.321012] Bluetooth: hci0: Frame reassembly failed (-84)
+[21732.321097] Bluetooth: hci0: Frame reassembly failed (-84)
+[21796.637851] Bluetooth: hci0: command 0x0405 tx timeout
+[21836.862069] Bluetooth: hci0: command 0x0405 tx timeout
+[21911.646423] Bluetooth: hci0: command 0x0405 tx timeout
+[21940.755883] Bluetooth: hci0: Frame reassembly failed (-84)
+[21940.756144] Bluetooth: hci0: Frame reassembly failed (-84)
+[21944.094588] Bluetooth: hci0: command 0x0405 tx timeout
+[21949.182597] Bluetooth: hci0: command 0x0405 tx timeout
+[21951.198603] Bluetooth: hci0: command 0x0405 tx timeout
+[21953.214649] Bluetooth: hci0: command 0x0405 tx timeout
+[21956.254653] Bluetooth: hci0: command 0x0405 tx timeout
+[21964.318691] Bluetooth: hci0: command 0x0405 tx timeout
+[21971.326746] Bluetooth: hci0: Opcode 0x0c03 failed: -110
+[21978.398733] Bluetooth: hci0: Opcode 0x0c03 failed: -110
+[21982.782764] Bluetooth: hci0: Opcode 0x0c03 failed: -110
+[21990.252047] Bluetooth: hci0: BCM: chip id 94
+[21990.252541] Bluetooth: hci0: BCM: features 0x2e
+[21990.255659] Bluetooth: hci0: BCM43430A1
+[21990.255670] Bluetooth: hci0: BCM43430A1 (001.002.009) build 0000
+[21990.255850] Bluetooth: hci0: BCM43430A1 'brcm/BCM43430A1.raspberrypi,3-model-b.hcd' Patch
+[21991.051923] Bluetooth: hci0: BCM: features 0x2e
+[21991.055092] Bluetooth: hci0: BCM43438A1 37.4MHz Raspberry Pi 3-0141
+[21991.055108] Bluetooth: hci0: BCM43430A1 (001.002.009) build 0508
