@@ -56,9 +56,26 @@ reapply_sco_routing() {
 finish() {
   reapply_sco_routing
   log "restarting the audio session so bluez endpoints re-register"
-  su - "${BRIDGE_USER:-admin}" -c \
-    'export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl --user restart wireplumber' 2>/dev/null \
-    || warn "could not restart wireplumber; do it manually"
+  # `su -` starts a login shell that may not see the user's systemd manager, so this
+  # silently did nothing: the adapter came back UP but with NO bluez endpoints
+  # registered, which looks like a half-successful recovery and is worse than a clean
+  # failure. Address the user instance explicitly instead.
+  local u uid
+  u="${BRIDGE_USER:-admin}"
+  uid="$(id -u "$u" 2>/dev/null || echo 1000)"
+  runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$uid" \
+      systemctl --user restart wireplumber 2>/dev/null \
+    || warn "could not restart wireplumber; run: systemctl --user restart wireplumber"
+
+  # Verify the endpoints actually came back. Without them the radio is up but the
+  # bridge is deaf, and nothing else in the system will tell you.
+  sleep 4
+  if bluetoothctl show 2>/dev/null | grep -qE '0000110a|0000111e'; then
+    log "bluez endpoints re-registered"
+  else
+    warn "adapter is up but NO A2DP/HFP endpoints are registered — audio will not work"
+    warn "  run: systemctl --user restart wireplumber   (as $u)"
+  fi
   log "RECOVERED at rung $1"
   exit 0
 }

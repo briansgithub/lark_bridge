@@ -1260,6 +1260,7 @@ Score = probability × impact, both 1–5.
 | R14 | Provisioning drifts from reality as Raspberry Pi OS updates | 3 | 2 | 6 | Pin the OS image in docs; `00-preflight.sh` refuses unknown kernel/OS combos | M13 |
 | R15 | **arduino-pico/Adafruit_TinyUSB fights custom UAC descriptors** | 3 | 3 | 9 | Arduino-API-free sources + dual build front-ends (ADR-0008); static descriptors via a custom class driver; CMake escape hatch is always green in CI | M9.1 gate, F1 |
 | R16 | Committed `i2s_slave.pio.h` drifts from `i2s_slave.pio` | 2 | 3 | 6 | `make pio` + CI diff check; header carries a "generated, do not edit" banner | CI `pico.yml` |
+| **R17** | **Controller wedges when a 2nd device is paged during active SCO** | 4 | 5 | **20** | Establish BOTH links before any call starts; bt-reset.sh rung 6 recovers; fall back to Mode 1W | **E07** |
 
 R1 and R2 are the two that can change the shape of the project. Both are resolved in the first two
 days by spikes S1 and S3, before any product code exists. That ordering is the main reason this plan
