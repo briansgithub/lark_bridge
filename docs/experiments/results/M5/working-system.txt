@@ -1,0 +1,101 @@
+=== WORKING MODE 1W SYSTEM — evidence capture 2026-08-16T21:38:26Z ===
+
+--- Bluetooth link ---
+	> ACL 5C:33:7B:CB:BF:C5 handle 11 state 1 lm PERIPHERAL AUTH ENCRYPT 
+	> eSCO 5C:33:7B:CB:BF:C5 handle 6 state 1 lm PERIPHERAL 
+
+--- SCO routing (must be 01 = Transport) ---
+  01 1D FC 00 01 02 00 01 01 
+
+--- negotiated codec / air mode ---
+(link already established; see E01 for Transparent/mSBC evidence)
+
+--- SCO throughput, 10 s ---
+downlink rx: +1337 pkt   uplink tx: +1338 pkt   (mSBC nominal 1330/10s)
+
+--- signal graph ---
+alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo:capture_FL
+  |-> input.bridge.mic:input_FL
+alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo:capture_FR
+  |-> input.bridge.mic:input_FR
+bluez_input.5C_33_7B_CB_BF_C5.0:output_FL
+  |-> input.bridge.callout:input_FL
+bluez_input.5C_33_7B_CB_BF_C5.0:output_FR
+  |-> input.bridge.callout:input_FR
+--
+output.bridge.mic:output_FL
+  |-> bluez_output.5C_33_7B_CB_BF_C5.1:input_FL
+output.bridge.mic:output_FR
+  |-> bluez_output.5C_33_7B_CB_BF_C5.1:input_FR
+--
+output.bridge.callout:output_FL
+  |-> alsa_output.usb-Generic_AB13X_USB_Audio_202405280846-00.analog-stereo:playback_FL
+output.bridge.callout:output_FR
+  |-> alsa_output.usb-Generic_AB13X_USB_Audio_202405280846-00.analog-stereo:playback_FR
+
+--- Android routing ---
+{
+  "audio_mode_requested": "MODE_IN_COMMUNICATION",
+  "audio_mode_actual": "MODE_IN_COMMUNICATION",
+  "audio_mode_owner": "- Mode: MODE_IN_COMMUNICATION",
+  "sco_audio_state": "SCO_STATE_ACTIVE_INTERNAL",
+  "sco_audio_mode": "SCO_MODE_VIRTUAL_CALL",
+  "active_communication_device": {
+    "role": "output",
+    "type": "bt_sco_hs",
+    "addr": "B8:27:EB:43:8D:51",
+    "name": "larkbridge"
+  },
+  "computed_preferred_communication_device": {
+    "role": "output",
+    "type": "bt_sco_hs",
+    "addr": "B8:27:EB:43:8D:51",
+    "name": "larkbridge"
+  },
+  "applied_preferred_communication_device": {
+    "role": "output",
+    "type": "bt_sco_hs",
+    "addr": "B8:27:EB:43:8D:51",
+    "name": "larkbridge"
+  },
+  "connected_devices": [
+    {
+      "raw": "[DeviceInfo: type:0x20 (bt_sco_hs) name:larkbridge addr:B8:27:EB:43:8D:51 codec: 0 sensorUuid: null disabled modes: {}]",
+      "group": "connected"
+    },
+    {
+      "raw": "[DeviceInfo: type:0x80000008 (bt_sco_hs) name:larkbridge addr:B8:27:EB:43:8D:51 codec: 0 sensorUuid: null disabled modes: {}]",
+      "group": "connected"
+    }
+  ],
+  "recent_mode_changes": [
+    {
+      "ts": "08-15 22:03:19:234",
+      "mode": "MODE_IN_COMMUNICATION",
+      "pkg": "com.discord"
+    },
+    {
+      "ts": "08-15 22:03:26:537",
+      "mode": "MODE_NORMAL",
+      "pkg": "com.discord"
+    },
+    {
+      "ts": "08-16 17:04:20:844",
+      "mode": "MODE_IN_COMMUNICATION",
+      "pkg": "com.discord"
+    }
+  ],
+  "bluetooth_events": [
+    "08-16 17:24:21:827 BT profile service: disconnecting HEADSET profile",
+    "08-16 17:24:21:827 BT profile service: disconnecting HEADSET profile",
+    "08-16 17:24:21:842 BT profile service: disconnecting HEARING_AID profile",
+    "08-16 17:24:21:843 BT profile service: disconnecting HEARING_AID profile",
+    "08-16 17:24:21:862 BT profile service: disconnecting LE_AUDIO profile",
+    "08-16 17:24:21:862 BT profile service: disconnecting LE_AUDIO profile",
+    "08-16 17:24:23:902 BT profile service: connecting HEADSET profile",
+    "08-16 17:24:23:999 BT profile service: connecting LE_AUDIO profile",
+    "08-16 17:24:24:006 BT profile service: connecting HEARING_AID profile",
+    "08-16 17:24:24:006 BT profile service: connecting A2DP profile"
+  ],
+  "raw_lines_matched": 25
+}

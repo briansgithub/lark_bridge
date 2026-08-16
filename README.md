@@ -13,9 +13,9 @@ full-duplex USB headset — while splitting the microphone and playback sides be
                                      └── Pi Pico ──USB──► Pixel 7a       (Mode 2)
 ```
 
-**Status: bring-up in progress.** Spikes **S1 and S2 pass on real hardware** — Android routes a
-live call to the Pi over Bluetooth SCO with mSBC wideband. 15 hardware tests pass. Spike S3
-(HFP + A2DP on one radio) is the remaining gate. See
+**Status: Mode 1W works end to end.** Speaking into the Lark A1 is heard by Discord on the
+Pixel 7a, through the bridge, over HFP with **mSBC wideband**. Spikes S1 and S2 pass; 15
+hardware tests pass. Spike S3 (HFP + A2DP on one radio) is the remaining gate. See
 [`docs/BRINGUP-REPORT.md`](docs/BRINGUP-REPORT.md) for what is proven and what broke;
 [`PLAN.md`](PLAN.md) for the architecture.
 

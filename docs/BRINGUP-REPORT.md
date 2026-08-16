@@ -3,8 +3,39 @@
 First session on real hardware. Written for whoever picks this up next, including the
 mistakes, because several of them are traps that would otherwise be walked into again.
 
-**Headline: the project's two highest-scoring risks are closed, both favourably.** Android
-routes a live Discord call's audio to the Pi over Bluetooth SCO with mSBC wideband.
+---
+
+## THE PROJECT'S CORE PREMISE IS PROVEN
+
+**Mode 1W works end to end.** Speaking into the Lark A1 transmitter is heard by Discord on
+the Pixel 7a, through the bridge:
+
+```
+Lark A1 transmitter ──2.4 GHz──► Lark receiver ──USB──► Pi
+   └─► bridge.mic ─► HFP/mSBC over eSCO ─► Pixel 7a ─► Discord
+Pixel ─► HFP downlink ─► bridge.callout ─► USB DAC (wired output)
+```
+
+Confirmed by the operator ("Discord is registering my voice through the bridge") and
+corroborated objectively — evidence in `docs/experiments/results/M5/working-system.txt`:
+
+| Measurement | Value |
+|---|---|
+| Link | eSCO, **mSBC wideband**, Transparent air mode, 60-byte frames |
+| SCO throughput | **rx +1337 / tx +1338 packets per 10 s** — mSBC nominal 1330, symmetric |
+| Tone injected into the Lark | −18.4 dBFS at the bridge input, 19.1 dB SNR, no clipping |
+| Android `active_communication_device` | `bt_sco_hs` **larkbridge** (also `computed` and `applied`) |
+| SCO routing | `0x01` Transport |
+
+This satisfies acceptance criterion 1 in `PLAN.md` §14 — *the far end hears the Lark, not the
+phone's built-in microphone* — for VoIP. Native cellular is still untested (SIM reports
+`LOADED,NOT_READY`).
+
+**Milestone M5 (Stage C: Lark → HFP uplink) achieved.**
+
+---
+
+**Also: the project's two highest-scoring risks are closed, both favourably.**
 
 ---
 
