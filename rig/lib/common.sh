@@ -89,8 +89,14 @@ pi_host() { inv pi_host larkbridge; }
 # Every invocation is a fresh SSH connection: Windows OpenSSH has no ControlMaster,
 # and the calling agent's shell is stateless anyway. BatchMode means a missing key
 # fails loudly instead of hanging on a password prompt.
+#
+# XDG_RUNTIME_DIR is exported for EVERY command, not just the ones that obviously need
+# it. A non-login ssh session does not get it, and without it `systemctl --user` and
+# `systemd-run --user` silently target the wrong (or no) manager. That cost a debugging
+# round: a detached soak appeared to launch and then reported "unit could not be found".
 pi() {
-  ssh -o BatchMode=yes -o ConnectTimeout=10 "$(pi_host)" "$@"
+  ssh -o BatchMode=yes -o ConnectTimeout=10 "$(pi_host)" \
+    "export XDG_RUNTIME_DIR=/run/user/\$(id -u); $*"
 }
 
 pi_sudo() {
