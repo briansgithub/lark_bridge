@@ -1,0 +1,49 @@
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- PlatformIO / pico-sdk --------------------------------------------------
+.pio/
+pico/build/
+pico/test/host/build/
+*.uf2
+*.elf
+*.bin
+*.hex
+*.map
+# NOTE: pico/i2s/*.pio.h is GENERATED but INTENTIONALLY COMMITTED — PlatformIO
+# cannot run pioasm. See ADR-0008 and risk R16. Do not add it here.
+
+# --- Build / IDE ------------------------------------------------------------
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# --- Test + diagnostic output ------------------------------------------------
+artifacts/
+*.btsnoop
+*.pcap
+tests/**/result.json
+tests/**/out/
+# Curated experiment evidence IS tracked — it is the project's memory.
+!docs/experiments/results/**
+
+# --- Local secrets / machine-specific ---------------------------------------
+config/bridge.toml
+*.local
+*.bridge.bak
+
+# --- OS ---------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

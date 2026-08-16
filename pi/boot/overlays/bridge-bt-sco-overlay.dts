@@ -1,0 +1,64 @@
+/*
+ * bridge-bt-sco — route SCO audio over the HCI transport on the Pi 3B's BCM43438.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * The BCM43438's PCM/I2S audio pins are not routed to anything on the Raspberry Pi 3B
+ * PCB. Broadcom controllers default to sending SCO (voice) audio out those pins, so on
+ * this board HFP/HSP audio goes nowhere and the profile appears to connect but is silent.
+ * That is the most likely root cause of raspberrypi/linux#2229, open since 2017.
+ *
+ * The kernel's Broadcom Bluetooth binding exposes the vendor command
+ * Write_SCO_PCM_Int_Param (OGF 0x3F, OCF 0x1C) as a five-byte device-tree property:
+ *
+ *     brcm,bt-pcm-int-params = <sco-routing pcm-interface-rate frame-type sync-mode clock-mode>
+ *
+ *     sco-routing        : 0 = PCM, 1 = Transport (HCI), 2 = Codec, 3 = I2S
+ *     pcm-interface-rate : 0 = 128 kbps, 1 = 256, 2 = 512, 3 = 1024, 4 = 2048
+ *     frame-type         : 0 = short, 1 = long
+ *     sync-mode          : 0 = slave, 1 = master
+ *     clock-mode         : 0 = slave, 1 = master
+ *
+ * We set 01 02 00 01 01 => route SCO to the HCI transport, 512 kbps, short frame,
+ * sync master, clock master. Only the first byte really matters for our purpose; the
+ * remaining four are the conventional Broadcom defaults and are ignored once routing
+ * is Transport.
+ *
+ * IMPORTANT CAVEAT — READ BEFORE RELYING ON THIS
+ * ----------------------------------------------
+ * This property is only honoured when the KERNEL drives the controller through serdev
+ * (the hci_bcm/btbcm driver binding to the DT node). If Raspberry Pi OS is still
+ * attaching the chip from userspace via hciuart.service -> btuart -> hciattach, the
+ * kernel never reads this node and the overlay does nothing.
+ *
+ * Spike S1 (tests/stage-b-hfp/s1-sco-over-hci.sh) determines which mechanism is in play
+ * and writes the answer to artifacts/.../attach-mechanism.txt. Run it BEFORE assuming
+ * this overlay is the fix. The runtime fallback that works either way is:
+ *
+ *     sudo tools/bt/hci_vendor_cmd.py --sco-routing-transport
+ *
+ * which is what bridge-btfw.service uses in production.
+ *
+ * BUILD + INSTALL
+ *     dtc -@ -I dts -O dtb -o bridge-bt-sco.dtbo bridge-bt-sco-overlay.dts
+ *     sudo cp bridge-bt-sco.dtbo /boot/firmware/overlays/
+ *     # then add to /boot/firmware/config.txt:
+ *     dtoverlay=bridge-bt-sco
+ *
+ * Reference: Documentation/devicetree/bindings/net/broadcom-bluetooth.yaml
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2837";
+
+	fragment@0 {
+		target = <&bt>;
+		__overlay__ {
+			/* Five bytes, in the order documented above. */
+			brcm,bt-pcm-int-params = [ 01 02 00 01 01 ];
+		};
+	};
+};

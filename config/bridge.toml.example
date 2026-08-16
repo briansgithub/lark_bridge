@@ -1,0 +1,115 @@
+# rpi-lark-bridge — user configuration
+#
+# Copy to config/bridge.toml and edit. config/bridge.toml is gitignored because it
+# contains your hardware's MAC addresses.
+#
+# Everything here is keyed on STABLE IDENTIFIERS — MAC addresses and udev properties —
+# never on hci0, hw:1 or card 2, which renumber across reboots and replugs.
+
+[bridge]
+# bluetooth       Mode 1  — call over HFP, audio out over A2DP.        Gated on spike S3.
+# bluetooth-wired Mode 1W — call over HFP, audio out over a USB DAC.   RECOMMENDED DEFAULT.
+# usb             Mode 2  — Lark -> Pi -> Pico -> Pixel as a USB headset.
+# diagnostics     Mode 3  — no policy, raw devices exposed.
+mode = "bluetooth-wired"
+
+# Friendly name the Pixel shows in its Bluetooth list.
+name = "LarkBridge"
+
+# Start in this mode at boot. Set false to come up in diagnostics and switch by hand.
+autostart = true
+
+
+[devices.phone]
+# The Pixel 7a. Find it with: bluetoothctl devices
+address = "AA:BB:CC:DD:EE:FF"
+# The Pi does NOT chase the phone with connect attempts — Android reconnects to trusted
+# headsets aggressively and racing it causes collisions. We stay connectable and wait.
+# One gentle attempt is allowed if the phone is known-present and silent for this long.
+connect_after_idle_seconds = 60
+
+
+[devices.output]
+# Bluetooth headphones or car stereo. Only used in mode = "bluetooth".
+address = "11:22:33:44:55:66"
+# The Pi DOES initiate to this one, with exponential backoff.
+reconnect = true
+
+
+[devices.lark]
+# The Hollyland receiver, matched by udev rather than by card number.
+# Fill these in from milestone M1 (Stage A):  lsusb  and  udevadm info
+usb_vendor_id  = ""     # e.g. "3302"
+usb_product_id = ""     # e.g. "1001"
+# Optional: pins the match to one specific unit if you own more than one.
+usb_serial     = ""
+
+
+[devices.wired_output]
+# The USB audio dongle used in mode = "bluetooth-wired". Leave the IDs empty to fall back
+# to the Pi's 3.5 mm jack — but note that requires dtparam=audio=on, which the installer
+# turns off by default. A dongle is strongly preferred; the Pi 3B's PWM audio is poor.
+usb_vendor_id  = ""     # e.g. "0d8c"  (C-Media CM108, the usual suspect)
+usb_product_id = ""     # e.g. "013c"
+use_headphone_jack = false
+
+
+[audio]
+# Graph rate. Fixed at 48 kHz by ADR-0007 — changing it is a design decision, not a tweak.
+rate = 48000
+# Quantum in frames. 1024 @ 48 kHz = 21.3 ms. Milestone M8 tunes this DOWN with XRUN
+# counts as the gate. Do not lower it speculatively.
+quantum = 1024
+# Microphone gain in dB applied at the bridge.mic loopback, NOT at the device mixer —
+# device mixers disappear on replug, node volumes do not.
+mic_gain_db = 0.0
+mic_muted = false
+# Call audio volume in dB at the bridge.callout loopback.
+output_gain_db = 0.0
+
+
+[audio.sidetone]
+# Hear your own voice in the output. Off by default; some people find it essential and
+# others find it maddening.
+enabled = false
+level_db = -20.0
+
+
+[audio.aec]
+# Acoustic echo cancellation. Not needed with headphones — there is no acoustic loop.
+# Turn on for the car-speaker case. See PLAN.md §5.5; enabling this is a config change,
+# not a re-plumb, because the loopbacks are already insertion points.
+enabled = false
+
+
+[bluetooth]
+# Prefer wideband speech (mSBC, 16 kHz) over CVSD (8 kHz). If the phone or controller
+# refuses, the link silently falls back — which is why bridgectl always reports the
+# codec actually in use. A silent CVSD fallback is the usual cause of "why does this
+# sound like 1995".
+prefer_msbc = true
+# Disable onboard 2.4 GHz Wi-Fi to reduce coexistence pressure on the shared radio die.
+# This is a MEASURED variable in stage E, not folklore — test both ways.
+disable_wifi = true
+
+
+[usb]
+# Mode 2 only.
+# 2 = UAC2 (default), 1 = UAC1 fallback. Which one Android accepts is decided empirically
+# at milestone M9.3 on the actual Pixel — see ADR-0005.
+uac_version = 2
+# Where call audio goes once it arrives back from the Pico.
+# "wired" | "bluetooth" | "jack" | "none"
+return_path = "wired"
+
+
+[diagnostics]
+# journald is always used. This raises verbosity.
+log_level = "info"          # debug | info | warn | error
+# Diagnostic PCM taps are explicit and time-boxed by default. Recording call audio has
+# consent and legal implications that vary by jurisdiction — see PLAN.md §15 Q5.
+allow_persistent_recording = false
+max_tap_seconds = 120
+# Health check cadence and how aggressively the recovery ladder may climb.
+health_interval_seconds = 5
+recovery_rung_cooldown_seconds = 300
