@@ -47,3 +47,7 @@ config/bridge.toml
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Bench-specific: MACs, host details
+rig/inventory.toml
+rig/adb/platform-tools/

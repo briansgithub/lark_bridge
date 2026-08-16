@@ -1,0 +1,51 @@
+# rig/inventory.toml — the physical lab, as it actually is.
+#
+# Copy to rig/inventory.toml and fill in. That file is gitignored: it holds MAC
+# addresses and host specifics for one bench.
+#
+# Rule for this file: identifiers must be STABLE. Hostnames, MACs and USB port paths
+# survive reboots and replugs; `hw:1`, `card 2` and `hci0` indices do not.
+
+# ---------------------------------------------------------------- control plane
+
+pi_host       = "larkbridge"          # matches the Host entry in ~/.ssh/config
+pi_ip         = "192.168.0.251"       # informational; ssh_config carries the real one
+pi_user       = "admin"
+pi_repo_path  = "~/rpi-lark-bridge"
+
+# Pixel 7a. Leave phone_serial empty if only one device is ever attached.
+# `adb devices` shows a USB serial; wireless shows <ip>:<port>, which changes on reboot,
+# so prefer the USB serial here and let connect.sh rediscover the wireless endpoint.
+phone_serial  = ""
+phone_wifi_ssid = "abridge-village_5G"   # 5 GHz on purpose - see the plan's RF rationale
+
+# ---------------------------------------------------------------- audio hardware
+#
+# Cheap dongles frequently share a serial number, so they are identified by USB PORT
+# PATH. Once set, do not move them between ports. `rig unit U11` prints the paths.
+
+lark_usb_id       = ""       # "vid:pid" from lsusb, filled in by U10
+lark_port_path    = ""
+
+dongle_a_port_path = ""      # DUT output  - Mode 1W wired call audio
+dongle_b_port_path = ""      # INSTRUMENT  - out drives the speaker, in captures the BT receiver
+
+# ---------------------------------------------------------------- bluetooth
+
+bt_receiver_mac = ""         # A2DP sink: both the "headphones" under test AND the capture tap
+pixel_bt_mac    = ""         # the phone, as an HFP Audio Gateway
+
+# ---------------------------------------------------------------- pico
+
+pico_swd_swdio_gpio = 24     # matches openocd's shipped interface/raspberrypi-swd.cfg
+pico_swd_swclk_gpio = 25
+pico_run_gpio       = 26     # hard reset
+pico_vbus_sense_gpio = 23    # tells "unplugged from phone" apart from "firmware crashed"
+
+# ---------------------------------------------------------------- measurement
+
+# Written by `rig calibrate` (U13/U15). Any DUT result below these is reported as
+# "below rig resolution", never as a measurement.
+cal_noise_floor_dbfs   = ""
+cal_loopback_latency_ms = ""
+cal_acoustic_snr_db     = ""

@@ -53,10 +53,46 @@ only read when the kernel drives the chip via serdev. If `hciuart.service` is at
 chip from userspace with `hciattach`, the overlay is a dead end and only the runtime vendor
 command can work. **Record this before choosing a fix.**
 
+## Partial result — attach mechanism resolved 2026-08-16 (no BT hardware needed)
+
+The branching question ("is the device-tree route even viable, or is the chip attached from
+userspace?") is **answered, favourably**, from the running system:
+
+```
+$ cat /sys/class/bluetooth/hci0/device/uevent
+DRIVER=hci_uart_bcm
+OF_NAME=bluetooth
+OF_FULLNAME=/soc/serial@7e201000/bluetooth
+OF_COMPATIBLE_0=brcm,bcm43438-bt
+
+$ systemctl is-enabled hciuart.service
+not-found
+```
+
+- **The kernel binds the controller via serdev** (`hci_uart_bcm` on `serial0-0`).
+  `hciuart.service` does not exist on this image at all — the userspace `hciattach` path is
+  gone. **Therefore `brcm,bt-pcm-int-params` in a device-tree overlay WILL be read**, and
+  `pi/boot/overlays/bridge-bt-sco-overlay.dts` is the correct production fix rather than a
+  possible dead end.
+- **`brcm,bt-pcm-int-params` is absent from the live device tree.** The node carries only
+  `compatible`, `fallback-bd-address`, `local-bd-address`, `max-speed`, `name`, `phandle`,
+  `shutdown-gpios`, `status`. So SCO routing sits at the **firmware default**, which on a Pi 3B
+  means the PCM pins — and those go nowhere on this PCB. This is exactly the failure mode
+  `PLAN.md` §2.1 predicted, now confirmed as the starting condition rather than inferred.
+
+Measured baseline: Debian 13 trixie, kernel **6.18.34+rpt-rpi-v8** (newer than the 6.12 the plan
+assumed), aarch64, Raspberry Pi 3 Model B **Rev 1.2**, bluez **5.82**, pipewire **1.4.2**,
+wireplumber **0.5.8**.
+
+**What this does not answer:** whether setting the property actually makes SCO data flow. The
+btstack-dev thread reports the vendor command being accepted but ineffective on some BCM43438
+firmware. That still requires the runs below.
+
 ## Runs
 
 | # | Date | Variant | Attach mechanism | SCO TX | SCO RX | Air mode | Verdict | Artifacts |
 |---|---|---|---|---|---|---|---|---|
+| 0 | 2026-08-16 | pre-flight, no BT peer | **serdev / `hci_uart_bcm`**; `bt-pcm-int-params` **absent** | — | — | — | DT route viable | `artifacts/U0*` |
 | 1 | | baseline | | | | | | |
 | 2 | | `--apply-vendor-cmd` | | | | | | |
 | 3 | | DT overlay `bridge-bt-sco` | | | | | | |

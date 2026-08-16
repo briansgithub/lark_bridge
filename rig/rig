@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# rig — control-plane CLI for the rpi-lark-bridge test rig.
+#
+# Runs on the dev PC. Every invocation is stateless and self-contained, because the
+# agent driving it has no persistent shell and a 10-minute command ceiling. Anything
+# that could exceed that must go through `rig soak`, which runs detached on the Pi.
+
+set -euo pipefail
+# shellcheck source=lib/common.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
+
+usage() {
+  cat >&2 <<'EOF'
+rig — closed-loop test rig for rpi-lark-bridge
+
+CONTROL
+  rig doctor                 one-screen health summary of the whole rig
+  rig pi <cmd...>            run a command on the Pi
+  rig phone <cmd...>         adb passthrough
+  rig sync                   copy the repo to the Pi
+  rig setup-adb              download + extract platform-tools on this PC
+
+HARDWARE LADDER
+  rig unit <id>              run one unit test   (U01, U10, U40 ...)
+  rig unit all               run in dependency order, stop at first failure
+  rig unit list              show the ladder
+
+PHONE
+  rig phone-state            dumpsys audio -> normalised JSON
+  rig phone-shot [file]      screencap PNG
+  rig phone-call <number>    place a call
+  rig phone-hangup
+
+PICO
+  rig pico flash <file>      flash over SWD (no BOOTSEL)
+  rig pico reset             pulse RUN
+  rig pico console           UART console
+
+MEASUREMENT
+  rig calibrate              U13 + U15; writes the rig's error floor to inventory.toml
+  rig soak start <stage>     detached long test on the Pi
+  rig soak status [id]
+  rig soak collect <id>
+
+Exit codes: 0 pass · 1 fail · 78 hardware absent (paused, not failed)
+EOF
+  exit "${1:-1}"
+}
+
+[ $# -ge 1 ] || usage
+
+cmd="$1"; shift || true
+
+case "$cmd" in
+
+  doctor)      exec "$RIG_ROOT/tests/doctor.sh" "$@" ;;
+
+  pi)          require_pi; exec ssh -o BatchMode=yes "$(pi_host)" "$@" ;;
+  phone)       require_phone; exec "$(adb_bin)" "$@" ;;
+  sync)        require_pi; pi_sync ;;
+
+  setup-adb)   exec "$RIG_ROOT/adb/setup.sh" "$@" ;;
+
+  unit)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      list)
+        printf '%-6s %s\n' ID DESCRIPTION
+        for f in "$RIG_ROOT"/tests/unit/U*.sh; do
+          [ -e "$f" ] || continue
+          id="$(basename "$f" .sh)"
+          desc="$(awk -F'— *' '/^# U[0-9]+ —/{print $2; exit}' "$f")"
+          printf '%-6s %s\n' "$id" "$desc"
+        done
+        ;;
+      all)
+        rc=0
+        for f in "$RIG_ROOT"/tests/unit/U*.sh; do
+          [ -e "$f" ] || continue
+          if ! "$f"; then
+            rc=$?
+            if [ "$rc" -eq 78 ]; then
+              warn "ladder paused at $(basename "$f" .sh) — hardware not connected"
+            else
+              err "ladder stopped at $(basename "$f" .sh)"
+            fi
+            exit "$rc"
+          fi
+        done
+        ok "entire ladder passed"
+        ;;
+      '') usage ;;
+      *)
+        f="$RIG_ROOT/tests/unit/${sub}.sh"
+        [ -x "$f" ] || die "no such unit test: $sub  (try: rig unit list)"
+        exec "$f" "$@"
+        ;;
+    esac
+    ;;
+
+  phone-state)  require_phone; exec "$RIG_ROOT/adb/audio-state.sh" "$@" ;;
+  phone-shot)   require_phone; exec "$RIG_ROOT/adb/screencap.sh" "$@" ;;
+  phone-call)   require_phone; exec "$RIG_ROOT/adb/call.sh" place "$@" ;;
+  phone-hangup) require_phone; exec "$RIG_ROOT/adb/call.sh" hangup ;;
+
+  pico)
+    sub="${1:-}"; shift || true
+    require_pi
+    case "$sub" in
+      flash)   exec "$RIG_ROOT/tests/pico-flash.sh" "$@" ;;
+      reset)   pi "sudo pinctrl set $(inv pico_run_gpio 26) op dl && sleep 0.1 && sudo pinctrl set $(inv pico_run_gpio 26) ip"
+               ok "pulsed RUN — Pico reset" ;;
+      console) pi "sudo stty -F /dev/serial0 115200 raw -echo && sudo cat /dev/serial0" ;;
+      *)       usage ;;
+    esac
+    ;;
+
+  calibrate)   exec "$RIG_ROOT/tests/unit/U13.sh" "$@" ;;
+
+  soak)
+    sub="${1:-}"; shift || true
+    require_pi
+    case "$sub" in
+      start)   exec "$RIG_ROOT/pi/soak/start.sh" "$@" ;;
+      status)  exec "$RIG_ROOT/pi/soak/status.sh" "$@" ;;
+      collect) exec "$RIG_ROOT/pi/soak/collect.sh" "$@" ;;
+      *)       usage ;;
+    esac
+    ;;
+
+  -h|--help|help) usage 0 ;;
+  *)              die "unknown command: $cmd  (try: rig --help)" ;;
+esac
