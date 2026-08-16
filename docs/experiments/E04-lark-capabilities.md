@@ -41,15 +41,49 @@ content.
 
 | # | Date | Rates offered | Formats | Channels | Verdict |
 |---|---|---|---|---|---|
-| 1 | | | | | |
+| 1 | 2026-08-16 | **48000 only** | S16_LE, S24_3LE | 2 (bit-identical) | CONFIRMED |
 
 ## Result
 
-_(fill in — paste the `--dump-hw-params` output verbatim, it is the primary evidence)_
+`3547:0407` "Shenzhen Hollyland Technology Wireless Microphone", USB port `1-1.3`.
+
+```
+FORMAT:   S16_LE S24_3LE
+CHANNELS: 2
+RATE:     48000
+```
+
+| Measurement | Value |
+|---|---|
+| Sample rate | **48 000 Hz, fixed** — no other rate offered |
+| Formats | S16_LE, S24_3LE |
+| Channels | 2, but **bit-identical** (max difference **0 LSB** across a 5 s capture) |
+| Idle noise floor | −50.6 dBFS RMS, −39.3 dBFS peak (room + preamp) |
+| Mixer controls | **none** — only a read-only `Capture Channel Map` |
 
 ## Verdict
 
-_(fill in)_
+**CONFIRMED, and favourably.**
+
+1. **48 kHz is fixed and matches ADR-0007's graph rate exactly.** There is therefore **zero
+   resampling at the first hop**, and the assumption the whole audio architecture rests on is
+   now measured rather than assumed. ADR-0007 stands unchanged.
+2. **The stereo stream is mono duplicated.** Both channels are bit-identical, so the receiver
+   carries one microphone into two channels. The graph should take a single channel; a downmix
+   would be harmless but pointless, and there is no risk of the 6 dB loss that downmixing a
+   correlated pair would otherwise imply.
+3. **No device-side gain control exists.** This confirms the plan's decision to apply microphone
+   gain on the PipeWire `bridge.mic` node — that turned out to be the only available option, not
+   a stylistic preference. Device mixers also vanish on replug, node volumes do not.
+4. The receiver exposes **capture only**, with no playback endpoint — exactly the Android
+   limitation this whole project exists to work around, now confirmed at the source.
+
+### Not yet answered
+
+Whether the transmitter applies internal AGC or noise gating. Not visible from descriptors; it
+would show up as non-linearity in an acoustic level sweep. The U15 acoustic sweep was linear at
+~1 dB per volume step over 30 dB, which is **weak evidence against** aggressive AGC, but that
+sweep was not designed to test it. Worth a dedicated run before trusting absolute levels.
 
 ## Consequences for the plan
 

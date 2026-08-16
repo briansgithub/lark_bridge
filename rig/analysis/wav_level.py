@@ -118,6 +118,18 @@ def analyse(path: str, tone: float | None, skip_start: float = 0.5) -> dict:
 
         out["per_channel"].append(info)
 
+    # Are the channels carrying the same signal? A mono source duplicated into a stereo
+    # stream looks like stereo to ALSA but carries no stereo information. That changes
+    # how the graph should treat it: taking one channel is correct, whereas downmixing a
+    # genuine stereo pair would lose content.
+    if ch == 2:
+        a, b = allv[0::2], allv[1::2]
+        n_cmp = min(len(a), len(b))
+        if n_cmp:
+            maxdiff = max(abs(a[i] - b[i]) for i in range(n_cmp))
+            out["channels_identical"] = maxdiff == 0
+            out["channel_max_diff_lsb"] = maxdiff
+
     return out
 
 
