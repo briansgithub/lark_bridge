@@ -26,28 +26,26 @@ entirely. That is a report about a configuration we deliberately avoid (ADR-0006
 in a user session), on unknown versions, so it may not apply to us at all — but it lands
 directly on our critical path, and the cost of finding out empirically is one afternoon.
 
-## The role naming, settled from source
+## The role naming, settled by MEASUREMENT (2026-08-16)
 
-This is the single easiest thing to get backwards on this project. Values in
-`bluez5.roles` describe the **remote device**, not us:
+`bluez5.roles` names the role **this machine plays**. Verified by setting each value and reading
+back `bluetoothctl show`:
 
-| Value | Remote is | We act as | Want? |
+| Config value | Adapter advertises | Pi acts as | Want? |
 |---|---|---|---|
-| `hfp_ag` | Audio Gateway (the Pixel) | **Hands-Free unit** | ✅ |
-| `hfp_hf` | Hands-Free unit (a headset) | Audio Gateway | ❌ |
-| `a2dp_sink` | Sink (headphones) | **A2DP Source** | ✅ |
-| `a2dp_source` | Source (a phone) | A2DP Sink | ❌ |
+| `a2dp_source` | Audio Source `0000110a` | **A2DP Source** | YES |
+| `a2dp_sink` | Audio Sink `0000110b` | A2DP Sink | no |
+| `hfp_hf` | Handsfree `0000111e` | **HFP Hands-Free** | YES |
+| `hfp_ag` | Handsfree AG `0000111f` | Audio Gateway | no |
+| `hsp_hs` | Headset `00001108` | HSP Headset | fallback |
 
-Evidence: `spa_bt_profile_from_uuid()` maps the remote's advertised UUID `0000111e` to
-`SPA_BT_PROFILE_HFP_HF`, and `backend-native.c` then dispatches the **AG** state machine
-for that profile:
+Working config: **`bluez5.roles = [ a2dp_source hfp_hf hsp_hs ]`**, which yields
+`Audio Source` + `Handsfree` + `Headset` on the adapter — exactly the three roles this
+project needs.
 
-```c
-case SPA_BT_PROFILE_HFP_HF: rfcomm_process_events(rfcomm, buf, true, rfcomm_hfp_ag);
-```
-
-So our config uses **`hfp_ag`** to become the hands-free unit. Confirming this empirically
-via `sdptool browse local` is part 1 of the experiment.
+**Correction:** an earlier revision claimed the opposite convention, inferred from
+`spa_bt_profile_from_uuid()`. That function maps a REMOTE device's UUIDs and does not govern
+this key. Part 1 of this experiment is therefore already answered, empirically.
 
 ## Method
 

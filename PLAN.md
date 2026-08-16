@@ -660,29 +660,33 @@ only in the car-speaker case. Leave room, don't build it:
 
 ### 6.1 The naming convention you must internalise first
 
-PipeWire's `bluez5.roles` values are named **from the remote device's perspective**, which is the
-opposite of what most people assume and the single easiest way to misconfigure this project.
-Confirmed from upstream source: `spa_bt_profile_from_uuid()` maps the *remote's advertised* UUID
-`0000111e` (HFP HF) → `SPA_BT_PROFILE_HFP_HF`, and `backend-native.c` then runs the **AG** state
-machine for that profile (`case SPA_BT_PROFILE_HFP_HF: rfcomm_process_events(..., rfcomm_hfp_ag)`)
-[DOC].
+`bluez5.roles` names the role **this machine plays**. **[TEST — measured 2026-08-16]**, by setting
+each value and reading back what the adapter advertises via `bluetoothctl show`:
 
-| `bluez5.roles` value | Remote device is | **Pi acts as** | Use here |
+| `bluez5.roles` value | Adapter then advertises | **Pi acts as** | Use here |
 |---|---|---|---|
-| `hfp_ag` | Audio Gateway (the Pixel) | **HFP Hands-Free** | ✅ required for the phone |
-| `hfp_hf` | Hands-Free unit (a headset) | Audio Gateway | ❌ disable |
-| `hsp_ag` | HSP Audio Gateway | HSP Headset | ✅ keep as fallback |
-| `hsp_hs` | HSP Headset | HSP AG | ❌ disable |
-| `a2dp_sink` | A2DP Sink (headphones) | **A2DP Source** | ✅ required for output |
-| `a2dp_source` | A2DP Source (a phone streaming) | A2DP Sink | ❌ disable — stops Android pushing media at us |
+| `a2dp_source` | Audio Source `0000110a` | **A2DP Source** | ✅ required — streams to headphones |
+| `a2dp_sink` | Audio Sink `0000110b` | A2DP Sink | ❌ disable — stops Android pushing media at us |
+| `hfp_hf` | Handsfree `0000111e` | **HFP Hands-Free** | ✅ required for the phone |
+| `hfp_ag` | Handsfree AG `0000111f` | Audio Gateway | ❌ disable |
+| `hsp_hs` | Headset `00001108` | HSP Headset | ✅ keep as fallback |
+| `hsp_ag` | Headset AG `00001112` | HSP AG | ❌ disable |
 | `bap_*` | LE Audio | — | ❌ disable (Pi 3 is BR/EDR-era) |
+
+So the working configuration is **`bluez5.roles = [ a2dp_source hfp_hf hsp_hs ]`**.
+
+> **Correction.** Earlier revisions of this plan asserted the opposite, remote-perspective
+> convention, inferred from `spa_bt_profile_from_uuid()` and `backend-native.c` in the PipeWire
+> source. **That inference was wrong** — those map a *remote* device's advertised UUIDs and do not
+> govern this config key. The table above is measured on the actual hardware. Where a documented
+> inference and a measurement disagree, the measurement wins.
 
 ### 6.2 Target configuration
 
 `pi/wireplumber/wireplumber.conf.d/50-bridge-bluez.conf`:
 ```
 monitor.bluez.properties = {
-  bluez5.roles              = [ hfp_ag hsp_ag a2dp_sink ]
+  bluez5.roles              = [ a2dp_source hfp_hf hsp_hs ]
   bluez5.hfphsp-backend     = "native"
   bluez5.enable-msbc        = true
   bluez5.enable-sbc-xq      = false      # latency > fidelity for call audio
@@ -981,7 +985,7 @@ to be throwaway; their deliverable is a document in `docs/experiments/`, not pro
 - **Objective:** confirm PipeWire's native backend registers UUID `0000111e` and completes service
   level connection with an Android AG; confirm no WirePlumber instability in the HF path.
 - **Files:** `docs/experiments/E02-hfp-hf-role.md`, a scratch WirePlumber conf
-- **Test:** set `bluez5.roles = [ hfp_ag hsp_ag a2dp_sink ]`; `sdptool browse local` shows Handsfree
+- **Test:** set `bluez5.roles = [ a2dp_source hfp_hf hsp_hs ]`; `sdptool browse local` shows Handsfree
   (not Handsfree AG); pair from the Pixel; verify Android's Bluetooth settings shows "Phone calls"
   available; check `wpctl status` for `bluez_input/bluez_output ... handsfree-head-unit` nodes;
   run 30 min with repeated call start/stop watching for WirePlumber restarts.

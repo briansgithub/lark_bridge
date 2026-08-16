@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # Spike S2 — Can this Pi act as an HFP *Hands-Free* unit for the Pixel (not an Audio Gateway)?
 #
-# The single easiest way to lose a week on this project is to get the role naming backwards.
-# PipeWire's bluez5.roles values are named from the REMOTE device's perspective, confirmed in
-# upstream source: spa_bt_profile_from_uuid() maps the remote's advertised UUID 0000111e
-# (HFP HF) to SPA_BT_PROFILE_HFP_HF, and backend-native.c then runs the *AG* state machine
-# for that profile. So:
+# bluez5.roles names the role WE play. Measured 2026-08-16 by setting each value and reading
+# back what the adapter advertises in `bluetoothctl show`:
 #
-#     hfp_ag   => remote is the Audio Gateway (the Pixel)  => WE are the Hands-Free unit  <-- want
-#     hfp_hf   => remote is a Hands-Free unit (a headset)  => WE are the Audio Gateway    <-- not this
-#     a2dp_sink   => remote is a sink (headphones)         => WE are the A2DP Source      <-- want
-#     a2dp_source => remote is a source (a phone)          => WE are the A2DP Sink        <-- not this
+#     a2dp_source => adapter advertises Audio Source 0000110a => we stream to headphones <-- want
+#     a2dp_sink   => adapter advertises Audio Sink   0000110b => we receive from a phone <-- not this
+#     hfp_hf      => adapter advertises Handsfree    0000111e => we are the HF unit      <-- want
+#     hfp_ag      => adapter advertises Handsfree AG 0000111f => we are the gateway      <-- not this
+#     hsp_hs      => adapter advertises Headset      00001108 => HSP fallback
+#
+# An earlier version of this script claimed the opposite (remote-perspective) convention,
+# inferred from spa_bt_profile_from_uuid(). That function maps a REMOTE device's UUIDs and does
+# not govern this config key. The table above is measured.
 #
 # This spike verifies (a) that we register UUID 0000111e, (b) that an Android AG completes a
 # service level connection with us, and (c) that WirePlumber survives it. Point (c) is not
