@@ -13,9 +13,11 @@ full-duplex USB headset — while splitting the microphone and playback sides be
                                      └── Pi Pico ──USB──► Pixel 7a       (Mode 2)
 ```
 
-**Status: pre-implementation.** The architecture, risks and milestones are specified in
-[`PLAN.md`](PLAN.md). Three hardware spikes (S1–S3) gate everything else — see
-[Getting started](#getting-started).
+**Status: bring-up in progress.** Spikes **S1 and S2 pass on real hardware** — Android routes a
+live call to the Pi over Bluetooth SCO with mSBC wideband. 15 hardware tests pass. Spike S3
+(HFP + A2DP on one radio) is the remaining gate. See
+[`docs/BRINGUP-REPORT.md`](docs/BRINGUP-REPORT.md) for what is proven and what broke;
+[`PLAN.md`](PLAN.md) for the architecture.
 
 ---
 
@@ -63,8 +65,7 @@ latency on the audio you hear, and differs from Mode 1 by one config string. See
 
 ## Getting started
 
-Nothing here is built yet. The first work is **three timeboxed spikes**, because two of them can
-change the shape of the project and both are answerable in a day:
+The rig drives the Pi over SSH and the phone over ADB. **S1 and S2 are done**; S3 is next:
 
 ```bash
 sudo ./tests/stage-b-hfp/s1-sco-over-hci.sh        # Does SCO reach the host at all on this radio?
