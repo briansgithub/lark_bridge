@@ -1,6 +1,6 @@
 # E01 — Do SCO audio packets cross the HCI transport on the Pi 3B's BCM43438?
 
-- **Status:** Not started — **run this first, before any other work on hardware**
+- **Status:** **CONCLUDED 2026-08-16 — RESOLVED, risk R2 closed**
 - **Resolves risk:** R2 (probability 3, impact 5, score 15)
 - **Gates milestone:** M4, and therefore the entire Bluetooth track
 - **Script:** `tests/stage-b-hfp/s1-sco-over-hci.sh`
@@ -132,13 +132,89 @@ Copy the artifact directories into `docs/experiments/results/E01/`. **Commit the
 `.btsnoop` files** — they are the evidence, and if the verdict is negative they are what
 justifies the limitation report the brief asks for rather than a design workaround.
 
-## Result
+## Result — measured 2026-08-16, during a live Discord call on the Pixel 7a
 
-_(fill in)_
+The controller powers up with **`sco_routing = 0x00` (PCM)**, read directly:
+
+```
+$ sudo hcitool -i hci0 cmd 0x3f 0x1d          # Read_SCO_PCM_Int_Param
+  01 1D FC 00  00 02 00 01 01
+               ^^ sco_routing = 0x00 = PCM
+```
+
+The BCM43438's PCM pins are not connected to anything on the Pi 3B PCB, so received SCO audio
+goes to a dead interface. **The resulting failure is asymmetric**, which is what makes it so
+easy to misdiagnose:
+
+| `sco_routing` | SCO Data **TX** | SCO Data **RX** | `hciconfig` sco counters |
+|---|---|---|---|
+| `0x00` PCM (default) | 4866 packets | **0 packets** | `rx: 0` / `tx: 5060` |
+| `0x01` Transport (fixed) | 7328 packets | **14656 packets** | `rx: 15831` / `tx: 19122` |
+
+Host→controller SCO still transmits over the air, so **the microphone direction appears to work
+while call audio from the phone silently never arrives.** SCO is a synchronous circuit — packets
+flow continuously regardless of speech — so RX = 0 is absence, not silence.
+
+The fix is a single vendor command, and the controller accepts it:
+
+```
+$ sudo hcitool -i hci0 cmd 0x3f 0x1c 0x01 0x02 0x00 0x01 0x01
+  01 1C FC 00                                  # status 0x00 success
+$ sudo hcitool -i hci0 cmd 0x3f 0x1d
+  01 1D FC 00  01 02 00 01 01                  # routing now 0x01 Transport
+```
+
+### Link quality achieved
+
+From the `Synchronous Connect Complete` event:
+
+```
+Link type: eSCO (0x02)          Transmission interval: 0x0c
+RX/TX packet length: 60          Retransmission window: 0x04
+Air mode: Transparent (0x03)
+```
+
+and the codec negotiation over RFCOMM:
+
+```
+AT+BAC=1,2,3   ->  +BCS: 2  ->  AT+BCS=2
+```
+
+**Codec 2 = mSBC.** Transparent air mode with 60-byte frames is exactly wideband speech, so the
+uplink quality ceiling is **16 kHz, not 8 kHz CVSD**. That is the best case the plan hoped for.
+
+### Android's view, concurrently
+
+```
+SCO state          : SCO_STATE_ACTIVE_INTERNAL
+active comm device : bt_sco_hs  larkbridge
+audio mode         : MODE_IN_COMMUNICATION  (owner: com.discord)
+```
+
+Android routed a live Discord call's audio to the Pi over Bluetooth SCO.
+
+With routing fixed, PipeWire finally exposes both HFP nodes:
+`bluez_input.5C_33_7B_CB_BF_C5.0` and `bluez_output.5C_33_7B_CB_BF_C5.1`. **This also answers
+the question left open in E02**: the HFP card materialises only once an SCO transport exists.
 
 ## Verdict
 
-_(CONFIRMED / REFUTED / INCONCLUSIVE)_
+**CONFIRMED — SCO data crosses the HCI transport in both directions, with mSBC wideband, once
+`sco_routing` is set to Transport.**
+
+Verdict code: `SCO_OK` (with `--apply-vendor-cmd`). Baseline without the fix: `SCO_HALF_DUPLEX`.
+
+## Production fix
+
+`bridge-btfw.service` + `/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh`, installed and
+enabled `WantedBy=bluetooth.service`. It is idempotent, and it **verifies the read-back** rather
+than assuming the write took — the btstack-dev thread describes firmware that accepts this
+command and ignores it. Tested both ways: no-ops when already correct, and repairs when forced
+back to PCM.
+
+The device-tree route (`brcm,bt-pcm-int-params` in `bridge-bt-sco-overlay.dts`) remains viable —
+the kernel binds via serdev — but is not needed now that the runtime unit is proven, and the
+runtime unit works regardless of attach mechanism.
 
 ## Consequences for the plan
 
