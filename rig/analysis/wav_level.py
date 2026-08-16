@@ -51,7 +51,7 @@ def dbfs(x: float) -> float:
     return -200.0 if x <= 0 else 20.0 * math.log10(x)
 
 
-def analyse(path: str, tone: float | None) -> dict:
+def analyse(path: str, tone: float | None, skip_start: float = 0.5) -> dict:
     with wave.open(path, "rb") as w:
         ch, width, rate, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
         raw = w.readframes(n)
@@ -62,8 +62,21 @@ def analyse(path: str, tone: float | None) -> dict:
     total = len(raw) // 2
     allv = struct.unpack(f"<{total}h", raw[: total * 2])
 
+    # Analyse only the STEADY portion. A capture that begins before playback has
+    # started contains leading silence, which scales the Goertzel magnitude down and
+    # makes the tone look ~3 dB quieter than its own peak — which then makes the
+    # residual calculation subtract almost the entire signal and collapse SNR to ~0 dB.
+    # Every statistic uses the same window so they stay mutually consistent.
+    skip = int(rate * max(skip_start, 0.0)) * ch
+    if skip < total:
+        allv = allv[skip:]
+    analysed = len(allv) // ch
+
     out: dict = {"file": path, "rate": rate, "channels": ch, "frames": n,
-                 "duration_s": round(n / rate, 3) if rate else 0, "per_channel": []}
+                 "duration_s": round(n / rate, 3) if rate else 0,
+                 "skip_start_s": skip_start,
+                 "analysed_s": round(analysed / rate, 3) if rate else 0,
+                 "per_channel": []}
 
     for c in range(ch):
         v = allv[c::ch]
@@ -84,13 +97,24 @@ def analyse(path: str, tone: float | None) -> dict:
         }
 
         if tone:
-            # Use at most 1 s: Goertzel is O(n) in Python and this is a Pi 3.
-            seg = norm[: min(len(norm), rate)]
-            amp = goertzel(seg, rate, tone)
+            # Use a whole number of tone cycles, up to 1 s: Goertzel is O(n) in pure
+            # Python and this is a Pi 3. A whole-cycle window also avoids spectral
+            # leakage inflating the residual.
+            want = min(len(norm), rate)
+            cycles = max(int(want * tone / rate), 1)
+            seg_len = min(int(cycles * rate / tone), len(norm))
+            seg = norm[:seg_len]
+
+            amp = goertzel(seg, rate, tone)          # sine AMPLITUDE, not RMS
+            tone_rms = amp / math.sqrt(2)
+
+            # Total power over the SAME window, so the subtraction is meaningful.
+            seg_rms = math.sqrt(sum(s * s for s in seg) / len(seg))
+            resid = max(seg_rms * seg_rms - tone_rms * tone_rms, 1e-20)
+
             info["tone_hz"] = tone
             info["tone_dbfs"] = round(dbfs(amp), 2)
-            resid = max(rms * rms - (amp / math.sqrt(2)) ** 2, 1e-20)
-            info["snr_db"] = round(dbfs(amp / math.sqrt(2)) - dbfs(math.sqrt(resid)), 2)
+            info["snr_db"] = round(dbfs(tone_rms) - dbfs(math.sqrt(resid)), 2)
 
         out["per_channel"].append(info)
 
@@ -102,9 +126,11 @@ def main() -> int:
     ap.add_argument("wav")
     ap.add_argument("--tone", type=float, default=None)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--skip-start", type=float, default=0.5,
+                    help="seconds to discard from the start (avoids pre-playback silence)")
     a = ap.parse_args()
 
-    r = analyse(a.wav, a.tone)
+    r = analyse(a.wav, a.tone, a.skip_start)
 
     if a.json:
         json.dump(r, sys.stdout, indent=2)

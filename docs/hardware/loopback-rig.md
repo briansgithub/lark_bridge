@@ -94,8 +94,38 @@ groups is an accepted limitation of a two-device rig.
 | **U20–U22**, Mode 1 | speaker | BT receiver line-out |
 | Mode 1W capture | speaker | dongle A's output |
 
-## Open issue: input level
+## Calibration results (U13, measured 2026-08-16)
 
-The C-Media input is **mic level** (~10 mV expected). A Bluetooth receiver's line-out is
-500 mV – 1 V, roughly 30–40 dB too hot. Available software attenuation is only 12 dB, so an
-inline attenuator is likely required. **U13 measures the actual figure** rather than assuming it.
+Loopback: dongle B green → dongle B pink. These are the rig's error floor. **Any later result
+at or below these figures is "below rig resolution", never a measurement.**
+
+| Constant | Value | Meaning |
+|---|---|---|
+| Noise floor (RMS) | **−89.2 dBFS** | quiet enough that dropouts stand out clearly |
+| Noise floor (peak) | −76.3 dBFS | |
+| DC offset | −1e−05 | negligible; the mic-bias concern did not materialise |
+| Loopback gain | **−17.7 dB** | headphone-out → mic-in path loss at minimum capture gain |
+| Linearity error | **±0.21 dB** over 40 dB | flat — confirms AGC is genuinely off |
+| Clipping onset | **none, even at 0 dBFS out** | ~17 dB of headroom remains at full output |
+| Usable dynamic range | **71.5 dB** | |
+
+**The inline attenuator is probably not needed.** At full-scale output the capture peaks at only
+−17.7 dBFS with zero clipped samples, so a line-level source of similar amplitude has ample
+headroom. Confirm against the actual Bluetooth receiver in U22 before declaring it closed; if
+that source turns out hotter, 12 dB of software attenuation plus a resistive divider remains
+available.
+
+**Caveat on the SNR column in the raw sweep:** the per-point SNR figures are indicative only.
+They are non-monotonic across the sweep because the residual is dominated by spectral leakage
+and, near 0 dBFS, by mild output-stage distortion rather than by noise. Cite **dynamic range**
+(derived from peak vs. noise floor) as the meaningful figure; treat SNR as a sanity check.
+
+Validated by the internal consistency of a pure sine: `peak − rms = 3.01 dB` and `tone = peak`
+both hold to within 0.05 dB at usable levels.
+
+### Gotcha that produced a wrong answer first time
+
+Capturing *before* starting playback puts leading silence in the analysis window. That scales
+the Goertzel magnitude down ~3 dB, making the tone read as if it were the RMS, which made the
+residual calculation subtract nearly the whole signal and report **SNR ≈ 2 dB**. Fixed by
+starting playback first and discarding the first 0.5 s (`--skip-start`).
