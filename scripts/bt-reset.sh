@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# Bluetooth controller recovery ladder for the Pi 3B's BCM43438.
+#
+# Climbs rungs in order, stopping as soon as the controller responds. Each rung is more
+# disruptive than the last. It never reboots -- that is the operator's call.
+#
+# WHY THIS EXISTS (observed 2026-08-16, after ~7 minutes of continuous mSBC SCO):
+# the controller stopped answering HCI commands entirely.
+#
+#     Bluetooth: hci0: command 0x0406 tx timeout      (0x0406 = HCI_Disconnect)
+#     Can't init device hci0: Connection timed out (110)
+#
+# RX byte counters froze while TX kept climbing -- the host was talking to something that
+# had stopped listening. Rungs 1-5 (disconnect, HCI disconnect, adapter down/up, service
+# restart) ALL FAILED. Only rung 6, unbinding and rebinding the serdev driver, recovered
+# it -- that forces a full firmware reload:
+#
+#     Bluetooth: hci0: BCM43430A1 'brcm/BCM43430A1.raspberrypi,3-model-b.hcd' Patch
+#
+# CRITICAL CONSEQUENCE: a firmware reload RESETS SCO ROUTING TO PCM. Verified: routing
+# read back as 0x00 immediately after rebinding. Any recovery that reloads firmware must
+# re-run bridge-btfw.service or HFP audio comes back half-duplex -- microphone works,
+# call audio silently does not. This script does that automatically.
+
+set -euo pipefail
+
+HCI="${BRIDGE_HCI:-hci0}"
+SERDEV="${BRIDGE_SERDEV:-serial0-0}"
+DRIVER="/sys/bus/serial/drivers/hci_uart_bcm"
+
+log()  { printf '[bt-reset] %s\n' "$*"; }
+warn() { printf '[bt-reset] WARN: %s\n' "$*" >&2; }
+
+# The only trustworthy liveness test is whether the controller ANSWERS. Counters alone
+# lie: TX keeps incrementing into a dead controller.
+alive() {
+  local before after
+  before="$(hciconfig "$HCI" 2>/dev/null | grep -oE 'RX bytes:[0-9]+' | tr -dc 0-9)" || return 1
+  hciconfig "$HCI" 2>/dev/null | grep -q 'UP RUNNING' || return 1
+  timeout 5 hcitool -i "$HCI" cmd 0x03 0x0014 >/dev/null 2>&1 || return 1   # Read Local Name
+  sleep 1
+  after="$(hciconfig "$HCI" 2>/dev/null | grep -oE 'RX bytes:[0-9]+' | tr -dc 0-9)"
+  [ "${after:-0}" -gt "${before:-0}" ]
+}
+
+reapply_sco_routing() {
+  if [ -x /usr/local/lib/rpi-lark-bridge/set-sco-routing.sh ]; then
+    log "re-applying SCO routing (firmware reload resets it to PCM)"
+    systemctl restart bridge-btfw.service 2>/dev/null \
+      || /usr/local/lib/rpi-lark-bridge/set-sco-routing.sh || warn "could not re-apply SCO routing"
+  else
+    warn "set-sco-routing.sh not installed — SCO will be routed to PCM and HFP downlink will be silent"
+  fi
+}
+
+finish() {
+  reapply_sco_routing
+  log "restarting the audio session so bluez endpoints re-register"
+  su - "${BRIDGE_USER:-admin}" -c \
+    'export XDG_RUNTIME_DIR=/run/user/$(id -u); systemctl --user restart wireplumber' 2>/dev/null \
+    || warn "could not restart wireplumber; do it manually"
+  log "RECOVERED at rung $1"
+  exit 0
+}
+
+[ "$(id -u)" -eq 0 ] || { echo "must run as root" >&2; exit 1; }
+
+log "checking controller"
+if alive; then log "controller is responding — nothing to do"; exit 0; fi
+
+# --- rung 1: disconnect everything ----------------------------------------------------
+log "rung 1: disconnecting all devices"
+for mac in $(hcitool con 2>/dev/null | awk '/ACL|eSCO/{print $3}' | sort -u); do
+  bluetoothctl disconnect "$mac" >/dev/null 2>&1 || true
+done
+sleep 3
+alive && finish 1
+
+# --- rung 2: force-drop links ---------------------------------------------------------
+log "rung 2: forcing HCI disconnect"
+for mac in $(hcitool con 2>/dev/null | awk '/ACL|eSCO/{print $3}' | sort -u); do
+  hcitool dc "$mac" >/dev/null 2>&1 || true
+done
+sleep 3
+alive && finish 2
+
+# --- rung 3: adapter down/up ----------------------------------------------------------
+log "rung 3: adapter down/up"
+hciconfig "$HCI" down >/dev/null 2>&1 || true
+sleep 2
+hciconfig "$HCI" up   >/dev/null 2>&1 || true
+sleep 3
+alive && finish 3
+
+# --- rung 4: rfkill cycle -------------------------------------------------------------
+if command -v rfkill >/dev/null 2>&1; then
+  log "rung 4: rfkill cycle"
+  rfkill block bluetooth  >/dev/null 2>&1 || true
+  sleep 2
+  rfkill unblock bluetooth >/dev/null 2>&1 || true
+  sleep 4
+  alive && finish 4
+else
+  log "rung 4: skipped (rfkill not installed)"
+fi
+
+# --- rung 5: restart bluetoothd -------------------------------------------------------
+log "rung 5: restarting bluetooth.service"
+systemctl restart bluetooth >/dev/null 2>&1 || true
+sleep 6
+alive && finish 5
+
+# --- rung 6: reload the driver, forcing a firmware reload -----------------------------
+# This is the one that actually worked. It is not a bigger hammer than a service restart;
+# it is a DIFFERENT hammer -- it re-runs the firmware patch load, which is what a wedged
+# BCM43438 needs.
+log "rung 6: unbind/rebind $DRIVER ($SERDEV) — forces firmware reload"
+if [ -d "$DRIVER" ]; then
+  echo "$SERDEV" > "$DRIVER/unbind" 2>/dev/null || warn "unbind failed"
+  sleep 3
+  echo "$SERDEV" > "$DRIVER/bind"   2>/dev/null || warn "bind failed"
+  sleep 8
+  alive && finish 6
+else
+  warn "$DRIVER not present — is the chip attached via serdev?"
+fi
+
+log "ALL RUNGS EXHAUSTED — the controller is still not responding."
+log "A reboot is the remaining option. Deliberately not doing that automatically."
+exit 1
