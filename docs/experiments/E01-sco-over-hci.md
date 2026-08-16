@@ -84,6 +84,30 @@ Measured baseline: Debian 13 trixie, kernel **6.18.34+rpt-rpi-v8** (newer than t
 assumed), aarch64, Raspberry Pi 3 Model B **Rev 1.2**, bluez **5.82**, pipewire **1.4.2**,
 wireplumber **0.5.8**.
 
+### Controller capability (measured, `hciconfig hci0 features`)
+
+`BD B8:27:EB:43:8D:51`, features page 0 = `bf fe cf fe db ff 7b 87`. Decoded by the stack, not
+by hand:
+
+| Capability | Present | Consequence |
+|---|---|---|
+| `<SCO link>`, `<HV2>`, `<HV3>` | yes | basic SCO available |
+| `<CVSD>` | yes | 8 kHz narrowband is the guaranteed floor |
+| **`<transparent SCO>`** | **yes** | **mSBC wideband (16 kHz) is possible** — the air mode it requires exists |
+| `<extended SCO>`, `<EV4>`, `<EV5>` | yes | full eSCO with retransmission |
+| `<EDR eSCO 2 Mbps>`, `<EDR eSCO 3 Mbps>`, `<3-slot EDR eSCO>` | yes | headroom for eSCO scheduling |
+| `<err. data report>` | yes | erroneous-data reporting, needed for mSBC packet-loss concealment |
+
+**So the controller is capable on paper for everything the design needs.** That narrows this
+experiment to a single question: does SCO routing actually deliver those packets over the HCI
+transport, or does the firmware default send them to the unconnected PCM pins?
+
+**Hypothesis for Stage E / risk R1, recorded now so it can be tested rather than guessed:**
+`SCO MTU: 64:1` — a 64-byte SCO buffer, and only **one** of it. mSBC frames are 60 bytes so
+they fit, but a single-deep queue means the host must service SCO on time, every time. Once
+A2DP's ACL traffic is competing for the same controller, that shallow queue is a plausible
+mechanism for the dropouts R1 predicts. Watch for SCO buffer overruns in `btmon` during E1–E6.
+
 **What this does not answer:** whether setting the property actually makes SCO data flow. The
 btstack-dev thread reports the vendor command being accepted but ineffective on some BCM43438
 firmware. That still requires the runs below.
