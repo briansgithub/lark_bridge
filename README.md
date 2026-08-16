@@ -40,8 +40,8 @@ to power the Pico that back-feeds the phone, and it is not obvious.
 
 | Mode | Microphone path | Call audio out | Radio does | Status |
 |---|---|---|---|---|
-| **1** Bluetooth bridge | Lark → Pi → HFP → Pixel | A2DP headphones/car | HFP **+** A2DP | Gated on spike S3 |
-| **1W** Bluetooth + wired | Lark → Pi → HFP → Pixel | USB DAC / 3.5 mm jack | HFP only | **Recommended default** |
+| **1** Bluetooth bridge | Lark → Pi → HFP → Pixel | A2DP car stereo | HFP **+** A2DP | **Primary target.** Gated on spike S3 |
+| **1W** Bluetooth + wired | Lark → Pi → HFP → Pixel | USB DAC / 3.5 mm jack | HFP only | **WORKING** — proven end to end |
 | **2** USB headset bridge | Lark → Pi → Pico → Pixel | Pixel → Pico → Pi → any sink | nothing | Independent track |
 | **3** Diagnostics | raw devices exposed | — | — | Always available |
 

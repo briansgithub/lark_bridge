@@ -1475,7 +1475,33 @@ plus one phone tap**, and optionally one button press.
 
 ## 15. Open questions
 
-Only the ones I genuinely cannot resolve by reading, measuring, or deciding myself.
+> **ANSWERED 2026-08-16.** Recorded here rather than deleted, because the answers changed
+> the plan's priorities.
+>
+> **Q1 — what if single-radio HFP+A2DP fails?** *Both* Mode 1 and Mode 1W are product
+> requirements. The daily-use output is a **car stereo over Bluetooth**, so Mode 1 is the
+> primary target and Mode 1W is the wired alternative that must also work. **This promotes
+> spike S3 from optional characterisation to a hard gate**, and it raises the stakes on the
+> controller wedge observed under SCO alone — Mode 1 puts strictly more load on that radio.
+>
+> **Q2 — which output devices?** A **car stereo** (make/model still to be recorded). The
+> iWorld receiver serves as the bench stand-in for Stage E.
+>
+> **Q3 — is ~200–300 ms of downlink latency acceptable?** Implicitly yes: Bluetooth output
+> is the preferred mode. Revisit if conversation feels awkward in the car.
+>
+> **Q4 — mains or portable?** **The Pi lives in the car.** Consequences now in scope:
+> 12 V→5 V supply sizing, boot time to call-ready, and surviving repeated power cycling
+> (ignition). None are yet designed.
+>
+> **Q5 — persistent recording?** Still unanswered. Default remains explicit, time-boxed,
+> off by default.
+>
+> **Deferred by the operator:** acoustic echo cancellation. Note this is *not* the same as
+> "not needed" — a car puts the stereo's speakers and the Lark's microphone in one cabin,
+> which is the exact geometry §5.5 identifies as requiring AEC. Expect to return to it.
+
+The questions as originally posed:
 
 1. **If the onboard radio cannot do HFP+A2DP acceptably (R1/R2 fail), what do you want?** The options
    are (a) Mode 1W with wired output becomes the product, (b) Mode 2 becomes the primary, (c) you
