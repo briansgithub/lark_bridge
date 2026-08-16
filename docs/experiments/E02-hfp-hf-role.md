@@ -59,11 +59,82 @@ Runs as the ordinary user, not root — PipeWire is a user service (ADR-0006).
 During the soak: place and end several calls (this is what forces SCO setup/teardown),
 toggle phone Bluetooth off and on, and leave one call running for several minutes.
 
+## Result — parts 1 and 2 CONFIRMED, 2026-08-16
+
+**Part 1 — do we register UUID `0000111e`?** Yes. With
+`bluez5.roles = [ a2dp_source hfp_hf hsp_hs ]` the adapter advertises `Handsfree (0000111e)`
+and `Audio Source (0000110a)`.
+
+**Part 2 — does an Android AG complete a service level connection with us?** Yes. Pixel 7a
+(`5C:33:7B:CB:BF:C5`) paired, bonded and trusted. The full HFP SLC completes, captured in
+`btmon`:
+
+```
+AT+BRSF=695      -> +BRSF: 3951, OK      feature exchange (only an HF sends AT+BRSF)
+AT+BAC=1,2,3     -> OK                    codecs offered: CVSD, mSBC, LC3-SWB
+AT+CIND=?        -> +CIND: ("call"...)    indicator list
+AT+CIND?         -> +CIND: 0,0,1,3...     indicator values
+AT+CMER=3,0,0,1  -> OK                    <-- SLC COMPLETE
+AT+CHLD=? / CLIP / CCWA / CMEE / CLCC -> OK
+```
+
+PipeWire's own debug log confirms which side we are:
+
+```
+spa.bluez5.native profile_new_connection: NewConnection
+    path=/org/bluez/hci0/dev_5C_33_7B_CB_BF_C5, fd=42, profile /Profile/HFPHF
+spa.bluez5.native rfcomm_hfp_hf: AG indicator state: call=0 callsetup=0 service=1
+                                 signal=3 roam=0 battchg=4 callheld=0
+                  AT+CHLD supported: 1 (0xF)
+                  Created virtual battery for 5C:33:7B:CB:BF:C5
+```
+
+`/Profile/HFPHF` registered, `rfcomm_hfp_hf` state machine running, phone AG indicators being
+read. **The Pi is functioning as an HFP Hands-Free unit.** `AT+BAC=1,2,3` means mSBC is offered,
+so wideband speech is reachable.
+
+**Android's own view agrees** (`adb shell dumpsys bluetooth_manager`):
+
+```
+Profile: HeadsetService
+  mActiveDevice: XX:XX:XX:XX:8D:51     <- larkbridge
+  mAudioRouteAllowed: true
+  isInbandRingingEnabled: true
+```
+
+Android has made the Pi its **active headset**.
+
+### Two supporting findings
+
+**Class of Device matters.** Out of the box the adapter reported `0x00400000` — no device class
+at all. Setting `Class = 0x000408` in `/etc/bluetooth/main.conf` yields `0x00680408`
+(major Audio/Video, minor Hands-free, service bits Audio + Telephony), after which Android lists
+`larkbridge` with a **headset icon** rather than as a generic device.
+
+**Profile bitmask decode**, from `spa_bt_device_check_profiles`:
+
+| Mask | Value | Meaning |
+|---|---|---|
+| `profiles` | `0x148` | A2DP_SOURCE + HSP_AG + HFP_AG — the **phone's** roles |
+| `connectable` | `0x144` | A2DP_SINK + HSP_AG + HFP_AG — what we can pair with, given our enabled roles |
+
+Note the asymmetry: internal `SPA_BT_PROFILE_*` constants describe the **remote's** role, while the
+`bluez5.roles` config key names **our own**. Both readings are correct about different things —
+which is exactly why the earlier inference went wrong.
+
+## Open: no PipeWire card for the phone
+
+The SLC completes but no `bluez_card.5C_33_7B_CB_BF_C5` appears in the graph, so there is no node
+to route audio through yet. The iWorld A2DP device does get a card, so the monitor works. Most
+likely the HFP card materialises only once an SCO transport exists — i.e. during an actual call —
+but that is **not yet verified**. This is the next thing to resolve, and it gates part 3 and S1.
+
 ## Runs
 
 | # | Date | Soak | 111e? | SLC? | WP restarts | PW restarts | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1 | | | | | | | |
+| 1 | 2026-08-16 | n/a (bring-up) | **yes** | **yes** | 0 | 0 | parts 1+2 PASS |
+| 2 | | 30 min | | | | | (part 3 soak pending) |
 
 ## Result
 
