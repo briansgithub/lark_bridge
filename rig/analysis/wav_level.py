@@ -51,7 +51,8 @@ def dbfs(x: float) -> float:
     return -200.0 if x <= 0 else 20.0 * math.log10(x)
 
 
-def analyse(path: str, tone: float | None, skip_start: float = 0.5) -> dict:
+def analyse(path: str, tone: float | None, skip_start: float = 0.5,
+            search_hz: float = 0.0) -> dict:
     with wave.open(path, "rb") as w:
         ch, width, rate, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
         raw = w.readframes(n)
@@ -77,6 +78,11 @@ def analyse(path: str, tone: float | None, skip_start: float = 0.5) -> dict:
                  "skip_start_s": skip_start,
                  "analysed_s": round(analysed / rate, 3) if rate else 0,
                  "per_channel": []}
+
+    # Frequency-search window: 0 means trust the nominal bin exactly (synchronous
+    # paths); >0 scans +/- that many Hz for asynchronous ones.
+    search_res = 0.5
+    search_steps = int(search_hz / search_res) if search_hz > 0 else 0
 
     for c in range(ch):
         v = allv[c::ch]
@@ -105,7 +111,25 @@ def analyse(path: str, tone: float | None, skip_start: float = 0.5) -> dict:
             seg_len = min(int(cycles * rate / tone), len(norm))
             seg = norm[:seg_len]
 
-            amp = goertzel(seg, rate, tone)          # sine AMPLITUDE, not RMS
+            # Search a small band around the nominal frequency instead of assuming the
+            # exact bin. Anything that has crossed an ASYNCHRONOUS link -- A2DP, USB
+            # audio, a separate DAC -- arrives at a slightly different rate because the
+            # far end runs its own clock. A fixed-bin Goertzel then misses the tone and
+            # reports a level far below the signal's own peak, which shows up as an
+            # absurd NEGATIVE SNR. Observed on the A2DP capture loop, where peak/rms were
+            # perfectly linear while the fixed-bin tone reading was 15-20 dB low.
+            best_amp, best_hz = 0.0, tone
+            for step in range(-search_steps, search_steps + 1):
+                f = tone + step * search_res
+                if f <= 0:
+                    continue
+                a = goertzel(seg, rate, f)
+                if a > best_amp:
+                    best_amp, best_hz = a, f
+
+            amp = best_amp                           # sine AMPLITUDE, not RMS
+            info["tone_found_hz"] = round(best_hz, 2)
+            info["tone_offset_hz"] = round(best_hz - tone, 2)
             tone_rms = amp / math.sqrt(2)
 
             # Total power over the SAME window, so the subtraction is meaningful.
@@ -138,11 +162,13 @@ def main() -> int:
     ap.add_argument("wav")
     ap.add_argument("--tone", type=float, default=None)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--search-hz", type=float, default=0.0,
+                    help="scan +/- this many Hz for the tone (use for A2DP/USB paths)")
     ap.add_argument("--skip-start", type=float, default=0.5,
                     help="seconds to discard from the start (avoids pre-playback silence)")
     a = ap.parse_args()
 
-    r = analyse(a.wav, a.tone, a.skip_start)
+    r = analyse(a.wav, a.tone, a.skip_start, a.search_hz)
 
     if a.json:
         json.dump(r, sys.stdout, indent=2)
