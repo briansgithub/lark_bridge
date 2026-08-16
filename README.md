@@ -52,6 +52,7 @@ latency on the audio you hear, and differs from Mode 1 by one config string. See
 | Path | Contains |
 |---|---|
 | `PLAN.md` | The specification. Architecture, risks, milestones, test matrix, acceptance criteria. |
+| [`docs/BRINGUP-REPORT.md`](docs/BRINGUP-REPORT.md) | **Start here.** What is proven on real hardware, what broke, and the traps. |
 | `docs/` | Architecture, ADRs, hardware, operations, and **experiment reports with raw data** |
 | `pi/` | Daemon (`bridged`/`bridgectl`), PipeWire/WirePlumber/BlueZ config, systemd, udev, DT overlays |
 | `pico/` | RP2040 firmware. PlatformIO is the primary build; CMake is the CI reference build. |
