@@ -134,7 +134,39 @@ but that is **not yet verified**. This is the next thing to resolve, and it gate
 | # | Date | Soak | 111e? | SLC? | WP restarts | PW restarts | Verdict |
 |---|---|---|---|---|---|---|---|
 | 1 | 2026-08-16 | n/a (bring-up) | **yes** | **yes** | 0 | 0 | parts 1+2 PASS |
-| 2 | | 30 min | | | | | (part 3 soak pending) |
+| 2 | 2026-08-16 | **29.97 min** | yes | yes | 0 | 0 | **part 3 PASS** |
+
+## Part 3 result — 30-minute stability soak, PASS
+
+Continuous HFP/mSBC with a live Discord call, sampled every 5 s
+(`artifacts/soak-hfp-stability-20260816T214755Z/`):
+
+| Metric | Result |
+|---|---|
+| Duration / samples | 29.97 min / 350 |
+| Connected samples | **350 / 350** |
+| SCO rate, mean | **137.3 rx / 137.4 tx pps** (mSBC nominal 133), symmetric |
+| Stalls (connected but no packets) | **0** |
+| Degraded samples | **0** |
+| Disconnects | **0** |
+| Controller wedged | **false** |
+| HCI reassembly errors | 21 (~0.7/min, in bursts) |
+
+**Bearing on the controller wedge.** Earlier in the same session the BCM43438 stopped
+answering HCI entirely after roughly 7 minutes of SCO, recoverable only by rebinding the
+serdev driver. This soak ran **more than four times that long with no recurrence**.
+
+The difference in conditions is the likely explanation: the wedge followed an hour of
+aggressive connect/disconnect cycling, adapter down/up, `bluetooth.service` restarts and a
+`loginctl terminate-user`. This soak was a single stable link left alone.
+
+**Provisional conclusion: the wedge is provoked by connection churn, not by sustained SCO.**
+That is a materially better outcome for a car appliance, where the link is established once
+and held — but it is *provisional*, based on one failure and one clean run. It also means
+churn is the thing to stress: ignition cycling and walk-away/return produce exactly the
+pattern that triggered it. Stage I should target that deliberately.
+
+WirePlumber restarts during the soak: 0. PipeWire restarts: 0. Risk **R4 closes**.
 
 ## Result
 
