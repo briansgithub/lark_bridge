@@ -100,10 +100,91 @@ HFP sink can make BlueZ cycle the **SCO audio connection**, which is Bluetooth-l
 occurrence 3 is not a clean "steady state wedged on its own" datapoint. It does, however,
 definitively remove *paging a second device* as a necessary condition.
 
+### Occurrence 4 — **captured on `btmon`. Mechanism identified.**
+
+The first occurrence caught with a running HCI capture and a clean baseline (0 reassembly errors
+after a fresh `bt-reset.sh`). Raw trace: `artifacts/E07/run6.btsnoop`, 3.8 MB.
+
+Conditions: single HFP link, Mode 1W, **no A2DP, no second device**. Three USB audio devices
+streaming (Lark capture, dongle A playback, dongle B idle).
+
+| wall clock | event |
+|---|---|
+| 22:55:44.988 | call routed to `larkbridge`; SCO starts |
+| 22:56:02.185 | **last good `SCO Data RX`** |
+| 22:56:02.193 | **first misparsed `HCI Event: Vendor (0xff) plen 244`** — 8 ms later |
+| 22:56:42.912 | operator plugs headphones into dongle A → USB re-enumeration |
+| 22:57:04.184 | last misparsed vendor event; controller silent from here |
+| 22:59:28.577 | `Frame reassembly failed (-84)` finally logged |
+| 23:00:06.516 | host **still** transmitting SCO into a dead controller |
+
+**SCO survived 17.2 seconds.**
+
+#### The mechanism is H4 frame desynchronisation, and the capture proves it
+
+```
+> SCO Data RX: Handle 6 flags 0x00 dlen 60   #4682  311.185982   <- normal, every 7.5 ms
+> HCI Event: Vendor (0xff) plen 244          #4684  311.193751   <- desync begins
+```
+
+| | before first vendor event | after |
+|---|---|---|
+| `SCO Data RX` frames | 2294 | **0** |
+| bogus `Vendor (0xff)` events | 0 | 709 |
+
+SCO reception does not degrade — it **stops dead** and is replaced by 244-byte "vendor events"
+whose payloads are high-entropy and repeat stale trailing bytes between consecutive events. They
+are not vendor events at all: they are **the mSBC SCO byte stream being misparsed**. The kernel
+lost byte alignment, read an audio byte as an H4 event code (`0xff`), the next as a length
+(`244`), and never recovered. Once alignment is lost, every subsequent byte is misframed, which
+is why **only a firmware reload via rung 6 recovers** — nothing host-side can resynchronise it.
+
+The host then transmitted **14 837 further SCO frames** over the next three minutes into a
+controller that could no longer parse them.
+
+#### Two things this rules out
+
+1. **The USB re-enumeration did not cause it.** The operator plugged headphones into dongle A at
+   22:56:42.9 — **40 seconds after** the link was already dead. The apparent correlation
+   ("I plugged them in and it disconnected") is real as an observation and wrong as a cause. An
+   earlier analysis in this session reported the USB event first and the Bluetooth failure
+   second; that ordering came from `dmesg` alone and was corrected only by absolute timestamps
+   from `btmon -r -T`. **Do not infer ordering across two log sources without absolute time.**
+2. **`Frame reassembly failed` is a lagging indicator.** It appeared at 22:59:28 — **3 minutes
+   26 seconds after** the desync at 22:56:02. It is useless as an early warning and misleading
+   as a trigger timestamp. Every previous occurrence in this file dated the failure by that
+   message and therefore dated it *late*.
+
+#### The honest detection signal
+
+`SCO Data RX` stops while `SCO Data TX` continues. That transition is visible in the capture at
+the exact millisecond, whereas `hciconfig`, HCI error counters and the supervisor's own leg
+verification all still read healthy minutes later.
+
 ## Working hypothesis
 
-**Superseded.** The former hypothesis — *paging a second device while eSCO is active* — is
-falsified by occurrence 3, where no second device existed.
+**Superseded twice.** The original — *paging a second device while eSCO is active* — is falsified
+by occurrence 3. Occurrence 4 replaces the general "UART is losing bytes" guess with a proven
+mechanism.
+
+**Established:** the HCI H4 stream loses byte alignment during SCO and never recovers.
+
+**Not established:** *why* a byte is lost. The remaining candidates are all about the receive
+path being starved for a few hundred microseconds:
+
+- **PL011 RX FIFO overrun from interrupt latency.** The FIFO is 32 bytes; at 921600 baud that is
+  ~347 µs of slack. Throughput is not the problem — SCO is only ~8 kB/s each way against ~92 kB/s
+  of capacity — but *latency* plausibly is.
+- **`dwc_otg` USB interrupt load.** The Pi 3's USB controller is well known for long interrupt
+  disable windows, and this failure occurred with three USB audio devices streaming. This is the
+  cheapest and most promising variable to test, and it is **not** in the original run list.
+- **2.4 GHz Wi-Fi sharing the die**, still enabled (`dtoverlay=disable-wifi` absent).
+- **Baud/clock margin** at 921600.
+
+Note the design coupling: routing **SCO over HCI** was a deliberate decision in E01 (the
+alternative, PCM routing, needs I2S wiring the hardware does not have). That decision is what
+puts continuous real-time audio on this UART, so if the transport is the limit, E01's conclusion
+is what has to be revisited — not the audio graph.
 
 ### New leading hypothesis: the HCI UART is losing bytes
 
@@ -174,6 +255,25 @@ the counter is what turns "it eventually broke" into a dose-response curve.
 | 8 | Same, at a **higher BT UART baud** (e.g. `3000000`) | If the fault is overrun, headroom should reduce the error rate. If the rate is unchanged, overrun is wrong and clock/flow-control is implicated instead. |
 | 9 | HFP connected, SLC up, **no call** (no SCO), left for 30 min | Isolates SCO from ACL. E03 step B already suggests this is clean; confirm with error counts. |
 | 10 | Deliberate PipeWire stream churn on the HFP sink during a call | Reproduces occurrence 3's confounder on purpose, to see whether SCO cycling alone provokes the burst. |
+| **11** | **SCO call with the USB audio devices unplugged** (HFP only, no Lark, no dongles) | **Highest priority.** Isolates `dwc_otg` interrupt load, the leading suspect for starving the PL011 RX FIFO. If SCO survives indefinitely with USB idle and dies in ~17 s with three streams running, the cause is settled. |
+
+**Measure time-to-desync, not pass/fail.** Occurrence 4 gives a concrete figure — **17.2 s** —
+and E03's spread was 7 s to 120 s, so a single surviving run proves nothing. Each run needs
+`btmon -w` and the metric below.
+
+### The metric to use from now on
+
+Time from first `SCO Data RX` to the last one before `SCO Data RX` count goes to zero:
+
+```bash
+sudo btmon -r run.btsnoop -T > t.txt
+grep -m1 "SCO Data RX" t.txt          # start
+grep    "SCO Data RX" t.txt | tail -1 # desync moment
+```
+
+Do **not** use `Frame reassembly failed` timestamps (3.5 minutes late in occurrence 4) or
+`dmesg | grep -c` (the ring wraps and undercounts — `journalctl -k` reported 2868 errors where
+`dmesg` showed 2013). This supersedes the counter noted as broken in E03.
 
 Run 9 is the key control: if reassembly errors are near zero without SCO and climb sharply with
 it, the SCO-over-HCI load is confirmed as the driver and the design decision from E01 becomes
