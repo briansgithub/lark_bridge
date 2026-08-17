@@ -1,0 +1,70 @@
+{
+  "noise_floor": {
+    "rms_dbfs": -87.45,
+    "peak_dbfs": -74.75,
+    "dc_offset": -1e-05
+  },
+  "loopback_gain_db": -19.03,
+  "linearity_max_error_db": 2.44,
+  "clipping_onset_dbfs": "none",
+  "snr_db": 18.67,
+  "dynamic_range_db": 65.98,
+  "sweep": [
+    {
+      "out_dbfs": -40,
+      "peak_dbfs": -57.84,
+      "rms_dbfs": -61.63,
+      "tone_dbfs": -58.71,
+      "snr_db": 16.97,
+      "clipped_pct": 0.0
+    },
+    {
+      "out_dbfs": -30,
+      "peak_dbfs": -48.3,
+      "rms_dbfs": -51.62,
+      "tone_dbfs": -48.68,
+      "snr_db": 18.02,
+      "clipped_pct": 0.0
+    },
+    {
+      "out_dbfs": -20,
+      "peak_dbfs": -38.53,
+      "rms_dbfs": -41.62,
+      "tone_dbfs": -38.7,
+      "snr_db": 16.37,
+      "clipped_pct": 0.0
+    },
+    {
+      "out_dbfs": -12,
+      "peak_dbfs": -30.58,
+      "rms_dbfs": -33.62,
+      "tone_dbfs": -30.66,
+      "snr_db": 18.67,
+      "clipped_pct": 0.0
+    },
+    {
+      "out_dbfs": -6,
+      "peak_dbfs": -24.58,
+      "rms_dbfs": -27.62,
+      "tone_dbfs": -24.65,
+      "snr_db": 19.93,
+      "clipped_pct": 0.0
+    },
+    {
+      "out_dbfs": -3,
+      "peak_dbfs": -21.73,
+      "rms_dbfs": -25.19,
+      "tone_dbfs": -22.3,
+      "snr_db": 15.63,
+      "clipped_pct": 0.0
+    },
+    {
+      "out_dbfs": 0,
+      "peak_dbfs": -21.47,
+      "rms_dbfs": -24.34,
+      "tone_dbfs": -21.56,
+      "snr_db": 12.71,
+      "clipped_pct": 0.0
+    }
+  ]
+}
