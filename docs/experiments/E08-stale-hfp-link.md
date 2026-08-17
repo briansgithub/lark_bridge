@@ -45,18 +45,45 @@ healthy: `hci0` `UP RUNNING`, no HCI errors (`errors:0` both directions), SCO fr
 the nominal rate, supervisor reporting both legs `verified`. A liveness check built on any of
 those would have reported the bridge as fine.
 
-## Recovery that worked
+## ~~Recovery that worked~~ — RETRACTED
 
-```bash
-bluetoothctl disconnect 5C:33:7B:CB:BF:C5
+> **This section was wrong and is kept only so the mistake is not repeated.**
+>
+> It originally recorded that `bluetoothctl disconnect` cleared the link cleanly, that the
+> connection table went empty, and therefore that *"the controller did NOT need resetting, so
+> this is not the E07 wedge."* Every part of that conclusion was false.
+
+`bluetoothctl disconnect` reported `Disconnection successful` and `bluetoothctl info` then
+showed `Connected: no`. Both came from **bluetoothd's local bookkeeping**. The kernel log shows
+what actually happened:
+
+```
+Bluetooth: hci0: command 0x0406 tx timeout      (0x0406 = HCI_Disconnect)
 ```
 
-Clean and immediate — `Disconnection successful`, connection table empty. The controller did
-**not** need resetting, so this is **not** the E07 wedge and must not be conflated with it. The
-supervisor then correctly observed `call DOWN` and tore down both loopbacks, which is the
-teardown path behaving exactly as designed.
+The Disconnect **never completed** — the controller had already stopped answering HCI. Minutes
+later `hciconfig hci0 version` returned `Connection timed out (110)`, HCI counters were frozen,
+and a `btmon` capture recorded zero traffic. Recovery required **rung 6 of `bt-reset.sh`**, the
+firmware reload.
 
-Cost: one command, but a command **nobody is present to type** in a car.
+**Lesson:** a success message from `bluetoothctl` is not evidence that the controller did
+anything. It reports the host's model of the link. Confirm state changes against `dmesg`,
+HCI counters, or `btmon` — not against the tool that requested them.
+
+## Consequently: is E08 even a separate defect?
+
+Probably not. See **E07 occurrence 3**. The likeliest single explanation is that the controller
+wedged, so the call teardown was never processed, leaving the host holding a link the phone had
+already abandoned — and leaving the phone unable to reconnect to a radio that was no longer
+listening.
+
+This file stays open rather than being merged into E07 because one thing is still unaccounted
+for: the half-open state was observed at ~22:29–22:35, while the first `Frame reassembly failed`
+burst is timestamped **22:39:18**. If that gap is real, the stale link *preceded* the wedge and
+is its own fault. But `dmesg`'s ring buffer had wrapped (2029 errors, oldest lost), so earlier
+bursts may simply be unrecoverable. **Do not treat the ordering as established** — the
+reproduction protocol below must run with `btmon` and a persistent kernel log before either
+merging these or keeping them apart.
 
 ## What is not yet known
 
