@@ -191,8 +191,22 @@ was written specifically because `hcitool` is deprecated and may vanish.
    parameter must be `01`.
 4. **The HFP card only appears once SCO is active**, i.e. during a call. An absent
    `bluez_card.<phone>` with a completed SLC is normal, not a fault.
-5. **Android initiates to headsets; the Pi should not chase it.** Connecting from the Pi gave
-   `br-connection-page-timeout`; tapping the device on the phone connected instantly.
+5. **Android initiates to headsets — but this is device-specific, and the PHONE is the
+   exception.** The original observation stands for the **iWorld speaker**: connecting to it
+   from the Pi gave `br-connection-page-timeout`, while tapping it on the phone worked
+   instantly.
+
+   **It does not generalise to the Pixel.** Measured 2026-08-17: after toggling Bluetooth off
+   and on, the phone repeatedly failed to connect when tapped, while the Pi was demonstrably
+   healthy and listening (`PSCAN ISCAN`, powered, `Handsfree (111e)` advertised, bond intact
+   on both sides, controller answering an active probe). A single
+   `bluetoothctl connect <phone>` from the Pi succeeded **immediately**, and eSCO came up with
+   it because the call was still live.
+
+   Consequence for the product: the supervisor's deliberate refusal to initiate (PLAN.md §6.5)
+   leaves a real hole — if the phone will not re-initiate after a Bluetooth toggle, nobody is
+   in the car to tap anything. Recovery may need to initiate, with a delay first so it does not
+   race Android's own attempt.
 6. **The AB13X dongles are single combo-jack.** Inserting a 3-pole plug makes them re-enumerate
    *without* an audio input interface at all. They can only ever be outputs.
 7. **User-unit logs do not reach the journal on this image** (`No journal files were found`).

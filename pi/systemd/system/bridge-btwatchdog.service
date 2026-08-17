@@ -1,0 +1,31 @@
+[Unit]
+# Unattended recovery for a wedged Bluetooth controller (E07).
+#
+# NOT ENABLED BY DEFAULT. `install.sh` must not enable this until the validation listed at the
+# bottom of pi/bridged/bt_watchdog.py has been done -- an untested watchdog that false-positives
+# drops live calls, which is worse than the fault it treats.
+#
+# System scope, not user scope: recovery unbinds/rebinds hci_uart_bcm and reloads controller
+# firmware, which needs root. The audio-path supervisor stays unprivileged and user-scoped.
+
+Description=rpi-lark-bridge Bluetooth controller watchdog
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/admin/rpi-lark-bridge/pi/bridged/bt_watchdog.py
+Restart=always
+RestartSec=10
+
+# Deliberately NOT sandboxed the way bridge-supervisor is: this exists to unbind and rebind a
+# kernel driver and reload firmware. Locking it out of /sys would defeat its only purpose.
+# It is kept small and single-purpose instead.
+
+# A recovery must be allowed to finish; killing bt-reset.sh partway can leave the adapter up
+# with no endpoints registered, which reads as success and is not (E07, "Recovery, established").
+TimeoutStopSec=330
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
