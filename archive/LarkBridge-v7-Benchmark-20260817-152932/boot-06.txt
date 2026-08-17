@@ -1,0 +1,40 @@
+﻿BOOT_ID=d53985d1-cdb9-46d7-ae9f-0cea885e8a45
+BOOT_TIME=Startup finished in 4.627s (kernel) + 14.161s (userspace) = 18.789s 
+TUNING_US=11731794
+BLUETOOTH_US=12177212
+SCO_US=14015392
+USER_US=14360165
+PIPEWIRE_US=14368911
+WIREPLUMBER_US=14385424
+SUPERVISOR_US=14393514
+BT_MGMT_SEC=12.386462
+SCO_VERIFY_SEC=14.011327
+HFP_WATCH_SEC=14.855405
+A2DP_SEC=16.230542
+FAILED_UNITS=0
+GOVERNOR=performance
+SCO_PARAMS=
+
+=== FAILED UNITS DETAIL ===
+  UNIT LOAD ACTIVE SUB DESCRIPTION
+
+0 loaded units listed.
+
+=== TARGETED JOURNAL ===
+[   11.460706] larkbridge systemd[1]: Starting bridge-tuning.service - rpi-lark-bridge latency tuning for the HCI UART...
+[   11.731893] larkbridge systemd[1]: Finished bridge-tuning.service - rpi-lark-bridge latency tuning for the HCI UART.
+[   12.177374] larkbridge systemd[1]: Started bluetooth.service - Bluetooth service.
+[   12.186780] larkbridge systemd[1]: Starting bridge-btfw.service - Route Bluetooth SCO audio to the HCI transport (BCM43438)...
+[   12.386462] larkbridge bluetoothd[532]: Bluetooth management interface 1.23 initialized
+[   13.722533] larkbridge set-sco-routing.sh[548]: [bridge-btfw] SCO PCM params: 00 02 00 01 01
+[   13.722533] larkbridge set-sco-routing.sh[548]: [bridge-btfw] SCO routing is 0x00 ├óΓé¼ΓÇ¥ requesting 0x01 (attempt 1/40)
+[   13.728598] larkbridge set-sco-routing.sh[548]: [bridge-btfw] Write_SCO_PCM_Int_Param accepted; waiting for verified readback
+[   14.010937] larkbridge set-sco-routing.sh[548]: [bridge-btfw] SCO PCM params: 01 02 00 01 01
+[   14.011327] larkbridge set-sco-routing.sh[548]: [bridge-btfw] verified: SCO routed to the HCI transport
+[   14.015500] larkbridge systemd[1]: Finished bridge-btfw.service - Route Bluetooth SCO audio to the HCI transport (BCM43438).
+[   14.369041] larkbridge systemd[547]: Started pipewire.service - PipeWire Multimedia Service.
+[   14.385520] larkbridge systemd[547]: Started wireplumber.service - Multimedia Service Session Manager.
+[   14.393618] larkbridge systemd[547]: Started bridge-supervisor.service - rpi-lark-bridge audio path supervisor.
+[   14.855405] larkbridge python3[619]: INFO watching for HFP nodes: bluez_output.5C_33_7B_CB_BF_C5.1 / bluez_input.5C_33_7B_CB_BF_C5.0
+[   15.577969] larkbridge python3[619]: INFO call DOWN
+[   16.230542] larkbridge bluetoothd[532]: Endpoint registered: sender=:1.20 path=/MediaEndpoint/A2DPSource/sbc
