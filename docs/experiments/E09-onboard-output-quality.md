@@ -96,9 +96,40 @@ noise with it. Re-measured across settings:
 | **0.00 dB** | **0.30 dB** | **0.06 dB** | −4 dB |
 | −6.64 dB | 0.25 dB | −0.01 dB | −10.6 dB |
 
-**Shipped setting: PCM = 0.00 dB**, persisted with `alsactl store`. Linear to 0.30 dB — against
-an instrument floor of 0.21 dB, i.e. linear to the limit of what this rig can resolve — while
-keeping 6.6 dB more level than the over-corrected setting.
+**Target: PCM ≈ 0.00 dB.** Linear to 0.30 dB — against an instrument floor of 0.21 dB, i.e.
+linear to the limit of what this rig can resolve — while keeping 6.6 dB more level than the
+over-corrected setting.
+
+### How it is actually held — `alsactl store` does NOT work here
+
+Recorded because the first mechanism was wrong and a reboot caught it.
+
+`amixer sset PCM 0dB` + `sudo alsactl store` looked correct and did not survive. After a reboot
+the mixer read **−19.88 dB**, and `alsa-restore` was not at fault — it faithfully restored
+`value -1988` from the state file, because that is what had been saved.
+
+**WirePlumber owns this control.** It applies its own persisted node volume to the hardware
+mixer, and `alsa-store` then captures whatever WirePlumber left behind at shutdown. Anything
+written with `amixer` is transient.
+
+Measured mapping, WirePlumber node volume → hardware PCM:
+
+| wpctl volume | hardware PCM |
+|---|---|
+| 1.00 | **+4.00 dB** ← the compressing setting |
+| 0.95 | +2.66 dB |
+| 0.90 | +1.25 dB |
+| **0.85** | **−0.23 dB** ← shipped |
+| 0.80 | −1.81 dB |
+| 0.70 | −5.29 dB |
+| 0.60 | −9.31 dB |
+
+**Shipped setting: WirePlumber sink volume `0.85`**, which lands at −0.23 dB — within a quarter
+of a dB of target and comfortably linear. Set with `wpctl set-volume <sink> 0.85`; WirePlumber
+persists it in `~/.local/state/wireplumber/default-routes`. **Verified across a reboot.**
+
+Note that WirePlumber's default of `1.00` maps to exactly the +4 dB setting E09 measured as
+compressing. A fresh install will start out distorting unless this is set.
 
 > **Invalid run, recorded so it is not mistaken for data:** a sweep labelled `-2dB` produced
 > offsets identical to the −6.64 dB run. `amixer sset PCM -2dB` does not parse — the argument is
@@ -125,8 +156,8 @@ close.
 
 ## Consequences
 
-1. Keep the onboard PCM mixer at **0.00 dB** (persisted via `alsactl store`). Do not raise it to
-   its +4 dB maximum — that is where the output stage compresses.
+1. Keep the WirePlumber sink volume at **0.85** (≈ −0.23 dB at the hardware mixer). Do not raise
+   it to 1.00 — that maps to the +4 dB maximum, where the output stage compresses.
 2. If Mode 1W audio is ever reported as distorted, check the level **before** suspecting the
    Bluetooth path — this stage compresses, and it is the only known nonlinearity in the chain.
 3. **This measurement cannot be repeated.** Dongle B has been returned. Any future audio-quality
