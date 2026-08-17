@@ -79,12 +79,38 @@ leakage. The instrument demonstrably resolves 48 dB, so the Pi's ~19.5 dB is rea
 a measurement limit. Dynamic range barely differs because it is peak-vs-noise-floor and blind to
 distortion — which is exactly why it is the wrong figure to quote here.
 
+## The fix, and the mistake in choosing it
+
+The sweep above ran with the PCM mixer at its maximum, **+4.00 dB**. The compression is therefore
+not a property of "the Pi's output" in the abstract — it is the output stage being driven past
+its linear range by the mixer. Backing the mixer off fixes it.
+
+First attempt set the mixer to **−6.64 dB**, which worked (linearity 2.41 → 0.25 dB) but gave
+away 10.6 dB of level to solve a problem that needed about 6. That matters: this feeds a **car
+aux input**, and a needlessly quiet source means turning the head unit up and raising its own
+noise with it. Re-measured across settings:
+
+| PCM mixer | linearity max error | compression at 0 dBFS | relative level |
+|---|---|---|---|
+| +4.00 dB | 2.41 dB | 2.90 dB | loudest |
+| **0.00 dB** | **0.30 dB** | **0.06 dB** | −4 dB |
+| −6.64 dB | 0.25 dB | −0.01 dB | −10.6 dB |
+
+**Shipped setting: PCM = 0.00 dB**, persisted with `alsactl store`. Linear to 0.30 dB — against
+an instrument floor of 0.21 dB, i.e. linear to the limit of what this rig can resolve — while
+keeping 6.6 dB more level than the over-corrected setting.
+
+> **Invalid run, recorded so it is not mistaken for data:** a sweep labelled `-2dB` produced
+> offsets identical to the −6.64 dB run. `amixer sset PCM -2dB` does not parse — the argument is
+> swallowed and the mixer is left unchanged, and the `|| true` guard hid the failure. Set levels
+> as `0dB` / `90%`, and verify with `sget` rather than trusting the exit status.
+
 ## Verdict
 
-**Usable for this product, with one rule: keep the digital output at or below −6 dBFS.**
+**Usable for this product at PCM 0 dB.**
 
-Below that the response is linear to within a tenth of a dB; above it the output stage compresses,
-reaching 2.9 dB by full scale, and distortion rises with level.
+At that setting the response is linear across the full digital range. At the mixer's maximum it
+compresses, reaching 2.9 dB by full scale, and distortion rises with level.
 
 This is a genuinely poor DAC by hi-fi standards. It does not matter much here:
 
@@ -99,7 +125,8 @@ close.
 
 ## Consequences
 
-1. Cap the Mode 1W output level at **−6 dBFS**; do not run the onboard jack at full scale.
+1. Keep the onboard PCM mixer at **0.00 dB** (persisted via `alsactl store`). Do not raise it to
+   its +4 dB maximum — that is where the output stage compresses.
 2. If Mode 1W audio is ever reported as distorted, check the level **before** suspecting the
    Bluetooth path — this stage compresses, and it is the only known nonlinearity in the chain.
 3. **This measurement cannot be repeated.** Dongle B has been returned. Any future audio-quality
