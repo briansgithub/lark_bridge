@@ -1,0 +1,36 @@
+[Unit]
+# Creates the Mode 1W audio path only while a call is active.
+#
+# See pi/bridged/bridge_supervisor.py for why this is a supervisor rather than static
+# config: the HFP nodes are transient, and a persistent loopback aimed at a transient
+# target gets silently re-linked to the DEFAULT device, closing an acoustic feedback loop.
+
+Description=rpi-lark-bridge audio path supervisor
+After=pipewire.service wireplumber.service
+Wants=pipewire.service wireplumber.service
+PartOf=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/rpi-lark-bridge/pi/bridged/bridge_supervisor.py
+Restart=always
+RestartSec=3
+
+# Deliberately unprivileged and sandboxed: this component makes policy decisions and
+# spawns pw-loopback. It has no business touching the filesystem or the network.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+
+# Killing this MUST NOT interrupt an in-progress call beyond tearing down its own
+# loopbacks — acceptance criterion 7 in PLAN.md §14. KillMode=control-group ensures the
+# pw-loopback children go with it rather than being orphaned into a phantom graph.
+KillMode=control-group
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target
