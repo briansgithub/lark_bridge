@@ -130,10 +130,45 @@ In this run the controller **stayed alive** through the A2DP teardown (SCO conti
 nominal rate). The wedges seen earlier are therefore not the same event as the A2DP drop,
 and should not be conflated. See E07.
 
+## Quantified: A2DP survival time under active SCO
+
+`rig/pi/measure/a2dp-survival.sh` measures seconds from stream start until the AVDTP
+transport leaves `active` or the device disconnects. All three links established **before**
+measuring, since establishing during SCO is a separate failure mode (E07).
+
+| Run | Survival | Outcome | SCO at end | Reassembly Δ | Controller |
+|---|---|---|---|---|---|
+| baseline-1 | **7 s** | device disconnected | 136 pps (nominal) | 0 | alive |
+| baseline-2 | **120 s** | **survived full duration** | 135 pps | 2 | alive |
+| baseline-3 | **121 s** | device disconnected | **0 pps** | **32** | **WEDGED** |
+
+Operator, concurrently: *"I hear the pips. Occasionally I heard them get fuzzy. They just
+stopped after a couple of minutes."* — the subjective and objective accounts agree.
+
+### This downgrades the verdict from FAIL to PARTIAL
+
+**Run 2 sustained A2DP and SCO together for the full two minutes**, with 2 reassembly errors
+and no wedge. The radio demonstrably *can* do both. The failure is **intermittent, not
+structural**:
+
+- sometimes fatal within seconds (7 s)
+- sometimes 2+ minutes with occasional audible fuzziness
+- eventually breaks — either A2DP disconnects, or the controller wedges
+
+**SCO is never the casualty.** In every run SCO held its nominal ~135 pps right up until the
+controller wedged. A2DP is what degrades and dies.
+
+### Consequence for methodology
+
+With a spread of 7 → 120+ seconds, **n=3 is far too few to evaluate a mitigation.** A fix
+producing a 60 s result would be indistinguishable from luck. Any future comparison needs
+either many runs, or a mitigation dramatic enough to be self-evident (e.g. 10/10 surviving
+the full duration).
+
 ## Verdict
 
-**FAIL for sustained simultaneous operation — but the failure is in software, not proven to
-be in the radio.**
+**PARTIAL — intermittent. Simultaneous operation works sometimes, degrades audibly, and
+eventually fails. The failure is in software and is not proven to be in the radio.**
 
 Mode 1 (call audio to a Bluetooth car stereo while HFP carries the call) is **not currently
 reliable**. The A2DP link survives seconds to tens of seconds once SCO is active, then our
