@@ -161,11 +161,118 @@ controller that could no longer parse them.
 the exact millisecond, whereas `hciconfig`, HCI error counters and the supervisor's own leg
 verification all still read healthy minutes later.
 
+### Occurrence 5 — production config, overnight: **37 min 3 s**, then dead for 8.5 hours
+
+The first run of the *shipped* configuration: **one** USB audio device (Lark), output on the
+Pi's onboard jack, one Bluetooth link, PCM at 0 dB. Instrumented with `rig/pi/soak/sco-sampler.sh`
+(active probe, one sample/minute). Timeline: `artifacts/E07/occurrence5-timeline.log.gz`.
+
+| wall clock | event |
+|---|---|
+| 02:18:23 | soak start; `esco=1 controller=yes`, 133 SCO frames/s, RX and TX in lockstep |
+| 02:55:26 | `reassembly_1min=8` — **still `controller=yes`** |
+| 02:56:26 | **first probe failure** (`controller=NO`) — **+37 min 3 s** |
+| 02:58:21 | phone gives up: `resetBluetoothSco`, routes back to earpiece |
+| 02:58:28 | `RX bytes` freezes at 29759349 while TX climbs for another 8.5 h |
+| 11:19 | still dead — 503 of 541 samples were `controller=NO` |
+
+**This is the headline result and it cuts both ways.** Removing USB audio devices bought a
+**129× improvement** — 17.2 s → 37 min — which strongly confirms the load hypothesis. It did
+**not** eliminate the fault. One full-speed USB capture device is still enough.
+
+#### The dose-response, complete
+
+| USB audio devices | time to desync |
+|---|---|
+| 3 (Lark + dongles A and B) | 17.2 s |
+| 1 (Lark only, onboard output) | **37 min 3 s** |
+| 0 | no desync in 228 s |
+
+#### Correction: reassembly errors were *not* lagging here
+
+Occurrence 4 recorded them 3 m 26 s late. Here they appeared at 02:55:26, **one minute before**
+the probe failed. The lesson survives in weakened form — do not *date* a failure by that message —
+but it is not reliably late either. The active probe is what should be trusted, and it worked:
+it flipped within a minute of the real event.
+
+Note also that `RX bytes` kept climbing for ~2 minutes *after* the probe started failing. That is
+consistent with the occurrence 4 mechanism: bytes still arrive and are counted, they are simply
+misframed. **A frozen RX counter confirms a wedge; a climbing one does not refute it.**
+
+#### Was it triggered by anything external? No — checked directly
+
+The operator asked whether the phone's 30-minute screen timeout could be responsible. Worth
+testing rather than dismissing: an Android screen-off often changes Bluetooth link power
+management, and a **burst** of HCI traffic is exactly what could overrun a 32-byte FIFO.
+
+`rig/analysis/btsnoop_window.py` parses the btsnoop record headers directly instead of decoding
+through `btmon` — 426 MB takes over an hour to pretty-print on a Pi 3 and about a minute to walk.
+Whole-capture totals, 02:14:18 → 11:43:31 (4 909 818 records):
+
+| monitor opcode | count |
+|---|---|
+| **SCO TX** | **4 553 817** |
+| **SCO RX** | **350 820** |
+| Ctrl Open / Ctrl Close | 2231 / 2230 |
+| Command | 558 |
+| Vendor Diag | 116 |
+| Event | 39 |
+| **ACL RX** | **2** |
+
+**Two ACL packets in nine and a half hours.** The phone was silent. And the SCO ratio is the wedge
+in one line: 4.55 M frames transmitted, 350 k received — 350 820 ÷ 133 per second ≈ 2640 s ≈ the
+44 minutes from capture start to 02:58, after which RX is zero and TX runs for another 8.5 hours.
+
+In the 3.5 minutes bracketing the failure there were **30 non-SCO records against 55 977 SCO
+frames**, and nearly all 30 were the sampler's own probes — `Command opcode 0x1001`
+(Read Local Version) plus its management-socket open/close pairs.
+
+**Absent entirely: `Mode Change` (0x14).** No sniff transition, no park, no
+`Synchronous Connection Changed`, no codec renegotiation, no `Max Slots Change`. Nothing from the
+phone at any point near the failure. The lone `Vendor Diag` at 02:55:06 looked suspicious until
+the full scan showed 116 of them scattered across the night (02:31, 02:37, 03:18, 04:17 …) — it is
+routine, not a precursor.
+
+The exact transition, from our own probe:
+
+```
+06:55:26.523 UTC  Command 0x1001  ->  Command Complete   (answered)
+06:56:26.644 UTC  Command 0x1001  ->  no reply, ever
+```
+
+**Conclusion: the screen timeout is ruled out, and so is any external trigger.** The desync
+happened in pure steady state, with nothing on the air but SCO frames. That is a stronger result
+than finding a trigger would have been: it means no burst is required. A single unlucky latency
+spike — one FIQ holding IRQs off for longer than the FIFO's ~347 µs — is sufficient. Which is
+exactly why the fault is intermittent and why its rate scales with USB load rather than with
+anything the phone does.
+
+#### The operational finding
+
+Nothing was deployed to recover it, so a fault that costs ~20 s to fix cost **8.5 hours of
+downtime**. In a car that is the whole product failing. This is what makes `bt-watchdog`
+mandatory rather than nice-to-have, independent of whether the root cause is ever eliminated.
+
 ## Working hypothesis
 
 **Superseded twice.** The original — *paging a second device while eSCO is active* — is falsified
 by occurrence 3. Occurrence 4 replaces the general "UART is losing bytes" guess with a proven
 mechanism.
+
+### Why bytes are lost — measured 2026-08-17
+
+| finding | evidence |
+|---|---|
+| The BT UART runs **PIO, no DMA** | `dmas` and `dma-names` are **absent** from `/proc/device-tree/soc/serial@7e201000` |
+| ~347 µs of slack before overrun | 32-byte PL011 FIFO ÷ 92160 bytes/s at 921600 baud |
+| It competes with a **FIQ** | `dwc_otg_sim-fiq` **153 M** interrupts vs `uart-pl011` **9.8 M**; a FIQ masks ordinary IRQs |
+| USB devices are **full-speed**, not high-speed | `not running at top speed; connect to a high speed hub` in dmesg — so isochronous traffic uses **split transactions**, the most FIQ-expensive mode |
+| CPU can run at **600 MHz** | governor `ondemand`, range 600–1200 MHz: the ISR sometimes runs at half clock |
+
+A PIO UART with 347 µs of headroom, sharing a CPU with a FIQ that fires 153 million times, is a
+textbook recipe for RX overrun. This explains the dose-response, why only a firmware reload
+recovers (H4 alignment is unrecoverable host-side), and why the fault is intermittent rather than
+structural — it needs a latency spike, not a sustained overload.
 
 **Established:** the HCI H4 stream loses byte alignment during SCO and never recovers.
 
