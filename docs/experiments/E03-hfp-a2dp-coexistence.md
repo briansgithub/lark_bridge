@@ -1,7 +1,7 @@
 # E03 — Can one Broadcom radio carry HFP/eSCO and A2DP simultaneously?
 
-- **Status:** Not started
-- **Resolves risk:** **R1 — the highest-scoring risk in the project** (probability 4, impact 4, score 16)
+- **Status:** **CONCLUDED 2026-08-16 — PARTIAL / intermittent; config-level mitigations exhausted**
+- **Resolves risk:** **R1** — measured. Probability raised 4→5, score 20.
 - **Gates milestone:** M6, and decides whether Mode 1 or Mode 1W is the shipped default
 - **Scripts:** `tests/stage-e-concurrent/s3-coexistence-smoke.sh` (smoke), then matrix rows E1–E6
 
@@ -157,6 +157,38 @@ structural**:
 
 **SCO is never the casualty.** In every run SCO held its nominal ~135 pps right up until the
 controller wedged. A2DP is what degrades and dies.
+
+### Mitigation bundle: NO EFFECT
+
+Applied together (option B, a deliberate high-conviction shot accepting that a positive
+result would need bisecting):
+
+| Change | Verified applied |
+|---|---|
+| `node.pause-on-idle = false` on bluez cards | **yes**, via pw-dump |
+| `session.suspend-timeout-seconds = 0` | not verifiable as a node prop |
+| A2DP forced to 44.1 kHz | not verifiable as a node prop |
+| Graph quantum 1024 -> 2048 | yes |
+
+| | Baseline | Mitigated |
+|---|---|---|
+| Runs | 7 s, 120 s, 121 s | 120 s, 83 s, 25 s |
+| Mean | ~83 s | ~76 s |
+| Reached the 120 s ceiling | 1 of 3 | 1 of 3 |
+| Ended with controller wedged | 1 of 3 | 1 of 3 |
+
+**Statistically indistinguishable from no change.** Had the bundle addressed the mechanism,
+3/3 at the ceiling was the expected signature. It is not there.
+
+The AVDTP-Suspend hypothesis is therefore weakened: disabling idle suspension did not stop
+the teardown, so whatever sends that Suspend is not PipeWire idling the node.
+
+Remaining untried mitigations are **not config-level** — AVDTP timeout constants and SBC
+bitpool caps are not exposed by BlueZ or WirePlumber configuration and would require
+patching source. That is a materially bigger undertaking than tuning.
+
+**Measurement bug found:** `reassembly_delta` returned -30 on one run — the kernel ring
+buffer wrapped between samples. That counter needs a monotonic source, not `dmesg | grep -c`.
 
 ### Consequence for methodology
 
