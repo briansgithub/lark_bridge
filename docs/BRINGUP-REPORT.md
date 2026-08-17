@@ -199,6 +199,29 @@ was written specifically because `hcitool` is deprecated and may vanish.
    Debug PipeWire by running it in the foreground with `WIREPLUMBER_DEBUG=D`.
 8. **Restarting `bluetooth.service` drops all connections** and orphans PipeWire's endpoint
    registrations. Restart WirePlumber afterwards, and expect to reconnect devices.
+9. **`pw-loopback -P <props>` silently defeats `--playback <target>`.** With any playback
+   property dict at all the stream lands on the DEFAULT sink and nothing reports an error.
+   Measured, same call otherwise identical:
+
+   | invocation | result |
+   |---|---|
+   | no `-P` | `bluez_output…` **correct** |
+   | `-P "{ node.pause-on-idle=false }"` | dongle B — wrong |
+   | `-P "{ media.role=Communication … }"` | dongle B — wrong |
+   | `-P "{ target.object=<sink> … }"` | dongle B — wrong |
+
+   Re-supplying `target.object` by hand does **not** rescue it, so this is not simply "`-P`
+   overwrites what `--playback` set". Do not pass `-P` on a leg whose target matters. This cost
+   an evening: the uplink appeared to work only because WirePlumber had *also* auto-linked the
+   Lark straight to the HFP sink, so the mic was being summed into the call twice by a path
+   nobody configured.
+10. **Verify where a loopback actually landed — never assume.** `--capture`/`--playback` are a
+    *request*. `bridge_supervisor.py` checks with `pw-link -l` and restarts the leg if it is
+    wrong. Use plain `pw-link -l`; adding `-I` right-aligns object IDs so every line begins with
+    whitespace, the node-header test never fires, and the parser silently returns zero links.
+11. **`pkill -f "pw-loopback …"` over SSH kills your own session.** The remote shell's command
+    line contains the pattern, so it matches itself; you get exit 255 and lose all output. Kill
+    by PID captured from `$!`.
 
 ---
 
@@ -206,9 +229,9 @@ was written specifically because `hcitool` is deprecated and may vanish.
 
 | Item | Notes |
 |---|---|
-| **R1 — HFP + A2DP on one radio** | Now the top risk. Measurement loop ready (U22). Hypothesis to test: `SCO MTU 64:1` is a single-buffer queue, a plausible place for contention to show first. |
-| Mode 1 signal path | Nodes exist on both sides; the `bridge.mic` / `bridge.callout` loopbacks are not yet wired. |
-| E02 part 3 | 30-minute HFP stability soak not yet run. |
+| **R1 — HFP + A2DP on one radio** | **Measured PARTIAL — see E03.** Intermittent; our own stack tears A2DP down under active SCO. Config-level mitigations exhausted; four untried non-config avenues listed in E03 before it may be called a hardware limitation. Mode 1 is deferred at the user's request. |
+| Mode 1W signal path | **Working and verified.** `bridge-supervisor` builds `Lark → HFP sink` and `HFP source → dongle A` on call-up and tears them down on call-end. |
+| E02 part 3 | **PASS** — 30-minute HFP soak clean. |
 | SIM `LOADED,NOT_READY` | Native cellular calls may not place; VoIP (Discord) works and was used throughout. |
 | Pico track | Soldered except the **1N400x diode**. Until it is fitted, do **not** connect Pi 5 V → VSYS; power the Pico from USB only. |
 | Reboot persistence | `bridge-btfw.service` is enabled but has not yet survived an actual reboot. |

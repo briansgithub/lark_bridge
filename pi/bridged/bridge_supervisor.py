@@ -82,8 +82,48 @@ def pw_nodes() -> set[str]:
     return names
 
 
+def pw_links() -> list[tuple[str, str]]:
+    """(output_node, input_node) for every link, node names only.
+
+    Uses plain `pw-link -l`: node lines start at column 0, link lines are indented.
+    Do NOT add -I -- it right-aligns object IDs so EVERY line starts with whitespace,
+    the "is this a node header" test never fires, and the parser reports zero links.
+    That made the verifier thrash both legs, including the one that was already correct.
+    """
+    try:
+        out = subprocess.run(
+            ["pw-link", "-l"], capture_output=True, text=True, timeout=10, check=False
+        ).stdout
+    except (subprocess.SubprocessError, OSError):
+        return []
+    links: list[tuple[str, str]] = []
+    current = None
+    for raw in out.splitlines():
+        if not raw.startswith((" ", "\t")):
+            current = raw.strip().split(":")[0]
+            continue
+        s = raw.strip()
+        if current is None or not s:
+            continue
+        if s.startswith("|->"):
+            links.append((current, s[3:].strip().split(":")[0]))
+        elif s.startswith("|<-"):
+            links.append((s[3:].strip().split(":")[0], current))
+    return links
+
+
+def unlink(src: str, dst: str) -> None:
+    """Remove every port-level link between two nodes."""
+    subprocess.run(["pw-link", "-d", src, dst], capture_output=True, timeout=10, check=False)
+
+
 class Loopback:
-    """One pw-loopback process, started only when both endpoints exist."""
+    """One pw-loopback process, started only when both endpoints exist.
+
+    pw-loopback names its nodes `input.<name>` and `output.<name>` — NOT
+    `<name>.capture`/`<name>.playback`. Getting that wrong makes every link query come
+    back empty and the graph look broken when it is fine.
+    """
 
     def __init__(self, name: str, capture: str, playback: str, channels: str):
         self.name = name
@@ -91,6 +131,30 @@ class Loopback:
         self.playback = playback
         self.channels = channels
         self.proc: subprocess.Popen | None = None
+        self.verified = False
+        self.attempts = 0
+        self.started_at = 0.0
+
+    @property
+    def out_node(self) -> str:
+        return f"output.{self.name}"
+
+    @property
+    def in_node(self) -> str:
+        return f"input.{self.name}"
+
+    def check_targets(self, links: list[tuple[str, str]]) -> bool:
+        """Did the loopback actually attach where we asked?
+
+        pw-loopback's --capture/--playback are a REQUEST. If the target is not ready to
+        accept at the moment the process starts, WirePlumber links the stream to the
+        DEFAULT device instead and nothing reports an error. Observed: the microphone leg
+        silently attached to the wrong sink, and the uplink only worked because
+        WirePlumber had ALSO auto-linked the source directly to the HFP sink. Verify.
+        """
+        outs = {d for s, d in links if s == self.out_node}
+        ins = {s for s, d in links if d == self.in_node}
+        return self.playback in outs and self.capture in ins
 
     @property
     def running(self) -> bool:
@@ -99,18 +163,31 @@ class Loopback:
     def start(self) -> None:
         if self.running:
             return
+        # DO NOT add -P here. Measured 2026-08-16: passing ANY playback property dict
+        # makes pw-loopback ignore --playback and land on the DEFAULT sink instead.
+        #
+        #   (no -P)                                        -> bluez_output...  CORRECT
+        #   -P "{ node.pause-on-idle=false }"              -> dongle B         wrong
+        #   -P "{ media.role=Communication ... }"          -> dongle B         wrong
+        #   -P "{ target.object=<sink> ... }"              -> dongle B         wrong
+        #
+        # Note the last row: re-supplying target.object by hand does NOT rescue it, so this
+        # is not a simple "-P overwrites the props --playback set". Whatever the mechanism,
+        # -P and --playback do not compose. The idle tweak is not worth a silently wrong
+        # target — this leg carries the microphone uplink, and the wrong sink is inaudible
+        # to the caller rather than obviously broken.
         cmd = [
             "pw-loopback",
             "--name", self.name,
             "--capture", self.capture,
             "--playback", self.playback,
             "--channels", self.channels,
-            "-P", '{ media.role=Communication node.pause-on-idle=false }',
         ]
         log.info("starting %s: %s -> %s", self.name, self.capture, self.playback)
         self.proc = subprocess.Popen(
             cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
+        self.started_at = time.monotonic()
 
     def stop(self, why: str) -> None:
         if not self.running:
@@ -175,9 +252,49 @@ def main() -> int:
                 callout.start()
             elif callout.running:
                 callout.stop("wired output disappeared")
+
+            links = pw_links()
+
+            # Remove WirePlumber's default-device auto-links that BYPASS the loopbacks.
+            # Observed twice: the Lark gets linked straight to the HFP sink in addition
+            # to going through bridge.mic, so the microphone is summed into the uplink
+            # TWICE. The supervisor cannot prevent this (it is default-device policy, not
+            # loopback behaviour), so it removes it after the fact.
+            for src, dst in links:
+                if src == LARK and dst == HFP_SINK:
+                    log.info("removing duplicate auto-link %s -> %s", src, dst)
+                    unlink(src, dst)
+                elif src == HFP_SOURCE and dst not in (WIRED_OUT, callout.in_node):
+                    log.info("removing stray downlink %s -> %s", src, dst)
+                    unlink(src, dst)
+
+            # Verify each leg landed where asked; restart it if not.
+            for leg in legs:
+                if not leg.running:
+                    continue
+                # Give it time to attach before judging. Verifying immediately after
+                # spawn races the link being made and looks like a wrong target.
+                if time.monotonic() - leg.started_at < 4.0:
+                    continue
+                if leg.check_targets(links):
+                    if not leg.verified:
+                        log.info("%s verified: %s -> %s", leg.name, leg.capture, leg.playback)
+                        leg.verified = True
+                    leg.attempts = 0
+                elif leg.attempts < 5:
+                    leg.attempts += 1
+                    log.warning(
+                        "%s attached to the wrong target (attempt %d) — restarting",
+                        leg.name, leg.attempts,
+                    )
+                    leg.stop("wrong target")
+                else:
+                    log.error("%s will not attach to %s after 5 attempts", leg.name, leg.playback)
         else:
             for leg in legs:
                 leg.stop("call ended")
+                leg.verified = False
+                leg.attempts = 0
 
         # A pw-loopback that died on its own (PipeWire restart, target vanished mid-call)
         # must not be left as a phantom: clear it so the next tick restarts it cleanly.
