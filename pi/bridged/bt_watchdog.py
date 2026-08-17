@@ -54,12 +54,22 @@ import time
 REPO = os.environ.get("BRIDGE_REPO", "/home/admin/rpi-lark-bridge")
 BT_RESET = os.path.join(REPO, "scripts", "bt-reset.sh")
 
-PROBE_INTERVAL = float(os.environ.get("BRIDGE_WD_INTERVAL", "30"))
-# 2 consecutive failures ~= 40-70 s of confirmed silence before acting. The probe itself
-# blocks until the kernel's HCI command timeout (~20 s) when the controller is wedged, so
-# each "failure" already represents a real timeout rather than a quick negative.
+# Timing is derived from the acceptance bar: a wedge must self-heal within ~90 s, measured from
+# the fault to call audio being back.
+#
+# The awkward case is a WEDGED controller (as opposed to an absent one): the probe does not fail
+# fast, it BLOCKS until its timeout, because the command is accepted and simply never answered.
+# So detection latency is (timeout + interval + timeout), not (interval x failures).
+#
+#     worst case detect = 20 + 15 + 20 = 55 s
+#     bt-reset.sh       ~= 30 s   (measured: rungs 1-6 plus endpoint re-registration)
+#     total             ~= 85 s   <- inside the 90 s bar
+#
+# The earlier defaults (30 s interval, 25 s timeout) gave 80 s detect + 30 s recovery = 110 s,
+# which missed the bar. Do not raise these without redoing that arithmetic.
+PROBE_INTERVAL = float(os.environ.get("BRIDGE_WD_INTERVAL", "15"))
 FAILURES_TO_ACT = int(os.environ.get("BRIDGE_WD_FAILURES", "2"))
-PROBE_TIMEOUT = float(os.environ.get("BRIDGE_WD_PROBE_TIMEOUT", "25"))
+PROBE_TIMEOUT = float(os.environ.get("BRIDGE_WD_PROBE_TIMEOUT", "20"))
 
 PHONE_MAC = os.environ.get("BRIDGE_PHONE_MAC", "5C:33:7B:CB:BF:C5")
 # Wait before initiating to the phone ourselves, so we do not race Android's own reconnect.
@@ -210,13 +220,22 @@ def main() -> int:
 if __name__ == "__main__":
     raise SystemExit(main())
 
-# VALIDATION STILL OWED
-# ---------------------
-# Untested against a real wedge. Before enabling:
-#   1. Confirm `controller_answers()` returns False on a genuinely wedged controller, and how
-#      long the probe blocks (assumed ~20 s from the kernel HCI timeout — verify).
-#   2. Confirm it does NOT fire during a normal bt-reset, a bluetooth.service restart, or an
-#      adapter down/up, all of which briefly make hci0 unavailable.
-#   3. Confirm a false positive is survivable: force a reset mid-call and time the recovery.
-#   4. Decide whether RECONNECT should default on. It contradicts trap 5's general advice and
-#      is justified only by the Pixel's measured failure to re-initiate after a BT toggle.
+# VALIDATION STATUS — measured 2026-08-17
+# ---------------------------------------
+# PASSED, no call active:
+#   * No false positive across `systemctl restart bluetooth` or `hciconfig hci0 down/up`.
+#     Zero bt-reset invocations over both perturbations.
+#   * Detection and recovery end to end: unbinding hci_uart_bcm (so hci0 vanishes) produced
+#         controller did not answer (1/2)
+#         controller did not answer (2/2)
+#         running bt-reset.sh  ->  RECOVERED at rung 6
+#     and hci0 returned UP RUNNING PSCAN ISCAN with the version probe answering.
+#
+# STILL OWED — needs a live call and therefore the operator:
+#   * The acceptance criterion itself: after recovery, does **call audio return unaided**?
+#     The phone logged `resetBluetoothSco` and fell back to its earpiece during occurrence 5,
+#     so Android may not re-route on its own. If it does not, this must do more than reconnect
+#     — and the fix has to work with no PC present, so `adb` is not an option.
+#   * Detection latency against a REAL wedge rather than an absent adapter. An unbound driver
+#     fails the probe quickly; a wedged controller blocks until PROBE_TIMEOUT. The timing above
+#     assumes the latter; confirm it.

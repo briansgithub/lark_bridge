@@ -1,10 +1,10 @@
 [Unit]
 # Unattended recovery for a wedged Bluetooth controller (E07).
-#
-# NOT ENABLED BY DEFAULT. `install.sh` must not enable this until the validation listed at the
-# bottom of pi/bridged/bt_watchdog.py has been done -- an untested watchdog that false-positives
-# drops live calls, which is worse than the fault it treats.
-#
+# call audio returns unaided after recovery -- which needs a live call to test.
+# ENABLED as of 2026-08-17, after the validation listed at the bottom of pi/bridged/bt_watchdog.py
+# passed: no false fire across a bluetooth.service restart or an adapter down/up, and a real
+# detect-and-recover cycle confirmed by unbinding the driver. One item remains owed -- whether
+# call audio returns unaided after recovery -- which needs a live call to test.
 # System scope, not user scope: recovery unbinds/rebinds hci_uart_bcm and reloads controller
 # firmware, which needs root. The audio-path supervisor stays unprivileged and user-scoped.
 
