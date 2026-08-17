@@ -1244,7 +1244,7 @@ Score = probability × impact, both 1–5.
 
 | # | Risk | P | I | Score | Mitigation | Resolving test |
 |---|---|---|---|---|---|---|
-| R1 | **Single radio cannot sustain HFP/SCO + A2DP acceptably** | 4 | 4 | **16** | Mode 1W as a first-class mode; Wi-Fi off; SBC bitpool cap; larger A2DP buffer; document as measured limitation | S3, E1–E6 |
+| R1 | **Single radio cannot sustain HFP/SCO + A2DP acceptably** | **5** | 4 | **20** | **CONFIRMED by measurement (E03): A2DP is torn down by our own stack seconds after SCO starts, reproduced on two devices. Mechanism is an AVDTP timeout, so mitigations are untried, not exhausted: AVDTP timeout tuning, bitpool cap, Wi-Fi off.** Mode 1W unaffected. | **E03 (done)** |
 | R2 | **SCO never reaches the host on BCM43438** (PCM routing) | 3 | 5 | **15** | DT `brcm,bt-pcm-int-params`; runtime vendor HCI command; both shipped | **S1** |
 | R3 | Android won't route calls to a USB headset | 3 | 4 | 12 | Mode 1/1W do not depend on this; Mode 2 is the secondary path by design | M12/J1–J3 |
 | R4 | WirePlumber/PipeWire instability in the HFP HF path | 3 | 4 | 12 | Pin versions; HSP fallback; systemd restart + `bridged` health; loopbacks survive restarts | S2, I6 |

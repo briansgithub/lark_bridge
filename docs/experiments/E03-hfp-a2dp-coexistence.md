@@ -79,13 +79,89 @@ Change one at a time, per `PLAN.md` §6.7:
 verdict is negative — they are what turns "it didn't work" into a defensible measured
 limitation.
 
-## Result
+## Result — 2026-08-16, stepwise isolation
 
-_(fill in)_
+Earlier attempts changed several variables at once and produced uninterpretable results. The
+protocol was redone one variable at a time, with the operator confirming audible 1 kHz pips
+(one per second — a *missing* pip is unambiguous where a stutter in a continuous tone is not)
+before each transition.
+
+| Step | Change | Objective | Subjective (operator) |
+|---|---|---|---|
+| **A** | A2DP alone | 1 ACL, transport active, controller alive | **pips clean** |
+| **B** | + HFP connected, **no call** | 2 ACL, transport active, 6 reassembly errors | **pips clean, no stutter** |
+| **C** | + call routed, **SCO live** | 2 ACL + eSCO, SCO rx/tx 804 per 6 s (nominal), controller alive | **degraded the instant SCO started**, recovered, ran ~20 s, then stopped |
+| **C′** | sustained streaming + SCO | SCO still nominal; **A2DP link torn down** | silence, then disconnect |
+
+### Two ACL links are NOT the problem
+
+Step B is the important negative control: **A2DP and HFP coexist perfectly with no call
+active.** Pips were clean by ear and the transport stayed active. Whatever fails is
+specifically about **SCO**, not about holding two links.
+
+### What actually tears the A2DP link down
+
+Not the peer. The HCI trace is explicit:
+
+```
+< HCI Command: Disconnect (0x01|0x0006)     Reason: Remote User Terminated (0x13)
+> Disconnect Complete                        Reason: Connection Terminated By Local Host (0x16)
+@ MGMT Device Disconnected 98:47:44:CD:73:DE Reason: Connection terminated by local host (0x02)
+```
+
+`<` means the **host sent** the Disconnect. **Our own stack tore the link down.** In the
+earlier iWorld run, bluetoothd logged `avdtp.c:cancel_request() Suspend…` then `Abort…`
+immediately before doing the same thing.
+
+**Working mechanism:** active SCO starves the ACL/AVDTP path → AVDTP signalling times out →
+bluetoothd aborts and disconnects the A2DP device. The radio is not refusing; a *timeout in
+our own stack* is giving up.
+
+### Reproduced across two devices
+
+The iWorld was suspected of being flaky (two `br-connection-page-timeout` failures, an
+unprompted drop, and a self-reset into pairing mode). It was replaced with a **Soundcore
+Space A40** as a control. **The A40 failed the same way**, which removes the peer as the
+explanation.
+
+### Controller wedge is a SEPARATE failure
+
+In this run the controller **stayed alive** through the A2DP teardown (SCO continued at
+nominal rate). The wedges seen earlier are therefore not the same event as the A2DP drop,
+and should not be conflated. See E07.
 
 ## Verdict
 
-_(PASS < 1/min · PARTIAL 1–10/min · FAIL > 10/min or SCO disconnects)_
+**FAIL for sustained simultaneous operation — but the failure is in software, not proven to
+be in the radio.**
+
+Mode 1 (call audio to a Bluetooth car stereo while HFP carries the call) is **not currently
+reliable**. The A2DP link survives seconds to tens of seconds once SCO is active, then our
+stack disconnects it.
+
+Confidence: **high that the behaviour is real** (reproduced, two devices, clean stepwise
+isolation, explicit HCI evidence of a local teardown). **Low that it is irreducible** — the
+proximate cause is an AVDTP timeout, which is a tunable, not a physical limit.
+
+## Before declaring this a hardware limitation
+
+The brief requires documenting a *measured* limitation rather than designing around it. That
+bar is not met yet, because these are untried:
+
+1. **AVDTP/AVRCP timeout tuning** in BlueZ — the teardown is a timeout, so lengthening it may
+   simply let A2DP ride through SCO reservation windows.
+2. **Larger A2DP buffering** (`session.suspend-timeout-seconds`, node latency) to survive
+   starvation periods.
+3. **Lower SBC bitpool / smaller ACL duty cycle** — `bluez5.enable-sbc-xq=false` is already
+   set, but bitpool has not been capped.
+4. **Wi-Fi disabled** (`dtoverlay=disable-wifi`) — never tested; the Pi's 2.4 GHz radio shares
+   a die with Bluetooth and is currently enabled.
+5. **`ControllerMode = bredr`** is configured but was never verified as applied.
+
+Until at least 1, 3 and 4 are tried, "the Pi 3 cannot do HFP + A2DP" is unproven.
+
+**Mode 1W (wired output) is unaffected** — it never asks the radio to do two things, and is
+already proven end to end.
 
 ## Consequences for the plan
 
