@@ -1,0 +1,79 @@
+Optimize LarkBridge boot path and harden Bluetooth SCO initialization
+
+Summary:
+- Audited Raspberry Pi 3B boot dependencies and measured actual readiness times for:
+  - Bluetooth/BlueZ
+  - BCM43438 SCO routing
+  - NetworkManager
+  - SSH
+  - user@1000
+  - PipeWire
+  - WirePlumber
+
+Boot optimization changes:
+- Disabled cloud-init using /etc/cloud/cloud-init.disabled after first:
+  - persisting the active Ethernet NetworkManager profile under
+    /etc/NetworkManager/system-connections/
+  - preserving the existing connection UUID
+  - verifying autoconnect, hostname, SSH, user account, linger state, and network persistence
+- Left NetworkManager-wait-online installed/unmasked; once cloud-init was disabled it naturally stopped participating in boot.
+- Removed the stale comment-only PipeWire drop-in:
+  ~/.config/pipewire/pipewire.conf.d/20-bridge-endpoints.conf
+  by renaming it to .notes.txt so PipeWire no longer attempts to parse it.
+- Preserved the existing PipeWire/WirePlumber user-service architecture.
+- Kept loginctl linger enabled for admin.
+
+User-manager startup optimization:
+- Found that user@1000.service was delayed by:
+    user@1000.service
+      -> systemd-user-sessions.service
+      -> network.target
+      -> NetworkManager.service
+- The dependency came from systemd's vendor drop-in:
+    /usr/lib/systemd/system/user@.service.d/10-login-barrier.conf
+- Added an instance-specific /dev/null override for user@1000.service only:
+    /etc/systemd/system/user@1000.service.d/10-login-barrier.conf -> /dev/null
+- This lets the lingering LarkBridge user manager, PipeWire, and WirePlumber start
+  in parallel with networking without changing global login/session policy.
+
+Bluetooth SCO routing hardening:
+- Diagnosed an intermittent boot failure in bridge-btfw.service.
+- The BCM43438 occasionally rejected Write_SCO_PCM_Int_Param during early boot,
+  even though the same command succeeded later.
+- Confirmed this was a transient controller-readiness race rather than a bad
+  command or broken Bluetooth stack.
+- Replaced the legacy single-attempt SCO routing logic with bounded retries:
+  - poll Read_SCO_PCM_Int_Param
+  - detect whether routing is already 0x01
+  - retry the vendor write if necessary
+  - read back and verify the final value
+  - fail only after a bounded retry window
+- No blind fixed startup sleep was added.
+- Verified SCO routing after reboot as:
+    01 02 00 01 01
+  where routing byte 0x01 means Transport/HCI.
+- bridge-btfw.service now completes successfully during boot.
+
+Safety/rollback behavior:
+- All optimizations are gated by runtime verification rather than assumptions.
+- Persistent NetworkManager state is checked before disabling cloud-init.
+- The systemd login-barrier change is scoped only to UID 1000.
+- The original SCO routing script is preserved in optimizer rollback state.
+- Rollback remains available through:
+    Optimize-LarkBridgeBoot-v6.ps1 -Mode Rollback
+
+Result:
+- Original total boot time: ~27.6 s
+- Current total boot time: ~18.5 s
+- Original PipeWire/WirePlumber readiness: ~24.1 s
+- Current PipeWire readiness: ~14.00 s
+- Current WirePlumber readiness: ~14.02 s
+- Bluetooth ready: ~11.95 s
+- SCO routing verified: ~13.61 s
+- Audio stack now starts independently of networking.
+- Zero failed systemd units after the final reboot.
+
+Current remaining bottleneck:
+- NetworkManager still takes ~6 s, but it no longer blocks the LarkBridge audio
+  stack, so further optimization should focus on actual bridge application
+  readiness rather than generic multi-user.target boot time.
