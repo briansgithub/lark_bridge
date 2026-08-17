@@ -1,0 +1,41 @@
+[Unit]
+# Latency tuning for the Bluetooth HCI UART (E07).
+#
+# The BT PL011 runs PIO with a 32-byte FIFO and no DMA (`dmas` absent from the device tree),
+# giving ~347 us of slack at 921600 baud before RX bytes are lost. Losing one byte desynchronises
+# the H4 stream permanently -- only a firmware reload recovers it. Anything that shortens the
+# interrupt-service path is therefore worth having.
+
+Description=rpi-lark-bridge latency tuning for the HCI UART
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# CPU governor: ondemand -> performance.
+#
+# Measured default: `ondemand` over 600-1200 MHz. At 600 MHz the UART ISR takes twice as long to
+# run, and each governor transition is itself a stall. Neither is affordable against a 347 us
+# budget. This pins the clock high; the Pi lives in a car with mains-equivalent power, so the
+# extra idle draw is irrelevant here.
+ExecStart=/bin/sh -c 'for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > "$g" || exit 1; done'
+
+# Verify rather than assume -- writing a governor can silently no-op if the driver rejects it.
+ExecStart=/bin/sh -c 'grep -qx performance /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor || { echo "governor did not take"; exit 1; }'
+
+# WHAT IS DELIBERATELY *NOT* HERE: IRQ affinity.
+#
+# The obvious move is to pin uart-pl011 (IRQ 99) to a core other than the one serving
+# dwc_otg_sim-fiq (IRQ 51, 153M interrupts, and a FIQ masks ordinary IRQs). It cannot be done.
+# Measured 2026-08-17:
+#
+#     all three IRQs report effective_affinity = 0   (everything lands on CPU0)
+#     echo 8 > /proc/irq/99/smp_affinity             -> write REJECTED
+#
+# The BCM2837 ARMCTRL routes peripheral interrupts to core 0 only; per-core routing exists for
+# local timers and mailboxes, not for peripherals. Do not retry this -- it is a hardware property
+# of the interrupt controller, not a configuration mistake.
+
+[Install]
+WantedBy=multi-user.target
