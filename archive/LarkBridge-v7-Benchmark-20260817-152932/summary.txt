@@ -1,0 +1,38 @@
+﻿LarkBridge v7 multi-boot benchmark
+Generated: 2026-08-17T15:34:09.2926098-04:00
+Host: admin@192.168.0.251
+Boots: 7
+
+Timing statistics
+-----------------
+TuningSec          mean=  11.788s  min=  11.700s  max=  11.957s  stddev=  0.081s
+BluetoothSec       mean=  12.223s  min=  12.126s  max=  12.394s  stddev=  0.082s
+BluetoothMgmtSec   mean=  12.408s  min=  12.312s  max=  12.564s  stddev=  0.077s
+ScoVerifySec       mean=  13.720s  min=  13.358s  max=  14.011s  stddev=  0.192s
+PipeWireSec        mean=  13.989s  min=  13.702s  max=  14.369s  stddev=  0.186s
+WirePlumberSec     mean=  14.006s  min=  13.726s  max=  14.385s  stddev=  0.184s
+SupervisorSec      mean=  14.016s  min=  13.733s  max=  14.394s  stddev=  0.185s
+HfpWatchSec        mean=  14.479s  min=  14.239s  max=  14.855s  stddev=  0.177s
+A2dpEndpointSec    mean=  15.883s  min=  15.742s  max=  16.231s  stddev=  0.161s
+
+Reliability
+-----------
+Boots with failed units: 1
+Boots not using performance governor: 0
+Boots without verified SCO params 01 02 00 01 01: 7
+
+Per-boot data
+-------------
+
+Boot BootId                               TuningSec BluetoothSec BluetoothMgmtSec ScoServiceSec ScoVerifySec UserManagerSec PipeWireSec WirePlumberSec
+---- ------                               --------- ------------ ---------------- ------------- ------------ -------------- ----------- --------------
+   1 206858a1-4572-43db-b137-79f5a669b797 11.957323    12.393523        12.563765     13.788959    13.785777      13.993878   14.002598      14.025362
+   2 406280e1-e7d7-4010-9337-cbc7f7b037f1 11.782761    12.185184        12.362553     13.709604     13.70579      13.951432    13.96106      13.971722
+   3 3f303aa8-2386-494b-88dc-eae5567a3693 11.844753    12.287526        12.467489     13.720596    13.704852      13.932446   13.942206      13.961728
+   4 ca21f30b-d004-42bf-95af-5677e372ae60 11.700036    12.126077        12.311813     13.758771    13.753207      13.884677    13.89557      13.909015
+   5 21764b25-2287-4a16-a670-44b6dbda19af   11.7466    12.203403        12.383684                                 13.693256   13.702112      13.726317
+   6 d53985d1-cdb9-46d7-ae9f-0cea885e8a45 11.731794    12.177212        12.386462     14.015392    14.011327      14.360165   14.368911      14.385424
+   7 67b7c193-59e1-44db-ae50-c4f46088a55c 11.751482    12.189998        12.376845     13.361236    13.357904      14.037921   14.049276      14.059815
+
+
+
