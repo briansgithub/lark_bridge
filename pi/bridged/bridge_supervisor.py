@@ -50,9 +50,24 @@ LARK = os.environ.get(
     "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone"
     "_Wireless_Microphone-01.analog-stereo",
 )
+# Mode 1W output. Defaults to the Pi's OWN 3.5 mm jack, not a USB dongle.
+#
+# This is a measured decision, not a convenience. Every USB audio device on the Pi 3B shares
+# one dwc_otg bus, and that bus's interrupt load desynchronises the Bluetooth HCI UART
+# (E07 occurrence 4): the H4 stream loses byte alignment mid-call and only a firmware reload
+# recovers it. Measured on the same link, same phone, same call:
+#
+#     3 USB audio devices, output via dongle A -> desync after 17.2 s
+#     1 USB audio device  (Lark only), onboard -> 84k SCO frames, 0 desyncs
+#
+# The Lark is USB and cannot be moved off that bus -- it is the microphone. The OUTPUT can be,
+# so it is. Quality is a non-issue: the source is 16 kHz HFP call audio, far below what even
+# the Pi's PWM DAC resolves, and it feeds a car aux input either way.
+#
+# Override with BRIDGE_WIRED_OUT to go back to a USB dongle.
 WIRED_OUT = os.environ.get(
     "BRIDGE_WIRED_OUT",
-    "alsa_output.usb-Generic_AB13X_USB_Audio_202405280846-00.analog-stereo",
+    "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
 )
 PHONE_MAC = os.environ.get("BRIDGE_PHONE_MAC", "5C:33:7B:CB:BF:C5")
 _M = PHONE_MAC.replace(":", "_")

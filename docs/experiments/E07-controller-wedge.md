@@ -279,6 +279,48 @@ Run 9 is the key control: if reassembly errors are near zero without SCO and cli
 it, the SCO-over-HCI load is confirmed as the driver and the design decision from E01 becomes
 the thing to revisit.
 
+## Runs 11 and 12 — USB confirmed as the trigger; a fix follows from it
+
+Run 11 executed the test above: identical link, identical phone, call routed to `larkbridge`,
+**all three USB audio devices physically unplugged**, supervisor stopped.
+
+| | occurrence 4 (3 USB devices streaming) | run 11 (USB bus empty) |
+|---|---|---|
+| time to desync | **17.2 s** | **none in 228 s** |
+| `SCO Data RX` | 2294, then 0 | **30 354, still flowing** |
+| bogus `Vendor (0xff)` events | 709 | **0** |
+| `Frame reassembly failed` | 2868/hour | **0** |
+| controller at end | wedged | alive |
+
+Run 12 then added back **only the Lark** and routed call audio to the **Pi's onboard 3.5 mm
+jack** instead of dongle A — one USB audio device instead of three:
+
+- **84 102** SCO RX frames over **10 min 31 s** of continuous call
+- **0** desyncs, **0** reassembly errors, controller alive
+- Operator confirmed the far end was audible on the onboard jack
+
+**Caveat on run 12's strength:** only the final ~2–3 minutes had the Lark actually streaming;
+the earlier part of that window was the USB-free baseline. So run 12 is **7–10× past the known
+failure point, not proof**. Given E03's 7 s–120 s spread, only a 30–60 minute soak settles it.
+
+`dwc_otg` FIQ mitigations were already active throughout (`fiq_enable=Y`, `fiq_fsm_enable=Y`),
+so this is not a case of a missing standard workaround — the load is simply too much for the
+PL011's 32-byte RX FIFO to ride out.
+
+### Design consequence, applied
+
+`bridge_supervisor.py` now defaults `BRIDGE_WIRED_OUT` to
+`alsa_output.platform-3f00b840.mailbox.stereo-fallback` — the Pi's own headphone jack.
+
+The Lark is USB and **cannot** be moved off that bus; it is the microphone. The output can be,
+so it is. This costs nothing: the source is 16 kHz HFP call audio, well below what the Pi's PWM
+DAC resolves, and it feeds a car aux input either way. It also deletes dongle A from the product
+entirely, and with it trap 6 (combo-jack re-enumeration).
+
+Dongle B remains **rig-only** — a measurement tap, never part of the shipped bridge. Any test
+that plugs it in is measuring a configuration the product does not use, and that now matters,
+because each USB audio device measurably shortens time-to-desync.
+
 ## Required regardless of cause: automatic recovery
 
 The product must survive this unattended in a car. Three occurrences, one manual `bt-reset.sh`
