@@ -69,6 +69,8 @@ WIRED_OUT = os.environ.get(
     "BRIDGE_WIRED_OUT",
     "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
 )
+AEC_ENABLED = os.environ.get("BRIDGE_AEC", "1") not in ("0", "false", "no")
+
 PHONE_MAC = os.environ.get("BRIDGE_PHONE_MAC", "5C:33:7B:CB:BF:C5")
 _M = PHONE_MAC.replace(":", "_")
 HFP_SINK = f"bluez_output.{_M}.1"    # audio TO the phone   (our microphone uplink)
@@ -130,6 +132,67 @@ def pw_links() -> list[tuple[str, str]]:
 def unlink(src: str, dst: str) -> None:
     """Remove every port-level link between two nodes."""
     subprocess.run(["pw-link", "-d", src, dst], capture_output=True, timeout=10, check=False)
+
+
+class AECManager:
+    """Manages the PipeWire/PulseAudio echo-cancel module lifecycle via pactl."""
+
+    def __init__(self, mic_source: str, speaker_sink: str):
+        self.mic_source = mic_source
+        self.speaker_sink = speaker_sink
+        self.module_id: str | None = None
+        self.name = "aec-bridge"
+
+    @property
+    def source_node(self) -> str:
+        return "echo-cancel-source"
+
+    @property
+    def sink_node(self) -> str:
+        return "echo-cancel-sink"
+
+    def start(self) -> bool:
+        if self.module_id:
+            return True
+
+        # Using pactl for reliability in this environment.
+        # webrtc is the preferred engine.
+        # we set source_master and sink_master to Lark and Wired Out.
+        # NS and AGC are disabled to avoid "cutting out" during double-talk.
+        # "Emergency" mode for Pi 3: rate 16k, simplified pactl args.
+        args = [
+            "aec_method=webrtc",
+            f"source_master={self.mic_source}",
+            f"sink_master={self.speaker_sink}",
+            "source_name=echo-cancel-source",
+            "sink_name=echo-cancel-sink",
+            "rate=16000",
+            "channels=1",
+            "aec_args=\"webrtc.noise_suppression=false webrtc.gain_control=false webrtc.extended_filter=false webrtc.high_pass_filter=false\"",
+        ]
+
+        log.info("loading module-echo-cancel via pactl: %s", " ".join(args))
+        try:
+            res = subprocess.run(
+                ["pactl", "load-module", "module-echo-cancel"] + args,
+                capture_output=True, text=True, timeout=10, check=True
+            )
+            self.module_id = res.stdout.strip()
+            log.info("AEC module loaded with ID %s", self.module_id)
+            return True
+        except (subprocess.SubprocessError, OSError) as exc:
+            log.error("failed to load AEC module via pactl: %s", exc)
+            return False
+
+    def stop(self) -> None:
+        if not self.module_id:
+            return
+        log.info("unloading AEC module %s", self.module_id)
+        subprocess.run(
+            ["pactl", "unload-module", self.module_id],
+            capture_output=True, timeout=10, check=False
+        )
+        self.module_id = None
 
 
 class Loopback:
@@ -227,8 +290,16 @@ def main() -> int:
         stream=sys.stdout,
     )
 
-    mic = Loopback("bridge.mic", LARK, HFP_SINK, "1")
-    callout = Loopback("bridge.callout", HFP_SOURCE, WIRED_OUT, "2")
+    aec = AECManager(LARK, WIRED_OUT)
+
+    if AEC_ENABLED:
+        # With AEC, the phone nodes link to the AEC virtual nodes
+        mic = Loopback("bridge.mic", aec.source_node, HFP_SINK, "1")
+        callout = Loopback("bridge.callout", HFP_SOURCE, aec.sink_node, "1")
+    else:
+        mic = Loopback("bridge.mic", LARK, HFP_SINK, "1")
+        callout = Loopback("bridge.callout", HFP_SOURCE, WIRED_OUT, "2")
+
     legs = (mic, callout)
 
     stopping = False
@@ -256,17 +327,27 @@ def main() -> int:
             last_call_up = call_up
 
         if call_up:
+            if AEC_ENABLED:
+                if not aec.start():
+                    log.error("AEC failed to start; call routing will be broken")
+
             # Only start a leg once its own endpoints are both present. The Lark or the
             # wired output can be unplugged independently of the phone.
-            if LARK in nodes:
+            if AEC_ENABLED:
+                # We assume LARK and WIRED_OUT are present if AEC started,
+                # but we still need to wait for HFP nodes which we know are there.
                 mic.start()
-            elif mic.running:
-                mic.stop("lark disappeared")
-
-            if WIRED_OUT in nodes:
                 callout.start()
-            elif callout.running:
-                callout.stop("wired output disappeared")
+            else:
+                if LARK in nodes:
+                    mic.start()
+                elif mic.running:
+                    mic.stop("lark disappeared")
+
+                if WIRED_OUT in nodes:
+                    callout.start()
+                elif callout.running:
+                    callout.stop("wired output disappeared")
 
             links = pw_links()
 
@@ -279,9 +360,13 @@ def main() -> int:
                 if src == LARK and dst == HFP_SINK:
                     log.info("removing duplicate auto-link %s -> %s", src, dst)
                     unlink(src, dst)
-                elif src == HFP_SOURCE and dst not in (WIRED_OUT, callout.in_node):
-                    log.info("removing stray downlink %s -> %s", src, dst)
-                    unlink(src, dst)
+                elif src == HFP_SOURCE:
+                    # If AEC is enabled, the HFP source should ONLY go to the AEC sink
+                    # via the callout loopback. It should NOT go directly to WIRED_OUT.
+                    allowed = [callout.in_node]
+                    if dst not in allowed:
+                        log.info("removing stray downlink %s -> %s", src, dst)
+                        unlink(src, dst)
 
             # Verify each leg landed where asked; restart it if not.
             for leg in legs:
@@ -310,6 +395,8 @@ def main() -> int:
                 leg.stop("call ended")
                 leg.verified = False
                 leg.attempts = 0
+            if AEC_ENABLED:
+                aec.stop()
 
         # A pw-loopback that died on its own (PipeWire restart, target vanished mid-call)
         # must not be left as a phantom: clear it so the next tick restarts it cleanly.
