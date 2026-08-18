@@ -158,8 +158,7 @@ class AECManager:
         # Using pactl for reliability in this environment.
         # webrtc is the preferred engine.
         # we set source_master and sink_master to Lark and Wired Out.
-        # NS and AGC are disabled to avoid "cutting out" during double-talk.
-        # "Emergency" mode for Pi 3: rate 16k, simplified pactl args.
+        # "Tuned" mode for Pi 3: rate 16k, extended_filter=true for cabin echoes.
         args = [
             "aec_method=webrtc",
             f"source_master={self.mic_source}",
@@ -168,7 +167,7 @@ class AECManager:
             "sink_name=echo-cancel-sink",
             "rate=16000",
             "channels=1",
-            "aec_args=\"webrtc.noise_suppression=false webrtc.gain_control=false webrtc.extended_filter=false webrtc.high_pass_filter=false\"",
+            "aec_args=\"webrtc.noise_suppression=true webrtc.gain_control=true webrtc.extended_filter=true webrtc.high_pass_filter=true\"",
         ]
 
         log.info("loading module-echo-cancel via pactl: %s", " ".join(args))
