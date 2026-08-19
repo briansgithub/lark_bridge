@@ -42,6 +42,31 @@ fi
 legacy=/home/admin/.config/pipewire/pipewire.conf.d/20-bridge-endpoints.conf
 if [ -e "$legacy" ]; then bad "active static PipeWire endpoint file exists"; else ok "static PipeWire endpoints absent"; fi
 
+fastpath="$(cat "$transaction/networkmanager-fastpath" 2>/dev/null || printf keep)"
+fastpath_script=/usr/local/lib/rpi-lark-bridge/boot-path/netplan
+fastpath_dropin=/etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf
+case "$fastpath" in
+    enable)
+        if [ -x "$fastpath_script" ] && [ -f "$fastpath_dropin" ]; then
+            ok "NetworkManager boot-only Netplan fast path deployed"
+        else
+            bad "NetworkManager boot-only Netplan fast path incomplete"
+        fi
+        if systemctl show NetworkManager.service -p Environment --value | grep -Fq '/usr/local/lib/rpi-lark-bridge/boot-path'; then
+            ok "NetworkManager boot-only path is effective for the next start"
+        else
+            bad "NetworkManager boot-only path is not effective"
+        fi
+        ;;
+    disable)
+        if [ ! -e "$fastpath_script" ] && [ ! -e "$fastpath_dropin" ]; then
+            ok "NetworkManager boot-only Netplan fast path absent"
+        else
+            bad "NetworkManager boot-only Netplan fast path was not removed"
+        fi
+        ;;
+esac
+
 show_has() {
     local unit="$1" property="$2" value="$3" values
     values="$(systemctl show "$unit" -p "$property" --value 2>/dev/null || true)"

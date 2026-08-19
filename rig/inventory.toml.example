@@ -25,7 +25,7 @@ boot_power_on_command = []
 boot_serial_capture_command = []
 boot_functional_probe_command = []
 # Applies a committed boot variant and arms its rollback timer before screening.
-boot_variant_apply_command = [] # may use {candidate}, {revision}, {run_dir}, {run_id}
+boot_variant_apply_command = ["python", "rig/boot/apply_variant.py", "--candidate", "{candidate}", "--revision", "{revision}", "--run-dir", "{run_dir}"]
 
 # Pixel 7a. Leave phone_serial empty if only one device is ever attached.
 # `adb devices` shows a USB serial; wireless shows <ip>:<port>, which changes on reboot,

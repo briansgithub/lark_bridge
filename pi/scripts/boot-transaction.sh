@@ -11,6 +11,7 @@ safe_target() {
     case "$1" in
         /etc/systemd/system/bridge-*.service|\
         /etc/systemd/system/bridge-*.timer|\
+        /etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf|\
         /etc/systemd/system/user@1000.service.d/10-login-barrier.conf|\
         /usr/local/lib/rpi-lark-bridge/*|\
         /home/admin/.config/pipewire/pipewire.conf.d/20-bridge-endpoints.conf|\

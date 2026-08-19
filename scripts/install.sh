@@ -10,9 +10,10 @@ LABEL="reconcile"
 DRY_RUN=0
 BOOT_ONLY=0
 BRIDGE_USER="${BRIDGE_USER:-admin}"
+NETWORKMANAGER_FASTPATH=keep
 
 usage() {
-    printf 'usage: sudo %s --boot-only [--dry-run] [--source-root PATH] [--transaction-label LABEL]\n' "$0"
+    printf 'usage: sudo %s --boot-only [--dry-run] [--source-root PATH] [--transaction-label LABEL] [--networkmanager-fastpath keep|enable|disable]\n' "$0"
 }
 
 while [ "$#" -gt 0 ]; do
@@ -21,6 +22,7 @@ while [ "$#" -gt 0 ]; do
         --dry-run) DRY_RUN=1 ;;
         --source-root) shift; SOURCE_ROOT="${1:?--source-root requires a path}" ;;
         --transaction-label) shift; LABEL="${1:?--transaction-label requires a value}" ;;
+        --networkmanager-fastpath) shift; NETWORKMANAGER_FASTPATH="${1:?--networkmanager-fastpath requires a value}" ;;
         -h|--help) usage; exit 0 ;;
         *) usage >&2; exit 2 ;;
     esac
@@ -28,6 +30,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ "$BOOT_ONLY" -eq 1 ] || { usage >&2; exit 2; }
+case "$NETWORKMANAGER_FASTPATH" in keep|enable|disable) ;; *) usage >&2; exit 2;; esac
 [ "$(id -u)" -eq 0 ] || { printf 'ERROR: must run as root\n' >&2; exit 1; }
 [ "$(uname -s)" = "Linux" ] || { printf 'ERROR: Linux is required\n' >&2; exit 1; }
 SOURCE_ROOT="$(cd "$SOURCE_ROOT" && pwd)"
@@ -55,6 +58,8 @@ managed_sources=(
     "pi/scripts/set-sco-routing.sh"
     "pi/scripts/boot-transaction.sh"
     "pi/scripts/boot-trial.sh"
+    "pi/scripts/netplan-startup-fastpath"
+    "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf"
     "pi/pipewire/pipewire.conf.d/20-bridge-endpoints.notes.txt"
 )
 for relative in "${managed_sources[@]}"; do
@@ -143,6 +148,25 @@ install_managed "pi/systemd/system/bridge-boot-trial-rollback.timer" "/etc/syste
 install_managed "pi/scripts/set-sco-routing.sh" "/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh" 0755
 install_managed "pi/scripts/boot-transaction.sh" "/usr/local/lib/rpi-lark-bridge/boot-transaction.sh" 0755
 install_managed "pi/scripts/boot-trial.sh" "/usr/local/lib/rpi-lark-bridge/boot-trial.sh" 0755
+
+fastpath_script=/usr/local/lib/rpi-lark-bridge/boot-path/netplan
+fastpath_dropin=/etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf
+printf '%s\n' "$NETWORKMANAGER_FASTPATH" > "$transaction/networkmanager-fastpath"
+case "$NETWORKMANAGER_FASTPATH" in
+    enable)
+        [ -x /usr/libexec/netplan/generate ] || die "Netplan generator is unavailable"
+        [ -x /usr/sbin/netplan ] || die "Netplan CLI is unavailable"
+        install_managed "pi/scripts/netplan-startup-fastpath" "$fastpath_script" 0755
+        install_managed "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf" \
+            "$fastpath_dropin" 0644
+        ;;
+    disable)
+        for target in "$fastpath_script" "$fastpath_dropin"; do
+            record_path "$target"
+            rm -f -- "$target"
+        done
+        ;;
+esac
 
 pipewire_dir="/home/$BRIDGE_USER/.config/pipewire/pipewire.conf.d"
 legacy_pipewire="$pipewire_dir/20-bridge-endpoints.conf"
