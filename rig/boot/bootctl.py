@@ -711,16 +711,23 @@ def compare(
                 "baseline_affected_runs": base_affected,
                 "candidate_affected_runs": cand_affected,
             }
-    accepted = (
+    performance_passes = (
         candidate_failures == 0
         and not health_regressions
         and effect >= minimum
         and ci[0] > 0
         and p95_candidate <= p95_base + 0.5
-        and cand_level == "functional"
     )
+    accepted = performance_passes and cand_level == "functional"
+    provisional_idle = performance_passes and cand_level == "idle" and allow_idle
+    if accepted:
+        verdict = "PROVISIONAL_ACCEPT"
+    elif provisional_idle:
+        verdict = "PROVISIONAL_IDLE_IMPROVEMENT"
+    else:
+        verdict = "REJECT"
     report = {
-        "verdict": "PROVISIONAL_ACCEPT" if accepted else "REJECT",
+        "verdict": verdict,
         "baseline": {
             "label": baseline_label,
             "runs": len(base_runs),
@@ -741,7 +748,11 @@ def compare(
         "median_improvement_s": effect,
         "minimum_effect_s": minimum,
         "bootstrap_95pct_ci_s": list(ci),
-        "note": "A provisional acceptance still requires the robustness and soak gates.",
+        "note": (
+            "Idle-ready evidence cannot accept the candidate; automated two-way call audio, robustness, and soak gates remain."
+            if provisional_idle
+            else "A provisional acceptance still requires the robustness and soak gates."
+        ),
     }
     print(json.dumps(report, indent=2))
     return 0 if accepted else 1
@@ -800,6 +811,7 @@ def screen(
                 time.sleep(3)
     finally:
         apply_variant(config, label=baseline_label, revision=baseline_revision)
+        confirm_trial(Ssh(config))
     return 1 if failures else 0
 
 

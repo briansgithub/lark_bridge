@@ -46,7 +46,7 @@ fastpath="$(cat "$transaction/networkmanager-fastpath" 2>/dev/null || printf kee
 fastpath_script=/usr/local/lib/rpi-lark-bridge/boot-path/netplan
 fastpath_dropin=/etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf
 case "$fastpath" in
-    enable)
+    enable|skip)
         if [ -x "$fastpath_script" ] && [ -f "$fastpath_dropin" ]; then
             ok "NetworkManager boot-only Netplan fast path deployed"
         else
@@ -56,6 +56,13 @@ case "$fastpath" in
             ok "NetworkManager boot-only path is effective for the next start"
         else
             bad "NetworkManager boot-only path is not effective"
+        fi
+        expected_mode=generate
+        [ "$fastpath" != skip ] || expected_mode=skip-audited
+        if systemctl show NetworkManager.service -p Environment --value | grep -Fq "BRIDGE_NETPLAN_STARTUP_MODE=$expected_mode"; then
+            ok "NetworkManager Netplan startup mode is $expected_mode"
+        else
+            bad "NetworkManager Netplan startup mode is not $expected_mode"
         fi
         ;;
     disable)

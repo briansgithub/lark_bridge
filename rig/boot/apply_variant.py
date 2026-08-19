@@ -22,6 +22,7 @@ SYNC_FILES = (
     "pi/systemd/system/bridge-boot-trial-rollback.service",
     "pi/systemd/system/bridge-boot-trial-rollback.timer",
     "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf",
+    "pi/systemd/system/NetworkManager-10-larkbridge-netplan-skip.conf",
     "pi/scripts/set-sco-routing.sh",
     "pi/scripts/boot-transaction.sh",
     "pi/scripts/boot-trial.sh",
@@ -31,6 +32,7 @@ SYNC_FILES = (
 VARIANTS = {
     "baseline": "disable",
     "netplan-fastpath": "enable",
+    "netplan-skip": "skip",
 }
 
 
