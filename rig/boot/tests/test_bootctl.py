@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -43,6 +44,73 @@ class BootCtlTests(unittest.TestCase):
         )
         self.assertGreater(low, 4)
         self.assertGreater(high, low)
+
+    def test_functional_result_requires_both_watermarks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "functional-result.json"
+            value = {
+                "schema_version": 1,
+                "run_id": "run-1",
+                "pass": True,
+                "call_active": True,
+                "lark_to_far_end": {"watermark": "mark", "detected": True},
+                "far_end_to_output": {"watermark": "mark", "detected": True},
+                "feedback_detected": False,
+                "dropouts": 0,
+            }
+            path.write_text(json.dumps(value), encoding="utf-8")
+            self.assertTrue(
+                bootctl.validate_functional_result(path, "run-1", "mark")["pass"]
+            )
+            value["far_end_to_output"]["detected"] = False
+            path.write_text(json.dumps(value), encoding="utf-8")
+            with self.assertRaises(RuntimeError):
+                bootctl.validate_functional_result(path, "run-1", "mark")
+
+    def test_health_summary_counts_known_failures(self):
+        result = bootctl.summarize_health(
+            "PipeWire xrun\nBluetooth hci0 command timed out\nEXT4-fs error\n"
+        )
+        self.assertEqual(result["xrun"], 1)
+        self.assertEqual(result["hci_failure"], 1)
+        self.assertEqual(result["filesystem"], 1)
+
+    def test_load_results_can_filter_boot_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for index, mode in enumerate(("warm", "cold")):
+                run = root / f"boot-run-{index}"
+                run.mkdir()
+                (run / "result.json").write_text(
+                    json.dumps(
+                        {
+                            "candidate": "base",
+                            "mode": mode,
+                            "verdict": "PASS",
+                            "readiness_level": "idle",
+                            "timings_s": {"idle_ready": 10 + index},
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+            runs, values, level = bootctl.load_results(root, "base", "warm")
+            self.assertEqual(len(runs), 1)
+            self.assertEqual(values, [10.0])
+            self.assertEqual(level, "idle")
+
+    def test_screen_requires_ten_randomized_pairs(self):
+        with self.assertRaises(ValueError):
+            bootctl.screen(
+                None,
+                baseline_label="base",
+                baseline_revision="base-rev",
+                candidate_label="candidate",
+                candidate_revision="candidate-rev",
+                pairs=9,
+                mode="warm",
+                require_functional=False,
+                seed=0,
+            )
 
 
 if __name__ == "__main__":
