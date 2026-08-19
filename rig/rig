@@ -19,6 +19,7 @@ CONTROL
   rig phone <cmd...>         adb passthrough
   rig sync                   copy the repo to the Pi
   rig setup-adb              download + extract platform-tools on this PC
+  rig wired-aec <command>    baseline/test/fault-test/soak/collect
 
 HARDWARE LADDER
   rig unit <id>              run one unit test   (U01, U10, U40 ...)
@@ -60,6 +61,7 @@ case "$cmd" in
   sync)        require_pi; pi_sync ;;
 
   setup-adb)   exec "$RIG_ROOT/adb/setup.sh" "$@" ;;
+  wired-aec)   exec "$RIG_ROOT/wired-aec.sh" "$@" ;;
 
   unit)
     sub="${1:-}"; shift || true

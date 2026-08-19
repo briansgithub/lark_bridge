@@ -24,7 +24,8 @@ phone_wifi_ssid = "abridge-village_5G"   # 5 GHz on purpose - see the plan's RF 
 # Cheap dongles frequently share a serial number, so they are identified by USB PORT
 # PATH. Once set, do not move them between ports. `rig unit U11` prints the paths.
 
-lark_usb_id       = ""       # "vid:pid" from lsusb, filled in by U10
+lark_usb_id       = "3547:0407" # stable VID:PID; Lark may use any Pi USB port
+lark_usb_serial   = ""          # optional if a future receiver exposes a unique serial
 lark_port_path    = ""
 
 dongle_a_port_path = ""      # DUT output  - Mode 1W wired call audio

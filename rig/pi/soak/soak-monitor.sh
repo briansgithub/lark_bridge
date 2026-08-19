@@ -100,8 +100,14 @@ while [ "$(date -u +%s)" -lt "$END" ]; do
 
   CONN="$(connected_state)"
 
-  printf '{"t":%s,"n":%s,"sco_rx_d":%s,"sco_tx_d":%s,"reassembly_d":%s,"connected":"%s","alive":%s}\n' \
-    "$(date -u +%s)" "$SAMPLE" "$D_RX" "$D_TX" "$D_ERR" "${CONN:-unknown}" "$ALIVE" >> "$JSONL"
+  TEMP="$(awk '{printf "%.2f", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo null)"
+  THROTTLED="$(vcgencmd get_throttled 2>/dev/null | sed 's/^throttled=//' || echo unknown)"
+  MEM_AVAILABLE="$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+  BRIDGE_STATE="$(python3 -c 'import json,os; p=f"/run/user/{os.getuid()}/bridge-status.json"; print(json.load(open(p)).get("state","unknown"))' 2>/dev/null || echo unknown)"
+
+  printf '{"t":%s,"n":%s,"sco_rx_d":%s,"sco_tx_d":%s,"reassembly_d":%s,"connected":"%s","alive":%s,"temperature_c":%s,"throttled":"%s","mem_available_kib":%s,"bridge_state":"%s"}\n' \
+    "$(date -u +%s)" "$SAMPLE" "$D_RX" "$D_TX" "$D_ERR" "${CONN:-unknown}" "$ALIVE" \
+    "${TEMP:-null}" "${THROTTLED:-unknown}" "${MEM_AVAILABLE:-0}" "${BRIDGE_STATE:-unknown}" >> "$JSONL"
 
   # Stop early on a hard wedge: continuing to sample a dead controller for another
   # 25 minutes gathers nothing and delays the report.
