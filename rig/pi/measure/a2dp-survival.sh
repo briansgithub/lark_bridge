@@ -58,7 +58,7 @@ SINK="$(pw-dump 2>/dev/null | python3 "$REPO/rig/analysis/find_node.py" --prefix
 [ -n "$SINK" ] || SINK="$(pw-dump 2>/dev/null | python3 "$REPO/rig/analysis/find_node.py" --prefix bluez_output)"
 [ -n "$SINK" ] || { echo '{"error":"no a2dp sink node"}'; exit 78; }
 
-WORK=/tmp/rig; mkdir -p "$WORK"; cd "$WORK"
+WORK=/tmp/rig; mkdir -p "$WORK"; cd "$WORK" || exit 1
 TONE="$WORK/survival.wav"
 [ -f "$TONE" ] || python3 "$REPO/tools/audio/tone_gen.py" --mode pips --freq 1000 \
   --seconds "$((MAX_S + 30))" --rate 48000 --channels 2 --dbfs -6 --out "$TONE" >/dev/null

@@ -111,6 +111,7 @@ require_pi() {
 
 # Copy the repo to the Pi. rsync is absent on Windows, so stream a tarball.
 pi_sync() {
+  # shellcheck disable=SC2088 # The remote shell, not this control PC, expands it.
   local dest; dest="$(inv pi_repo_path '~/rpi-lark-bridge')"
   info "syncing repo -> $(pi_host):$dest"
   pi "mkdir -p $dest"
