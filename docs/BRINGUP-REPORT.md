@@ -186,9 +186,10 @@ was written specifically because `hcitool` is deprecated and may vanish.
    `bluetoothctl show`: you want `Audio Source (110a)` and `Handsfree (111e)`.
 2. **`monitor.bluez.seat-monitoring = disabled` goes in `wireplumber.profiles`**, not in
    `monitor.bluez.properties`. Headless Bluetooth does not work without it.
-3. **SCO routing resets to PCM on controller power-up.** `bridge-btfw.service` handles it, but if
-   HFP audio is one-directional, check `hcitool -i hci0 cmd 0x3f 0x1d` first — the first
-   parameter must be `01`.
+3. **SCO routing must read back as Transport after controller power-up.** Device Tree is
+   authoritative and `bridge-btfw.service` verifies it without writing controller state. If HFP
+   audio is one-directional, check `hcitool -i hci0 cmd 0x3f 0x1d` first — the first parameter
+   must be `01`.
 4. **The HFP card only appears once SCO is active**, i.e. during a call. An absent
    `bluez_card.<phone>` with a completed SLC is normal, not a fault.
 5. **Android initiates to headsets — but this is device-specific, and the PHONE is the

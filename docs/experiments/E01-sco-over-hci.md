@@ -207,14 +207,13 @@ Verdict code: `SCO_OK` (with `--apply-vendor-cmd`). Baseline without the fix: `S
 ## Production fix
 
 `bridge-btfw.service` + `/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh`, installed and
-enabled `WantedBy=bluetooth.service`. It is idempotent, and it **verifies the read-back** rather
-than assuming the write took — the btstack-dev thread describes firmware that accepts this
-command and ignores it. Tested both ways: no-ops when already correct, and repairs when forced
-back to PCM.
+enabled `WantedBy=bluetooth.service`. The shipped implementation is now verification-only: Device
+Tree is authoritative, and the service checks both the live property and controller readback with
+bounded retries. It never repairs an incorrect value with a userspace controller write.
 
-The device-tree route (`brcm,bt-pcm-int-params` in `bridge-bt-sco-overlay.dts`) remains viable —
-the kernel binds via serdev — but is not needed now that the runtime unit is proven, and the
-runtime unit works regardless of attach mechanism.
+The device-tree route (`brcm,bt-pcm-int-params` in `bridge-bt-sco-overlay.dts`) is the production
+mechanism because the kernel binds via serdev. The runtime unit remains mandatory as a fail-closed
+readiness check.
 
 ## Consequences for the plan
 
