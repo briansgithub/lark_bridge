@@ -18,6 +18,7 @@ CONTROL
   rig pi <cmd...>            run a command on the Pi
   rig phone <cmd...>         adb passthrough
   rig sync                   copy the repo to the Pi
+  rig boot <command>         closed-loop boot doctor/run/baseline/compare
   rig setup-adb              download + extract platform-tools on this PC
   rig wired-aec <command>    baseline/test/fault-test/soak/collect
 
@@ -59,6 +60,11 @@ case "$cmd" in
   pi)          require_pi; exec ssh -o BatchMode=yes "$(pi_host)" "$@" ;;
   phone)       require_phone; exec "$(adb_bin)" "$@" ;;
   sync)        require_pi; pi_sync ;;
+  boot)
+    PY="$(command -v py 2>/dev/null || command -v python3 2>/dev/null || true)"
+    [ -n "$PY" ] || die "Python 3.11+ is required on the control PC"
+    exec "$PY" "$RIG_ROOT/boot/bootctl.py" "$@"
+    ;;
 
   setup-adb)   exec "$RIG_ROOT/adb/setup.sh" "$@" ;;
   wired-aec)   exec "$RIG_ROOT/wired-aec.sh" "$@" ;;
