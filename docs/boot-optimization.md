@@ -73,3 +73,9 @@ requires the matching `run_id`, `pass=true`, `call_active=true`, zero dropouts, 
 timer; a run confirms it only after readiness. An unconfirmed candidate restores its transaction
 after 120 seconds and reboots. Kernel, firmware, Device Tree, partition, and filesystem candidates
 remain prohibited until out-of-band recovery exists.
+
+The physical-Pi variant hook currently supports `baseline`, `netplan-fastpath`, and
+`netplan-skip`. The latter two remain explicit experiment modes; ordinary `make install` keeps the
+deployed NetworkManager behavior unchanged. See
+[`boot-optimization-results-2026-08-19.md`](boot-optimization-results-2026-08-19.md) for the
+provisional warm-boot result and promotion gates.
