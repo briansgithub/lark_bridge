@@ -77,9 +77,15 @@ level_db = -20.0
 
 [audio.aec]
 # Acoustic echo cancellation. Not needed with headphones — there is no acoustic loop.
-# Turn on for the car-speaker case. See PLAN.md §5.5; enabling this is a config change,
-# not a re-plumb, because the loopbacks are already insertion points.
+# Keep disabled until the wired baseline has been captured. When enabled, the supervisor
+# owns a native PipeWire/WebRTC module whose lifetime is limited to an active call.
 enabled = false
+method = "webrtc"
+# Fixed to the established graph rate and mono to preserve Pi 3 CPU headroom.
+rate = 48000
+channels = 1
+# Never substitute the raw Lark automatically if AEC construction or verification fails.
+failure_policy = "fail_closed"
 
 
 [bluetooth]

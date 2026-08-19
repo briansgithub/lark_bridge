@@ -1,34 +1,10 @@
 #!/usr/bin/env python3
-"""bridge-supervisor — create the Mode 1W audio path only while a call is up.
+"""Own the transient Mode 1W call graph, including optional WebRTC AEC.
 
-Runs as a user systemd service on the Pi. Python because it is pure policy: it decides
-WHEN links should exist and shells out to pw-loopback to make them. It never touches PCM
-samples — PipeWire does that (ADR-0003).
-
-WHY THIS EXISTS INSTEAD OF PURE CONFIG
---------------------------------------
-ADR-0002 declared the loopbacks statically, assuming endpoints are persistent. They are
-not. The HFP nodes (bluez_input/bluez_output for the phone) exist ONLY while SCO is up,
-i.e. during a call. Measured consequence of the static approach:
-
-    WirePlumber does not leave a stream waiting when target.object is absent.
-    It links it to the DEFAULT device instead.
-
-With no call active that produced:
-    bridge.mic.playback    -> dongle B   (wanted: HFP sink)
-    bridge.callout.capture -> Lark       (wanted: HFP source)
-
-which closes Lark -> callout.playback -> car speakers -> Lark: a live acoustic feedback
-loop, unattended. `node.dont-reconnect = true` does not fix it — the streams error when
-their target is missing at creation and take the whole loopback module down.
-
-So: create the loopbacks when the targets appear, destroy them when they vanish. The
-fallback window cannot occur because there is nothing to fall back.
-
-WHAT IT DELIBERATELY DOES NOT DO
---------------------------------
-It does not connect Bluetooth devices. Android initiates to headsets and racing it causes
-collisions (PLAN.md §6.5). The phone connects itself; this only reacts.
+The supervisor never processes PCM in Python. It owns policy and process lifetime while
+PipeWire's compiled WebRTC module performs the real-time DSP. HFP endpoints exist only
+during a call, so every call-specific stream is built transactionally and torn down when
+an endpoint disappears. There is deliberately no default-device fallback.
 """
 
 from __future__ import annotations
@@ -39,116 +15,239 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
+import tomllib
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Any
 
 POLL_SECONDS = 2.0
+BUILD_TIMEOUT_SECONDS = 10.0
+ATTACH_GRACE_SECONDS = 4.0
+MAX_BUILD_ATTEMPTS = 5
 
-# Deterministic node names. bluez names derive from the phone's MAC; ALSA names from USB
-# vendor/product/serial. Both survive reboots and replugs, unlike card numbers or node ids.
-LARK = os.environ.get(
-    "BRIDGE_LARK",
+DEFAULT_LARK = (
     "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone"
-    "_Wireless_Microphone-01.analog-stereo",
+    "_Wireless_Microphone-01.analog-stereo"
 )
-# Mode 1W output. Defaults to the Pi's OWN 3.5 mm jack, not a USB dongle.
-#
-# This is a measured decision, not a convenience. Every USB audio device on the Pi 3B shares
-# one dwc_otg bus, and that bus's interrupt load desynchronises the Bluetooth HCI UART
-# (E07 occurrence 4): the H4 stream loses byte alignment mid-call and only a firmware reload
-# recovers it. Measured on the same link, same phone, same call:
-#
-#     3 USB audio devices, output via dongle A -> desync after 17.2 s
-#     1 USB audio device  (Lark only), onboard -> 84k SCO frames, 0 desyncs
-#
-# The Lark is USB and cannot be moved off that bus -- it is the microphone. The OUTPUT can be,
-# so it is. Quality is a non-issue: the source is 16 kHz HFP call audio, far below what even
-# the Pi's PWM DAC resolves, and it feeds a car aux input either way.
-#
-# Override with BRIDGE_WIRED_OUT to go back to a USB dongle.
-WIRED_OUT = os.environ.get(
-    "BRIDGE_WIRED_OUT",
-    "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
-)
-PHONE_MAC = os.environ.get("BRIDGE_PHONE_MAC", "5C:33:7B:CB:BF:C5")
-_M = PHONE_MAC.replace(":", "_")
-HFP_SINK = f"bluez_output.{_M}.1"    # audio TO the phone   (our microphone uplink)
-HFP_SOURCE = f"bluez_input.{_M}.0"   # audio FROM the phone (call audio downlink)
+DEFAULT_LARK_COMPONENT = "USB3547:0407"
+DEFAULT_WIRED_OUT = "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+DEFAULT_PHONE_MAC = "5C:33:7B:CB:BF:C5"
+
+AEC_SOURCE = "bridge.aec.source"
+AEC_SINK = "bridge.aec.sink"
+AEC_CAPTURE = "echo-cancel-capture"
+AEC_PLAYBACK = "echo-cancel-playback"
 
 log = logging.getLogger("bridge-supervisor")
 
 
-def pw_nodes() -> set[str]:
-    """Names of every node currently in the graph. Empty set if PipeWire is unreachable."""
+class State(str, Enum):
+    CALL_DOWN = "CALL_DOWN"
+    DISCOVERING = "DISCOVERING"
+    BUILDING = "BUILDING"
+    ACTIVE = "ACTIVE"
+    DEGRADED = "DEGRADED"
+    FAILED = "FAILED"
+
+
+@dataclass(frozen=True)
+class AecSettings:
+    enabled: bool = False
+    method: str = "webrtc"
+    rate: int = 48_000
+    channels: int = 1
+    failure_policy: str = "fail_closed"
+
+
+@dataclass(frozen=True)
+class Settings:
+    aec: AecSettings
+    lark_node: str = DEFAULT_LARK
+    lark_component: str = DEFAULT_LARK_COMPONENT
+    wired_output: str = DEFAULT_WIRED_OUT
+    phone_mac: str = DEFAULT_PHONE_MAC
+    status_path: Path = Path("/tmp/bridge-status.json")
+    config_path: Path | None = None
+
+    @property
+    def hfp_sink(self) -> str:
+        return f"bluez_output.{self.phone_mac.replace(':', '_')}.1"
+
+    @property
+    def hfp_source(self) -> str:
+        return f"bluez_input.{self.phone_mac.replace(':', '_')}.0"
+
+
+def parse_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"invalid boolean: {value!r}")
+
+
+def default_config_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "config" / "bridge.toml"
+
+
+def default_status_path() -> Path:
+    uid = os.getuid() if hasattr(os, "getuid") else 0
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{uid}"))
+    return runtime / "bridge-status.json"
+
+
+def load_settings(path: Path | None = None) -> Settings:
+    config_path = path or Path(os.environ.get("BRIDGE_CONFIG", default_config_path()))
+    data: dict[str, Any] = {}
+    if config_path.exists():
+        with config_path.open("rb") as handle:
+            data = tomllib.load(handle)
+    else:
+        log.warning("config %s is absent; retaining safe AEC-off defaults", config_path)
+
+    aec_data = (data.get("audio") or {}).get("aec") or {}
+    enabled = bool(aec_data.get("enabled", False))
+    if "BRIDGE_AEC_ENABLED" in os.environ:
+        enabled = parse_bool(os.environ["BRIDGE_AEC_ENABLED"])
+    method = str(aec_data.get("method", "webrtc"))
+    rate = int(aec_data.get("rate", 48_000))
+    channels = int(aec_data.get("channels", 1))
+    failure_policy = str(aec_data.get("failure_policy", "fail_closed"))
+
+    if method != "webrtc":
+        raise ValueError("audio.aec.method must be 'webrtc'")
+    if rate != 48_000:
+        raise ValueError("audio.aec.rate must remain 48000 on this fixed-rate graph")
+    if channels != 1:
+        raise ValueError("audio.aec.channels must be 1 on the Pi 3 optimized graph")
+    if failure_policy != "fail_closed":
+        raise ValueError("audio.aec.failure_policy must be 'fail_closed'")
+
+    phone = str(((data.get("devices") or {}).get("phone") or {}).get("address", ""))
+    if not phone or phone == "AA:BB:CC:DD:EE:FF":
+        phone = DEFAULT_PHONE_MAC
+
+    status_value = os.environ.get("BRIDGE_STATUS")
+    return Settings(
+        aec=AecSettings(enabled, method, rate, channels, failure_policy),
+        lark_node=os.environ.get("BRIDGE_LARK", DEFAULT_LARK),
+        lark_component=os.environ.get("BRIDGE_LARK_COMPONENT", DEFAULT_LARK_COMPONENT),
+        wired_output=os.environ.get("BRIDGE_WIRED_OUT", DEFAULT_WIRED_OUT),
+        phone_mac=os.environ.get("BRIDGE_PHONE_MAC", phone).upper(),
+        status_path=Path(status_value) if status_value else default_status_path(),
+        config_path=config_path,
+    )
+
+
+NodeMap = dict[str, dict[str, Any]]
+LinkList = list[tuple[str, str]]
+
+
+def pw_nodes() -> NodeMap | None:
     try:
-        out = subprocess.run(
+        result = subprocess.run(
             ["pw-dump"], capture_output=True, text=True, timeout=10, check=False
-        ).stdout
-        objs = json.loads(out)
+        )
+        if result.returncode != 0:
+            return None
+        objects = json.loads(result.stdout)
     except (subprocess.SubprocessError, json.JSONDecodeError, OSError) as exc:
-        log.warning("pw-dump failed (%s); treating graph as unknown", exc)
-        return set()
-    names = set()
-    for o in objs:
-        if o.get("type") != "PipeWire:Interface:Node":
+        log.warning("pw-dump failed: %s", exc)
+        return None
+
+    nodes: NodeMap = {}
+    for obj in objects:
+        if obj.get("type") != "PipeWire:Interface:Node":
             continue
-        n = ((o.get("info") or {}).get("props") or {}).get("node.name")
-        if n:
-            names.add(str(n))
-    return names
+        props = (obj.get("info") or {}).get("props") or {}
+        name = props.get("node.name")
+        if name:
+            nodes[str(name)] = props
+    return nodes
 
 
-def pw_links() -> list[tuple[str, str]]:
-    """(output_node, input_node) for every link, node names only.
-
-    Uses plain `pw-link -l`: node lines start at column 0, link lines are indented.
-    Do NOT add -I -- it right-aligns object IDs so EVERY line starts with whitespace,
-    the "is this a node header" test never fires, and the parser reports zero links.
-    That made the verifier thrash both legs, including the one that was already correct.
-    """
+def pw_links() -> LinkList | None:
     try:
-        out = subprocess.run(
+        result = subprocess.run(
             ["pw-link", "-l"], capture_output=True, text=True, timeout=10, check=False
-        ).stdout
-    except (subprocess.SubprocessError, OSError):
-        return []
-    links: list[tuple[str, str]] = []
-    current = None
-    for raw in out.splitlines():
+        )
+        if result.returncode != 0:
+            return None
+    except (subprocess.SubprocessError, OSError) as exc:
+        log.warning("pw-link failed: %s", exc)
+        return None
+
+    links: LinkList = []
+    current: str | None = None
+    for raw in result.stdout.splitlines():
         if not raw.startswith((" ", "\t")):
             current = raw.strip().split(":")[0]
             continue
-        s = raw.strip()
-        if current is None or not s:
+        value = raw.strip()
+        if current is None or not value:
             continue
-        if s.startswith("|->"):
-            links.append((current, s[3:].strip().split(":")[0]))
-        elif s.startswith("|<-"):
-            links.append((s[3:].strip().split(":")[0], current))
+        if value.startswith("|->"):
+            links.append((current, value[3:].strip().split(":")[0]))
+        elif value.startswith("|<-"):
+            links.append((value[3:].strip().split(":")[0], current))
     return links
 
 
-def unlink(src: str, dst: str) -> None:
-    """Remove every port-level link between two nodes."""
-    subprocess.run(["pw-link", "-d", src, dst], capture_output=True, timeout=10, check=False)
+def find_lark(nodes: NodeMap, settings: Settings) -> str | None:
+    if settings.lark_node in nodes:
+        return settings.lark_node
+    matches = [
+        name
+        for name, props in nodes.items()
+        if props.get("media.class") == "Audio/Source"
+        and str(props.get("alsa.components", "")).upper()
+        == settings.lark_component.upper()
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        log.error("Lark identity %s is ambiguous: %s", settings.lark_component, matches)
+    return None
+
+
+def unlink(source: str, target: str) -> None:
+    try:
+        subprocess.run(
+            ["pw-link", "-d", source, target],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("failed to remove link %s -> %s: %s", source, target, exc)
+
+
+def set_aec_mute(muted: bool) -> bool:
+    try:
+        result = subprocess.run(
+            ["pactl", "set-sink-mute", AEC_SINK, "1" if muted else "0"],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 class Loopback:
-    """One pw-loopback process, started only when both endpoints exist.
+    """A child pw-loopback with explicit, continuously verified targets."""
 
-    pw-loopback names its nodes `input.<name>` and `output.<name>` — NOT
-    `<name>.capture`/`<name>.playback`. Getting that wrong makes every link query come
-    back empty and the graph look broken when it is fine.
-    """
-
-    def __init__(self, name: str, capture: str, playback: str, channels: str):
+    def __init__(self, name: str, capture: str, playback: str, channels: int):
         self.name = name
         self.capture = capture
         self.playback = playback
         self.channels = channels
-        self.proc: subprocess.Popen | None = None
-        self.verified = False
-        self.attempts = 0
-        self.started_at = 0.0
+        self.proc: subprocess.Popen[str] | None = None
 
     @property
     def out_node(self) -> str:
@@ -158,19 +257,6 @@ class Loopback:
     def in_node(self) -> str:
         return f"input.{self.name}"
 
-    def check_targets(self, links: list[tuple[str, str]]) -> bool:
-        """Did the loopback actually attach where we asked?
-
-        pw-loopback's --capture/--playback are a REQUEST. If the target is not ready to
-        accept at the moment the process starts, WirePlumber links the stream to the
-        DEFAULT device instead and nothing reports an error. Observed: the microphone leg
-        silently attached to the wrong sink, and the uplink only worked because
-        WirePlumber had ALSO auto-linked the source directly to the HFP sink. Verify.
-        """
-        outs = {d for s, d in links if s == self.out_node}
-        ins = {s for s, d in links if d == self.in_node}
-        return self.playback in outs and self.capture in ins
-
     @property
     def running(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
@@ -178,46 +264,465 @@ class Loopback:
     def start(self) -> None:
         if self.running:
             return
-        # DO NOT add -P here. Measured 2026-08-16: passing ANY playback property dict
-        # makes pw-loopback ignore --playback and land on the DEFAULT sink instead.
-        #
-        #   (no -P)                                        -> bluez_output...  CORRECT
-        #   -P "{ node.pause-on-idle=false }"              -> dongle B         wrong
-        #   -P "{ media.role=Communication ... }"          -> dongle B         wrong
-        #   -P "{ target.object=<sink> ... }"              -> dongle B         wrong
-        #
-        # Note the last row: re-supplying target.object by hand does NOT rescue it, so this
-        # is not a simple "-P overwrites the props --playback set". Whatever the mechanism,
-        # -P and --playback do not compose. The idle tweak is not worth a silently wrong
-        # target — this leg carries the microphone uplink, and the wrong sink is inaudible
-        # to the caller rather than obviously broken.
-        cmd = [
+        command = [
             "pw-loopback",
-            "--name", self.name,
-            "--capture", self.capture,
-            "--playback", self.playback,
-            "--channels", self.channels,
+            "--name",
+            self.name,
+            "--capture",
+            self.capture,
+            "--playback",
+            self.playback,
+            "--channels",
+            str(self.channels),
         ]
         log.info("starting %s: %s -> %s", self.name, self.capture, self.playback)
         self.proc = subprocess.Popen(
-            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True
         )
-        self.started_at = time.monotonic()
 
-    def stop(self, why: str) -> None:
-        if not self.running:
-            self.proc = None
+    def targets_verified(self, links: LinkList) -> bool:
+        outputs = {target for source, target in links if source == self.out_node}
+        inputs = {source for source, target in links if target == self.in_node}
+        return self.playback in outputs and self.capture in inputs
+
+    def stop(self, reason: str) -> None:
+        if self.proc is None:
             return
-        log.info("stopping %s (%s)", self.name, why)
-        assert self.proc is not None
-        self.proc.terminate()
-        try:
-            self.proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            log.warning("%s did not exit; killing", self.name)
-            self.proc.kill()
-            self.proc.wait(timeout=5)
+        log.info("stopping %s (%s)", self.name, reason)
+        if self.running:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait(timeout=5)
         self.proc = None
+
+
+def spa_string(value: str) -> str:
+    return json.dumps(value)
+
+
+class NativeAecHost:
+    """Hold a native PipeWire WebRTC module inside a child pw-cli context."""
+
+    def __init__(self, settings: AecSettings, microphone: str, output: str):
+        self.settings = settings
+        self.microphone = microphone
+        self.output = output
+        self.proc: subprocess.Popen[str] | None = None
+
+    @property
+    def running(self) -> bool:
+        return self.proc is not None and self.proc.poll() is None
+
+    @property
+    def pid(self) -> int | None:
+        return self.proc.pid if self.running and self.proc is not None else None
+
+    def module_command(self) -> str:
+        arguments = " ".join(
+            [
+                "{",
+                "library.name = aec/libspa-aec-webrtc",
+                f"audio.rate = {self.settings.rate}",
+                f"audio.channels = {self.settings.channels}",
+                "audio.position = [ MONO ]",
+                "aec.args = {",
+                "webrtc.noise_suppression = false",
+                "webrtc.gain_control = false",
+                "webrtc.voice_detection = false",
+                "webrtc.high_pass_filter = true",
+                "}",
+                "capture.props = {",
+                f"target.object = {spa_string(self.microphone)}",
+                "node.dont-reconnect = true",
+                "node.passive = true",
+                "}",
+                "source.props = {",
+                f"node.name = {spa_string(AEC_SOURCE)}",
+                "media.class = Audio/Source",
+                "}",
+                "sink.props = {",
+                f"node.name = {spa_string(AEC_SINK)}",
+                "media.class = Audio/Sink",
+                "}",
+                "playback.props = {",
+                f"target.object = {spa_string(self.output)}",
+                "node.dont-reconnect = true",
+                "node.passive = true",
+                "}",
+                "}",
+            ]
+        )
+        return f"load-module libpipewire-module-echo-cancel {arguments}\n"
+
+    def start(self) -> None:
+        if self.running:
+            return
+        log.info("starting native WebRTC AEC: %s -> %s", self.microphone, self.output)
+        self.proc = subprocess.Popen(
+            ["pw-cli"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        assert self.proc.stdin is not None
+        self.proc.stdin.write(self.module_command())
+        self.proc.stdin.flush()
+
+    def stop(self, reason: str) -> None:
+        if self.proc is None:
+            return
+        log.info("stopping native AEC host (%s)", reason)
+        if self.proc.stdin is not None:
+            try:
+                self.proc.stdin.close()
+            except OSError:
+                pass
+        if self.running:
+            try:
+                self.proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.proc.terminate()
+                try:
+                    self.proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    self.proc.kill()
+                    self.proc.wait(timeout=3)
+        self.proc = None
+
+
+def unexpected_call_links(
+    links: LinkList,
+    *,
+    lark: str,
+    hfp_source: str,
+    hfp_sink: str,
+    microphone_input: str,
+    callout_input: str,
+    aec_enabled: bool,
+) -> LinkList:
+    unexpected: LinkList = []
+    for source, target in links:
+        if (
+            source == lark
+            and target == hfp_sink
+            or source == hfp_source
+            and target != callout_input
+            or aec_enabled
+            and source == AEC_SOURCE
+            and target != microphone_input
+        ):
+            unexpected.append((source, target))
+    return unexpected
+
+
+class CallGraph:
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self.state = State.CALL_DOWN
+        self.generation = 0
+        self.signature: tuple[Any, ...] | None = None
+        self.aec_host: NativeAecHost | None = None
+        self.microphone: Loopback | None = None
+        self.callout: Loopback | None = None
+        self.build_started = 0.0
+        self.routes_started = 0.0
+        self.attempts = 0
+        self.next_attempt = 0.0
+        self.verified = False
+        self.last_failure: str | None = None
+        self.unexpected_links: LinkList = []
+
+    def teardown(self, reason: str) -> None:
+        if self.aec_host is not None:
+            set_aec_mute(True)
+        if self.callout is not None:
+            self.callout.stop(reason)
+        if self.microphone is not None:
+            self.microphone.stop(reason)
+        if self.aec_host is not None:
+            self.aec_host.stop(reason)
+        self.callout = None
+        self.microphone = None
+        self.aec_host = None
+        self.build_started = 0.0
+        self.routes_started = 0.0
+        self.verified = False
+        self.unexpected_links = []
+
+    def update_signature(self, signature: tuple[Any, ...]) -> None:
+        if signature == self.signature:
+            return
+        self.generation += 1
+        self.teardown("endpoint generation changed")
+        self.signature = signature
+        self.attempts = 0
+        self.next_attempt = 0.0
+        self.last_failure = None
+
+    def fail(self, reason: str) -> None:
+        self.last_failure = reason
+        self.attempts += 1
+        log.error("call graph generation %d failed: %s", self.generation, reason)
+        self.teardown(reason)
+        if self.attempts >= MAX_BUILD_ATTEMPTS:
+            self.state = State.FAILED
+        else:
+            self.state = State.DEGRADED
+            self.next_attempt = time.monotonic() + min(2**self.attempts, 30)
+
+    def begin_build(self, lark: str) -> None:
+        self.state = State.BUILDING
+        self.build_started = time.monotonic()
+        if self.settings.aec.enabled:
+            self.aec_host = NativeAecHost(
+                self.settings.aec, lark, self.settings.wired_output
+            )
+            self.aec_host.start()
+            return
+        self.callout = Loopback(
+            "bridge.callout", self.settings.hfp_source, self.settings.wired_output, 2
+        )
+        self.microphone = Loopback("bridge.mic", lark, self.settings.hfp_sink, 1)
+        self.callout.start()
+        self.microphone.start()
+        self.routes_started = time.monotonic()
+
+    def start_aec_routes(self) -> None:
+        set_aec_mute(True)
+        self.callout = Loopback("bridge.callout", self.settings.hfp_source, AEC_SINK, 1)
+        self.microphone = Loopback("bridge.mic", AEC_SOURCE, self.settings.hfp_sink, 1)
+        self.callout.start()
+        self.microphone.start()
+        self.routes_started = time.monotonic()
+
+    def remove_dangerous_autolinks(self, links: LinkList, lark: str) -> bool:
+        changed = False
+        for source, target in links:
+            dangerous = source == lark and target == self.settings.hfp_sink
+            if self.callout is not None:
+                dangerous = dangerous or (
+                    source == self.settings.hfp_source
+                    and target != self.callout.in_node
+                )
+            if self.microphone is not None and self.settings.aec.enabled:
+                dangerous = dangerous or (
+                    source == AEC_SOURCE and target != self.microphone.in_node
+                )
+            if dangerous:
+                log.warning("removing unsafe auto-link %s -> %s", source, target)
+                unlink(source, target)
+                changed = True
+        return changed
+
+    def validate(self, links: LinkList, lark: str) -> bool:
+        if self.microphone is None or self.callout is None:
+            return False
+        if not self.microphone.targets_verified(
+            links
+        ) or not self.callout.targets_verified(links):
+            return False
+        if self.settings.aec.enabled:
+            if (lark, AEC_CAPTURE) not in links:
+                return False
+            if (AEC_PLAYBACK, self.settings.wired_output) not in links:
+                return False
+        self.unexpected_links = unexpected_call_links(
+            links,
+            lark=lark,
+            hfp_source=self.settings.hfp_source,
+            hfp_sink=self.settings.hfp_sink,
+            microphone_input=self.microphone.in_node,
+            callout_input=self.callout.in_node,
+            aec_enabled=self.settings.aec.enabled,
+        )
+        return not self.unexpected_links
+
+    def tick(self, nodes: NodeMap, links: LinkList, lark: str | None) -> None:
+        call_up = self.settings.hfp_sink in nodes and self.settings.hfp_source in nodes
+        output_up = self.settings.wired_output in nodes
+        signature = (call_up, lark, output_up)
+        self.update_signature(signature)
+
+        if not call_up:
+            self.teardown("call down")
+            self.state = State.CALL_DOWN
+            return
+        if lark is None or not output_up:
+            self.teardown("required physical endpoint absent")
+            self.state = State.DISCOVERING
+            return
+        if self.state == State.FAILED:
+            return
+        if time.monotonic() < self.next_attempt:
+            self.state = State.DEGRADED
+            return
+        if self.aec_host is None and self.microphone is None and self.callout is None:
+            try:
+                self.begin_build(lark)
+            except OSError as exc:
+                self.fail(f"call graph process could not start: {exc}")
+            return
+
+        if self.settings.aec.enabled:
+            if self.aec_host is None or not self.aec_host.running:
+                self.fail("native AEC owner exited")
+                return
+            aec_nodes_ready = AEC_SOURCE in nodes and AEC_SINK in nodes
+            if self.microphone is None and self.callout is None:
+                if aec_nodes_ready:
+                    self.start_aec_routes()
+                    return
+                if time.monotonic() - self.build_started > BUILD_TIMEOUT_SECONDS:
+                    self.fail("AEC nodes did not appear before timeout")
+                return
+
+        if self.microphone is None or self.callout is None:
+            self.fail("call routes are only partially constructed")
+            return
+        if not self.microphone.running or not self.callout.running:
+            self.fail("a call loopback exited")
+            return
+        if time.monotonic() - self.routes_started < ATTACH_GRACE_SECONDS:
+            return
+        if self.remove_dangerous_autolinks(links, lark):
+            return
+        if not self.validate(links, lark):
+            self.fail("graph targets or safety invariants did not verify")
+            return
+        if self.settings.aec.enabled and not self.verified and not set_aec_mute(False):
+            self.fail("AEC sink could not be unmuted")
+            return
+
+        if not self.verified:
+            log.info("call graph generation %d ACTIVE and verified", self.generation)
+        self.verified = True
+        self.attempts = 0
+        self.state = State.ACTIVE
+
+    def status(
+        self, nodes: NodeMap, links: LinkList, lark: str | None
+    ) -> dict[str, Any]:
+        call_up = self.settings.hfp_sink in nodes and self.settings.hfp_source in nodes
+        expected: LinkList = []
+        if self.microphone is not None and self.callout is not None:
+            expected.extend(
+                [
+                    (self.microphone.capture, self.microphone.in_node),
+                    (self.microphone.out_node, self.microphone.playback),
+                    (self.callout.capture, self.callout.in_node),
+                    (self.callout.out_node, self.callout.playback),
+                ]
+            )
+        if self.settings.aec.enabled and lark is not None:
+            expected.extend(
+                [(lark, AEC_CAPTURE), (AEC_PLAYBACK, self.settings.wired_output)]
+            )
+        missing = [pair for pair in expected if pair not in links]
+        return {
+            "timestamp": time.time(),
+            "state": self.state.value,
+            "generation": self.generation,
+            "call": {"hfp_nodes_present": call_up},
+            "endpoints": {
+                "lark": lark,
+                "hfp_source": self.settings.hfp_source if call_up else None,
+                "hfp_sink": self.settings.hfp_sink if call_up else None,
+                "wired_output": (
+                    self.settings.wired_output
+                    if self.settings.wired_output in nodes
+                    else None
+                ),
+            },
+            "aec": {
+                "enabled": self.settings.aec.enabled,
+                "method": self.settings.aec.method,
+                "rate": self.settings.aec.rate,
+                "channels": self.settings.aec.channels,
+                "verified": self.verified and self.settings.aec.enabled,
+                "module_backend": (
+                    "native-pw-cli" if self.settings.aec.enabled else None
+                ),
+                "owner_pid": self.aec_host.pid if self.aec_host is not None else None,
+            },
+            "graph": {
+                "expected_links": expected,
+                "missing_links": missing,
+                "unexpected_links": self.unexpected_links,
+            },
+            "attempts": self.attempts,
+            "last_failure": self.last_failure,
+            "config_path": str(self.settings.config_path),
+        }
+
+
+def reconcile_stale_pulse_aec() -> None:
+    """Remove only old bridge-owned Pulse modules from pre-native experiments."""
+    try:
+        result = subprocess.run(
+            ["pactl", "list", "short", "modules"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return
+    for line in result.stdout.splitlines():
+        if "module-echo-cancel" not in line or "bridge.aec." not in line:
+            continue
+        module_id = line.split(maxsplit=1)[0]
+        log.warning("unloading stale bridge-owned Pulse AEC module %s", module_id)
+        subprocess.run(
+            ["pactl", "unload-module", module_id],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+
+
+def runtime_metrics() -> dict[str, Any]:
+    metrics: dict[str, Any] = {}
+    try:
+        thermal = Path("/sys/class/thermal/thermal_zone0/temp")
+        metrics["temperature_c"] = round(
+            int(thermal.read_text(encoding="utf-8").strip()) / 1000.0, 2
+        )
+    except (OSError, ValueError):
+        metrics["temperature_c"] = None
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                metrics["mem_available_kib"] = int(line.split()[1])
+                break
+    except (OSError, ValueError):
+        metrics["mem_available_kib"] = None
+    for key, command in {
+        "throttled": ["vcgencmd", "get_throttled"],
+        "arm_clock": ["vcgencmd", "measure_clock", "arm"],
+    }.items():
+        try:
+            result = subprocess.run(
+                command, capture_output=True, text=True, timeout=3, check=False
+            )
+            metrics[key] = result.stdout.strip() if result.returncode == 0 else None
+        except (OSError, subprocess.SubprocessError):
+            metrics[key] = None
+    return metrics
+
+
+def write_status(path: Path, status: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=path.parent, prefix=".bridge-status-", delete=False
+    ) as handle:
+        json.dump(status, handle, indent=2)
+        handle.write("\n")
+        temporary = Path(handle.name)
+    os.replace(temporary, path)
 
 
 def main() -> int:
@@ -226,102 +731,61 @@ def main() -> int:
         format="%(levelname)s %(message)s",
         stream=sys.stdout,
     )
+    try:
+        settings = load_settings()
+    except (OSError, tomllib.TOMLDecodeError, ValueError) as exc:
+        log.error("configuration rejected: %s", exc)
+        return 2
 
-    mic = Loopback("bridge.mic", LARK, HFP_SINK, "1")
-    callout = Loopback("bridge.callout", HFP_SOURCE, WIRED_OUT, "2")
-    legs = (mic, callout)
-
+    reconcile_stale_pulse_aec()
+    graph = CallGraph(settings)
     stopping = False
 
-    def on_signal(signum, _frame):
+    def on_signal(signum: int, _frame: Any) -> None:
         nonlocal stopping
-        log.info("signal %s — shutting down", signum)
+        log.info("signal %s; shutting down", signum)
         stopping = True
 
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
+    log.info(
+        "watching HFP nodes %s / %s; AEC %s",
+        settings.hfp_sink,
+        settings.hfp_source,
+        "enabled" if settings.aec.enabled else "disabled",
+    )
 
-    log.info("watching for HFP nodes: %s / %s", HFP_SINK, HFP_SOURCE)
-    last_call_up: bool | None = None
-
+    last_metrics = 0.0
+    metrics: dict[str, Any] = {}
     while not stopping:
         nodes = pw_nodes()
-
-        # A call is "up" only when BOTH HFP nodes are present. One without the other is a
-        # transient during setup or teardown; acting on it would create a half-graph.
-        call_up = HFP_SINK in nodes and HFP_SOURCE in nodes
-
-        if call_up != last_call_up:
-            log.info("call %s", "UP" if call_up else "DOWN")
-            last_call_up = call_up
-
-        if call_up:
-            # Only start a leg once its own endpoints are both present. The Lark or the
-            # wired output can be unplugged independently of the phone.
-            if LARK in nodes:
-                mic.start()
-            elif mic.running:
-                mic.stop("lark disappeared")
-
-            if WIRED_OUT in nodes:
-                callout.start()
-            elif callout.running:
-                callout.stop("wired output disappeared")
-
-            links = pw_links()
-
-            # Remove WirePlumber's default-device auto-links that BYPASS the loopbacks.
-            # Observed twice: the Lark gets linked straight to the HFP sink in addition
-            # to going through bridge.mic, so the microphone is summed into the uplink
-            # TWICE. The supervisor cannot prevent this (it is default-device policy, not
-            # loopback behaviour), so it removes it after the fact.
-            for src, dst in links:
-                if src == LARK and dst == HFP_SINK:
-                    log.info("removing duplicate auto-link %s -> %s", src, dst)
-                    unlink(src, dst)
-                elif src == HFP_SOURCE and dst not in (WIRED_OUT, callout.in_node):
-                    log.info("removing stray downlink %s -> %s", src, dst)
-                    unlink(src, dst)
-
-            # Verify each leg landed where asked; restart it if not.
-            for leg in legs:
-                if not leg.running:
-                    continue
-                # Give it time to attach before judging. Verifying immediately after
-                # spawn races the link being made and looks like a wrong target.
-                if time.monotonic() - leg.started_at < 4.0:
-                    continue
-                if leg.check_targets(links):
-                    if not leg.verified:
-                        log.info("%s verified: %s -> %s", leg.name, leg.capture, leg.playback)
-                        leg.verified = True
-                    leg.attempts = 0
-                elif leg.attempts < 5:
-                    leg.attempts += 1
-                    log.warning(
-                        "%s attached to the wrong target (attempt %d) — restarting",
-                        leg.name, leg.attempts,
-                    )
-                    leg.stop("wrong target")
-                else:
-                    log.error("%s will not attach to %s after 5 attempts", leg.name, leg.playback)
+        links = pw_links()
+        if nodes is None or links is None:
+            graph.fail("PipeWire graph could not be inspected")
+            nodes = nodes or {}
+            links = links or []
         else:
-            for leg in legs:
-                leg.stop("call ended")
-                leg.verified = False
-                leg.attempts = 0
+            lark = find_lark(nodes, settings)
+            graph.tick(nodes, links, lark)
 
-        # A pw-loopback that died on its own (PipeWire restart, target vanished mid-call)
-        # must not be left as a phantom: clear it so the next tick restarts it cleanly.
-        for leg in legs:
-            if leg.proc is not None and leg.proc.poll() is not None:
-                log.warning("%s exited unexpectedly (rc=%s)", leg.name, leg.proc.returncode)
-                leg.proc = None
-
+        now = time.monotonic()
+        if now - last_metrics >= 10:
+            metrics = runtime_metrics()
+            last_metrics = now
+        lark = find_lark(nodes, settings) if nodes else None
+        status = graph.status(nodes, links, lark)
+        status["system"] = metrics
+        try:
+            write_status(settings.status_path, status)
+        except OSError as exc:
+            log.warning("status write failed: %s", exc)
         time.sleep(POLL_SECONDS)
 
-    for leg in legs:
-        leg.stop("supervisor shutting down")
+    graph.teardown("supervisor shutting down")
+    try:
+        write_status(settings.status_path, graph.status({}, [], None))
+    except OSError:
+        pass
     log.info("stopped")
     return 0
 

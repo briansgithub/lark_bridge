@@ -45,7 +45,7 @@ lint-sh: ## shellcheck all shell scripts
 lint-py: venv ## ruff + black --check + mypy
 	$(VENV)/bin/ruff check "$(PY_DIR)" "$(REPO_ROOT)/tools" "$(REPO_ROOT)/tests"
 	$(VENV)/bin/black --check "$(PY_DIR)" "$(REPO_ROOT)/tools" "$(REPO_ROOT)/tests"
-	$(VENV)/bin/mypy "$(PY_DIR)/src"
+	$(VENV)/bin/mypy "$(PY_DIR)/bridge_supervisor.py" "$(PY_DIR)/bt_watchdog.py"
 
 .PHONY: lint-c
 lint-c: ## clang-format check + the ADR-0008 "no Arduino API in shared sources" rule

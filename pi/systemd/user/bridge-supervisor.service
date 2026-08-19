@@ -27,8 +27,8 @@ ProtectControlGroups=yes
 RestrictAddressFamilies=AF_UNIX
 
 # Killing this MUST NOT interrupt an in-progress call beyond tearing down its own
-# loopbacks — acceptance criterion 7 in PLAN.md §14. KillMode=control-group ensures the
-# pw-loopback children go with it rather than being orphaned into a phantom graph.
+# loopbacks. KillMode=control-group also owns the native pw-cli AEC module host, so the
+# WebRTC streams disappear even if the Python supervisor is killed unexpectedly.
 KillMode=control-group
 TimeoutStopSec=15
 
