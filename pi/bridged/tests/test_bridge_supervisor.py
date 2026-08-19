@@ -42,6 +42,13 @@ failure_policy = "fail_closed"
             with self.assertRaisesRegex(ValueError, "48000"):
                 supervisor.load_settings(config)
 
+    def test_invalid_webrtc_boolean_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "bridge.toml"
+            config.write_text('[audio.aec]\nnoise_suppression = "false"\n', encoding="utf-8")
+            with self.assertRaisesRegex(TypeError, "noise_suppression"):
+                supervisor.load_settings(config)
+
 
 class IdentityAndGraphTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -87,6 +94,23 @@ class NativeAecTests(unittest.TestCase):
         self.assertIn("audio.channels = 1", command)
         self.assertIn("webrtc.noise_suppression = false", command)
         self.assertIn("webrtc.gain_control = false", command)
+        self.assertIn("webrtc.high_pass_filter = true", command)
+        self.assertIn("webrtc.voice_detection = false", command)
+        self.assertIn("webrtc.transient_suppression = true", command)
+
+    def test_module_tuning_is_explicit(self) -> None:
+        settings = supervisor.AecSettings(
+            enabled=True,
+            high_pass_filter=False,
+            noise_suppression=True,
+            gain_control=True,
+            transient_suppression=False,
+        )
+        command = supervisor.NativeAecHost(settings, "lark", "output").module_command()
+        self.assertIn("webrtc.high_pass_filter = false", command)
+        self.assertIn("webrtc.noise_suppression = true", command)
+        self.assertIn("webrtc.gain_control = true", command)
+        self.assertIn("webrtc.transient_suppression = false", command)
 
 
 class FakeHost:

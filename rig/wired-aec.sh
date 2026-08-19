@@ -4,8 +4,51 @@ set -uo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 
 usage() {
-  echo "usage: rig wired-aec baseline|bench|test|fault-test|soak|collect [args...]" >&2
+  echo "usage: rig wired-aec baseline|capabilities|bench|speaker-cal|speaker-baseline|test|fault-test|soak|collect [args...]" >&2
   exit 2
+}
+
+speaker_series() {
+  local label="$1" mode="$2" default_runs="$3"
+  shift 3
+  local runs="$default_runs" dir remote_base trial remote_trial local_trial escaped
+  local -a bench_args=() bench_jsons=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --runs) runs="${2:?--runs requires a count}"; shift 2 ;;
+      *) bench_args+=("$1"); shift ;;
+    esac
+  done
+  [[ "$runs" =~ ^[1-9][0-9]*$ ]] || die "--runs must be a positive integer"
+  require_pi
+  dir="$(artifact_dir "wired-aec-$label")"
+  remote_base="/var/tmp/wired-aec-$label-$(timestamp)"
+  info "running $runs speaker $label trials"
+  for (( trial=1; trial<=runs; trial++ )); do
+    printf -v remote_trial '%s/trial-%02d' "$remote_base" "$trial"
+    printf -v local_trial '%s/trial-%02d' "$dir" "$trial"
+    mkdir -p "$local_trial"
+    escaped=""
+    for argument in "${bench_args[@]}"; do
+      printf -v quoted '%q' "$argument"
+      escaped+=" $quoted"
+    done
+    info "$label trial $trial/$runs"
+    pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote_trial'$escaped" \
+      > "$local_trial/bench-run.json" 2> "$local_trial/bench-run.err" || true
+    scp -q -r "$(pi_host):$remote_trial/." "$local_trial/" 2>/dev/null || true
+    [ -s "$local_trial/bench.json" ] && bench_jsons+=("$local_trial/bench.json")
+  done
+  if "$PY" "$RIG_ROOT/analysis/aec_baseline.py" \
+      --mode "$mode" --min-runs "$runs" "${bench_jsons[@]}" > "$dir/summary.json"; then
+    emit_result "wired-aec-$label" PASS "$dir" runs "$runs"
+    ok "$label PASS"
+  else
+    emit_result "wired-aec-$label" FAIL "$dir" runs "$runs"
+    err "$label FAIL"
+  fi
+  info "evidence: $dir"
+  [ -s "$dir/result.json" ] && grep -q '"verdict": "PASS"' "$dir/result.json"
 }
 
 PY="$(command -v py 2>/dev/null || command -v python3 2>/dev/null || true)"
@@ -37,7 +80,7 @@ snapshot() {
   pi 'journalctl -u bluetooth -u bridge-btfw -u bridge-btwatchdog --since=-10min --no-pager 2>&1 || true' \
     > "$dir/system-journal.txt"
 
-  if require_phone >/dev/null 2>&1; then
+  if adb_bin >/dev/null 2>&1 && phone get-state >/dev/null 2>&1; then
     "$RIG_ROOT/adb/audio-state.sh" --save "$dir" > "$dir/android-audio.txt" 2>&1 || true
   else
     warn "Pixel ADB unavailable; Android state omitted"
@@ -62,6 +105,22 @@ case "$command" in
   baseline)
     snapshot baseline baseline
     ;;
+  capabilities)
+    require_pi
+    dir="$(artifact_dir wired-aec-capabilities)"
+    fail=0
+    pi 'cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_capabilities.py' \
+      > "$dir/capabilities.json" 2> "$dir/capabilities.err" || fail=1
+    if [ "$fail" -eq 0 ] && grep -q '"verdict": "PASS"' "$dir/capabilities.json"; then
+      emit_result wired-aec-capabilities PASS "$dir"
+      ok "capability report PASS"
+    else
+      emit_result wired-aec-capabilities FAIL "$dir"
+      err "capability report FAIL"
+    fi
+    info "evidence: $dir"
+    exit "$fail"
+    ;;
   bench)
     require_pi
     dir="$(artifact_dir wired-aec-bench)"
@@ -74,6 +133,10 @@ case "$command" in
     scp -q "$(pi_host):$remote/raw-mic.wav" "$dir/" 2>/dev/null || true
     scp -q "$(pi_host):$remote/clean-mic.wav" "$dir/" 2>/dev/null || true
     scp -q "$(pi_host):$remote/bench.json" "$dir/" 2>/dev/null || true
+    for artifact in module-command.txt graph-active.json links-active.txt \
+      runtime-samples.json runtime-summary.json pw-top.txt pipewire-journal.txt; do
+      scp -q "$(pi_host):$remote/$artifact" "$dir/" 2>/dev/null || true
+    done
     if [ -s "$dir/bench.json" ] && grep -q '"verdict": "PASS"' "$dir/bench.json"; then
       emit_result wired-aec-bench PASS "$dir"
       ok "bench PASS"
@@ -84,6 +147,12 @@ case "$command" in
     fi
     info "evidence: $dir"
     exit "$fail"
+    ;;
+  speaker-cal)
+    speaker_series speaker-cal calibration 3 "$@"
+    ;;
+  speaker-baseline)
+    speaker_series speaker-baseline baseline 10 "$@"
     ;;
   test)
     snapshot test active

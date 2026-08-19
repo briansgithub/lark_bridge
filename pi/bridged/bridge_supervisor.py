@@ -60,6 +60,11 @@ class AecSettings:
     rate: int = 48_000
     channels: int = 1
     failure_policy: str = "fail_closed"
+    high_pass_filter: bool = True
+    noise_suppression: bool = False
+    gain_control: bool = False
+    voice_detection: bool = False
+    transient_suppression: bool = True
 
 
 @dataclass(frozen=True)
@@ -90,6 +95,13 @@ def parse_bool(value: str) -> bool:
     raise ValueError(f"invalid boolean: {value!r}")
 
 
+def toml_bool(data: dict[str, Any], key: str, default: bool) -> bool:
+    value = data.get(key, default)
+    if not isinstance(value, bool):
+        raise TypeError(f"audio.aec.{key} must be a boolean")
+    return value
+
+
 def default_config_path() -> Path:
     return Path(__file__).resolve().parents[2] / "config" / "bridge.toml"
 
@@ -110,13 +122,18 @@ def load_settings(path: Path | None = None) -> Settings:
         log.warning("config %s is absent; retaining safe AEC-off defaults", config_path)
 
     aec_data = (data.get("audio") or {}).get("aec") or {}
-    enabled = bool(aec_data.get("enabled", False))
+    enabled = toml_bool(aec_data, "enabled", False)
     if "BRIDGE_AEC_ENABLED" in os.environ:
         enabled = parse_bool(os.environ["BRIDGE_AEC_ENABLED"])
     method = str(aec_data.get("method", "webrtc"))
     rate = int(aec_data.get("rate", 48_000))
     channels = int(aec_data.get("channels", 1))
     failure_policy = str(aec_data.get("failure_policy", "fail_closed"))
+    high_pass_filter = toml_bool(aec_data, "high_pass_filter", True)
+    noise_suppression = toml_bool(aec_data, "noise_suppression", False)
+    gain_control = toml_bool(aec_data, "gain_control", False)
+    voice_detection = toml_bool(aec_data, "voice_detection", False)
+    transient_suppression = toml_bool(aec_data, "transient_suppression", True)
 
     if method != "webrtc":
         raise ValueError("audio.aec.method must be 'webrtc'")
@@ -133,7 +150,18 @@ def load_settings(path: Path | None = None) -> Settings:
 
     status_value = os.environ.get("BRIDGE_STATUS")
     return Settings(
-        aec=AecSettings(enabled, method, rate, channels, failure_policy),
+        aec=AecSettings(
+            enabled=enabled,
+            method=method,
+            rate=rate,
+            channels=channels,
+            failure_policy=failure_policy,
+            high_pass_filter=high_pass_filter,
+            noise_suppression=noise_suppression,
+            gain_control=gain_control,
+            voice_detection=voice_detection,
+            transient_suppression=transient_suppression,
+        ),
         lark_node=os.environ.get("BRIDGE_LARK", DEFAULT_LARK),
         lark_component=os.environ.get("BRIDGE_LARK_COMPONENT", DEFAULT_LARK_COMPONENT),
         wired_output=os.environ.get("BRIDGE_WIRED_OUT", DEFAULT_WIRED_OUT),
@@ -328,10 +356,11 @@ class NativeAecHost:
                 f"audio.channels = {self.settings.channels}",
                 "audio.position = [ MONO ]",
                 "aec.args = {",
-                "webrtc.noise_suppression = false",
-                "webrtc.gain_control = false",
-                "webrtc.voice_detection = false",
-                "webrtc.high_pass_filter = true",
+                f"webrtc.noise_suppression = {str(self.settings.noise_suppression).lower()}",
+                f"webrtc.gain_control = {str(self.settings.gain_control).lower()}",
+                f"webrtc.voice_detection = {str(self.settings.voice_detection).lower()}",
+                f"webrtc.high_pass_filter = {str(self.settings.high_pass_filter).lower()}",
+                f"webrtc.transient_suppression = {str(self.settings.transient_suppression).lower()}",
                 "}",
                 "capture.props = {",
                 f"target.object = {spa_string(self.microphone)}",

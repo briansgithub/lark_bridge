@@ -86,6 +86,12 @@ rate = 48000
 channels = 1
 # Never substitute the raw Lark automatically if AEC construction or verification fails.
 failure_policy = "fail_closed"
+# Installed WebRTC1 baseline. Keep these explicit so package defaults cannot drift.
+high_pass_filter = true
+noise_suppression = false
+gain_control = false
+voice_detection = false
+transient_suppression = true
 
 
 [bluetooth]
