@@ -121,11 +121,15 @@ pico-monitor: ## Open the Pico CDC diagnostic console
 
 .PHONY: install
 install: ## Provision this machine (must be the Pi, must be root)
-	sudo "$(REPO_ROOT)/scripts/install.sh"
+	sudo "$(REPO_ROOT)/scripts/install.sh" --boot-only
+
+.PHONY: uninstall
+uninstall: ## Roll back the current boot provisioning transaction
+	sudo "$(REPO_ROOT)/scripts/uninstall.sh" --boot-only
 
 .PHONY: verify
 verify: ## Run the post-install health checks
-	"$(REPO_ROOT)/scripts/bootstrap/70-verify.sh"
+	sudo "$(REPO_ROOT)/scripts/bootstrap/70-verify.sh" --boot-only
 
 .PHONY: logs
 logs: ## Collect a diagnostic bundle into ./artifacts

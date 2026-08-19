@@ -17,10 +17,9 @@
 #
 #     Bluetooth: hci0: BCM43430A1 'brcm/BCM43430A1.raspberrypi,3-model-b.hcd' Patch
 #
-# CRITICAL CONSEQUENCE: a firmware reload RESETS SCO ROUTING TO PCM. Verified: routing
-# read back as 0x00 immediately after rebinding. Any recovery that reloads firmware must
-# re-run bridge-btfw.service or HFP audio comes back half-duplex -- microphone works,
-# call audio silently does not. This script does that automatically.
+# The production Device Tree property is reapplied when the serdev driver reloads the
+# controller. Recovery still runs bridge-btfw.service, but that unit is deliberately
+# read-only: it refuses to continue unless both Device Tree and controller readback agree.
 
 set -euo pipefail
 
@@ -43,18 +42,18 @@ alive() {
   [ "${after:-0}" -gt "${before:-0}" ]
 }
 
-reapply_sco_routing() {
+verify_sco_routing() {
   if [ -x /usr/local/lib/rpi-lark-bridge/set-sco-routing.sh ]; then
-    log "re-applying SCO routing (firmware reload resets it to PCM)"
+    log "verifying Device Tree-native SCO routing after controller recovery"
     systemctl restart bridge-btfw.service 2>/dev/null \
-      || /usr/local/lib/rpi-lark-bridge/set-sco-routing.sh || warn "could not re-apply SCO routing"
+      || /usr/local/lib/rpi-lark-bridge/set-sco-routing.sh || warn "could not verify SCO routing"
   else
-    warn "set-sco-routing.sh not installed — SCO will be routed to PCM and HFP downlink will be silent"
+    warn "set-sco-routing.sh not installed — SCO routing cannot be verified"
   fi
 }
 
 finish() {
-  reapply_sco_routing
+  verify_sco_routing
   log "restarting the audio session so bluez endpoints re-register"
   # `su -` starts a login shell that may not see the user's systemd manager, so this
   # silently did nothing: the adapter came back UP but with NO bluez endpoints

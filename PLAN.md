@@ -195,7 +195,7 @@ does **not** set `brcm,bt-pcm-int-params` [DOC]. So out of the box the controlle
 to dead PCM pins. That is the most likely explanation for the long-standing "A2DP works, HSP/HFP is
 silent on Pi 3" reports (raspberrypi/linux#2229, open since 2017) [DOC].
 
-**Two candidate fixes, both cheap to test (spike S1):**
+**Two candidate fixes tested by spike S1:**
 - **S1a:** ship a device-tree overlay adding `brcm,bt-pcm-int-params = <0x01 0x02 0x00 0x01 0x01>;`
   to the `bt` node. Requires the kernel to be driving the chip via serdev/`hci_bcm` rather than
   userspace `hciattach` from `hciuart.service` — check which one Raspberry Pi OS Trixie actually uses
@@ -205,8 +205,9 @@ silent on Pi 3" reports (raspberrypi/linux#2229, open since 2017) [DOC].
   after `bluetooth.service`. Ugly but transport-agnostic, and it works whether or not the DT property
   is honoured.
 
-S1a is the correct engineering answer; S1b is the fallback and also the fast way to *learn the
-answer* in an afternoon. Do S1b first for the knowledge, then S1a for the product.
+S1a is the shipped engineering answer. S1b was useful for diagnosis but is no longer a production
+fallback: `bridge-btfw.service` now performs bounded, read-only verification of the DT property and
+controller readback.
 
 **What is not documented and must be measured.** Whether the controller's scheduler can sustain a
 2-slot eSCO reservation (EV3/2-EV3, ~64 kbit/s each way) alongside an A2DP ACL stream (~200–350
@@ -518,9 +519,10 @@ than relying on BlueZ's `[Policy] AutoEnable` alone (which we still set as a bel
 
 ### 4.5 `bridge-btfw.service` (system unit, shell)
 
-Applies the SCO-routing configuration and Class-of-Device after `bluetooth.service` is up. Shell,
-~30 lines, because it is three `hciconfig`/`btmgmt`/`hcitool` calls with error checking. Ordering:
-`After=bluetooth.service`, `Before=bridge.target`. Idempotent; logs the controller's response bytes.
+Verifies DT-native SCO routing after `bluetooth.service` is up. It checks the live Device Tree
+property and bounded controller readback without writing controller state. Ordering is
+`After=bluetooth.service` with `Requires=` and `PartOf=bluetooth.service`; it has no dependency on
+`bridge.target`.
 
 ### 4.6 Pico firmware
 
@@ -721,8 +723,8 @@ ReconnectIntervals = 1,2,4,8,16,32,64
 
 Because the BCM43438's PCM pins go nowhere on a Pi 3B, SCO **must** be routed to the HCI transport.
 Set via `brcm,bt-pcm-int-params = <0x01 0x02 0x00 0x01 0x01>` in a DT overlay on the `bt` node
-(`sco-routing=1 Transport`, `rate=512 kbps`, `frame=short`, `sync=master`, `clock=master`) [DOC], or
-at runtime by `bridge-btfw.service` issuing `hcitool cmd 0x3f 0x1c 01 02 00 01 01`.
+(`sco-routing=1 Transport`, `rate=512 kbps`, `frame=short`, `sync=master`, `clock=master`) [DOC].
+`bridge-btfw.service` only verifies that property and the resulting controller readback.
 
 Codec preference: **mSBC (wideband, 16 kHz)** over CVSD (8 kHz). mSBC over SCO needs "transparent
 data" air mode plus controller support; PipeWire probes for it and PipeWire's own quirk database can
@@ -1245,7 +1247,7 @@ Score = probability × impact, both 1–5.
 | # | Risk | P | I | Score | Mitigation | Resolving test |
 |---|---|---|---|---|---|---|
 | R1 | **Single radio cannot sustain HFP/SCO + A2DP acceptably** | **5** | 4 | **20** | **CONFIRMED by measurement (E03): A2DP is torn down by our own stack seconds after SCO starts, reproduced on two devices. Mechanism is an AVDTP timeout, so mitigations are untried, not exhausted: AVDTP timeout tuning, bitpool cap, Wi-Fi off.** Mode 1W unaffected. | **E03 (done)** |
-| R2 | **SCO never reaches the host on BCM43438** (PCM routing) | 3 | 5 | **15** | DT `brcm,bt-pcm-int-params`; runtime vendor HCI command; both shipped | **S1** |
+| R2 | **SCO never reaches the host on BCM43438** (PCM routing) | 3 | 5 | **15** | DT `brcm,bt-pcm-int-params`; bounded read-only verifier | **S1** |
 | R3 | Android won't route calls to a USB headset | 3 | 4 | 12 | Mode 1/1W do not depend on this; Mode 2 is the secondary path by design | M12/J1–J3 |
 | R4 | WirePlumber/PipeWire instability in the HFP HF path | 3 | 4 | 12 | Pin versions; HSP fallback; systemd restart + `bridged` health; loopbacks survive restarts | S2, I6 |
 | R5 | `bcm2835-i2s` full duplex unreliable | 3 | 3 | 9 | googlevoicehat overlay first, custom overlay second, `snd_pcm_link` third | G1, G2, E06 |
