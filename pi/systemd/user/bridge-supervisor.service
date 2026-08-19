@@ -22,6 +22,8 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
+# Machine-readable status is atomically replaced under the per-user runtime directory.
+ReadWritePaths=%t
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictAddressFamilies=AF_UNIX

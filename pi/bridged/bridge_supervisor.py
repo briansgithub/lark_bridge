@@ -204,8 +204,7 @@ def find_lark(nodes: NodeMap, settings: Settings) -> str | None:
         name
         for name, props in nodes.items()
         if props.get("media.class") == "Audio/Source"
-        and str(props.get("alsa.components", "")).upper()
-        == settings.lark_component.upper()
+        and str(props.get("alsa.components", "")).upper() == settings.lark_component.upper()
     ]
     if len(matches) == 1:
         return matches[0]
@@ -478,9 +477,7 @@ class CallGraph:
         self.state = State.BUILDING
         self.build_started = time.monotonic()
         if self.settings.aec.enabled:
-            self.aec_host = NativeAecHost(
-                self.settings.aec, lark, self.settings.wired_output
-            )
+            self.aec_host = NativeAecHost(self.settings.aec, lark, self.settings.wired_output)
             self.aec_host.start()
             return
         self.callout = Loopback(
@@ -505,8 +502,7 @@ class CallGraph:
             dangerous = source == lark and target == self.settings.hfp_sink
             if self.callout is not None:
                 dangerous = dangerous or (
-                    source == self.settings.hfp_source
-                    and target != self.callout.in_node
+                    source == self.settings.hfp_source and target != self.callout.in_node
                 )
             if self.microphone is not None and self.settings.aec.enabled:
                 dangerous = dangerous or (
@@ -521,9 +517,7 @@ class CallGraph:
     def validate(self, links: LinkList, lark: str) -> bool:
         if self.microphone is None or self.callout is None:
             return False
-        if not self.microphone.targets_verified(
-            links
-        ) or not self.callout.targets_verified(links):
+        if not self.microphone.targets_verified(links) or not self.callout.targets_verified(links):
             return False
         if self.settings.aec.enabled:
             if (lark, AEC_CAPTURE) not in links:
@@ -603,9 +597,7 @@ class CallGraph:
         self.attempts = 0
         self.state = State.ACTIVE
 
-    def status(
-        self, nodes: NodeMap, links: LinkList, lark: str | None
-    ) -> dict[str, Any]:
+    def status(self, nodes: NodeMap, links: LinkList, lark: str | None) -> dict[str, Any]:
         call_up = self.settings.hfp_sink in nodes and self.settings.hfp_source in nodes
         expected: LinkList = []
         if self.microphone is not None and self.callout is not None:
@@ -617,10 +609,8 @@ class CallGraph:
                     (self.callout.out_node, self.callout.playback),
                 ]
             )
-        if self.settings.aec.enabled and lark is not None:
-            expected.extend(
-                [(lark, AEC_CAPTURE), (AEC_PLAYBACK, self.settings.wired_output)]
-            )
+        if self.aec_host is not None and lark is not None:
+            expected.extend([(lark, AEC_CAPTURE), (AEC_PLAYBACK, self.settings.wired_output)])
         missing = [pair for pair in expected if pair not in links]
         return {
             "timestamp": time.time(),
@@ -632,9 +622,7 @@ class CallGraph:
                 "hfp_source": self.settings.hfp_source if call_up else None,
                 "hfp_sink": self.settings.hfp_sink if call_up else None,
                 "wired_output": (
-                    self.settings.wired_output
-                    if self.settings.wired_output in nodes
-                    else None
+                    self.settings.wired_output if self.settings.wired_output in nodes else None
                 ),
             },
             "aec": {
@@ -643,9 +631,7 @@ class CallGraph:
                 "rate": self.settings.aec.rate,
                 "channels": self.settings.aec.channels,
                 "verified": self.verified and self.settings.aec.enabled,
-                "module_backend": (
-                    "native-pw-cli" if self.settings.aec.enabled else None
-                ),
+                "module_backend": ("native-pw-cli" if self.settings.aec.enabled else None),
                 "owner_pid": self.aec_host.pid if self.aec_host is not None else None,
             },
             "graph": {
@@ -705,9 +691,7 @@ def runtime_metrics() -> dict[str, Any]:
         "arm_clock": ["vcgencmd", "measure_clock", "arm"],
     }.items():
         try:
-            result = subprocess.run(
-                command, capture_output=True, text=True, timeout=3, check=False
-            )
+            result = subprocess.run(command, capture_output=True, text=True, timeout=3, check=False)
             metrics[key] = result.stdout.strip() if result.returncode == 0 else None
         except (OSError, subprocess.SubprocessError):
             metrics[key] = None
@@ -782,6 +766,7 @@ def main() -> int:
         time.sleep(POLL_SECONDS)
 
     graph.teardown("supervisor shutting down")
+    graph.state = State.CALL_DOWN
     try:
         write_status(settings.status_path, graph.status({}, [], None))
     except OSError:

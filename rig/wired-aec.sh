@@ -4,7 +4,7 @@ set -uo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 
 usage() {
-  echo "usage: rig wired-aec baseline|test|fault-test|soak|collect [args...]" >&2
+  echo "usage: rig wired-aec baseline|bench|test|fault-test|soak|collect [args...]" >&2
   exit 2
 }
 
@@ -61,6 +61,29 @@ command="${1:-}"; shift || true
 case "$command" in
   baseline)
     snapshot baseline baseline
+    ;;
+  bench)
+    require_pi
+    dir="$(artifact_dir wired-aec-bench)"
+    remote="/var/tmp/wired-aec-bench-$(timestamp)"
+    fail=0
+    info "running low-level AUX/speaker/Lark AEC capture"
+    pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote' $*" \
+      > "$dir/bench-run.json" 2> "$dir/bench-run.err" || fail=1
+    scp -q "$(pi_host):$remote/reference.wav" "$dir/" 2>/dev/null || true
+    scp -q "$(pi_host):$remote/raw-mic.wav" "$dir/" 2>/dev/null || true
+    scp -q "$(pi_host):$remote/clean-mic.wav" "$dir/" 2>/dev/null || true
+    scp -q "$(pi_host):$remote/bench.json" "$dir/" 2>/dev/null || true
+    if [ -s "$dir/bench.json" ] && grep -q '"verdict": "PASS"' "$dir/bench.json"; then
+      emit_result wired-aec-bench PASS "$dir"
+      ok "bench PASS"
+    else
+      fail=1
+      emit_result wired-aec-bench FAIL "$dir"
+      err "bench FAIL or acoustic stimulus was not measurable"
+    fi
+    info "evidence: $dir"
+    exit "$fail"
     ;;
   test)
     snapshot test active
