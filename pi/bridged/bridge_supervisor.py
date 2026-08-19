@@ -333,10 +333,20 @@ def spa_string(value: str) -> str:
 class NativeAecHost:
     """Hold a native PipeWire WebRTC module inside a child pw-cli context."""
 
-    def __init__(self, settings: AecSettings, microphone: str, output: str):
+    def __init__(
+        self,
+        settings: AecSettings,
+        microphone: str,
+        output: str,
+        *,
+        latency_frames: int | None = None,
+    ):
+        if latency_frames is not None and latency_frames <= 0:
+            raise ValueError("latency_frames must be positive")
         self.settings = settings
         self.microphone = microphone
         self.output = output
+        self.latency_frames = latency_frames
         self.proc: subprocess.Popen[str] | None = None
 
     @property
@@ -348,41 +358,44 @@ class NativeAecHost:
         return self.proc.pid if self.running and self.proc is not None else None
 
     def module_command(self) -> str:
-        arguments = " ".join(
-            [
-                "{",
-                "library.name = aec/libspa-aec-webrtc",
-                f"audio.rate = {self.settings.rate}",
-                f"audio.channels = {self.settings.channels}",
-                "audio.position = [ MONO ]",
-                "aec.args = {",
-                f"webrtc.noise_suppression = {str(self.settings.noise_suppression).lower()}",
-                f"webrtc.gain_control = {str(self.settings.gain_control).lower()}",
-                f"webrtc.voice_detection = {str(self.settings.voice_detection).lower()}",
-                f"webrtc.high_pass_filter = {str(self.settings.high_pass_filter).lower()}",
-                f"webrtc.transient_suppression = {str(self.settings.transient_suppression).lower()}",
-                "}",
-                "capture.props = {",
-                f"target.object = {spa_string(self.microphone)}",
-                "node.dont-reconnect = true",
-                "node.passive = true",
-                "}",
-                "source.props = {",
-                f"node.name = {spa_string(AEC_SOURCE)}",
-                "media.class = Audio/Source",
-                "}",
-                "sink.props = {",
-                f"node.name = {spa_string(AEC_SINK)}",
-                "media.class = Audio/Sink",
-                "}",
-                "playback.props = {",
-                f"target.object = {spa_string(self.output)}",
-                "node.dont-reconnect = true",
-                "node.passive = true",
-                "}",
-                "}",
-            ]
-        )
+        module_args = [
+            "{",
+            "library.name = aec/libspa-aec-webrtc",
+            f"audio.rate = {self.settings.rate}",
+            f"audio.channels = {self.settings.channels}",
+            "audio.position = [ MONO ]",
+            "aec.args = {",
+            f"webrtc.noise_suppression = {str(self.settings.noise_suppression).lower()}",
+            f"webrtc.gain_control = {str(self.settings.gain_control).lower()}",
+            f"webrtc.voice_detection = {str(self.settings.voice_detection).lower()}",
+            f"webrtc.high_pass_filter = {str(self.settings.high_pass_filter).lower()}",
+            f"webrtc.transient_suppression = {str(self.settings.transient_suppression).lower()}",
+            "}",
+            "capture.props = {",
+            f"target.object = {spa_string(self.microphone)}",
+            "node.dont-reconnect = true",
+            "node.passive = true",
+            "}",
+            "source.props = {",
+            f"node.name = {spa_string(AEC_SOURCE)}",
+            "media.class = Audio/Source",
+            "}",
+            "sink.props = {",
+            f"node.name = {spa_string(AEC_SINK)}",
+            "media.class = Audio/Sink",
+            "}",
+            "playback.props = {",
+            f"target.object = {spa_string(self.output)}",
+            "node.dont-reconnect = true",
+            "node.passive = true",
+            "}",
+            "}",
+        ]
+        if self.latency_frames is not None:
+            module_args.insert(
+                5, f"node.latency = {self.latency_frames}/{self.settings.rate}"
+            )
+        arguments = " ".join(module_args)
         return f"load-module libpipewire-module-echo-cancel {arguments}\n"
 
     def start(self) -> None:

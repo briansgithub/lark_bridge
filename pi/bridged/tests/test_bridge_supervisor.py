@@ -112,6 +112,15 @@ class NativeAecTests(unittest.TestCase):
         self.assertIn("webrtc.gain_control = true", command)
         self.assertIn("webrtc.transient_suppression = false", command)
 
+    def test_bench_latency_request_is_explicit(self) -> None:
+        command = supervisor.NativeAecHost(
+            supervisor.AecSettings(enabled=True),
+            "lark",
+            "output",
+            latency_frames=1024,
+        ).module_command()
+        self.assertIn("node.latency = 1024/48000", command)
+
 
 class FakeHost:
     def __init__(self, _settings: object, _microphone: str, _output: str):

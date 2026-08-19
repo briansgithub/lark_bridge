@@ -8,6 +8,7 @@ import dataclasses
 import importlib.util
 import json
 import math
+import re
 import signal
 import subprocess
 import sys
@@ -67,6 +68,36 @@ def wait_links(module, expected: set[tuple[str, str]], timeout: float = 10) -> N
     raise RuntimeError(f"PipeWire links did not appear: {sorted(expected)}")
 
 
+def output_volume(node: str) -> tuple[float, bool]:
+    graph = subprocess.run(
+        ["pw-dump"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    try:
+        objects = json.loads(graph.stdout)
+        node_id = next(
+            str(obj["id"])
+            for obj in objects
+            if ((obj.get("info") or {}).get("props") or {}).get("node.name") == node
+        )
+    except (json.JSONDecodeError, KeyError, StopIteration) as exc:
+        raise RuntimeError(f"could not resolve wired-output id for {node}") from exc
+    result = subprocess.run(
+        ["wpctl", "get-volume", node_id],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
+    )
+    match = re.search(r"Volume:\s+([0-9.]+)", result.stdout)
+    if result.returncode != 0 or match is None:
+        raise RuntimeError(f"could not read wired-output volume: {result.stderr.strip()}")
+    return float(match.group(1)), "[MUTED]" in result.stdout
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
@@ -77,6 +108,11 @@ def main() -> int:
     parser.add_argument("--tone", type=float, default=1000.0)
     parser.add_argument("--tone-dbfs", type=float, default=-30.0)
     parser.add_argument("--profile-name", default="baseline")
+    parser.add_argument(
+        "--node-latency-frames",
+        type=int,
+        help="bench-only PipeWire echo-cancel node latency request",
+    )
     parser.add_argument(
         "--high-pass-filter", action=argparse.BooleanOptionalAction, default=None
     )
@@ -108,6 +144,13 @@ def main() -> int:
     output_node = args.output or settings.wired_output
     if lark is None or output_node not in nodes:
         raise SystemExit("Lark or wired output is absent")
+    wired_volume, wired_muted = output_volume(output_node)
+    if wired_muted:
+        raise SystemExit("wired output is muted")
+    if wired_volume > 0.86:
+        raise SystemExit(
+            f"wired output volume {wired_volume:.2f} exceeds the measured-safe 0.85 setting"
+        )
 
     tone_path = args.out / "reference.wav"
     raw_path = args.out / "raw-mic.wav"
@@ -147,7 +190,9 @@ def main() -> int:
         if value is not None:
             replacements[field] = value
     tuning = dataclasses.replace(tuning, **replacements)
-    host = module.NativeAecHost(tuning, lark, output_node)
+    host = module.NativeAecHost(
+        tuning, lark, output_node, latency_frames=args.node_latency_frames
+    )
     recorders: list[subprocess.Popen[bytes]] = []
     started = time.monotonic()
     started_wall = time.time()
@@ -232,9 +277,7 @@ def main() -> int:
     journal = subprocess.run(
         [
             "journalctl",
-            "--user",
-            "-u",
-            "pipewire",
+            "_SYSTEMD_USER_UNIT=pipewire.service",
             "--since",
             f"@{int(started_wall)}",
             "--no-pager",
@@ -315,6 +358,8 @@ def main() -> int:
         "module_startup_ms": module_started_ms,
         "lark": lark,
         "wired_output": output_node,
+        "wired_output_volume": wired_volume,
+        "node_latency_frames": args.node_latency_frames,
         "tone_dbfs": args.tone_dbfs,
         "signal": args.signal,
         "profile_name": args.profile_name,
