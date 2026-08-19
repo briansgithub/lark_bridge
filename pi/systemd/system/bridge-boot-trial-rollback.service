@@ -1,0 +1,13 @@
+[Unit]
+Description=Roll back an unconfirmed LarkBridge boot trial
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/rpi-lark-bridge/boot-trial.sh rollback-pending
+
+# This recovery unit writes only the managed transaction paths and reboots.
+NoNewPrivileges=yes
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectControlGroups=yes

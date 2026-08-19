@@ -101,6 +101,7 @@ info "baseline xrun counter: $XRUN_BEFORE"
 # ---------------------------------------------------------------- 4. capture + stream
 
 info "starting btmon capture"
+# shellcheck disable=SC2024 # btmon needs sudo; the control user owns the log directory.
 sudo btmon -w "$DIR/hci.btsnoop" > "$DIR/btmon.txt" 2>&1 &
 BTMON_PID=$!
 cleanup_pid_on_exit "$BTMON_PID"

@@ -18,6 +18,7 @@ done
 
 ID="${LABEL}-$(timestamp)"
 MAC="$(inv pixel_bt_mac '')"
+# shellcheck disable=SC2088 # The remote shell expands the configured fallback.
 REPO_REMOTE="$(inv pi_repo_path '~/rpi-lark-bridge')"
 
 # ABSOLUTE path on purpose. systemd-run does NOT inherit the invoking shell's working

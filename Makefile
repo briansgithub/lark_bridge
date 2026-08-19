@@ -71,6 +71,7 @@ test-host: test-py test-pico-host ## All tests that need no hardware
 .PHONY: test-py
 test-py: venv ## pytest for bridged/bridgectl against recorded fixtures
 	$(VENV)/bin/pytest "$(PY_DIR)/tests" -q
+	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/rig/boot/tests" -p 'test_*.py'
 
 .PHONY: test-pico-host
 test-pico-host: ## Host-compiled unit tests for ring buffer / rate control
@@ -120,11 +121,15 @@ pico-monitor: ## Open the Pico CDC diagnostic console
 
 .PHONY: install
 install: ## Provision this machine (must be the Pi, must be root)
-	sudo "$(REPO_ROOT)/scripts/install.sh"
+	sudo "$(REPO_ROOT)/scripts/install.sh" --boot-only
+
+.PHONY: uninstall
+uninstall: ## Roll back the current boot provisioning transaction
+	sudo "$(REPO_ROOT)/scripts/uninstall.sh" --boot-only
 
 .PHONY: verify
 verify: ## Run the post-install health checks
-	"$(REPO_ROOT)/scripts/bootstrap/70-verify.sh"
+	sudo "$(REPO_ROOT)/scripts/bootstrap/70-verify.sh" --boot-only
 
 .PHONY: logs
 logs: ## Collect a diagnostic bundle into ./artifacts

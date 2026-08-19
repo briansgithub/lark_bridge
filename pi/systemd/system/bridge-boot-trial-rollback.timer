@@ -1,0 +1,10 @@
+[Unit]
+Description=Rollback timer for an unconfirmed LarkBridge boot trial
+
+[Timer]
+OnBootSec=120s
+AccuracySec=1s
+Unit=bridge-boot-trial-rollback.service
+
+[Install]
+WantedBy=timers.target
