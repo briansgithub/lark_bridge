@@ -201,6 +201,8 @@ class Ssh:
             self._base() + [remote],
             input=input_text,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             timeout=timeout or self.config.ssh_timeout_s + 5,
             check=False,
@@ -267,7 +269,7 @@ def collect_evidence(ssh: Ssh, directory: Path) -> None:
     for filename, command in commands.items():
         try:
             result = ssh.run(command, timeout=30)
-            text = result.stdout + (
+            text = (result.stdout or "") + (
                 "\nSTDERR:\n" + result.stderr if result.stderr else ""
             )
         except subprocess.TimeoutExpired as exc:
