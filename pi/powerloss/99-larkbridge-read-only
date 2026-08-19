@@ -1,0 +1,2 @@
+// A deployed appliance is image-updated. In-place package mutation is unsupported.
+DPkg::Pre-Invoke { "test -e /run/larkbridge-image-build-mode || { echo 'LarkBridge is read-only; install a replacement SD image' >&2; exit 100; }"; };

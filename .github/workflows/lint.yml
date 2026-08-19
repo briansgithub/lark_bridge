@@ -40,7 +40,13 @@ jobs:
       # tools/ must stay importable with a bare stdlib Python: these scripts run on the Pi
       # during provisioning, before the project virtualenv exists.
       - name: Byte-compile stdlib-only tools
-        run: python -m compileall -q tools/
+        run: python -m compileall -q tools/ pi/powerloss/ rig/powerloss/ scripts/powerloss/
+
+      - name: Power-loss host tests
+        run: |
+          python -m unittest discover -s pi/powerloss/tests -p 'test_*.py'
+          python -m unittest discover -s rig/powerloss/tests -p 'test_*.py'
+          python -m unittest discover -s scripts/powerloss/tests -p 'test_*.py'
 
       - name: Assert tools/ imports nothing outside the stdlib
         run: |
