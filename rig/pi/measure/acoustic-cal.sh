@@ -19,7 +19,7 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 
 rig_resolve
 L="${LARK_CARD:-}"; B="${DONGLE_B_CARD:-}"
-[ -n "$L" ] || { echo "Lark not present at $LARK_PORT" >&2; exit 78; }
+[ -n "$L" ] || { echo "Lark $LARK_USB_ID not present on any USB port" >&2; exit 78; }
 [ -n "$B" ] || { echo "dongle B not present at $DONGLE_B_PORT" >&2; exit 78; }
 
 TARGET_PEAK="${TARGET_PEAK:--18}"   # dBFS at the Lark: healthy level with real headroom

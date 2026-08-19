@@ -10,12 +10,13 @@ unit_header "U10" "Lark A1 capture device" \
 require_pi
 DIR="$(artifact_dir U10-lark)"
 PY="$(command -v py 2>/dev/null || command -v python3)"
-LARK_PORT="$(inv lark_port_path 1-1.3)"
+LARK_USB_ID="$(inv lark_usb_id 3547:0407)"
+LARK_USB_SERIAL="$(inv lark_usb_serial '')"
 
-CARD="$(pi "cd ~/rpi-lark-bridge && . rig/pi/measure/devices.sh && rig_resolve && echo \$LARK_CARD")"
-[ -n "$CARD" ] || need_hardware "Lark A1 USB receiver at port $LARK_PORT" \
+CARD="$(pi "cd ~/rpi-lark-bridge && LARK_USB_ID='$LARK_USB_ID' LARK_USB_SERIAL='$LARK_USB_SERIAL' bash -c '. rig/pi/measure/devices.sh; rig_resolve; echo \$LARK_CARD'")"
+[ -n "$CARD" ] || need_hardware "Lark A1 USB receiver ($LARK_USB_ID) in any Pi USB port" \
   "Plug the Hollyland receiver (3547:0407) into the Pi."
-ok "Lark present: card $CARD at port $LARK_PORT"
+ok "Lark present by stable USB identity: $LARK_USB_ID -> card $CARD"
 
 pi "arecord -D hw:$CARD,0 -f S16_LE -c 2 -r 48000 --dump-hw-params -d1 /dev/null 2>&1" \
   > "$DIR/hw-params.txt" 2>&1 || true
