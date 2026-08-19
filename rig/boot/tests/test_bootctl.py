@@ -154,6 +154,41 @@ class BootCtlTests(unittest.TestCase):
                 2,
             )
 
+    def test_compare_labels_idle_improvement_as_provisional(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for label, timing in (("base", 20.0), ("candidate", 10.0)):
+                for index in range(10):
+                    run = root / f"boot-run-{label}-{index}"
+                    run.mkdir()
+                    (run / "result.json").write_text(
+                        json.dumps(
+                            {
+                                "candidate": label,
+                                "mode": "warm",
+                                "verdict": "PASS",
+                                "readiness_level": "idle",
+                                "timings_s": {"idle_ready": timing},
+                                "health_events": {},
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                verdict = bootctl.compare(
+                    SimpleNamespace(artifacts=root),
+                    "base",
+                    "candidate",
+                    True,
+                    "warm",
+                )
+            self.assertEqual(verdict, 1)
+            self.assertEqual(
+                json.loads(output.getvalue())["verdict"],
+                "PROVISIONAL_IDLE_IMPROVEMENT",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

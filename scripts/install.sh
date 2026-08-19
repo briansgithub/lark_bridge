@@ -13,7 +13,7 @@ BRIDGE_USER="${BRIDGE_USER:-admin}"
 NETWORKMANAGER_FASTPATH=keep
 
 usage() {
-    printf 'usage: sudo %s --boot-only [--dry-run] [--source-root PATH] [--transaction-label LABEL] [--networkmanager-fastpath keep|enable|disable]\n' "$0"
+    printf 'usage: sudo %s --boot-only [--dry-run] [--source-root PATH] [--transaction-label LABEL] [--networkmanager-fastpath keep|enable|skip|disable]\n' "$0"
 }
 
 while [ "$#" -gt 0 ]; do
@@ -30,7 +30,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ "$BOOT_ONLY" -eq 1 ] || { usage >&2; exit 2; }
-case "$NETWORKMANAGER_FASTPATH" in keep|enable|disable) ;; *) usage >&2; exit 2;; esac
+case "$NETWORKMANAGER_FASTPATH" in keep|enable|skip|disable) ;; *) usage >&2; exit 2;; esac
 [ "$(id -u)" -eq 0 ] || { printf 'ERROR: must run as root\n' >&2; exit 1; }
 [ "$(uname -s)" = "Linux" ] || { printf 'ERROR: Linux is required\n' >&2; exit 1; }
 SOURCE_ROOT="$(cd "$SOURCE_ROOT" && pwd)"
@@ -60,6 +60,7 @@ managed_sources=(
     "pi/scripts/boot-trial.sh"
     "pi/scripts/netplan-startup-fastpath"
     "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf"
+    "pi/systemd/system/NetworkManager-10-larkbridge-netplan-skip.conf"
     "pi/pipewire/pipewire.conf.d/20-bridge-endpoints.notes.txt"
 )
 for relative in "${managed_sources[@]}"; do
@@ -153,11 +154,16 @@ fastpath_script=/usr/local/lib/rpi-lark-bridge/boot-path/netplan
 fastpath_dropin=/etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf
 printf '%s\n' "$NETWORKMANAGER_FASTPATH" > "$transaction/networkmanager-fastpath"
 case "$NETWORKMANAGER_FASTPATH" in
-    enable)
+    enable|skip)
         [ -x /usr/libexec/netplan/generate ] || die "Netplan generator is unavailable"
         [ -x /usr/sbin/netplan ] || die "Netplan CLI is unavailable"
         install_managed "pi/scripts/netplan-startup-fastpath" "$fastpath_script" 0755
-        install_managed "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf" \
+        if [ "$NETWORKMANAGER_FASTPATH" = skip ]; then
+            fastpath_source=pi/systemd/system/NetworkManager-10-larkbridge-netplan-skip.conf
+        else
+            fastpath_source=pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf
+        fi
+        install_managed "$fastpath_source" \
             "$fastpath_dropin" 0644
         ;;
     disable)
