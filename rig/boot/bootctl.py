@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
+import re
+import shlex
 import socket
 import statistics
 import subprocess
@@ -29,6 +32,17 @@ SYSTEM_UNITS = (
     "bridge-tuning.service",
 )
 USER_UNITS = ("pipewire.service", "wireplumber.service", "bridge-supervisor.service")
+HEALTH_PATTERNS = {
+    "xrun": re.compile(r"\b(?:xrun|underrun|overrun)\b", re.IGNORECASE),
+    "undervoltage": re.compile(r"under-?voltage", re.IGNORECASE),
+    "hci_failure": re.compile(
+        r"(?:Bluetooth|hci\d).*?(?:timed? out|failed|error)", re.IGNORECASE
+    ),
+    "service_restart": re.compile(r"Scheduled restart job", re.IGNORECASE),
+    "filesystem": re.compile(
+        r"(?:EXT4-fs error|I/O error|filesystem error)", re.IGNORECASE
+    ),
+}
 
 REMOTE_PROBE = r"""
 import json, os, pathlib, subprocess
@@ -54,6 +68,7 @@ except (OSError, json.JSONDecodeError) as exc:
 
 bt_list = run(["bluetoothctl", "list"])
 bt_show = run(["bluetoothctl", "show"])
+failed_units = run(["systemctl", "--failed", "--no-legend", "--plain"])
 system = unit_states("system", __SYSTEM_UNITS__)
 user = unit_states("user", __USER_UNITS__)
 failures = []
@@ -61,12 +76,26 @@ failures += [f"{name}={state or 'unknown'}" for name, state in system.items() if
 failures += [f"user:{name}={state or 'unknown'}" for name, state in user.items() if state != "active"]
 if not bt_list["stdout"] or "Powered: yes" not in bt_show["stdout"]:
     failures.append("Bluetooth adapter is not registered and powered")
+if failed_units["stdout"]:
+    failures.append("failed systemd units are present")
 if bridge.get("error"):
     failures.append("bridge status is unavailable")
 elif bridge.get("state") == "DEGRADED" or bridge.get("last_failure"):
     failures.append(f"bridge unhealthy: {bridge.get('last_failure') or bridge.get('state')}")
 elif not (bridge.get("endpoints") or {}).get("lark"):
     failures.append("Lark endpoint is absent")
+elif not (bridge.get("endpoints") or {}).get("wired_output"):
+    failures.append("configured output is absent")
+if (bridge.get("graph") or {}).get("missing_links"):
+    failures.append("bridge graph has missing links")
+if (bridge.get("graph") or {}).get("unexpected_links"):
+    failures.append("bridge graph has unexpected links")
+if bridge.get("state") == "CALL_DOWN" and (bridge.get("aec") or {}).get("owner_pid"):
+    failures.append("stale AEC owner exists while the call is down")
+
+power = run(["vcgencmd", "get_throttled"])
+if power["rc"] == 0 and power["stdout"] != "throttled=0x0":
+    failures.append(f"power flags are not clear: {power['stdout']}")
 
 print(json.dumps({
     "boot_id": pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
@@ -74,10 +103,50 @@ print(json.dumps({
     "system_units": system,
     "user_units": user,
     "bluetooth": {"list": bt_list, "show": bt_show},
+    "failed_units": failed_units,
     "bridge": bridge,
-    "power": run(["vcgencmd", "get_throttled"]),
+    "power": power,
     "ready": not failures,
     "failures": failures,
+}))
+"""
+
+REMOTE_MANIFEST = r"""
+import hashlib, json, pathlib, subprocess
+
+def text(path):
+    try:
+        return pathlib.Path(path).read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return ""
+
+def run(args):
+    result = subprocess.run(args, text=True, capture_output=True, check=False)
+    return result.stdout.strip()
+
+def digest(path):
+    try:
+        return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return ""
+
+files = [
+    "/etc/systemd/system/bridge-tuning.service",
+    "/etc/systemd/system/bridge-btfw.service",
+    "/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh",
+    "/boot/firmware/config.txt",
+    "/boot/firmware/cmdline.txt",
+]
+packages = ["systemd", "bluez", "network-manager", "pipewire", "wireplumber", "cloud-init"]
+print(json.dumps({
+    "os_release": text("/etc/os-release"),
+    "kernel": run(["uname", "-a"]),
+    "firmware": run(["vcgencmd", "version"]),
+    "model": text("/proc/device-tree/model").replace("\x00", ""),
+    "machine_id_sha256": hashlib.sha256(text("/etc/machine-id").encode()).hexdigest(),
+    "packages": {name: run(["dpkg-query", "-W", "-f=${Version}", name]) for name in packages},
+    "file_sha256": {path: digest(path) for path in files},
+    "default_target": run(["systemctl", "get-default"]),
 }))
 """
 
@@ -132,6 +201,7 @@ class Config:
     power_on: tuple[str, ...]
     serial_capture: tuple[str, ...]
     functional_probe: tuple[str, ...]
+    variant_apply: tuple[str, ...]
 
     @classmethod
     def load(cls, path: Path, artifacts: Path | None = None) -> Config:
@@ -161,6 +231,7 @@ class Config:
             power_on=command("boot_power_on_command"),
             serial_capture=command("boot_serial_capture_command"),
             functional_probe=command("boot_functional_probe_command"),
+            variant_apply=command("boot_variant_apply_command"),
         )
 
 
@@ -222,6 +293,17 @@ class Ssh:
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"invalid remote probe JSON: {exc}") from exc
 
+    def manifest(self) -> dict[str, Any]:
+        result = self.run("python3 -", input_text=REMOTE_MANIFEST)
+        if result.returncode != 0:
+            raise RuntimeError(
+                result.stderr.strip() or f"remote manifest exited {result.returncode}"
+            )
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"invalid remote manifest JSON: {exc}") from exc
+
 
 def port_open(host: str, timeout: float = 0.5) -> bool:
     try:
@@ -277,6 +359,47 @@ def collect_evidence(ssh: Ssh, directory: Path) -> None:
         (directory / filename).write_text(text, encoding="utf-8")
 
 
+def summarize_health(journal: str) -> dict[str, int]:
+    return {
+        name: len(pattern.findall(journal)) for name, pattern in HEALTH_PATTERNS.items()
+    }
+
+
+def validate_functional_result(
+    path: Path, run_id: str, watermark: str
+) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"functional result is unavailable or invalid: {exc}"
+        ) from exc
+    if value.get("schema_version") != 1 or value.get("run_id") != run_id:
+        raise RuntimeError("functional result schema or run identity is invalid")
+    if value.get("pass") is not True or value.get("call_active") is not True:
+        raise RuntimeError("functional result did not prove an active passing call")
+    for direction in ("lark_to_far_end", "far_end_to_output"):
+        proof = value.get(direction) or {}
+        if proof.get("watermark") != watermark or proof.get("detected") is not True:
+            raise RuntimeError(
+                f"functional result lacks the {direction} watermark proof"
+            )
+    if value.get("feedback_detected") is not False:
+        raise RuntimeError("functional result did not prove feedback absence")
+    if int(value.get("dropouts", -1)) != 0:
+        raise RuntimeError("functional result reports dropouts")
+    return value
+
+
+def confirm_trial(ssh: Ssh) -> str:
+    result = ssh.run(
+        "sudo -n /usr/local/lib/rpi-lark-bridge/boot-trial.sh confirm", timeout=15
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "boot trial confirmation failed")
+    return result.stdout.strip()
+
+
 def wait_for_port(host: str, wanted: bool, deadline: float) -> bool:
     while time.monotonic() < deadline:
         if port_open(host) is wanted:
@@ -320,9 +443,16 @@ def run_boot(
     recorder = Recorder(directory)
     ssh = Ssh(config)
     meta = git_metadata()
+    remote_manifest = ssh.manifest()
     write_json(
         directory / "manifest.json",
-        {"run_id": run_id, "candidate": candidate, "mode": mode, "git": meta},
+        {
+            "run_id": run_id,
+            "candidate": candidate,
+            "mode": mode,
+            "git": meta,
+            "remote": remote_manifest,
+        },
     )
     result: dict[str, Any] = {
         "run_id": run_id,
@@ -411,15 +541,38 @@ def run_boot(
         result["readiness_level"] = "idle"
 
         if config.functional_probe:
+            watermark = "LB-" + hashlib.sha256(run_id.encode()).hexdigest()[:16]
             hook = run_hook(
                 config.functional_probe,
                 timeout=config.boot_timeout_s,
                 run_dir=str(directory),
                 run_id=run_id,
                 candidate=candidate,
+                watermark=watermark,
             )
             if hook.returncode != 0:
                 raise RuntimeError(f"functional probe exited {hook.returncode}")
+            functional = validate_functional_result(
+                directory / "functional-result.json", run_id, watermark
+            )
+            write_json(directory / "functional-result.validated.json", functional)
+            functional_probe = ssh.probe()
+            write_json(directory / "functional-ready.json", functional_probe)
+            bridge = functional_probe.get("bridge") or {}
+            graph = bridge.get("graph") or {}
+            aec = bridge.get("aec") or {}
+            if bridge.get("state") != "ACTIVE":
+                raise RuntimeError(
+                    "supervisor is not ACTIVE after the functional probe"
+                )
+            if aec.get("enabled") and not aec.get("verified"):
+                raise RuntimeError(
+                    "AEC is enabled but unverified after the functional probe"
+                )
+            if graph.get("missing_links") or graph.get("unexpected_links"):
+                raise RuntimeError(
+                    "functional PipeWire graph has missing or unexpected links"
+                )
             result["timings_s"]["functional_ready"] = recorder.event("functional_ready")
             result["readiness_level"] = "functional"
         elif require_functional:
@@ -427,7 +580,13 @@ def run_boot(
                 "functional readiness was required but no hook is configured"
             )
 
+        confirmation = confirm_trial(ssh)
+        recorder.event("trial_confirmed", detail=confirmation)
         collect_evidence(ssh, directory)
+        journal = (directory / "journal.txt").read_text(
+            encoding="utf-8", errors="replace"
+        )
+        result["health_events"] = summarize_health(journal)
         result["verdict"] = "PASS"
     except (OSError, RuntimeError, subprocess.TimeoutExpired, ValueError) as exc:
         result["failure"] = str(exc)
@@ -465,7 +624,7 @@ def doctor(config: Config) -> int:
 
 
 def load_results(
-    root: Path, label: str
+    root: Path, label: str, mode: str | None = None
 ) -> tuple[list[dict[str, Any]], list[float], str]:
     all_runs = []
     values = []
@@ -473,6 +632,8 @@ def load_results(
     for path in sorted(root.glob("boot-run-*/result.json")):
         result = json.loads(path.read_text(encoding="utf-8"))
         if result.get("candidate") != label:
+            continue
+        if mode and result.get("mode") != mode:
             continue
         all_runs.append(result)
         timings = result.get("timings_s", {})
@@ -487,14 +648,20 @@ def load_results(
 
 
 def compare(
-    config: Config, baseline_label: str, candidate_label: str, allow_idle: bool
+    config: Config,
+    baseline_label: str,
+    candidate_label: str,
+    allow_idle: bool,
+    mode: str | None,
 ) -> int:
-    base_runs, baseline, base_level = load_results(config.artifacts, baseline_label)
-    cand_runs, candidate, cand_level = load_results(config.artifacts, candidate_label)
-    if len(baseline) < 5 or len(candidate) < 5:
-        raise SystemExit(
-            "comparison requires at least five passing runs for each label"
-        )
+    base_runs, baseline, base_level = load_results(
+        config.artifacts, baseline_label, mode
+    )
+    cand_runs, candidate, cand_level = load_results(
+        config.artifacts, candidate_label, mode
+    )
+    if len(baseline) < 10 or len(candidate) < 10:
+        raise SystemExit("comparison requires at least ten passing runs for each label")
     if not allow_idle and (base_level != "functional" or cand_level != "functional"):
         raise SystemExit(
             "idle-only results cannot produce an acceptance verdict; use --allow-idle"
@@ -507,8 +674,24 @@ def compare(
     candidate_failures = len(cand_runs) - len(candidate)
     p95_base = percentile(baseline, 0.95)
     p95_candidate = percentile(candidate, 0.95)
+    health_regressions = {}
+    for name in HEALTH_PATTERNS:
+        base_max = max(
+            (int(run.get("health_events", {}).get(name, 0)) for run in base_runs),
+            default=0,
+        )
+        cand_max = max(
+            (int(run.get("health_events", {}).get(name, 0)) for run in cand_runs),
+            default=0,
+        )
+        if cand_max > base_max:
+            health_regressions[name] = {
+                "baseline_max": base_max,
+                "candidate_max": cand_max,
+            }
     accepted = (
         candidate_failures == 0
+        and not health_regressions
         and effect >= minimum
         and ci[0] > 0
         and p95_candidate <= p95_base + 0.5
@@ -531,6 +714,8 @@ def compare(
             "p95_s": p95_candidate,
         },
         "readiness_level": cand_level,
+        "mode": mode or "all",
+        "health_regressions": health_regressions,
         "median_improvement_s": effect,
         "minimum_effect_s": minimum,
         "bootstrap_95pct_ci_s": list(ci),
@@ -538,6 +723,88 @@ def compare(
     }
     print(json.dumps(report, indent=2))
     return 0 if accepted else 1
+
+
+def apply_variant(config: Config, *, label: str, revision: str) -> None:
+    if not config.variant_apply:
+        raise RuntimeError("boot_variant_apply_command is not configured")
+    result = run_hook(
+        config.variant_apply,
+        timeout=config.boot_timeout_s,
+        candidate=label,
+        revision=revision,
+        run_dir=str(config.artifacts),
+        run_id=f"variant-{label}",
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"variant apply hook exited {result.returncode}: {label}")
+
+
+def screen(
+    config: Config,
+    *,
+    baseline_label: str,
+    baseline_revision: str,
+    candidate_label: str,
+    candidate_revision: str,
+    pairs: int,
+    mode: str,
+    require_functional: bool,
+    seed: int,
+) -> int:
+    if pairs < 10:
+        raise ValueError("candidate screening requires at least ten randomized pairs")
+    rng = random.Random(seed)
+    assignments = [
+        (baseline_label, baseline_revision),
+        (candidate_label, candidate_revision),
+    ]
+    failures = 0
+    try:
+        for _ in range(pairs):
+            order = (
+                assignments[:] if rng.randrange(2) == 0 else list(reversed(assignments))
+            )
+            for label, revision in order:
+                apply_variant(config, label=label, revision=revision)
+                path = run_boot(
+                    config,
+                    mode=mode,
+                    candidate=label,
+                    require_functional=require_functional,
+                )
+                result = json.loads((path / "result.json").read_text(encoding="utf-8"))
+                failures += result["verdict"] != "PASS"
+                time.sleep(3)
+    finally:
+        apply_variant(config, label=baseline_label, revision=baseline_revision)
+    return 1 if failures else 0
+
+
+def trial(config: Config, action: str, transaction: str | None) -> int:
+    ssh = Ssh(config)
+    if action == "arm":
+        if not transaction:
+            raise SystemExit("trial arm requires --transaction")
+        command = (
+            "sudo -n /usr/local/lib/rpi-lark-bridge/boot-trial.sh arm "
+            + shlex.quote(transaction)
+        )
+    elif action == "confirm":
+        command = "sudo -n /usr/local/lib/rpi-lark-bridge/boot-trial.sh confirm"
+    elif action == "rollback":
+        if not transaction:
+            raise SystemExit("trial rollback requires --transaction")
+        command = (
+            "sudo -n /usr/local/lib/rpi-lark-bridge/boot-transaction.sh rollback "
+            + shlex.quote(transaction)
+        )
+    else:
+        command = "sudo -n /usr/local/lib/rpi-lark-bridge/boot-trial.sh status"
+    result = ssh.run(command, timeout=30)
+    sys.stdout.write(result.stdout)
+    sys.stderr.write(result.stderr)
+    return result.returncode
 
 
 def parser() -> argparse.ArgumentParser:
@@ -559,6 +826,19 @@ def parser() -> argparse.ArgumentParser:
     compare_cmd.add_argument("--baseline", required=True)
     compare_cmd.add_argument("--candidate", required=True)
     compare_cmd.add_argument("--allow-idle", action="store_true")
+    compare_cmd.add_argument("--mode", choices=("warm", "cold"))
+    screen_cmd = commands.add_parser("screen")
+    screen_cmd.add_argument("--baseline", required=True)
+    screen_cmd.add_argument("--baseline-rev", required=True)
+    screen_cmd.add_argument("--candidate", required=True)
+    screen_cmd.add_argument("--candidate-rev", required=True)
+    screen_cmd.add_argument("--pairs", type=int, default=10)
+    screen_cmd.add_argument("--mode", choices=("warm", "cold"), default="warm")
+    screen_cmd.add_argument("--seed", type=int, default=0)
+    screen_cmd.add_argument("--require-functional", action="store_true")
+    trial_cmd = commands.add_parser("trial")
+    trial_cmd.add_argument("action", choices=("arm", "confirm", "rollback", "status"))
+    trial_cmd.add_argument("--transaction")
     return result
 
 
@@ -593,7 +873,23 @@ def main() -> int:
             time.sleep(3)
         return 1 if failures else 0
     if args.command == "compare":
-        return compare(config, args.baseline, args.candidate, args.allow_idle)
+        return compare(
+            config, args.baseline, args.candidate, args.allow_idle, args.mode
+        )
+    if args.command == "screen":
+        return screen(
+            config,
+            baseline_label=args.baseline,
+            baseline_revision=args.baseline_rev,
+            candidate_label=args.candidate,
+            candidate_revision=args.candidate_rev,
+            pairs=args.pairs,
+            mode=args.mode,
+            require_functional=args.require_functional,
+            seed=args.seed,
+        )
+    if args.command == "trial":
+        return trial(config, args.action, args.transaction)
     return 2
 
 
