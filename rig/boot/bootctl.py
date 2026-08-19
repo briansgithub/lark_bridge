@@ -134,6 +134,8 @@ files = [
     "/etc/systemd/system/bridge-tuning.service",
     "/etc/systemd/system/bridge-btfw.service",
     "/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh",
+    "/usr/local/lib/rpi-lark-bridge/boot-path/netplan",
+    "/etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf",
     "/boot/firmware/config.txt",
     "/boot/firmware/cmdline.txt",
 ]
@@ -684,10 +686,30 @@ def compare(
             (int(run.get("health_events", {}).get(name, 0)) for run in cand_runs),
             default=0,
         )
-        if cand_max > base_max:
+        base_total = sum(
+            int(run.get("health_events", {}).get(name, 0)) for run in base_runs
+        )
+        cand_total = sum(
+            int(run.get("health_events", {}).get(name, 0)) for run in cand_runs
+        )
+        base_affected = sum(
+            int(run.get("health_events", {}).get(name, 0)) > 0 for run in base_runs
+        )
+        cand_affected = sum(
+            int(run.get("health_events", {}).get(name, 0)) > 0 for run in cand_runs
+        )
+        if (
+            cand_max > base_max
+            or cand_total > base_total
+            or cand_affected > base_affected
+        ):
             health_regressions[name] = {
                 "baseline_max": base_max,
                 "candidate_max": cand_max,
+                "baseline_total": base_total,
+                "candidate_total": cand_total,
+                "baseline_affected_runs": base_affected,
+                "candidate_affected_runs": cand_affected,
             }
     accepted = (
         candidate_failures == 0

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "bootctl.py"
 SPEC = importlib.util.spec_from_file_location("bootctl_tested", MODULE_PATH)
@@ -110,6 +113,45 @@ class BootCtlTests(unittest.TestCase):
                 mode="warm",
                 require_functional=False,
                 seed=0,
+            )
+
+    def test_compare_rejects_more_health_affected_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for label, timing in (("base", 20.0), ("candidate", 10.0)):
+                for index in range(10):
+                    run = root / f"boot-run-{label}-{index}"
+                    run.mkdir()
+                    hci_failures = (
+                        4 if index == 0 or (label == "candidate" and index == 1) else 0
+                    )
+                    (run / "result.json").write_text(
+                        json.dumps(
+                            {
+                                "candidate": label,
+                                "mode": "warm",
+                                "verdict": "PASS",
+                                "readiness_level": "functional",
+                                "timings_s": {"functional_ready": timing},
+                                "health_events": {"hci_failure": hci_failures},
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                verdict = bootctl.compare(
+                    SimpleNamespace(artifacts=root),
+                    "base",
+                    "candidate",
+                    False,
+                    "warm",
+                )
+            self.assertEqual(verdict, 1)
+            report = json.loads(output.getvalue())
+            self.assertEqual(
+                report["health_regressions"]["hci_failure"]["candidate_affected_runs"],
+                2,
             )
 
 
