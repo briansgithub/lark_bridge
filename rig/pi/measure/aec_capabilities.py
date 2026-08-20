@@ -17,6 +17,10 @@ SOURCE_REFERENCE = (
     "https://gitlab.freedesktop.org/pipewire/pipewire/-/raw/1.4.2/"
     "spa/plugins/aec/aec-webrtc.cpp"
 )
+MODULE_SOURCE_REFERENCE = (
+    "https://gitlab.freedesktop.org/pipewire/pipewire/-/raw/1.4.2/"
+    "src/modules/module-echo-cancel.c"
+)
 KNOWN_PROPERTIES = {
     "webrtc.beamforming",
     "webrtc.delay_agnostic",
@@ -30,6 +34,11 @@ KNOWN_PROPERTIES = {
     "webrtc.target-direction",
     "webrtc.transient_suppression",
     "webrtc.voice_detection",
+}
+KNOWN_MODULE_CONTROLS = {
+    "buffer.max_size",
+    "buffer.play_delay",
+    "debug.aec.wav-path",
 }
 
 
@@ -69,6 +78,21 @@ def main() -> int:
         for match in re.finditer(r"webrtc\.[a-z0-9_-]+", line)
     }
     properties = sorted(compiled_strings & KNOWN_PROPERTIES)
+    module_candidates = list(
+        Path("/usr/lib").glob(
+            "*/pipewire-0.3/libpipewire-module-echo-cancel.so"
+        )
+    ) + list(
+        Path("/usr/lib").glob("pipewire-0.3/libpipewire-module-echo-cancel.so")
+    )
+    if len(module_candidates) != 1:
+        raise SystemExit(
+            f"expected one installed echo-cancel module, found {module_candidates}"
+        )
+    echo_module = module_candidates[0]
+    echo_module_binary = echo_module.read_bytes()
+    echo_module_strings = set(command("strings", str(echo_module)).splitlines())
+    module_controls = sorted(echo_module_strings & KNOWN_MODULE_CONTROLS)
     if "webrtc.extended_filter" in properties:
         variant = "legacy-webrtc"
     elif "webrtc.transient_suppression" in properties:
@@ -99,6 +123,12 @@ def main() -> int:
         "unsupported_planned_properties": sorted(
             {"webrtc.extended_filter"} - set(properties)
         ),
+        "echo_cancel_module": {
+            "path": str(echo_module),
+            "sha256": hashlib.sha256(echo_module_binary).hexdigest(),
+            "supported_controls": module_controls,
+            "source_reference": MODULE_SOURCE_REFERENCE,
+        },
         "baseline": {
             "high_pass_filter": settings.high_pass_filter,
             "noise_suppression": settings.noise_suppression,

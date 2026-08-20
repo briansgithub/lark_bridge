@@ -4,7 +4,7 @@ set -uo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 
 usage() {
-  echo "usage: rig wired-aec baseline|capabilities|bench|speaker-cal|speaker-baseline|test|fault-test|soak|collect [args...]" >&2
+  echo "usage: rig wired-aec baseline|capabilities|bench|speaker-cal|speaker-baseline|speaker-paired|speaker-thermal|test|fault-test|soak|collect [args...]" >&2
   exit 2
 }
 
@@ -12,10 +12,14 @@ speaker_series() {
   local label="$1" mode="$2" default_runs="$3"
   shift 3
   local runs="$default_runs" dir remote_base trial remote_trial local_trial escaped
-  local -a bench_args=() bench_jsons=()
+  local has_signal=0 has_profile=0 signal
+  local -a bench_args=() bench_jsons=() trial_args=()
+  local -a baseline_signals=(sine multitone speech)
   while [ $# -gt 0 ]; do
     case "$1" in
       --runs) runs="${2:?--runs requires a count}"; shift 2 ;;
+      --signal) bench_args+=("$1" "${2:?--signal requires a value}"); has_signal=1; shift 2 ;;
+      --profile-name) bench_args+=("$1" "${2:?--profile-name requires a value}"); has_profile=1; shift 2 ;;
       *) bench_args+=("$1"); shift ;;
     esac
   done
@@ -28,8 +32,20 @@ speaker_series() {
     printf -v remote_trial '%s/trial-%02d' "$remote_base" "$trial"
     printf -v local_trial '%s/trial-%02d' "$dir" "$trial"
     mkdir -p "$local_trial"
+    trial_args=("${bench_args[@]}")
+    if [ "$has_signal" -eq 0 ]; then
+      if [ "$mode" = baseline ]; then
+        signal="${baseline_signals[$(( (trial - 1) % ${#baseline_signals[@]} ))]}"
+      else
+        signal=sine
+      fi
+      trial_args+=(--signal "$signal")
+    fi
+    if [ "$has_profile" -eq 0 ]; then
+      trial_args+=(--profile-name "$label-trial-$trial")
+    fi
     escaped=""
-    for argument in "${bench_args[@]}"; do
+    for argument in "${trial_args[@]}"; do
       printf -v quoted '%q' "$argument"
       escaped+=" $quoted"
     done
@@ -49,6 +65,122 @@ speaker_series() {
   fi
   info "evidence: $dir"
   [ -s "$dir/result.json" ] && grep -q '"verdict": "PASS"' "$dir/result.json"
+}
+
+speaker_paired() {
+  local candidate="" baseline_summary="" pairs=10 seed=1307 dir remote_base pair profile order remote_trial local_trial escaped argument quoted
+  local -a common_args=() candidate_args=() bench_jsons=() schedule=() profiles=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --candidate) candidate="${2:?--candidate requires a value}"; shift 2 ;;
+      --baseline-summary) baseline_summary="${2:?--baseline-summary requires a path}"; shift 2 ;;
+      --pairs) pairs="${2:?--pairs requires a count}"; shift 2 ;;
+      --seed) seed="${2:?--seed requires a value}"; shift 2 ;;
+      --high-pass-filter|--no-high-pass-filter|--noise-suppression|--no-noise-suppression|--gain-control|--no-gain-control|--transient-suppression|--no-transient-suppression)
+        die "paired tuning flags are selected by --candidate"
+        ;;
+      *) common_args+=("$1"); shift ;;
+    esac
+  done
+  [[ "$pairs" =~ ^[1-9][0-9]*$ ]] || die "--pairs must be a positive integer"
+  [[ "$seed" =~ ^[0-9]+$ ]] || die "--seed must be a non-negative integer"
+  [ -n "$baseline_summary" ] || die "speaker-paired requires --baseline-summary from a passing speaker baseline"
+  [ -s "$baseline_summary" ] || die "baseline summary does not exist: $baseline_summary"
+  grep -q '"verdict": "PASS"' "$baseline_summary" || die "paired trials are gated on a passing speaker baseline"
+  case "$candidate" in
+    high-pass-off) candidate_args=(--no-high-pass-filter) ;;
+    noise-suppression) candidate_args=(--noise-suppression) ;;
+    gain-control) candidate_args=(--gain-control) ;;
+    transient-off) candidate_args=(--no-transient-suppression) ;;
+    extended-filter) die "webrtc.extended_filter is absent from the installed SPA library" ;;
+    *) die "--candidate must be high-pass-off, noise-suppression, gain-control, or transient-off" ;;
+  esac
+
+  require_pi
+  dir="$(artifact_dir "wired-aec-paired-$candidate")"
+  remote_base="/var/tmp/wired-aec-paired-$candidate-$(timestamp)"
+  mapfile -t schedule < <("$PY" -c 'import random,sys; r=random.Random(int(sys.argv[2])); print("\n".join("candidate-first" if r.randrange(2) else "baseline-first" for _ in range(int(sys.argv[1]))))' "$pairs" "$seed")
+  printf '%s\n' "${schedule[@]}" > "$dir/order.txt"
+  info "running $pairs randomized paired trials for $candidate (seed $seed)"
+
+  for (( pair=1; pair<=pairs; pair++ )); do
+    order="${schedule[$((pair - 1))]}"
+    if [ "$order" = candidate-first ]; then
+      profiles=(candidate baseline)
+    else
+      profiles=(baseline candidate)
+    fi
+    for profile in "${profiles[@]}"; do
+      printf -v remote_trial '%s/pair-%02d-%s' "$remote_base" "$pair" "$profile"
+      printf -v local_trial '%s/pair-%02d-%s' "$dir" "$pair" "$profile"
+      mkdir -p "$local_trial"
+      local -a run_args=(
+        "${common_args[@]}"
+        --high-pass-filter --no-noise-suppression --no-gain-control --transient-suppression
+        --profile-name "pair-$pair-$profile"
+      )
+      [ "$profile" = baseline ] || run_args+=("${candidate_args[@]}")
+      escaped=""
+      for argument in "${run_args[@]}"; do
+        printf -v quoted '%q' "$argument"
+        escaped+=" $quoted"
+      done
+      info "pair $pair/$pairs: $profile"
+      pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote_trial'$escaped" \
+        > "$local_trial/bench-run.json" 2> "$local_trial/bench-run.err" || true
+      scp -q -r "$(pi_host):$remote_trial/." "$local_trial/" 2>/dev/null || true
+      [ -s "$local_trial/bench.json" ] && bench_jsons+=("$local_trial/bench.json")
+    done
+  done
+
+  if "$PY" "$RIG_ROOT/analysis/aec_pairs.py" --candidate "$candidate" \
+      --min-pairs "$pairs" --seed "$seed" "${bench_jsons[@]}" > "$dir/summary.json"; then
+    emit_result "wired-aec-paired-$candidate" PASS "$dir" pairs "$pairs"
+    ok "paired $candidate trial PASS (speaker-only, preliminary)"
+  else
+    emit_result "wired-aec-paired-$candidate" FAIL "$dir" pairs "$pairs"
+    err "paired $candidate trial FAIL"
+  fi
+  info "evidence: $dir"
+  [ -s "$dir/result.json" ] && grep -q '"verdict": "PASS"' "$dir/result.json"
+}
+
+speaker_thermal() {
+  local baseline_summary="" dir remote escaped="" argument quoted fail=0
+  local -a thermal_args=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --baseline-summary) baseline_summary="${2:?--baseline-summary requires a path}"; shift 2 ;;
+      *) thermal_args+=("$1"); shift ;;
+    esac
+  done
+  [ -n "$baseline_summary" ] || die "speaker-thermal requires --baseline-summary from a passing speaker baseline"
+  [ -s "$baseline_summary" ] || die "baseline summary does not exist: $baseline_summary"
+  grep -q '"verdict": "PASS"' "$baseline_summary" || die "thermal screen is gated on a passing speaker baseline"
+  require_pi
+  dir="$(artifact_dir wired-aec-speaker-thermal)"
+  remote="/var/tmp/wired-aec-speaker-thermal-$(timestamp)"
+  for argument in "${thermal_args[@]}"; do
+    printf -v quoted '%q' "$argument"
+    escaped+=" $quoted"
+  done
+  info "running gated speaker-only AEC thermal screen"
+  pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_thermal.py --out '$remote'$escaped" \
+    > "$dir/thermal-run.json" 2> "$dir/thermal-run.err" || fail=1
+  for artifact in thermal.json runtime-samples.json runtime-summary.json pw-top.txt \
+      pipewire-journal.txt module-command.txt links-active.txt; do
+    scp -q "$(pi_host):$remote/$artifact" "$dir/" 2>/dev/null || true
+  done
+  if [ "$fail" -eq 0 ] && [ -s "$dir/thermal.json" ] && grep -q '"verdict": "PASS"' "$dir/thermal.json"; then
+    emit_result wired-aec-speaker-thermal PASS "$dir"
+    ok "speaker thermal screen PASS"
+  else
+    fail=1
+    emit_result wired-aec-speaker-thermal FAIL "$dir"
+    err "speaker thermal screen FAIL"
+  fi
+  info "evidence: $dir"
+  return "$fail"
 }
 
 PY="$(command -v py 2>/dev/null || command -v python3 2>/dev/null || true)"
@@ -129,11 +261,13 @@ case "$command" in
     info "running low-level AUX/speaker/Lark AEC capture"
     pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote' $*" \
       > "$dir/bench-run.json" 2> "$dir/bench-run.err" || fail=1
+    scp -q "$(pi_host):$remote/stimulus.wav" "$dir/" 2>/dev/null || true
     scp -q "$(pi_host):$remote/reference.wav" "$dir/" 2>/dev/null || true
     scp -q "$(pi_host):$remote/raw-mic.wav" "$dir/" 2>/dev/null || true
     scp -q "$(pi_host):$remote/clean-mic.wav" "$dir/" 2>/dev/null || true
+    scp -q "$(pi_host):$remote/aec-internal.wav" "$dir/" 2>/dev/null || true
     scp -q "$(pi_host):$remote/bench.json" "$dir/" 2>/dev/null || true
-    for artifact in module-command.txt graph-active.json links-active.txt \
+    for artifact in module-command.txt graph-active.json links-active.txt links-recording.txt \
       runtime-samples.json runtime-summary.json pw-top.txt pipewire-journal.txt; do
       scp -q "$(pi_host):$remote/$artifact" "$dir/" 2>/dev/null || true
     done
@@ -153,6 +287,12 @@ case "$command" in
     ;;
   speaker-baseline)
     speaker_series speaker-baseline baseline 10 "$@"
+    ;;
+  speaker-paired)
+    speaker_paired "$@"
+    ;;
+  speaker-thermal)
+    speaker_thermal "$@"
     ;;
   test)
     snapshot test active

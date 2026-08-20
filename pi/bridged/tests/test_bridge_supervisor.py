@@ -97,6 +97,7 @@ class NativeAecTests(unittest.TestCase):
         self.assertIn("webrtc.high_pass_filter = true", command)
         self.assertIn("webrtc.voice_detection = false", command)
         self.assertIn("webrtc.transient_suppression = true", command)
+        self.assertNotIn("buffer.play_delay", command)
 
     def test_module_tuning_is_explicit(self) -> None:
         settings = supervisor.AecSettings(
@@ -120,6 +121,24 @@ class NativeAecTests(unittest.TestCase):
             latency_frames=1024,
         ).module_command()
         self.assertIn("node.latency = 1024/48000", command)
+
+    def test_bench_reference_delay_is_explicit(self) -> None:
+        command = supervisor.NativeAecHost(
+            supervisor.AecSettings(enabled=True),
+            "lark",
+            "output",
+            play_delay_frames=21600,
+        ).module_command()
+        self.assertIn("buffer.play_delay = 21600/48000", command)
+
+    def test_bench_reference_delay_cannot_be_negative(self) -> None:
+        with self.assertRaises(ValueError):
+            supervisor.NativeAecHost(
+                supervisor.AecSettings(enabled=True),
+                "lark",
+                "output",
+                play_delay_frames=-1,
+            )
 
 
 class FakeHost:
