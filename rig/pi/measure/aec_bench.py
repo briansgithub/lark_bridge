@@ -15,10 +15,13 @@ import sys
 import time
 from pathlib import Path
 
-from aec_profile import ActiveProfiler
+from aec_profile import ActiveProfiler, gate_failures
 
 REPO = Path(__file__).resolve().parents[3]
 SUPERVISOR_PATH = REPO / "pi" / "bridged" / "bridge_supervisor.py"
+RAW_RECORDER = "bridge.bench.raw-recorder"
+CLEAN_RECORDER = "bridge.bench.clean-recorder"
+REFERENCE_RECORDER = "bridge.bench.reference-recorder"
 
 
 def load_supervisor():
@@ -68,6 +71,18 @@ def wait_links(module, expected: set[tuple[str, str]], timeout: float = 10) -> N
     raise RuntimeError(f"PipeWire links did not appear: {sorted(expected)}")
 
 
+def verify_recorder_links(module, expected: set[tuple[str, str]]) -> None:
+    """Reject target fallback or duplicate recorder inputs."""
+    links = set(module.pw_links() or [])
+    recorder_names = {target for _, target in expected}
+    actual = {(source, target) for source, target in links if target in recorder_names}
+    if actual != expected:
+        raise RuntimeError(
+            f"bench recorder targeting mismatch: expected {sorted(expected)}, "
+            f"found {sorted(actual)}"
+        )
+
+
 def output_volume(node: str) -> tuple[float, bool]:
     graph = subprocess.run(
         ["pw-dump"],
@@ -98,20 +113,54 @@ def output_volume(node: str) -> tuple[float, bool]:
     return float(match.group(1)), "[MUTED]" in result.stdout
 
 
+def node_id(node: str) -> str:
+    graph = subprocess.run(
+        ["pw-dump"], capture_output=True, text=True, check=False, timeout=10
+    )
+    try:
+        objects = json.loads(graph.stdout)
+        return str(
+            next(
+                obj["id"]
+                for obj in objects
+                if ((obj.get("info") or {}).get("props") or {}).get("node.name")
+                == node
+            )
+        )
+    except (json.JSONDecodeError, KeyError, StopIteration) as exc:
+        raise RuntimeError(f"could not resolve PipeWire id for {node}") from exc
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--seconds", type=float, default=8.0)
     parser.add_argument(
-        "--signal", choices=("sine", "multitone", "speech"), default="sine"
+        "--signal", choices=("sine", "multitone", "speech", "noise"), default="sine"
     )
     parser.add_argument("--tone", type=float, default=1000.0)
     parser.add_argument("--tone-dbfs", type=float, default=-30.0)
+    parser.add_argument(
+        "--silence-seconds",
+        type=float,
+        default=1.0,
+        help="leading and trailing silence around the stimulus",
+    )
     parser.add_argument("--profile-name", default="baseline")
     parser.add_argument(
         "--node-latency-frames",
         type=int,
         help="bench-only PipeWire echo-cancel node latency request",
+    )
+    parser.add_argument(
+        "--play-delay-frames",
+        type=int,
+        help="bench-only delay applied to the AEC reference, not speaker playback",
+    )
+    parser.add_argument(
+        "--internal-debug-wav",
+        action="store_true",
+        help="record aligned play/capture/output channels inside module-echo-cancel",
     )
     parser.add_argument(
         "--high-pass-filter", action=argparse.BooleanOptionalAction, default=None
@@ -129,6 +178,8 @@ def main() -> int:
         "--output", help="explicit PipeWire output node for instrument tests"
     )
     args = parser.parse_args()
+    if args.seconds <= 0 or args.silence_seconds < 0:
+        raise SystemExit("seconds must be positive and silence-seconds non-negative")
     args.out.mkdir(parents=True, exist_ok=True)
 
     module = load_supervisor()
@@ -152,7 +203,8 @@ def main() -> int:
             f"wired output volume {wired_volume:.2f} exceeds the measured-safe 0.85 setting"
         )
 
-    tone_path = args.out / "reference.wav"
+    stimulus_path = args.out / "stimulus.wav"
+    reference_path = args.out / "reference.wav"
     raw_path = args.out / "raw-mic.wav"
     clean_path = args.out / "clean-mic.wav"
     subprocess.run(
@@ -165,6 +217,10 @@ def main() -> int:
             str(args.tone),
             "--seconds",
             str(args.seconds),
+            "--lead-silence",
+            str(args.silence_seconds),
+            "--trail-silence",
+            str(args.silence_seconds),
             "--rate",
             "48000",
             "--channels",
@@ -172,7 +228,7 @@ def main() -> int:
             "--dbfs",
             str(args.tone_dbfs),
             "--out",
-            str(tone_path),
+            str(stimulus_path),
         ],
         check=True,
         stdout=subprocess.DEVNULL,
@@ -191,7 +247,11 @@ def main() -> int:
             replacements[field] = value
     tuning = dataclasses.replace(tuning, **replacements)
     host = module.NativeAecHost(
-        tuning, lark, output_node, latency_frames=args.node_latency_frames
+        tuning,
+        lark,
+        output_node,
+        latency_frames=args.node_latency_frames,
+        play_delay_frames=args.play_delay_frames,
     )
     recorders: list[subprocess.Popen[bytes]] = []
     started = time.monotonic()
@@ -206,6 +266,25 @@ def main() -> int:
             module,
             {(lark, module.AEC_CAPTURE), (module.AEC_PLAYBACK, output_node)},
         )
+        if args.internal_debug_wav:
+            internal_path = args.out / "aec-internal.wav"
+            debug_param = (
+                '{ params = [ "debug.aec.wav-path" '
+                f"{json.dumps(str(internal_path))} ] }}"
+            )
+            subprocess.run(
+                [
+                    "pw-cli",
+                    "set-param",
+                    node_id(module.AEC_SOURCE),
+                    "Props",
+                    debug_param,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
         module_started_ms = round((time.monotonic() - started) * 1000, 2)
         (args.out / "module-command.txt").write_text(
             host.module_command(), encoding="utf-8"
@@ -233,16 +312,28 @@ def main() -> int:
         profiler = ActiveProfiler(
             args.out,
             host.pid,
-            iterations=max(math.ceil(args.seconds) + 4, 5),
+            iterations=max(math.ceil(args.seconds + 2 * args.silence_seconds) + 4, 5),
         )
         profiler.start()
-        for target, output in ((lark, raw_path), (module.AEC_SOURCE, clean_path)):
+        for target, recorder_name, capture_sink, output in (
+            (lark, RAW_RECORDER, False, raw_path),
+            (module.AEC_SOURCE, CLEAN_RECORDER, False, clean_path),
+            (module.AEC_SINK, REFERENCE_RECORDER, True, reference_path),
+        ):
+            properties = {
+                "node.name": recorder_name,
+                "node.dont-reconnect": True,
+            }
+            if capture_sink:
+                properties["stream.capture.sink"] = True
             recorders.append(
                 subprocess.Popen(
                     [
                         "pw-record",
                         "--target",
                         target,
+                        "--properties",
+                        json.dumps(properties, separators=(",", ":")),
                         "--rate",
                         "48000",
                         "--channels",
@@ -258,8 +349,28 @@ def main() -> int:
                 )
             )
         time.sleep(1)
+        if any(recorder.poll() is not None for recorder in recorders):
+            raise RuntimeError("one or more bench recorders exited before playback")
+        recorder_links = {
+            (lark, RAW_RECORDER),
+            (module.AEC_SOURCE, CLEAN_RECORDER),
+            (module.AEC_SINK, REFERENCE_RECORDER),
+        }
+        wait_nodes(module, {RAW_RECORDER, CLEAN_RECORDER, REFERENCE_RECORDER})
+        wait_links(module, recorder_links)
+        verify_recorder_links(module, recorder_links)
+        (args.out / "links-recording.txt").write_text(
+            subprocess.run(
+                ["pw-link", "-l"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=10,
+            ).stdout,
+            encoding="utf-8",
+        )
         subprocess.run(
-            ["pw-play", "--target", module.AEC_SINK, str(tone_path)],
+            ["pw-play", "--target", module.AEC_SINK, str(stimulus_path)],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -305,11 +416,15 @@ def main() -> int:
             "--clean",
             str(clean_path),
             "--reference",
-            str(tone_path),
+            str(reference_path),
             "--signal",
             args.signal,
             "--tone",
             str(args.tone),
+            "--skip",
+            str(3 + args.silence_seconds),
+            "--trailing-silence",
+            str(args.silence_seconds),
         ],
         capture_output=True,
         text=True,
@@ -334,21 +449,9 @@ def main() -> int:
         health = {"error": health_run.stderr or "health capture failed"}
 
     failures = list(metrics.get("failures", []))
-    pw_errors = runtime.get("pw_top", {}).get("error_delta_total")
-    if isinstance(pw_errors, int) and pw_errors > 0:
-        failures.append(f"PipeWire ERR counters increased by {pw_errors}")
+    failures.extend(gate_failures(runtime))
     if "resync" in (journal.stdout + journal.stderr).lower():
         failures.append("PipeWire ALSA playback resynchronized during the capture")
-    if (
-        runtime.get("temperature_c_max") is not None
-        and runtime["temperature_c_max"] >= 75
-    ):
-        failures.append("temperature reached the 75 C stop threshold")
-    if any(
-        value not in {None, "throttled=0x0"}
-        for value in (runtime.get("throttled_start"), runtime.get("throttled_end"))
-    ):
-        failures.append("throttle or undervoltage flags are set")
     metrics["failures"] = failures
     metrics["verdict"] = "PASS" if not failures else "FAIL"
 
@@ -360,7 +463,10 @@ def main() -> int:
         "wired_output": output_node,
         "wired_output_volume": wired_volume,
         "node_latency_frames": args.node_latency_frames,
+        "play_delay_frames": args.play_delay_frames,
+        "internal_debug_wav": args.internal_debug_wav,
         "tone_dbfs": args.tone_dbfs,
+        "silence_seconds": args.silence_seconds,
         "signal": args.signal,
         "profile_name": args.profile_name,
         "webrtc": {

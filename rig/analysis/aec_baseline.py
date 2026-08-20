@@ -28,6 +28,15 @@ def nested(data: dict[str, Any], *keys: str) -> Any:
     return value
 
 
+def summarize(values: list[float]) -> dict[str, float | None]:
+    return {
+        "median": round(statistics.median(values), 3) if values else None,
+        "min": min(values) if values else None,
+        "max": max(values) if values else None,
+        "spread": round(max(values) - min(values), 3) if values else None,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bench", type=Path, nargs="+")
@@ -80,7 +89,15 @@ def main() -> int:
     error_deltas = [
         int(value)
         for run in runs
-        if (value := nested(run, "runtime", "pw_top", "error_delta_total")) is not None
+        if (
+            value := (
+                nested(run, "runtime", "pw_top", "steady_error_delta_total")
+                if nested(run, "runtime", "pw_top", "steady_error_delta_total")
+                is not None
+                else nested(run, "runtime", "pw_top", "error_delta_total")
+            )
+        )
+        is not None
     ]
     clipped = [
         max(
@@ -90,18 +107,54 @@ def main() -> int:
         for run in runs
     ]
 
+    by_signal: dict[str, dict[str, Any]] = {}
+    for signal in sorted({str(run.get("signal")) for run in runs}):
+        signal_runs = [run for run in runs if str(run.get("signal")) == signal]
+        signal_raw = [
+            float(value)
+            for run in signal_runs
+            if (value := nested(run, "metrics", "raw_correlated_dbfs")) is not None
+        ]
+        signal_suppression = [
+            float(value)
+            for run in signal_runs
+            if (value := nested(run, "metrics", "suppression_db")) is not None
+        ]
+        by_signal[signal] = {
+            "runs": len(signal_runs),
+            "raw_correlated_dbfs": summarize(signal_raw),
+            "suppression_db": {
+                "median": (
+                    round(statistics.median(signal_suppression), 3)
+                    if signal_suppression
+                    else None
+                ),
+                "p95": percentile(signal_suppression, 0.95),
+            },
+        }
+        if len(signal_raw) != len(signal_runs):
+            failures.append(f"{signal}: one or more runs lack raw correlated-level metrics")
+        elif signal_raw:
+            if min(signal_raw) < -55:
+                failures.append(
+                    f"{signal}: raw signal floor failed at {min(signal_raw):.2f} dBFS"
+                )
+            spread = max(signal_raw) - min(signal_raw)
+            if spread > 3:
+                failures.append(f"{signal}: fixture spread {spread:.2f} dB exceeds 3 dB")
+
     if len(raw_levels) != len(runs):
         failures.append("one or more runs lack raw correlated-level metrics")
     elif raw_levels:
-        if min(raw_levels) < -55:
-            failures.append(
-                f"raw signal floor failed: minimum {min(raw_levels):.2f} dBFS"
-            )
-        spread = max(raw_levels) - min(raw_levels)
-        if spread > 3:
-            failures.append(f"fixture spread {spread:.2f} dB exceeds 3 dB")
-        median_raw = statistics.median(raw_levels)
-        if not -35 <= median_raw <= -20:
+        sine_levels = [
+            float(value)
+            for run in runs
+            if str(run.get("signal")) == "sine"
+            and (value := nested(run, "metrics", "raw_correlated_dbfs")) is not None
+        ]
+        preferred_levels = sine_levels or raw_levels
+        median_raw = statistics.median(preferred_levels)
+        if args.mode == "calibration" and not -35 <= median_raw <= -20:
             warnings.append(
                 f"median raw signal {median_raw:.2f} dBFS is outside preferred -35 to -20 dBFS"
             )
@@ -137,14 +190,8 @@ def main() -> int:
         "mode": args.mode,
         "runs": len(runs),
         "signal": sorted({str(run.get("signal")) for run in runs}),
-        "raw_correlated_dbfs": {
-            "median": round(statistics.median(raw_levels), 3) if raw_levels else None,
-            "min": min(raw_levels) if raw_levels else None,
-            "max": max(raw_levels) if raw_levels else None,
-            "spread": (
-                round(max(raw_levels) - min(raw_levels), 3) if raw_levels else None
-            ),
-        },
+        "raw_correlated_dbfs": summarize(raw_levels),
+        "by_signal": by_signal,
         "suppression_db": {
             "median": (
                 round(statistics.median(suppressions), 3) if suppressions else None

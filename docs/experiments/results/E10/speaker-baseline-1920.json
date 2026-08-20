@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-20T00:54:18Z",
+  "artifact": "artifacts/wired-aec-speaker-baseline-20260820T005418Z",
+  "verdict": "FAIL",
+  "fixture": {
+    "speaker": "Monoprice Harmony Boombox over AUX",
+    "microphone": "Hollyland Lark lavalier",
+    "distance_m": 1.0,
+    "speaker_physical_volume": "maximum",
+    "pipewire_output_volume": 0.85,
+    "stimulus_dbfs": -25.0
+  },
+  "aec_profile": {
+    "rate_hz": 48000,
+    "channels": 1,
+    "node_latency_frames": 1920,
+    "play_delay_frames": 0,
+    "high_pass_filter": true,
+    "noise_suppression": false,
+    "gain_control": false,
+    "voice_detection": false,
+    "transient_suppression": true
+  },
+  "runs": 10,
+  "suppression_db": {
+    "median": 1.77,
+    "best": 9.13,
+    "required_median": 10.0
+  },
+  "per_signal": {
+    "sine": {
+      "runs": 4,
+      "raw_dbfs_median": -34.805,
+      "raw_db_spread": 3.37,
+      "suppression_db_median": 0.995,
+      "suppression_db_best": 9.13
+    },
+    "multitone": {
+      "runs": 3,
+      "raw_component_dbfs_median": -49.95,
+      "raw_db_spread": 0.3,
+      "suppression_db_median": 3.05,
+      "suppression_db_best": 4.25
+    },
+    "speech": {
+      "runs": 3,
+      "raw_broadband_dbfs_median": -44.98,
+      "raw_db_spread": 0.13,
+      "suppression_db_median": 1.6,
+      "suppression_db_best": 2.64
+    }
+  },
+  "convergence": {
+    "allowance_s": 2.0,
+    "sustained_windows_required": 2,
+    "window_s": 1.0,
+    "runs_achieving_10_db": 0
+  },
+  "resource": {
+    "aec_cpu_percent_one_core_median": 16.66,
+    "aec_cpu_percent_one_core_p95": 16.85,
+    "temperature_c_max": 56.92,
+    "mem_available_kib_min": 679632,
+    "arm_clock_hz_min": 1200000000,
+    "throttled": "0x0",
+    "steady_pipewire_errors": 0,
+    "resynchronizations": 0,
+    "clipped_runs": 0,
+    "stale_aec_nodes": 0
+  },
+  "gate_state": {
+    "absolute_suppression": "FAIL",
+    "timing_1920": "PASS",
+    "pi3_resource_short_screen": "PASS",
+    "paired_optimization": "GATED",
+    "thermal_15_minute": "GATED",
+    "production_promotion_allowed": false
+  }
+}

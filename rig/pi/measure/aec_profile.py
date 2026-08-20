@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 TICKS = os.sysconf(os.sysconf_names["SC_CLK_TCK"])
+PI3_ARM_CLOCK_HZ = 1_200_000_000
 
 
 def percentile(values: list[float], fraction: float) -> float | None:
@@ -120,7 +121,7 @@ def command(*args: str) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
-def parse_pw_top(path: Path) -> dict[str, Any]:
+def parse_pw_top(path: Path, startup_samples: int = 3) -> dict[str, Any]:
     nodes: dict[str, dict[str, list[float] | list[int]]] = {}
     if not path.exists():
         return {"nodes": {}, "error_delta_total": None}
@@ -144,12 +145,23 @@ def parse_pw_top(path: Path) -> dict[str, Any]:
 
     summary: dict[str, Any] = {}
     total_delta = 0
+    startup_delta_total = 0
+    steady_delta_total = 0
     for name, values in nodes.items():
         waits = list(values["wait_ratio"])
         busy = list(values["busy_ratio"])
         errors = list(values["errors"])
         delta = max(errors) - min(errors) if errors else 0
+        split = min(startup_samples, len(errors))
+        startup_errors = errors[:split]
+        steady_errors = errors[max(split - 1, 0) :]
+        startup_delta = (
+            max(startup_errors) - min(startup_errors) if startup_errors else 0
+        )
+        steady_delta = max(steady_errors) - min(steady_errors) if steady_errors else 0
         total_delta += max(delta, 0)
+        startup_delta_total += max(startup_delta, 0)
+        steady_delta_total += max(steady_delta, 0)
         summary[name] = {
             "samples": len(busy),
             "wait_ratio_p99": percentile(waits, 0.99),
@@ -158,8 +170,66 @@ def parse_pw_top(path: Path) -> dict[str, Any]:
             "errors_first": errors[0] if errors else None,
             "errors_last": errors[-1] if errors else None,
             "error_delta": delta,
+            "startup_error_delta": startup_delta,
+            "steady_error_delta": steady_delta,
         }
-    return {"nodes": summary, "error_delta_total": total_delta}
+    return {
+        "nodes": summary,
+        "error_delta_total": total_delta,
+        "startup_error_delta_total": startup_delta_total,
+        "steady_error_delta_total": steady_delta_total,
+        "startup_samples": startup_samples,
+    }
+
+
+def longest_core_over(samples: list[dict[str, Any]], threshold: float) -> float:
+    longest = 0
+    streaks: dict[str, int] = {}
+    for sample in samples:
+        current = sample.get("cpu_percent") or {}
+        cores = {name for name in current if name.startswith("cpu") and name != "cpu"}
+        for core in set(streaks) | cores:
+            streaks[core] = (
+                streaks.get(core, 0) + 1
+                if current.get(core, 0) > threshold
+                else 0
+            )
+            longest = max(longest, streaks[core])
+    return float(longest)
+
+
+def gate_failures(summary: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    pw_top = summary.get("pw_top") or {}
+    errors = pw_top.get("steady_error_delta_total", pw_top.get("error_delta_total"))
+    if isinstance(errors, int) and errors > 0:
+        failures.append(f"PipeWire steady-state ERR counters increased by {errors}")
+    for name, node in (pw_top.get("nodes") or {}).items():
+        busy = node.get("busy_ratio_p99")
+        if isinstance(busy, (int, float)) and busy > 0.70:
+            failures.append(f"{name} B/Q p99 {busy:.2f} exceeds 0.70")
+    total_cpu = summary.get("total_cpu_percent_mean")
+    if isinstance(total_cpu, (int, float)) and total_cpu >= 75:
+        failures.append(f"average total CPU {total_cpu:.2f}% is not below 75%")
+    pinned = summary.get("per_core_over_90_longest_s")
+    if isinstance(pinned, (int, float)) and pinned > 5:
+        failures.append(f"a CPU core stayed above 90% for {pinned:.1f}s")
+    rss_delta = summary.get("aec_rss_kib_delta")
+    if isinstance(rss_delta, int) and rss_delta >= 150 * 1024:
+        failures.append(f"AEC RSS grew by {rss_delta / 1024:.1f} MiB")
+    memory = summary.get("mem_available_kib_min")
+    if isinstance(memory, int) and memory < 250 * 1024:
+        failures.append(f"available memory fell to {memory / 1024:.1f} MiB")
+    temperature = summary.get("temperature_c_max")
+    if isinstance(temperature, (int, float)) and temperature >= 75:
+        failures.append(f"temperature reached {temperature:.2f} C")
+    clock = summary.get("arm_clock_hz_min")
+    if isinstance(clock, int) and clock < PI3_ARM_CLOCK_HZ:
+        failures.append(f"ARM clock fell to {clock} Hz")
+    throttled = summary.get("throttled_samples") or []
+    if any(value not in {None, "throttled=0x0"} for value in throttled):
+        failures.append("throttle or undervoltage flags were observed")
+    return failures
 
 
 class ActiveProfiler:
@@ -235,6 +305,7 @@ class ActiveProfiler:
                     "mem_available_kib": mem_available_kib(),
                     "temperature_c": temperature_c(),
                     "arm_clock_hz": arm_clock_hz(),
+                    "throttled": command("vcgencmd", "get_throttled"),
                 }
             )
             previous_cpu = current_cpu
@@ -295,13 +366,23 @@ class ActiveProfiler:
                 round(statistics.median(total_cpu), 3) if total_cpu else None
             ),
             "total_cpu_percent_p95": percentile(total_cpu, 0.95),
+            "total_cpu_percent_mean": (
+                round(statistics.fmean(total_cpu), 3) if total_cpu else None
+            ),
+            "per_core_over_90_longest_s": round(
+                longest_core_over(self.samples, 90) * self.interval, 3
+            ),
             "temperature_c_max": max(temperatures) if temperatures else None,
             "mem_available_kib_min": min(memories) if memories else None,
             "arm_clock_hz_min": min(clocks) if clocks else None,
             "throttled_start": self.throttled_start,
             "throttled_end": self.throttled_end,
+            "throttled_samples": [
+                sample.get("throttled") for sample in self.samples
+            ],
             "pw_top": parse_pw_top(self.out_dir / "pw-top.txt"),
         }
+        summary["gate_failures"] = gate_failures(summary)
         (self.out_dir / "runtime-samples.json").write_text(
             json.dumps(self.samples, indent=2) + "\n", encoding="utf-8"
         )

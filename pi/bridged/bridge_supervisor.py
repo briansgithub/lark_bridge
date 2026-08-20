@@ -340,13 +340,17 @@ class NativeAecHost:
         output: str,
         *,
         latency_frames: int | None = None,
+        play_delay_frames: int | None = None,
     ):
         if latency_frames is not None and latency_frames <= 0:
             raise ValueError("latency_frames must be positive")
+        if play_delay_frames is not None and play_delay_frames < 0:
+            raise ValueError("play_delay_frames cannot be negative")
         self.settings = settings
         self.microphone = microphone
         self.output = output
         self.latency_frames = latency_frames
+        self.play_delay_frames = play_delay_frames
         self.proc: subprocess.Popen[str] | None = None
 
     @property
@@ -394,6 +398,11 @@ class NativeAecHost:
         if self.latency_frames is not None:
             module_args.insert(
                 5, f"node.latency = {self.latency_frames}/{self.settings.rate}"
+            )
+        if self.play_delay_frames is not None:
+            module_args.insert(
+                5,
+                f"buffer.play_delay = {self.play_delay_frames}/{self.settings.rate}",
             )
         arguments = " ".join(module_args)
         return f"load-module libpipewire-module-echo-cancel {arguments}\n"
