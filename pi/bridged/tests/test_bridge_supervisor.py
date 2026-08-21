@@ -142,9 +142,22 @@ class NativeAecTests(unittest.TestCase):
 
 
 class FakeHost:
-    def __init__(self, _settings: object, _microphone: str, _output: str):
+    last: FakeHost | None = None
+
+    def __init__(
+        self,
+        _settings: object,
+        _microphone: str,
+        _output: str,
+        *,
+        latency_frames: int | None = None,
+        play_delay_frames: int | None = None,
+    ):
+        self.latency_frames = latency_frames
+        self.play_delay_frames = play_delay_frames
         self.running = False
         self.pid = None
+        FakeHost.last = self
 
     def start(self) -> None:
         self.running = True
@@ -247,6 +260,89 @@ class CallGraphLifecycleTests(unittest.TestCase):
             graph.tick(nodes, [], settings.lark_node)
         self.assertIsNone(graph.microphone)
         self.assertNotEqual(graph.state, supervisor.State.ACTIVE)
+
+
+class PlaybackTimingTests(unittest.TestCase):
+    """The AEC graph timing that decides whether the onboard jack crackles.
+
+    Left unset, the WebRTC module asks for a 480-frame quantum and PipeWire drops the
+    onboard sink to min-quantum 256, which underruns under call load. Measured on the
+    unit: echo-cancel-playback logged 417 underruns in 20 s unset versus 5 at 1920.
+    """
+
+    def test_default_is_the_validated_timing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            settings = supervisor.load_settings(Path(directory) / "missing.toml")
+        self.assertEqual(settings.aec.node_latency_frames, 1920)
+        self.assertIsNone(settings.aec.play_delay_frames)
+
+    def test_production_module_command_pins_the_quantum(self) -> None:
+        """The regression that caused the crackle: this was bench-only before."""
+        settings = supervisor.Settings(aec=supervisor.AecSettings(enabled=True))
+        graph = supervisor.CallGraph(settings)
+        with mock.patch.object(supervisor, "NativeAecHost", FakeHost):
+            graph.begin_build("lark")
+        assert FakeHost.last is not None
+        self.assertEqual(FakeHost.last.latency_frames, 1920)
+
+    def test_configured_timing_reaches_the_module_arguments(self) -> None:
+        command = supervisor.NativeAecHost(
+            supervisor.AecSettings(enabled=True),
+            "lark",
+            "output",
+            latency_frames=supervisor.AecSettings().node_latency_frames,
+        ).module_command()
+        self.assertIn("node.latency = 1920/48000", command)
+
+    def test_config_can_override_timing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "bridge.toml"
+            config.write_text(
+                """
+[audio.aec]
+enabled = true
+node_latency_frames = 1440
+play_delay_frames = 480
+""",
+                encoding="utf-8",
+            )
+            settings = supervisor.load_settings(config)
+        self.assertEqual(settings.aec.node_latency_frames, 1440)
+        self.assertEqual(settings.aec.play_delay_frames, 480)
+
+    def test_nonsense_timing_is_rejected(self) -> None:
+        bodies = (
+            """
+[audio.aec]
+enabled = true
+node_latency_frames = 0
+""",
+            """
+[audio.aec]
+enabled = true
+play_delay_frames = -1
+""",
+        )
+        for body in bodies:
+            with tempfile.TemporaryDirectory() as directory:
+                config = Path(directory) / "bridge.toml"
+                config.write_text(body, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    supervisor.load_settings(config)
+
+    def test_timing_must_be_an_integer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "bridge.toml"
+            config.write_text(
+                """
+[audio.aec]
+enabled = true
+node_latency_frames = "1920"
+""",
+                encoding="utf-8",
+            )
+            with self.assertRaises(TypeError):
+                supervisor.load_settings(config)
 
 
 if __name__ == "__main__":

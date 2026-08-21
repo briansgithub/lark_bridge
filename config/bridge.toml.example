@@ -92,6 +92,22 @@ noise_suppression = false
 gain_control = false
 voice_detection = false
 transient_suppression = true
+# Graph timing for the AEC module, in frames at the 48 kHz graph rate.
+#
+# This is the setting that decides whether the onboard jack crackles. The WebRTC module
+# processes 10 ms blocks, so if node.latency is left unset it asks the graph for 480
+# frames and PipeWire drops the ONBOARD SINK to min-quantum 256 to match. A 256-frame
+# buffer on the bcm2835 PWM output does not survive call load: measured on the unit,
+# echo-cancel-playback logged 417 underruns in 20 s at the default versus 5 at 1920,
+# and each underrun is a click in the far-end audio.
+#
+# 1920 frames (40 ms) is E10's ten-trial-clean timing and keeps the sink at 1024.
+# Set to a smaller value only with fresh underrun measurements to justify it.
+node_latency_frames = 1920
+# Extra delay on the AEC reference path. E10 found no added delay helped convergence on
+# this fixture, so it stays unset. TOML has no null literal: leave the key commented out
+# to omit buffer.play_delay from the module arguments entirely.
+# play_delay_frames = 21600
 
 
 [bluetooth]

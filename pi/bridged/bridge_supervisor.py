@@ -65,6 +65,14 @@ class AecSettings:
     gain_control: bool = False
     voice_detection: bool = False
     transient_suppression: bool = True
+    # The WebRTC module processes in 10 ms blocks and, left alone, asks the graph for a
+    # 480-frame quantum. That drags the whole graph down with it: the onboard sink drops
+    # from 2048 to min-quantum 256, and the bcm2835 output cannot hold a 256-frame buffer
+    # under call load -- it underruns, and every underrun is an audible click in the
+    # far-end audio. E10 measured 1920 as the only timing that stayed clean across ten
+    # trials, so that is the default here rather than a bench-only override.
+    node_latency_frames: int | None = 1920
+    play_delay_frames: int | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +101,16 @@ def parse_bool(value: str) -> bool:
     if normalized in {"0", "false", "no", "off"}:
         return False
     raise ValueError(f"invalid boolean: {value!r}")
+
+
+def toml_opt_int(data: dict[str, Any], key: str, default: int | None) -> int | None:
+    """Absent key keeps the default. TOML has no null, so omitting is how you opt out."""
+    if key not in data:
+        return default
+    value = data[key]
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"audio.aec.{key} must be an integer or null")
+    return value
 
 
 def toml_bool(data: dict[str, Any], key: str, default: bool) -> bool:
@@ -134,7 +152,13 @@ def load_settings(path: Path | None = None) -> Settings:
     gain_control = toml_bool(aec_data, "gain_control", False)
     voice_detection = toml_bool(aec_data, "voice_detection", False)
     transient_suppression = toml_bool(aec_data, "transient_suppression", True)
+    node_latency_frames = toml_opt_int(aec_data, "node_latency_frames", 1920)
+    play_delay_frames = toml_opt_int(aec_data, "play_delay_frames", None)
 
+    if node_latency_frames is not None and node_latency_frames <= 0:
+        raise ValueError("audio.aec.node_latency_frames must be positive")
+    if play_delay_frames is not None and play_delay_frames < 0:
+        raise ValueError("audio.aec.play_delay_frames cannot be negative")
     if method != "webrtc":
         raise ValueError("audio.aec.method must be 'webrtc'")
     if rate != 48_000:
@@ -161,6 +185,8 @@ def load_settings(path: Path | None = None) -> Settings:
             gain_control=gain_control,
             voice_detection=voice_detection,
             transient_suppression=transient_suppression,
+            node_latency_frames=node_latency_frames,
+            play_delay_frames=play_delay_frames,
         ),
         lark_node=os.environ.get("BRIDGE_LARK", DEFAULT_LARK),
         lark_component=os.environ.get("BRIDGE_LARK_COMPONENT", DEFAULT_LARK_COMPONENT),
@@ -528,7 +554,13 @@ class CallGraph:
         self.state = State.BUILDING
         self.build_started = time.monotonic()
         if self.settings.aec.enabled:
-            self.aec_host = NativeAecHost(self.settings.aec, lark, self.settings.wired_output)
+            self.aec_host = NativeAecHost(
+                self.settings.aec,
+                lark,
+                self.settings.wired_output,
+                latency_frames=self.settings.aec.node_latency_frames,
+                play_delay_frames=self.settings.aec.play_delay_frames,
+            )
             self.aec_host.start()
             return
         self.callout = Loopback(
@@ -681,6 +713,8 @@ class CallGraph:
                 "method": self.settings.aec.method,
                 "rate": self.settings.aec.rate,
                 "channels": self.settings.aec.channels,
+                "node_latency_frames": self.settings.aec.node_latency_frames,
+                "play_delay_frames": self.settings.aec.play_delay_frames,
                 "verified": self.verified and self.settings.aec.enabled,
                 "module_backend": ("native-pw-cli" if self.settings.aec.enabled else None),
                 "owner_pid": self.aec_host.pid if self.aec_host is not None else None,
