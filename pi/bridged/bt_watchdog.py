@@ -77,6 +77,13 @@ PHONE_MAC = os.environ.get("BRIDGE_PHONE_MAC", "5C:33:7B:CB:BF:C5")
 # sometimes will NOT re-initiate after a Bluetooth toggle, and in a car nobody can tap it.
 RECONNECT_DELAY = float(os.environ.get("BRIDGE_WD_RECONNECT_DELAY", "20"))
 RECONNECT = os.environ.get("BRIDGE_WD_RECONNECT", "1") not in ("0", "false", "no")
+# Bounded, because an unbounded reconnector fights the operator. If the phone was
+# deliberately taken elsewhere -- Bluetooth switched off, or the call moved to another
+# device -- pulling it back repeatedly is the same class of bug as e6f4139, where the
+# bridge fought another app for the communication route. The budget resets only when the
+# phone is actually connected, so a deliberate departure costs a few failed attempts and
+# then silence.
+RECONNECT_ATTEMPTS = int(os.environ.get("BRIDGE_WD_RECONNECT_ATTEMPTS", "3"))
 
 BACKOFF_START = 60.0
 BACKOFF_MAX = 900.0
@@ -145,7 +152,10 @@ def reconnect_phone() -> None:
     if phone_connected():
         log.info("phone reconnected on its own")
         return
-    log.warning("phone still absent after %.0fs — initiating", RECONNECT_DELAY)
+    # Deliberately does not restate a duration: callers know how long the phone has been
+    # gone, this function does not, and printing RECONNECT_DELAY here reported a number
+    # that was simply wrong when called from the absence path.
+    log.info("initiating connect to %s", PHONE_MAC)
     try:
         r = subprocess.run(
             ["bluetoothctl", "connect", PHONE_MAC],
@@ -183,6 +193,10 @@ def main() -> int:
     backoff = BACKOFF_START
     last_recovery = 0.0
 
+    phone_present = False
+    phone_absent_since: float | None = None
+    phone_attempts = 0
+
     while not stopping:
         if controller_answers():
             if failures:
@@ -191,6 +205,39 @@ def main() -> int:
             # A clean probe well past the last recovery means we are stable again.
             if last_recovery and time.monotonic() - last_recovery > BACKOFF_MAX:
                 backoff = BACKOFF_START
+
+            # A healthy controller with no phone on it. This is the ordinary in-car case
+            # and it is NOT a wedge: the recovery ladder below never runs, because the
+            # controller is answering perfectly well. Before this branch existed,
+            # reconnect_phone() was reachable only after recover(), so a phone that simply
+            # went out of range was never re-established.
+            #
+            # Measured 2026-08-23 on the hardened card: after a power cut the Pixel did not
+            # re-initiate within 130 s, while a Pi-initiated connect succeeded in 20 s.
+            # In a car there is nobody to tap the phone, so the Pi has to make the call.
+            if RECONNECT:
+                if phone_connected():
+                    if not phone_present:
+                        log.info("phone present")
+                    phone_present = True
+                    phone_absent_since = None
+                    phone_attempts = 0
+                else:
+                    if phone_present:
+                        log.warning("phone dropped")
+                        phone_present = False
+                    if phone_absent_since is None:
+                        phone_absent_since = time.monotonic()
+                    absent = time.monotonic() - phone_absent_since
+                    # Hold off briefly so we do not race Android when it *does* choose to
+                    # re-initiate; only then take over.
+                    if absent >= RECONNECT_DELAY and phone_attempts < RECONNECT_ATTEMPTS:
+                        phone_attempts += 1
+                        log.warning(
+                            "phone absent %.0fs — initiating (attempt %d/%d)",
+                            absent, phone_attempts, RECONNECT_ATTEMPTS,
+                        )
+                        reconnect_phone()
         else:
             failures += 1
             log.warning("controller did not answer (%d/%d)", failures, FAILURES_TO_ACT)
