@@ -1,0 +1,18 @@
+[Unit]
+Description=Seal a stable last-known-good LarkBridge pairing snapshot
+After=bridge-storage-guard.service bluetooth.service
+ConditionPathIsMountPoint=/var/lib/larkbridge-persist
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/rpi-lark-bridge/powerloss/lark_state.py pairing-seal
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/larkbridge-persist
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX

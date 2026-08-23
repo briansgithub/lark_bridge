@@ -1,5 +1,8 @@
 # rpi-lark-bridge
 
+Abrupt-power-loss image preparation and the manual 50-cut acceptance campaign are
+documented in [`docs/power-loss-hardening.md`](docs/power-loss-hardening.md).
+
 Make a **Hollyland Lark A1** USB-C lavalier microphone work as the call microphone on a
 **Google Pixel 7a** (Android 14), with call audio routed somewhere else entirely.
 

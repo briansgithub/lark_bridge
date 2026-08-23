@@ -1,0 +1,19 @@
+[Unit]
+Description=Capture short-lived boot helper process ancestry in RAM
+After=local-fs.target
+Before=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/rpi-lark-bridge/boot-process-observer.py
+TimeoutStartSec=35
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ReadWritePaths=/run
+
+[Install]
+WantedBy=multi-user.target

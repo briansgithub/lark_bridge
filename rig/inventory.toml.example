@@ -13,6 +13,20 @@ pi_ip         = "192.168.0.251"       # informational; ssh_config carries the re
 pi_user       = "admin"
 pi_repo_path  = "~/rpi-lark-bridge"
 
+# Closed-loop boot controller. Keep commands as argument arrays: they are executed directly,
+# never through a shell. Leave empty until the corresponding bench hardware is installed.
+boot_probe_host = "192.168.0.251"
+boot_ssh_timeout_seconds = 8
+boot_shutdown_timeout_seconds = 30
+boot_timeout_seconds = 120
+boot_cold_off_seconds = 10
+boot_power_off_command = []
+boot_power_on_command = []
+boot_serial_capture_command = []
+boot_functional_probe_command = []
+# Applies a committed boot variant and arms its rollback timer before screening.
+boot_variant_apply_command = ["python", "rig/boot/apply_variant.py", "--candidate", "{candidate}", "--revision", "{revision}", "--run-dir", "{run_dir}"]
+
 # Pixel 7a. Leave phone_serial empty if only one device is ever attached.
 # `adb devices` shows a USB serial; wireless shows <ip>:<port>, which changes on reboot,
 # so prefer the USB serial here and let connect.sh rediscover the wireless endpoint.
