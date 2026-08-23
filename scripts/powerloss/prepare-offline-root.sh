@@ -144,7 +144,17 @@ install -m 0644 "$SOURCE_ROOT/pi/powerloss/overlayroot.local.conf" "$ROOT_MOUNT/
 
 rm -rf -- "$ROOT_MOUNT/var/lib/bluetooth" "$ROOT_MOUNT/var/log/journal"
 rm -f -- "$ROOT_MOUNT/var/lib/systemd/random-seed"
-ln -s /var/lib/larkbridge-persist/bluetooth/live "$ROOT_MOUNT/var/lib/bluetooth"
+# NOT a symlink. bluetoothd declares StateDirectory=bluetooth, and systemd refuses to
+# set up a StateDirectory whose path is a symlink -- it exits 238/STATE_DIRECTORY and
+# bluetooth.service never starts. Measured in E14: the first boot of a converted card had
+# no Bluetooth at all, which for this product means no calls. Give systemd the real
+# directory it expects and bind the LARKDATA copy over it instead.
+mkdir -p "$ROOT_MOUNT/var/lib/bluetooth"
+chmod 0700 "$ROOT_MOUNT/var/lib/bluetooth"
+if ! grep -q "^/var/lib/larkbridge-persist/bluetooth/live" "$ROOT_MOUNT/etc/fstab"; then
+    printf '%s %s none %s 0 0
+'         /var/lib/larkbridge-persist/bluetooth/live /var/lib/bluetooth         bind,nofail,x-systemd.requires-mounts-for=/var/lib/larkbridge-persist         >> "$ROOT_MOUNT/etc/fstab"
+fi
 ln -s /var/lib/larkbridge-persist/journal "$ROOT_MOUNT/var/log/journal"
 ln -s /var/lib/larkbridge-persist/random-seed "$ROOT_MOUNT/var/lib/systemd/random-seed"
 
