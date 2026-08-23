@@ -1,0 +1,155 @@
+{
+  "summary": {
+    "label": "orientA-iworld",
+    "a2dp_hci": "hci1",
+    "call_hci": "hci0",
+    "same_controller": false,
+    "sco_active": true,
+    "elapsed_s": 424,
+    "requested_s": 420,
+    "completed_full_duration": true,
+    "segments_scored": 14,
+    "segments_unscored": 0,
+    "analysed_minutes": 7.0,
+    "total_dropouts": 0,
+    "dropouts_per_minute": 0.0,
+    "bar_dropouts_per_minute": 1.0,
+    "meets_bar": true,
+    "worst_segment_dropouts": 0,
+    "median_segment_dropouts": 0.0,
+    "segments_with_transport_not_active": [],
+    "segments_with_sco_stalled": [],
+    "sco_delta_median": 4030.0,
+    "a2dp_controller_alive": true,
+    "call_controller_alive": true,
+    "artifacts": "artifacts\\orientA-iworld"
+  },
+  "segments": [
+    {
+      "index": 0,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4028,
+      "raw": null
+    },
+    {
+      "index": 1,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4031,
+      "raw": null
+    },
+    {
+      "index": 2,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4034,
+      "raw": null
+    },
+    {
+      "index": 3,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4035,
+      "raw": null
+    },
+    {
+      "index": 4,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4029,
+      "raw": null
+    },
+    {
+      "index": 5,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4034,
+      "raw": null
+    },
+    {
+      "index": 6,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4029,
+      "raw": null
+    },
+    {
+      "index": 7,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4020,
+      "raw": null
+    },
+    {
+      "index": 8,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4035,
+      "raw": null
+    },
+    {
+      "index": 9,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4021,
+      "raw": null
+    },
+    {
+      "index": 10,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4038,
+      "raw": null
+    },
+    {
+      "index": 11,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4027,
+      "raw": null
+    },
+    {
+      "index": 12,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4028,
+      "raw": null
+    },
+    {
+      "index": 13,
+      "dropouts": 0,
+      "transport_before": "active",
+      "transport_after": "active",
+      "connected": true,
+      "sco_delta": 4033,
+      "raw": null
+    }
+  ]
+}
