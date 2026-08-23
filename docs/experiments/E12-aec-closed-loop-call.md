@@ -218,7 +218,8 @@ The second A/B used a single restart and did not wedge.
 - **Echo suppression passed at 12.04 dB**, but n=1 and with the far-end talker co-located with the
   near-end mic, so the Lark heard the same speech twice. Near-end preservation is untested and
   E10's calibrated protocol has not been re-run on the fixed build.
-- **The far-end path failed silently twice** during this session, costing two captures.
+- **Two captures were lost to a disconnected far-end microphone**, originally and wrongly written
+  up here as a supervisor liveness defect. See the retraction below.
 
 ## Verdict
 
@@ -233,25 +234,45 @@ against E10's 1.77 dB. It is doing useful work for ~16.7 % of one core.
 That rests on an n=1 measurement taken with the far-end talker in the same room as the near-end
 mic. Revisit after a proper near-end preservation and double-talk test with uncorrelated talkers.
 
-## Finding: a healthy-looking graph can be carrying no audio
+## RETRACTED: "a healthy-looking graph can be carrying no audio"
 
-Twice during this session the far end went silent while the supervisor reported `ACTIVE` with
-`verified: true`, `missing: []` and `unexpected: []`. Tapping the HFP downlink directly
-(`bluez_input`) showed **-84.29 dBFS, the idle floor** -- identical on every silent capture. The
-Pi's graph was intact end to end; the phone had simply stopped sending over SCO.
+This section previously reported a supervisor defect: twice the far end went silent while the
+supervisor reported `ACTIVE` with `verified: true`, `missing: []` and `unexpected: []`, and the HFP
+downlink read -84.29 dBFS. It concluded that "the supervisor validates link topology, not signal
+presence" and proposed a liveness check.
 
-**The supervisor validates link topology, not signal presence.** A bridge can therefore look
-perfectly healthy and be completely silent, which is indistinguishable from working until someone
-speaks. A liveness check -- downlink level over a window -- would catch it, and belongs either in
-the supervisor or in the status file.
+**That was wrong, and the conclusion is withdrawn.** The operator's far-end microphone was not
+connected properly during those two captures. Nothing was being sent, so nothing arrived. The Pi
+was working correctly and faithfully carrying silence, and `ACTIVE` was the correct report.
 
-Related, and correct behaviour rather than a defect: `bridge.aec.source` cannot be tapped while the
-supervisor runs. `remove_dangerous_autolinks` enforces exclusive consumption and unlinks any
-consumer that is not the `bridge.mic` loopback, which is what stops the cleaned mic signal leaking.
-Instrumentation must use the HFP sink monitor instead.
+A bridge carrying silence because nobody is talking is not broken, and the liveness check proposed
+here would have been a false-positive machine -- flagging a healthy unit every time the far end went
+quiet. It was nearly built.
+
+The related claim elsewhere in this document that **phone-side SCO routing is unreliable, "three
+occurrences in one session"**, rested on the same mistake and is also withdrawn. The operator's own
+impression that routing is "usually, but flaky" stands as their observation; the evidence offered
+here for it does not. The E08 controller wedge was a separate and real event, unaffected by this.
+
+**What survives, reframed:** "after a fault clears, do the links come back without the audio?" is a
+real question, but it is a per-fault assertion against a *known injected* far-end signal, not a
+standing health invariant. It only means anything when the far end is under test control.
+
+**Methodological lesson worth keeping:** with no known far-end signal, "working but quiet" and
+"broken and silent" are indistinguishable at every tap. E13 addresses this by looping a
+deterministic source into the call rather than relying on someone talking.
+
+## Finding: instrumentation cannot tap `bridge.aec.source`
+
+Correct behaviour rather than a defect, but it constrains every future harness.
+`remove_dangerous_autolinks` enforces exclusive consumption of the AEC source and unlinks any
+consumer that is not the `bridge.mic` loopback -- which is what stops the cleaned mic signal
+leaking. A recorder aimed there does not survive. Instrumentation must use the HFP sink monitor
+instead, which is also the truer measurement since it includes the loopback stage.
 
 ## Next action
 
-Hand three items to the fault-injection campaign: the `bridge-btfw` recovery gap, the
-restart-churn wedge trigger, and the silent-but-ACTIVE liveness gap. Re-run E10's calibrated
-speaker protocol on the fixed build to test whether the crackle fix really did repair convergence.
+Hand two items to the fault-injection campaign: the `bridge-btfw` recovery gap and the
+restart-churn wedge trigger. (A third, the "silent-but-ACTIVE liveness gap", was retracted -- see
+above.) Re-run E10's calibrated speaker protocol on the fixed build to test whether the crackle fix
+really did repair convergence.
