@@ -219,13 +219,17 @@ def check(status: dict, status_error: str | None) -> tuple[list[dict], dict]:
         if aec.get("enabled") and not aec.get("verified"):
             violations.append({"id": "I4", "detail": "ACTIVE but AEC never verified"})
 
-    # I7 -- with the AEC down the graph must be back at its configured quantum.
+    # I7 is reported as an OBSERVATION, not a violation.
+    #
+    # A single sample cannot tell a ratchet from a teardown still in progress: there is a
+    # real window where the call is already down but the AEC has not finished unloading,
+    # and the quantum has legitimately not returned yet. Firing on that produced a false
+    # positive on restart-supervisor -- exactly the kind of noise that makes a checker
+    # untrustworthy. Persistence is the caller's judgement, because only the caller has
+    # the timeline.
     quantum = graph_quantum()
     configured = configured_quantum()
-    if state == "CALL_DOWN" and quantum and configured and quantum < configured:
-        violations.append(
-            {"id": "I7", "detail": f"quantum {quantum} below configured {configured} with no call"}
-        )
+    quantum_low = bool(state == "CALL_DOWN" and quantum and configured and quantum < configured)
 
     observations = {
         "state": state,
@@ -238,6 +242,7 @@ def check(status: dict, status_error: str | None) -> tuple[list[dict], dict]:
         "call_up": bool(endpoints.get("hfp_source")),
         "graph_quantum": quantum,
         "configured_quantum": configured,
+        "quantum_below_configured": quantum_low,
         "link_count": len(links),
         "bluetooth": bluetooth_state(),
         "resources": resource_counts(status),

@@ -24,9 +24,11 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import subprocess
 import sys
 import time
+import wave
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -65,6 +67,61 @@ def lark_usb_path() -> str | None:
         except OSError:
             continue
     return None
+
+
+def speaker_level(seconds: float = 6.0) -> dict:
+    """What is actually coming out of the jack, right now.
+
+    The whole point of the looping far-end source: with a known signal playing, silence
+    at the speaker means the bridge is broken. Without one it means nothing at all, which
+    is the mistake E12 made. So this reports the level AND whether the far-end signal was
+    present upstream, and refuses to call it a failure when the source itself has stopped.
+    """
+    status, _ = INV.read_status()
+    output = (status.get("endpoints") or {}).get("wired_output")
+    source = (status.get("endpoints") or {}).get("hfp_source")
+    result: dict = {"output_node": output}
+    if not output:
+        result["skipped"] = "no wired output endpoint"
+        return result
+
+    def capture(target: str, name: str, capture_sink: bool) -> float | None:
+        path = f"/tmp/e13/{name}.wav"
+        props = {"node.name": f"e13.{name}", "node.dont-reconnect": True}
+        if capture_sink:
+            props["stream.capture.sink"] = True
+        sh(f"timeout {seconds + 2} pw-record --target {target} "
+           f"--properties '{json.dumps(props, separators=(',', ':'))}' "
+           f"--rate 48000 --channels 1 --channel-map mono --format s16 {path}",
+           timeout=seconds + 6)
+        try:
+            with wave.open(path, "rb") as handle:
+                frames = handle.readframes(handle.getnframes())
+        except (OSError, wave.Error):
+            return None
+        if len(frames) < 2:
+            return None
+        import array
+        data = array.array("h")
+        data.frombytes(frames[: len(frames) // 2 * 2])
+        if not data:
+            return None
+        rms = math.sqrt(sum(v * v for v in data) / len(data)) / 32768.0
+        return round(20.0 * math.log10(max(rms, 1e-9)), 2)
+
+    result["speaker_rms_dbfs"] = capture(output, "spk", True)
+    if source:
+        result["downlink_rms_dbfs"] = capture(source, "dl", False)
+    # Only meaningful if the far end is actually sending something.
+    down = result.get("downlink_rms_dbfs")
+    spk = result.get("speaker_rms_dbfs")
+    if down is None or down < -80:
+        result["verdict"] = "inconclusive: far-end source silent or unmeasurable"
+    elif spk is not None and spk < -80:
+        result["verdict"] = "AUDIO DEAD: far end arriving but nothing at the jack"
+    else:
+        result["verdict"] = "audio flowing"
+    return result
 
 
 def sample() -> dict:
@@ -239,6 +296,8 @@ def main() -> int:
     ap.add_argument("--settle", type=float, default=3.0, help="seconds of baseline before the fault")
     ap.add_argument("--delay", type=float, default=2.0, help="race-window delay for timed faults")
     ap.add_argument("--gap", type=float, default=5.0, help="seconds to leave the Lark removed")
+    ap.add_argument("--no-audio-check", dest="audio_check", action="store_false",
+                    help="skip the post-fault speaker/downlink measurement")
     ap.add_argument("--kill-budget", type=int, default=12,
                     help="max kills for kill-aec-x5 before giving up")
     ap.add_argument("--outdir", default="/tmp/e13")
@@ -262,16 +321,34 @@ def main() -> int:
 
     timeline: list[dict] = []
     recovered_at: float | None = None
+    left_active = False
+    quantum_low_run = 0
+    quantum_low_max = 0
     deadline = time.monotonic() + args.observe
     while time.monotonic() < deadline:
         point = sample()
         timeline.append(point)
-        # "Recovered" means healthy AND actually carrying a call again, not merely quiet.
-        if recovered_at is None and point["healthy"] and point["observations"]["state"] == "ACTIVE":
+        state = point["observations"]["state"]
+
+        # Recovery means ACTIVE *again*, so the fault must be seen to land first. Without
+        # this the first post-injection sample -- taken before the supervisor's 2 s poll
+        # notices anything -- is still ACTIVE and gets reported as "recovered in 0.4 s".
+        if state != "ACTIVE":
+            left_active = True
+        if recovered_at is None and left_active and point["healthy"] and state == "ACTIVE":
             recovered_at = point["t"]
 
+        # I7: a ratchet only counts if it persists past teardown.
+        if point["observations"].get("quantum_below_configured"):
+            quantum_low_run += 1
+            quantum_low_max = max(quantum_low_max, quantum_low_run)
+        else:
+            quantum_low_run = 0
+
+    audio = speaker_level() if args.audio_check else None
     report = {
         "fault": args.fault,
+        "audio_after": audio,
         "detail": detail,
         "injected_at": injected_at,
         "baseline_healthy": all(p["healthy"] for p in before),
@@ -280,6 +357,9 @@ def main() -> int:
         "recovery_seconds": round(recovered_at - injected_at, 1) if recovered_at else None,
         "states_seen": sorted({p["observations"]["state"] for p in timeline if p["observations"]["state"]}),
         "violations_seen": sorted({v["id"] for p in timeline for v in p["violations"]}),
+        "fault_observed": left_active,
+        "quantum_low_max_run": quantum_low_max,
+        "quantum_ratcheted": quantum_low_max >= 5,
         "final": timeline[-1] if timeline else None,
         "samples": len(timeline),
         "timeline": timeline,
