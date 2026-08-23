@@ -398,5 +398,56 @@ class FailedIsNotTerminalTests(unittest.TestCase):
         self.assertEqual(graph.attempts, 0)
 
 
+class EarlyAutolinkSweepTests(unittest.TestCase):
+    """The session manager wires a source to the HFP sink the instant it appears.
+
+    E13 measured the consequence: when the Lark came back mid-call, WirePlumber linked it
+    straight to bluez_output and the supervisor left that standing for 6.4 s -- raw
+    un-cancelled mic audio to the far end, and a closed acoustic loop through the speaker.
+    The sweep must therefore run before any build logic, not after the graph is finished.
+    """
+
+    def _graph(self) -> supervisor.CallGraph:
+        settings = supervisor.Settings(aec=supervisor.AecSettings(enabled=True))
+        return supervisor.CallGraph(settings)
+
+    def test_lark_to_hfp_sink_is_cut_during_building(self) -> None:
+        graph = self._graph()
+        nodes = {
+            "lark": {},
+            graph.settings.hfp_sink: {},
+            graph.settings.hfp_source: {},
+            graph.settings.wired_output: {},
+        }
+        dangerous = [("lark", graph.settings.hfp_sink)]
+        removed: list[tuple[str, str]] = []
+        with (
+            mock.patch.object(supervisor, "NativeAecHost", FakeHost),
+            mock.patch.object(supervisor, "unlink", lambda s, t: removed.append((s, t))),
+        ):
+            graph.tick(nodes, dangerous, "lark")
+        self.assertIn(
+            ("lark", graph.settings.hfp_sink),
+            removed,
+            "the raw Lark uplink must be cut on the same tick it appears, not after the build",
+        )
+
+    def test_sweep_does_not_stall_the_build(self) -> None:
+        """Cutting the link must not abort the tick; that would extend the exposure."""
+        graph = self._graph()
+        nodes = {
+            "lark": {},
+            graph.settings.hfp_sink: {},
+            graph.settings.hfp_source: {},
+            graph.settings.wired_output: {},
+        }
+        with (
+            mock.patch.object(supervisor, "NativeAecHost", FakeHost),
+            mock.patch.object(supervisor, "unlink", lambda s, t: None),
+        ):
+            graph.tick(nodes, [("lark", graph.settings.hfp_sink)], "lark")
+        self.assertIsNotNone(graph.aec_host, "the build must still start on this tick")
+
+
 if __name__ == "__main__":
     unittest.main()

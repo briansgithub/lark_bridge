@@ -644,6 +644,21 @@ class CallGraph:
             self.teardown("required physical endpoint absent")
             self.state = State.DISCOVERING
             return
+
+        # Safety sweep, before any build logic.
+        #
+        # The session manager auto-links a source to the HFP sink the INSTANT that source
+        # appears. Measured in E13: the moment the Lark came back, WirePlumber wired it
+        # straight to bluez_output, sending raw un-cancelled mic audio to the far end and
+        # closing Lark -> phone -> far end -> speaker -> Lark. It stood for 6.4 s.
+        #
+        # The sweep used to run only once routes were up and ATTACH_GRACE_SECONDS had
+        # elapsed -- long after the dangerous link exists. Preventing that link is not a
+        # finishing touch on a built graph, it is the first thing to do on every tick
+        # where a Lark and an HFP sink coexist. It does not return early: the later sweep
+        # still owns "wait a tick and revalidate", and stalling the build here would
+        # simply extend the exposure it is meant to end.
+        self.remove_dangerous_autolinks(links, lark)
         if self.state == State.FAILED:
             if time.monotonic() < self.next_attempt:
                 return
