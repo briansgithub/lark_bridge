@@ -91,31 +91,45 @@ def fault_kill_aec(_args) -> dict:
     return {"action": "kill-aec", "pid": pid, "rc": rc, "out": out}
 
 
-def fault_kill_aec_x5(_args) -> dict:
-    """Walk the supervisor's backoff to FAILED.
+def fault_kill_aec_x5(args) -> dict:
+    """Deny the AEC host a successful rebuild until the supervisor gives up.
 
-    fail() increments attempts and goes DEGRADED with a min(2**n, 30) backoff until
-    attempts >= MAX_BUILD_ATTEMPTS, then FAILED. Because update_signature() only resets
-    attempts when (call_up, lark, output_up) CHANGES, and tick() returns immediately once
-    FAILED, the prediction is that the unit stays dead for the rest of the call.
+    Two traps make the naive version useless, both of which this hit on the first run:
+
+    1. The status file keeps reporting the OLD owner_pid for a moment after a kill, so a
+       loop that just re-reads it kills an already-dead pid and counts a failure that
+       never happened. Wait for a pid that is both DIFFERENT and alive.
+    2. tick() sets attempts = 0 on every successful verification. Waiting out the backoff
+       between kills lets the graph fully rebuild, which resets the counter -- so a
+       patient attacker never reaches FAILED. Failures only accumulate if each new host
+       dies BEFORE it verifies.
+
+    So this drives the observed `attempts` counter rather than a kill count: kill each new
+    host the instant it appears and stop when the supervisor reports FAILED, attempts has
+    reached the cap, or the kill budget runs out.
     """
-    events = []
-    for attempt, wait in enumerate(BACKOFF_STEPS[:MAX_BUILD_ATTEMPTS], start=1):
-        deadline = time.monotonic() + wait + 25
-        pid = None
-        while time.monotonic() < deadline:
-            status, _ = INV.read_status()
-            pid = (status.get("aec") or {}).get("owner_pid")
-            if pid:
-                break
-            time.sleep(1.0)
-        if not pid:
-            events.append({"attempt": attempt, "note": "AEC owner never reappeared", "killed": False})
+    events: list[dict] = []
+    seen: set[int] = set()
+    deadline = time.monotonic() + args.observe
+    while len(events) < args.kill_budget and time.monotonic() < deadline:
+        status, _ = INV.read_status()
+        state = status.get("state")
+        attempts = status.get("attempts") or 0
+        if state == "FAILED" or attempts >= MAX_BUILD_ATTEMPTS:
+            events.append({"note": f"stopping: state={state} attempts={attempts}"})
             break
+        pid = (status.get("aec") or {}).get("owner_pid")
+        if not pid or pid in seen or not Path(f"/proc/{pid}").exists():
+            time.sleep(0.2)
+            continue
+        seen.add(pid)
         sh(f"kill -9 {pid}")
-        events.append({"attempt": attempt, "pid": pid, "killed": True})
-        time.sleep(1.0)
-    return {"action": "kill-aec-x5", "events": events}
+        gone = not Path(f"/proc/{pid}").exists()
+        events.append({"kill": len(events) + 1, "pid": pid, "confirmed_gone": gone,
+                       "attempts_before": attempts, "state_before": state})
+    status, _ = INV.read_status()
+    return {"action": "kill-aec-x5", "events": events,
+            "attempts_after": status.get("attempts"), "state_after": status.get("state")}
 
 
 def fault_kill_loopback(_args) -> dict:
@@ -225,6 +239,8 @@ def main() -> int:
     ap.add_argument("--settle", type=float, default=3.0, help="seconds of baseline before the fault")
     ap.add_argument("--delay", type=float, default=2.0, help="race-window delay for timed faults")
     ap.add_argument("--gap", type=float, default=5.0, help="seconds to leave the Lark removed")
+    ap.add_argument("--kill-budget", type=int, default=12,
+                    help="max kills for kill-aec-x5 before giving up")
     ap.add_argument("--outdir", default="/tmp/e13")
     args = ap.parse_args()
 

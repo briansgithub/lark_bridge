@@ -27,6 +27,17 @@ POLL_SECONDS = 2.0
 BUILD_TIMEOUT_SECONDS = 10.0
 ATTACH_GRACE_SECONDS = 4.0
 MAX_BUILD_ATTEMPTS = 5
+# FAILED used to be terminal: tick() returned immediately and update_signature() only
+# resets `attempts` when (call_up, lark, output_up) CHANGES. Measured in E13 -- five AEC
+# host deaths in a burst left the unit permanently dead with the call still up, the far
+# end still arriving on the downlink at -12 dBFS, and the speaker at -200 dBFS. Nothing
+# was unplugged, so nothing changed the signature, so nothing ever retried.
+#
+# MAX_BUILD_ATTEMPTS exists to stop a hot rebuild loop, which is worth keeping. Dying
+# forever is not. So FAILED now retries on a long interval: rare enough not to hammer a
+# genuinely broken graph, frequent enough that a user mid-call gets their audio back
+# without knowing this component exists.
+FAILED_RETRY_SECONDS = 60.0
 
 DEFAULT_LARK = (
     "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone"
@@ -546,6 +557,7 @@ class CallGraph:
         self.teardown(reason)
         if self.attempts >= MAX_BUILD_ATTEMPTS:
             self.state = State.FAILED
+            self.next_attempt = time.monotonic() + FAILED_RETRY_SECONDS
         else:
             self.state = State.DEGRADED
             self.next_attempt = time.monotonic() + min(2**self.attempts, 30)
@@ -633,7 +645,17 @@ class CallGraph:
             self.state = State.DISCOVERING
             return
         if self.state == State.FAILED:
-            return
+            if time.monotonic() < self.next_attempt:
+                return
+            # The burst that exhausted the attempts may be long over. Try again from
+            # scratch rather than staying dead for the life of the call.
+            log.warning(
+                "retrying call graph from FAILED after %.0fs", FAILED_RETRY_SECONDS
+            )
+            self.attempts = 0
+            self.next_attempt = 0.0
+            self.last_failure = None
+            self.state = State.DEGRADED
         if time.monotonic() < self.next_attempt:
             self.state = State.DEGRADED
             return
