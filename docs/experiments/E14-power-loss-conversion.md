@@ -197,3 +197,86 @@ written by remounting `/media/root-ro` rw and re-sealing it, and survives reboot
 Trade accepted deliberately: **no logs survive a power cut.** For a car appliance diagnosed over
 SSH while parked that is the right side of the trade, and it can be reversed by flipping `Storage`
 back — the persistent sizing is retained in the drop-in, marked inert, for exactly that reason.
+
+## Power cuts, at last — and the in-car cycle end to end (2026-08-23)
+
+With defect 5 resolved the campaign was no longer blocked. Two physical cuts were performed by the
+operator, each verified by a changed `boot_id` so a cut could not be confused with a reboot.
+
+### Cut 1 — idle
+
+| Check | Result |
+|---|---|
+| Genuine cut | `boot_id` changed |
+| Unclean shutdown | `EXT4-fs (mmcblk0p2): orphan cleanup on readonly fs` |
+| LARKDATA | mounted clean `r/w`, no errors |
+| Storage guard | **`READY`, `reasons: []`** |
+| Pairing | intact; all four slots present |
+| Config slot | `a`, `pairing: live-valid` |
+| Failed units | 0 |
+| Back on SSH | ~30 s |
+
+### Cut 2 — **mid-call**, the worst case
+
+Power pulled with the call up, eSCO carrying audio, and LARKDATA live.
+
+| Check | Result |
+|---|---|
+| Genuine cut | `boot_id` changed |
+| LARKDATA (live at the moment power died) | **`READY`, `reasons: []`** |
+| Pairing | **intact**, all four slots |
+| Failed units | 0 |
+| Phone reconnected | **unaided, ~20 s**, no human involvement |
+| Fresh call afterwards | **works** — see below |
+
+The fresh call is the assertion that matters. Surviving a cut is worthless if the appliance cannot
+take the next call:
+
+```
+healthy: True          state: ACTIVE
+aec_enabled: True      aec_verified: True
+call_up: True          lark_present: True
+graph_quantum: 1920    quantum_below_configured: False
+bluetooth: acl True, sco True
+resources: modules 57, loopback 2, fds 54, RSS 13888 KiB
+```
+
+Resource figures are identical to E13's healthy baseline, and `quantum_below_configured: False` is
+the direct assertion that the crackle regression has not returned under a read-only root.
+
+### The phone will not reconnect itself — measured, then fixed
+
+The in-car assumption was that Android auto-connects to a trusted paired HFP device. **It does
+not.** After a power cut the Pixel was observed for **130 s** with the Pi discoverable, bonded and
+trusted, and it never re-initiated. A Pi-initiated connect succeeded in 20 s.
+
+This was already predicted in `bt_watchdog.py`'s Trap 5 note from 2026-08-17, but the code never
+acted on it: `reconnect_phone()` was reachable only after `recover()`, which runs only when the
+*controller* stops answering. A phone that merely went out of range left the controller answering
+perfectly well, so nothing ever re-established the link.
+
+Fixed in `cd5dbd4` with a bounded reconnect on the healthy-controller path. The budget resets only
+on a successful connection, so an operator who deliberately moves the call elsewhere costs three
+failed attempts and then silence — deliberately avoiding the failure mode of `e6f4139`, where the
+bridge fought another app for the communication route.
+
+**The complete in-car cycle now runs with nobody in the loop:**
+
+```
+power on -> boot ~19 s -> watchdog holds 30 s -> connects -> call works
+         -> power cut mid-call -> recovers -> reconnects unaided -> next call works
+```
+
+Roughly 60-70 s from power-on to phone connected.
+
+### What these cuts do not cover
+
+- **n=2.** Two cuts, one idle and one mid-call. No cumulative-cut testing.
+- **No early-boot cut.** A cut landing a few seconds into boot, while the guard is choosing a
+  config slot, is the window the design most fears and was not exercised.
+- **No cut during a persistent write** to the config or pairing slots.
+- **A/B slot recovery was never forced.** `config_slot: a` was valid throughout, so the fallback
+  path to slot B has still never executed.
+- Cuts were ~10 s off. Brownouts and rapid off/on cycles are untested.
+- **No logs survive a cut**, by design now. Post-cut forensics rely on the guard's verdict and
+  `invariants.py`, not the journal.
