@@ -194,11 +194,20 @@ reconnect until the controller was reset.
 - `bridge-btwatchdog` detected it, backed off, escalated to `bt-reset.sh`, rfkill-cycled the
   adapter, and **recovered the controller unaided**. The RX counters reset, confirming a firmware
   reload. That is the designed behaviour working.
-- **`bridge-btfw.service` failed during the wedge** ("controller never became readable for SCO
-  verification after 30 attempts") and **did not re-run after recovery**. Since a firmware reload
-  resets SCO routing to PCM, that left routing unverified until it was restarted by hand. **A
-  verification service that fails during a wedge and never retries afterwards is a gap**, and it
-  belongs to the fault-injection campaign.
+- **`bridge-btfw.service` was left in `failed` state after the wedge** ("controller never became
+  readable for SCO verification after 30 attempts"), and SCO routing stayed unverified until it was
+  restarted by hand. Since a firmware reload resets SCO routing to PCM, that matters.
+
+  **This was originally written up as "it never retries after recovery", which E13 found to be
+  wrong.** `bt-reset.sh` has a `reapply_sco_routing()` on its success path that does
+  `systemctl restart bridge-btfw.service`, so the retry mechanism exists. The journal had rotated
+  by the time E13 looked, so whether that path ran and btfw failed *again*, or never ran at all,
+  is **unverified and should not be asserted either way**.
+
+  What is verifiable from the code: btfw's retry budget is `MAX_ATTEMPTS=30` at `RETRY_DELAY=0.10`,
+  i.e. **3 seconds**, under a `TimeoutStartSec=5`. That is a short window in which to wait for a
+  controller to become readable immediately after a firmware reload, and it is the most likely
+  reason a reapply would fail a second time. Worth testing deliberately rather than inferring.
 - E08's open questions name loopback churn as a candidate trigger. Repeated supervisor restarts
   during active SCO is now a concrete, if unproven, candidate. n=1.
 
