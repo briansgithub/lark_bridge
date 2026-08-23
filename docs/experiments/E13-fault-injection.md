@@ -12,7 +12,7 @@ config. Nobody had ever tried to break it. Where does it get stuck?
 ## Fixture
 
 Live Discord call, Pixel 7a over HFP/SCO, Lark A1 on the Pi's USB, Pi 3.5 mm output to a speaker
-about 1 m from the Lark. Supervisor from `codex/aec-crackle-diagnosis` at
+about 1 m from the Lark. Supervisor from `claude/aec-crackle-diagnosis` at
 `node_latency_frames = 1920`, graph quantum 2048.
 
 **A deterministic far-end source ran throughout**: a speech-shaped loop played into Discord via
@@ -189,7 +189,7 @@ Both were mine, and both mattered enough to fix in place:
   hub port is untouched. It drives the same kernel/ALSA/PipeWire removal path — all the supervisor
   can see — but it is not a physical disconnect.
 - **Findings apply to the deployed hybrid**: system layer from `codex/boot-optimization`, user layer
-  from `codex/aec-crackle-diagnosis`. Master's SCO routing refactor is **not** deployed, so Bluetooth
+  from `claude/aec-crackle-diagnosis`. Master's SCO routing refactor is **not** deployed, so Bluetooth
   results describe the older `set-sco-routing.sh`.
 - **The E08 wedge was not reproduced**, so the btfw retry-budget hypothesis remains untested: it
   needs a firmware reload to exercise. Forcing one costs the call.

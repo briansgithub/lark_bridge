@@ -14,7 +14,7 @@ is loud enough to drive a speaker, and what the 1920-frame buffer cost in latenc
 
 Pixel 7a in a Discord call with a Windows PC (far end = the operator speaking into a USB mic),
 routed to the Pi over HFP/SCO. Lark A1 on the Pi's USB. Pi 3.5 mm output to a speaker roughly
-1 m from the Lark. Supervisor content is `codex/aec-crackle-diagnosis`
+1 m from the Lark. Supervisor content is `claude/aec-crackle-diagnosis`
 (`7526870c9f8d1611…`), graph quantum 2048, sink volume 85 %.
 
 Recorded at **two taps at once**, because Discord, Opus and the mSBC/SCO leg all inject artifacts
@@ -232,7 +232,7 @@ The second A/B used a single restart and did not wedge.
 
 ## Verdict
 
-**`codex/aec-crackle-diagnosis` is confirmed on hardware and ready to merge.** The fix is load-
+**`claude/aec-crackle-diagnosis` is confirmed on hardware and ready to merge.** The fix is load-
 bearing: without it, a live call drives the graph to `min-quantum` 256, produces 34× the sink
 underruns, and puts the playback path 405 ms behind.
 
