@@ -122,7 +122,7 @@ failure discovered after a power cut would have been unattributable.
 
 **Do not merge `codex/power-loss-hardening` to master as written.** It produced a non-functional
 appliance in four independent ways, and a fifth defect still blocks its own validation. The merge
-onto `codex/integration` is worth keeping, because the fixes live there and the branch is now much
+onto `claude/integration` is worth keeping, because the fixes live there and the branch is now much
 closer to correct.
 
 ## Caveats

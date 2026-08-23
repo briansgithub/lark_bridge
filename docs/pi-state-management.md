@@ -17,7 +17,7 @@ drifting in **both** directions:
 Two conclusions follow, and they are the whole reason for this document.
 
 **The unit is a hybrid.** Its system layer is `codex/boot-optimization`; its user layer is
-`codex/aec-crackle-diagnosis`. No single commit describes the running appliance. Notably,
+`claude/aec-crackle-diagnosis`. No single commit describes the running appliance. Notably,
 master's HEAD commit — `refactor(bluetooth): make SCO routing verification-only` — is *not*
 deployed, so any Bluetooth work on this unit tests routing behaviour master has already replaced.
 
