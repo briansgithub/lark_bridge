@@ -1,7 +1,8 @@
 # E14 — Converting the appliance to a read-only root, and merging the power-loss work
 
-- **Status:** MERGE DONE. Conversion works after four fixes. **Power-cut campaign BLOCKED** by a
-  fifth defect. `codex/power-loss-hardening` was **not** ready to merge as written.
+- **Status:** MERGE DONE. Conversion works after four fixes. **Defect 5 resolved 2026-08-23** by
+  moving the journal to RAM; the campaign is unblocked. `codex/power-loss-hardening` was **not**
+  ready to merge as written.
 - **Gates milestone:** power-loss hardening release
 - **Owner / date:** Claude / 2026-08-23
 
@@ -70,7 +71,7 @@ It exists to remount `/` per fstab, and overlayfs rejects any reconfigure, so it
 Harmless in itself, but `powerlossctl`'s pre-cut acceptance refuses *any* failed unit — so it is
 not cosmetic in practice. **Fixed:** masked, since the initramfs has already assembled `/`.
 
-## Defect 5 — BLOCKING, unfixed: the journal corrupts itself every boot
+## Defect 5 — RESOLVED 2026-08-23: the journal corrupts itself every boot
 
 The appliance is permanently DEGRADED, and `powerlossctl arm` correctly refuses to cut power:
 
@@ -141,3 +142,58 @@ symlinking `/var/log/journal` at all — then re-run the conversion from clean s
 power-cut campaign. The rig is otherwise ready: `rig/inventory.toml` written, host-side safety
 evidence created and verified, campaign initialised at
 `artifacts/powerloss/campaign-20260823T140824Z`.
+
+## Defect 5 — resolution, and a correction to the mechanism above
+
+**The mechanism recorded above is wrong.** This document inferred rename-under-open-fd: the guard
+calling `os.replace()` on the journal directory while journald held it open. Direct evidence
+refutes it. journald's fd 28 resolves to inode 102, which is the *live*
+`journal/<machine-id>/system.journal` — not a stale handle into the quarantined directory. The
+guard's unit already orders itself `Before=systemd-journal-flush.service`, so journald has not
+opened persistent storage when it runs. The corruption's cause was never established, and this
+document implied more was known than was.
+
+What *was* established, by measurement:
+
+- The corruption is **ongoing, not inherited from the source image**. A freshly created journal
+  failed `journalctl --verify` at 45% of an 8 MB file within ~90 minutes, **with no power cut ever
+  performed**. The guard was correctly detecting real, recurring damage.
+- An earlier reading of "journald is storing nothing at all" was a **transient state sampled inside
+  the window right after the guard quarantines at boot**. Steady state was healthy and `journalctl`
+  read the corrupt journal perfectly well. But records emitted during that window are genuinely
+  lost — worst precisely when a post-power-cut record matters most.
+- The dominant cost was never corruption but **write churn**: `rtkit-daemon` logging
+  `Supervising 0 threads of 0 processes of 0 users.` at `PRIORITY=7` about three times a second,
+  15374 of 15600 records in a 90 minute boot, driving 1.69 MB/min to LARKDATA while idle.
+- Storage `DEGRADED` **gates nothing functional**. It is read only by `powerloss_verify.py` (which
+  accepts `DEGRADED` as valid) and `rig/boot/bootctl.py`. The `DEGRADED` in `bridge_supervisor.py`
+  is an unrelated enum. Calls were never affected.
+
+**Resolution: the journal moved to RAM** (`d016aa1`), removing the failure class rather than
+chasing a cause that could have been journald, ext4 under `commit=1`, or the card itself. This is
+also correct on its own merits for an appliance that runs in a car: a power cut can only corrupt a
+write in flight, and the safest journal is one that never touches the card.
+
+Required alongside it: the stale journal files had to be deleted from LARKDATA. `verify_or_reset_journal`
+(`pi/powerloss/storage_guard.py:124`) returns clean only when it finds no `.journal` files, so
+switching to volatile alone would have left the guard re-quarantining 32 MB on every boot.
+
+Verified on hardware after reboot:
+
+| | Before | After |
+|---|---|---|
+| Storage state | `DEGRADED` every boot | **`READY`, `reasons: []`** |
+| Journal location | 24 MB on LARKDATA | **RAM only**, card dir empty |
+| LARKDATA written / 120 s idle | 3,375,104 B | **65,536 B** |
+| LARKDATA used | ~28 MB | **632 K** |
+| rootfs written | 0 B | 0 B |
+| Boot / storage guard | 19.34 s / 1.616 s | 18.84 s / 1.536 s |
+| Pixel pairing | intact | **intact** |
+| Failed units | 0 | 0 |
+
+**A 98% reduction in idle writes** (~2.3 GB/day to ~46 MB/day). The change is on the sealed card,
+written by remounting `/media/root-ro` rw and re-sealing it, and survives reboot.
+
+Trade accepted deliberately: **no logs survive a power cut.** For a car appliance diagnosed over
+SSH while parked that is the right side of the trade, and it can be reversed by flipping `Storage`
+back — the persistent sizing is retained in the drop-in, marked inert, for exactly that reason.
