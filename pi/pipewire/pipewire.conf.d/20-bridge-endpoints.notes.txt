@@ -1,4 +1,4 @@
-# rpi-lark-bridge — endpoint policy note (ADR-0002, AMENDED)
+# rpi-lark-bridge endpoint policy note (ADR-0002, AMENDED)
 #
 # The Mode 1W loopbacks are NOT declared here any more. They are created and destroyed by
 # bridge-supervisor (pi/bridged/bridge_supervisor.py) as calls come and go.
@@ -14,9 +14,8 @@
 #     bridge.callout.capture -> Lark       (wanted: HFP source)
 # closing Lark -> callout.playback -> car speakers -> Lark: a live acoustic feedback loop.
 #
-#  does NOT fix it — streams error when their target is
-# missing at creation and take the entire loopback module down with them.
-#
 # The supervisor removes the failure by construction: no target, no loopback, nothing to
 # fall back to. ADR-0002's core claim still holds for PERSISTENT endpoints; it simply does
 # not extend to transient ones.
+#
+# This file deliberately uses a .txt suffix so PipeWire never parses it as configuration.

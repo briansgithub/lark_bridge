@@ -1,38 +1,23 @@
 [Unit]
-# Route SCO audio to the HCI transport on the Pi 3B's BCM43438.
-#
-# WHY THIS IS MANDATORY, measured 2026-08-16:
-# The controller powers up with sco_routing = 0x00 (PCM). The BCM43438's PCM pins are
-# not connected to anything on the Pi 3B PCB, so received SCO audio is delivered to a
-# dead interface. The failure is ASYMMETRIC and therefore easy to misdiagnose:
-#
-#   sco_routing = PCM (default)      TX 4866 packets   RX     0 packets
-#   sco_routing = Transport (fixed)  TX 7328 packets   RX 14656 packets
-#
-# Host->controller SCO still transmits over the air, so the microphone direction appears
-# to work while call audio from the phone silently never arrives. This is the most likely
-# explanation for the decade-old "A2DP works, HSP/HFP is silent on Pi 3" reports
-# (raspberrypi/linux#2229, open since 2017).
-#
-# Verify at runtime with the Read counterpart:
-#     sudo hcitool -i hci0 cmd 0x3f 0x1d
-#     -> 01 1D FC 00 01 02 00 01 01
-#                     ^^ first parameter must be 01 (Transport), not 00 (PCM)
-#
-# A device-tree overlay setting brcm,bt-pcm-int-params is the cleaner equivalent and IS
-# viable here (the kernel binds the chip via serdev/hci_uart_bcm, confirmed in E01), but
-# this runtime unit works regardless of attach mechanism and is easier to verify.
-
-Description=Route Bluetooth SCO audio to the HCI transport (BCM43438)
+Description=Verify Bluetooth SCO-over-HCI routing (BCM43438)
 Documentation=file:/usr/share/doc/rpi-lark-bridge/E01-sco-over-hci.md
 After=bluetooth.service
 Requires=bluetooth.service
-Before=bridge.target
+PartOf=bluetooth.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+TimeoutStartSec=5
 ExecStart=/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh
+
+# The verifier must never need to write the filesystem.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
 
 [Install]
 WantedBy=bluetooth.service

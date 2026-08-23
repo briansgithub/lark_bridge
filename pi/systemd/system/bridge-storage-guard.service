@@ -1,0 +1,23 @@
+[Unit]
+Description=LarkBridge persistent storage guard
+Documentation=file:///home/admin/rpi-lark-bridge/docs/power-loss-hardening.md
+DefaultDependencies=no
+Wants=local-fs.target
+After=local-fs.target
+Before=systemd-journal-flush.service bluetooth.service bridge-btfw.service bridge-btwatchdog.service user@1000.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/rpi-lark-bridge/powerloss/storage_guard.py
+RemainAfterExit=yes
+TimeoutStartSec=30
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/larkbridge-persist /home/admin/rpi-lark-bridge/config /run/larkbridge
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

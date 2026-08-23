@@ -1,58 +1,55 @@
 #!/usr/bin/env bash
-# Set Broadcom SCO routing to the HCI transport, and VERIFY it took.
+# BRIDGE_BTFW_VERIFY_ONLY_V2
 #
-# Runs as root from bridge-btfw.service. Idempotent: safe to run repeatedly.
-#
-# Vendor commands (Broadcom, OGF 0x3F):
-#   0x1C Write_SCO_PCM_Int_Param  <routing> <rate> <frame> <sync> <clock>
-#   0x1D Read_SCO_PCM_Int_Param   -> same five bytes back
-#
-#   routing: 0=PCM  1=Transport(HCI)  2=Codec  3=I2S
-#
-# We want 1 (Transport). Everything after it is the conventional Broadcom default and is
-# ignored once routing is Transport.
-
+# Device Tree configures BCM43438 SCO-over-HCI. This script only verifies the
+# live property and controller readback; it never modifies controller state.
 set -euo pipefail
 
 HCI="${BRIDGE_HCI:-hci0}"
-DEV="${HCI#hci}"
-WANT_ROUTING="01"
+DT_PROP="/sys/firmware/devicetree/base/soc/serial@7e201000/bluetooth/brcm,bt-pcm-int-params"
+WANT_DT_HEX="0102000101"
+WANT_PARAMS="01 02 00 01 01"
+MAX_ATTEMPTS="${BRIDGE_BT_VERIFY_ATTEMPTS:-30}"
+RETRY_DELAY="${BRIDGE_BT_VERIFY_DELAY:-0.10}"
 
 log() { printf '[bridge-btfw] %s\n' "$*"; }
 die() { printf '[bridge-btfw] ERROR: %s\n' "$*" >&2; exit 1; }
 
-command -v hcitool >/dev/null 2>&1 || die "hcitool not found (package: bluez)"
+command -v hcitool >/dev/null 2>&1 || die "hcitool not found"
+[ -f "$DT_PROP" ] || die "DT-native SCO property is missing: $DT_PROP"
+
+dt_hex="$(od -An -tx1 -v "$DT_PROP" | tr -d ' \n')"
+[ "$dt_hex" = "$WANT_DT_HEX" ] ||
+    die "DT SCO property is '$dt_hex', expected '$WANT_DT_HEX'"
 
 read_params() {
-  # Command Complete payload: 01 1D FC <status> <5 params>
-  hcitool -i "$HCI" cmd 0x3f 0x1d 2>/dev/null \
-    | tr -s ' \n' ' ' \
-    | grep -oE '01 1D FC [0-9A-F]{2}( [0-9A-F]{2}){5}' \
-    | tail -1 \
-    | awk '{print $5, $6, $7, $8, $9}'
+    hcitool -i "$HCI" cmd 0x3f 0x1d 2>/dev/null |
+        awk '
+            /^[[:space:]]*01 1D FC / {
+                if ($4 == "00") {
+                    print $5, $6, $7, $8, $9
+                    exit
+                }
+            }
+        '
 }
 
-BEFORE="$(read_params || true)"
-log "current SCO PCM params: ${BEFORE:-<unreadable>}"
+for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
+    params="$(read_params || true)"
+    if [ -n "$params" ]; then
+        log "SCO PCM params: $params"
+        [ "$params" = "$WANT_PARAMS" ] ||
+            die "controller SCO params are '$params', expected '$WANT_PARAMS'; refusing to modify controller state"
+        log "verified: DT-native SCO routing is active; no userspace write performed"
+        exit 0
+    fi
 
-CURRENT_ROUTING="${BEFORE%% *}"
-if [ "$CURRENT_ROUTING" = "$WANT_ROUTING" ]; then
-  log "SCO routing already Transport(HCI) — nothing to do"
-  exit 0
-fi
+    case "$attempt" in
+        1|10|20|"$MAX_ATTEMPTS")
+            log "controller not yet readable for SCO verification (attempt ${attempt}/${MAX_ATTEMPTS})"
+            ;;
+    esac
+    sleep "$RETRY_DELAY"
+done
 
-log "SCO routing is 0x${CURRENT_ROUTING:-??} — setting to 0x01 (Transport/HCI)"
-hcitool -i "$HCI" cmd 0x3f 0x1c 0x01 0x02 0x00 0x01 0x01 >/dev/null 2>&1 \
-  || die "controller rejected Write_SCO_PCM_Int_Param"
-
-sleep 1
-AFTER="$(read_params || true)"
-log "new SCO PCM params: ${AFTER:-<unreadable>}"
-
-# Verify rather than assume: on some BCM firmware the command is accepted but has no
-# effect, which is the failure mode the btstack-dev thread describes.
-case "$AFTER" in
-  "$WANT_ROUTING "*) log "verified: SCO now routed to the HCI transport" ;;
-  "")                die "could not read back parameters — cannot confirm the change" ;;
-  *)                 die "command accepted but routing is still 0x${AFTER%% *}; SCO audio will not reach the host" ;;
-esac
+die "controller never became readable for SCO verification after ${MAX_ATTEMPTS} attempts"

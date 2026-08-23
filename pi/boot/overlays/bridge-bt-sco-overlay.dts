@@ -31,13 +31,9 @@
  * attaching the chip from userspace via hciuart.service -> btuart -> hciattach, the
  * kernel never reads this node and the overlay does nothing.
  *
- * Spike S1 (tests/stage-b-hfp/s1-sco-over-hci.sh) determines which mechanism is in play
- * and writes the answer to artifacts/.../attach-mechanism.txt. Run it BEFORE assuming
- * this overlay is the fix. The runtime fallback that works either way is:
- *
- *     sudo tools/bt/hci_vendor_cmd.py --sco-routing-transport
- *
- * which is what bridge-btfw.service uses in production.
+ * Spike S1 confirmed that the kernel binds this controller through serdev and applies
+ * the property. Production bridge-btfw.service is therefore verification-only: it
+ * requires this property and checks controller readback without issuing a userspace write.
  *
  * BUILD + INSTALL
  *     dtc -@ -I dts -O dtb -o bridge-bt-sco.dtbo bridge-bt-sco-overlay.dts

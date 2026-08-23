@@ -1,0 +1,27 @@
+#!/bin/sh
+# Preserve Netplan generation while avoiding redundant manager reloads during boot.
+set -eu
+
+if [ "$#" -eq 1 ] && [ "$1" = generate ]; then
+    state="$(systemctl is-system-running 2>/dev/null || true)"
+    if [ "$state" = starting ]; then
+        if [ "${BRIDGE_NETPLAN_STARTUP_MODE:-generate}" = skip-audited ]; then
+            overrides=0
+            for directory in /etc/netplan /run/netplan; do
+                if find "$directory" -maxdepth 1 -type f -name '*.yaml' -print -quit 2>/dev/null | grep -q .; then
+                    overrides=1
+                fi
+            done
+            vendor_hash="$(sha256sum /usr/lib/netplan/00-network-manager-all.yaml 2>/dev/null | awk '{print $1}')"
+            generated=/run/NetworkManager/conf.d/10-globally-managed-devices.conf
+            if [ "$overrides" -eq 0 ] && \
+               [ "$vendor_hash" = 71d2f3a0d872d07f435b830a6316af92b24f3b29af3622a193c3283f73d4ab45 ] && \
+               [ -f "$generated" ] && [ ! -s "$generated" ]; then
+                exit 0
+            fi
+        fi
+        exec /usr/libexec/netplan/generate
+    fi
+fi
+
+exec /usr/sbin/netplan "$@"
