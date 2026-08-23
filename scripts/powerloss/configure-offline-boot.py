@@ -63,17 +63,27 @@ def configure_fstab(path: Path) -> None:
     atomic_text(path, "\n".join(output) + "\n")
 
 
+# Deliberately NOT adding `ro` to the kernel cmdline.
+#
+# overlayroot inspects the cmdline and, on finding `ro`, remounts the assembled overlay
+# read-only "just to be more normal" (init-bottom/overlayroot, lines 703 and 865-869).
+# An overlayfs cannot be reconfigured after mount -- the kernel answers "No changes
+# allowed in reconfigure" -- so that is permanent for the boot, and the tmpfs overlay
+# that is supposed to receive runtime writes receives none. Measured in E14: the very
+# first boot of a converted card had a read-only overlay, bridge-storage-guard died with
+# EROFS writing bridge.toml, and nothing on the system could write anywhere.
+#
+# The card is still protected without it: overlayroot mounts the real root device
+# read-only at /media/root-ro and keeps it there. Verified on hardware -- a write to /
+# lands in the tmpfs upper and is absent from /media/root-ro.
 def configure_cmdline(path: Path) -> None:
     lines = path.read_text(encoding="utf-8").splitlines()
     if len(lines) != 1:
         raise ValueError("cmdline.txt must contain exactly one line")
     tokens = [token for token in lines[0].split() if token not in {"ro", "rw"}]
+    # Strip both, then re-add neither: see the note above configure_cmdline.
     if not any(token.startswith("root=") for token in tokens):
         raise ValueError("cmdline.txt has no root= argument")
-    root_index = next(
-        index for index, token in enumerate(tokens) if token.startswith("root=")
-    )
-    tokens.insert(root_index + 1, "ro")
     atomic_text(path, " ".join(tokens) + "\n")
 
 

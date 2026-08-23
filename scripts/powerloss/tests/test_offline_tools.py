@@ -56,8 +56,20 @@ class OfflineBootConfiguration(unittest.TestCase):
             self.assertTrue(root_line.split()[3].endswith(",ro"))
             self.assertTrue(boot_line.split()[3].endswith(",ro"))
             cmdline = (boot / "cmdline.txt").read_text(encoding="utf-8")
-            self.assertIn("root=PARTUUID=two ro rootfstype=ext4", cmdline)
+            # NEITHER ro NOR rw belongs on the cmdline of an overlay-root image.
+            #
+            # This previously asserted that `ro` was added. E14 measured what that does on
+            # real hardware: overlayroot sees `ro` on the cmdline and deliberately remounts
+            # the assembled overlay read-only, an overlayfs cannot be reconfigured
+            # afterwards, and the tmpfs overlay meant to absorb runtime writes absorbs
+            # none. bridge-storage-guard died with EROFS on the first boot.
+            #
+            # The card is still protected: overlayroot mounts the real device read-only at
+            # /media/root-ro. Verified on hardware -- writes land in the tmpfs upper and
+            # never reach the card.
+            self.assertIn("root=PARTUUID=two rootfstype=ext4", cmdline)
             self.assertNotIn(" rw ", f" {cmdline} ")
+            self.assertNotIn(" ro ", f" {cmdline} ")
             self.assertIn(
                 "auto_initramfs=1", (boot / "config.txt").read_text(encoding="utf-8")
             )
