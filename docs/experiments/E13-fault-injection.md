@@ -140,6 +140,34 @@ Ten build/teardown cycles: modules 57, loopback processes 2, AEC file descriptor
 constant. RSS 13768–13824 KiB, jitter only, no trend. **Graph quantum 1920 every cycle, no
 ratchet.** Recovery 13.3–15.2 s with no degradation. I6 and I7 hold.
 
+## Tier 4 — the churn hypothesis is refuted
+
+E12 observed the E08 controller wedge after four supervisor restarts during a live call and
+offered restart churn as a candidate trigger, since E08's own open questions name loopback churn
+as a suspect. That hypothesis was tested directly and **it lost**.
+
+| Run | Restarts | Gap | State at each check | Wedge |
+|---|---:|---:|---|---|
+| Gentle | 8 | 12 s | `ACTIVE` (rebuild completed between each) | **no** |
+| Harsh | 14 | 4 s | **`BUILDING` every time** — each restart interrupted an in-flight rebuild | **no** |
+
+The controller answered on every check, ACL and SCO stayed up throughout, no invariant was
+violated, and the call survived both runs with audio flowing. The harsh run is strictly more
+aggressive than what preceded the E12 wedge — 14 interrupted rebuilds against 4 spaced restarts —
+and the first run's 12 s spacing was already *tighter* than E12's roughly 37 s, so spacing alone
+was never a plausible mechanism.
+
+**The E08 wedge therefore remains unexplained, at n=1.** It is recorded here as unreproduced rather
+than attributed to the nearest available cause.
+
+Two other observations point the same way. An identical AEC kill burst was followed by the phone
+dropping its Bluetooth link on one occasion and not on a second, and both churn runs left Bluetooth
+untouched.
+
+A genuine positive result falls out of this: **the supervisor survives 14 interrupted rebuilds
+cleanly**, with no invariant violations and full recovery, which is a stronger statement about the
+teardown path than any single fault produced.
+
 ## Corrections to E12
 
 Both were mine, and both mattered enough to fix in place:
@@ -163,12 +191,13 @@ Both were mine, and both mattered enough to fix in place:
 - **Findings apply to the deployed hybrid**: system layer from `codex/boot-optimization`, user layer
   from `codex/aec-crackle-diagnosis`. Master's SCO routing refactor is **not** deployed, so Bluetooth
   results describe the older `set-sco-routing.sh`.
-- **Tier 4 not run.** The deliberate E08 wedge reproduction, and with it the btfw retry-budget test,
-  remain outstanding.
+- **The E08 wedge was not reproduced**, so the btfw retry-budget hypothesis remains untested: it
+  needs a firmware reload to exercise. Forcing one costs the call.
 - Residual ~0.9 s uplink exposure is measured, not eliminated.
 
 ## Next action
 
-Run the Tier 4 wedge to test the restart-churn trigger and the btfw retry budget together. Decide
-whether Finding 2 warrants a product-level response. Consider the WirePlumber policy rule that would
-close Finding 3's residual window.
+Test the btfw retry budget by forcing a firmware reload (bt-reset.sh rung 6) and timing how long
+the controller takes to become readable, against btfw's 3 s allowance. Decide whether Finding 2
+warrants a product-level response. Consider the WirePlumber policy rule that would close Finding 3's
+residual window. The E08 wedge needs a different hypothesis.

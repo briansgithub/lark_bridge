@@ -252,6 +252,40 @@ def fault_lark_unplug_during_build(args) -> dict:
             "gap_s": args.gap, "off": off, "on": on}
 
 
+def fault_restart_churn(args) -> dict:
+    """Reproduce the E08 controller wedge by churning the graph during active SCO.
+
+    E12 ran four supervisor restarts in ~2.5 minutes during a live call and the Bluetooth
+    controller wedged: it stopped answering HCI commands, BlueZ kept reporting Connected
+    while no HFP nodes existed, and the phone could not reconnect until bt-reset.sh
+    rfkill-cycled the adapter. A later single-restart run did not wedge. E08's own open
+    questions name loopback churn as a suspect, so this is a deliberate attempt at the
+    trigger rather than waiting to be surprised by it again.
+
+    Samples the controller between restarts, because the wedge is defined by the
+    controller ceasing to answer, not by anything the supervisor reports.
+    """
+    events: list[dict] = []
+    for i in range(args.churn_count):
+        sh("systemctl --user restart bridge-supervisor.service")
+        time.sleep(args.churn_gap)
+        # `hcitool con` needs the controller to answer, so a timeout IS the wedge signal.
+        rc, out = sh("timeout 6 hcitool con", timeout=10)
+        status, _ = INV.read_status()
+        events.append({
+            "restart": i + 1,
+            "controller_answered": rc == 0,
+            "acl": "ACL" in out,
+            "sco": "SCO" in out,
+            "state": status.get("state"),
+        })
+        if rc != 0:
+            events.append({"note": "CONTROLLER STOPPED ANSWERING -- wedge reproduced"})
+            break
+    return {"action": "restart-churn", "count": args.churn_count,
+            "gap_s": args.churn_gap, "events": events}
+
+
 def fault_config_corrupt(_args) -> dict:
     cfg = Path.home() / "rpi-lark-bridge/config/bridge.toml"
     backup = Path("/tmp/e13/bridge.toml.faultctl")
@@ -283,6 +317,7 @@ FAULTS = {
     "restart-pipewire": fault_restart_pipewire,
     "lark-cycle": fault_lark_cycle,
     "lark-unplug-during-build": fault_lark_unplug_during_build,
+    "restart-churn": fault_restart_churn,
     "config-corrupt": fault_config_corrupt,
     "config-restore": fault_config_restore,
 }
@@ -298,6 +333,8 @@ def main() -> int:
     ap.add_argument("--gap", type=float, default=5.0, help="seconds to leave the Lark removed")
     ap.add_argument("--no-audio-check", dest="audio_check", action="store_false",
                     help="skip the post-fault speaker/downlink measurement")
+    ap.add_argument("--churn-count", type=int, default=8, help="supervisor restarts for restart-churn")
+    ap.add_argument("--churn-gap", type=float, default=12.0, help="seconds between churn restarts")
     ap.add_argument("--kill-budget", type=int, default=12,
                     help="max kills for kill-aec-x5 before giving up")
     ap.add_argument("--outdir", default="/tmp/e13")
