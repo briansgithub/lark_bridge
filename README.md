@@ -59,6 +59,7 @@ latency on the audio you hear, and differs from Mode 1 by one config string. See
 | `PLAN.md` | The specification. Architecture, risks, milestones, test matrix, acceptance criteria. |
 | [`docs/BRINGUP-REPORT.md`](docs/BRINGUP-REPORT.md) | **Start here.** What is proven on real hardware, what broke, and the traps. |
 | `docs/` | Architecture, ADRs, hardware, operations, and **experiment reports with raw data** |
+| [`docs/operations/connecting.md`](docs/operations/connecting.md) | How to reach the Pi over the router or a direct cable, and the traps in both. |
 | `pi/` | Daemon (`bridged`/`bridgectl`), PipeWire/WirePlumber/BlueZ config, systemd, udev, DT overlays |
 | `pico/` | RP2040 firmware. PlatformIO is the primary build; CMake is the CI reference build. |
 | `config/` | User configuration (device MACs, mode, gains) + JSON schema |
