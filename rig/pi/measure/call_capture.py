@@ -41,6 +41,9 @@ REPO = Path(__file__).resolve().parents[3]
 SUPERVISOR_PATH = REPO / "pi" / "bridged" / "bridge_supervisor.py"
 PRE_RECORDER = "bridge.e12.pre"
 POST_RECORDER = "bridge.e12.post"
+REFERENCE_RECORDER = "bridge.e12.reference"
+RAW_RECORDER = "bridge.e12.raw"
+CLEAN_RECORDER = "bridge.e12.clean"
 
 
 def load_supervisor():
@@ -98,13 +101,15 @@ def parse_pwtop(path: Path, interest: list[str]) -> dict:
     return out
 
 
-def start_recorder(target: str, name: str, path: Path) -> subprocess.Popen:
-    properties = {
+def start_recorder(target: str, name: str, path: Path, capture_sink: bool) -> subprocess.Popen:
+    properties: dict = {
         "node.name": name,
         "node.dont-reconnect": True,
-        # Both taps are sink monitors, not sources.
-        "stream.capture.sink": True,
     }
+    if capture_sink:
+        # Only needed when the target is a SINK and we want its monitor. The Lark and
+        # bridge.aec.source are real sources; setting this on them captures nothing.
+        properties["stream.capture.sink"] = True
     return subprocess.Popen(
         [
             "pw-record", "--target", target,
@@ -150,6 +155,9 @@ def main() -> int:
     ap.add_argument("--label", required=True)
     ap.add_argument("--seconds", type=float, default=20.0)
     ap.add_argument("--outdir", default="/tmp/e12")
+    ap.add_argument("--mode", choices=("crackle", "echo"), default="crackle",
+                    help="crackle: taps either side of the AEC. "
+                         "echo: reference/raw/clean for aec_metrics suppression.")
     ap.add_argument("--allow-call-down", action="store_true",
                     help="measure even if the supervisor is not ACTIVE (diagnostics only)")
     args = ap.parse_args()
@@ -158,19 +166,43 @@ def main() -> int:
     settings = module.load_settings()
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
-    pre_path = outdir / f"pre_{args.label}.wav"
-    post_path = outdir / f"post_{args.label}.wav"
     top_path = outdir / f"pwtop_{args.label}.txt"
     output_node = settings.wired_output
 
     status = read_status()
+    lark = (status.get("endpoints") or {}).get("lark")
+    if args.mode == "echo":
+        if not lark:
+            print(json.dumps({"error": "no Lark endpoint; cannot record the raw near-end tap"}))
+            return 1
+        # aec_metrics wants exactly three: the echo source, the microphone that hears it,
+        # and what actually leaves for the far end.
+        #
+        # The clean tap is the HFP SINK monitor, not bridge.aec.source. The supervisor
+        # enforces exclusive consumption of the AEC source -- remove_dangerous_autolinks
+        # unlinks anything that is not the bridge.mic loopback, so a recorder aimed there
+        # does not survive. Tapping the HFP sink is also the truer measurement: it is
+        # what is handed to Bluetooth, so it includes the loopback stage as well as the
+        # AEC, and it is what the far end will actually hear.
+        taps = [
+            (module.AEC_SINK, REFERENCE_RECORDER, True),
+            (lark, RAW_RECORDER, False),
+            (settings.hfp_sink, CLEAN_RECORDER, True),
+        ]
+    else:
+        taps = [
+            (module.AEC_SINK, PRE_RECORDER, True),
+            (output_node, POST_RECORDER, True),
+        ]
+
+    paths = {name: outdir / f"{name.rsplit('.', 1)[-1]}_{args.label}.wav" for _, name, _ in taps}
     result: dict = {
         "label": args.label,
+        "mode": args.mode,
         "seconds": args.seconds,
         "state_before": status.get("state"),
         "aec_before": status.get("aec", {}),
-        "pre_wav": str(pre_path),
-        "post_wav": str(post_path),
+        "wavs": {name: str(path) for name, path in paths.items()},
         "health_before": system_health(),
     }
 
@@ -183,24 +215,22 @@ def main() -> int:
         print()
         return 1
 
-    pre = post = topper = None
+    recorders: list[subprocess.Popen] = []
+    topper = None
     try:
-        pre = start_recorder(module.AEC_SINK, PRE_RECORDER, pre_path)
-        post = start_recorder(output_node, POST_RECORDER, post_path)
+        for target, name, capture_sink in taps:
+            recorders.append(start_recorder(target, name, paths[name], capture_sink))
         with open(top_path, "w") as handle:
             topper = subprocess.Popen(["pw-top", "-b", "-n", str(int(args.seconds) + 6)],
                                       stdout=handle, stderr=subprocess.STDOUT)
             time.sleep(2.0)  # let the recorders link before asserting
-            verify_recorder_links(module, {
-                (module.AEC_SINK, PRE_RECORDER),
-                (output_node, POST_RECORDER),
-            })
+            verify_recorder_links(module, {(t, n) for t, n, _ in taps})
             result["links_verified"] = True
             time.sleep(args.seconds)
     except Exception as exc:  # noqa: BLE001 - report, do not mask
         result["error"] = f"{type(exc).__name__}: {exc}"
     finally:
-        for proc in (pre, post, topper):
+        for proc in [*recorders, topper]:
             if proc is not None and proc.poll() is None:
                 proc.terminate()
                 try:
