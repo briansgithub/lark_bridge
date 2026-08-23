@@ -56,3 +56,33 @@ see `rig/analysis/btsnoop_window.py`.
 Note `/run` is tmpfs, so the record is deliberately lost on reboot. That is correct: a
 reboot means we genuinely do not know why we are disconnected, which is the
 "unknown → one attempt" case above.
+
+## Implemented 2026-08-23 — bounded attempts, not reason codes
+
+The premise this document was written on turned out to be wrong in a way worth recording.
+
+**The phone does not reconnect on its own.** The design here assumed the Pi should mostly stay out
+of the way and let Android re-initiate, with reconnect logic reserved for unusual cases. Measured on
+the hardened card: after a power cut the Pixel was watched for **130 s** while the Pi sat
+discoverable, bonded and trusted, and it never re-initiated. A Pi-initiated connect succeeded in
+20 s. In a car there is nobody to tap the phone, so the Pi has to make the call in the *ordinary*
+case, not the exceptional one.
+
+**What was implemented** (`cd5dbd4`) is the bounded-attempt half of this policy, not the
+reason-code half:
+
+- When the controller is healthy but the phone is absent, wait `RECONNECT_DELAY` (so Android is not
+  raced when it *does* choose to re-initiate), then initiate.
+- At most `RECONNECT_ATTEMPTS` (default 3) attempts. The budget resets **only** on a successful
+  connection.
+
+**The btmon reason-code consumer was not built.** The bounded budget approximates the intent:
+after an unintentional drop the Pi re-establishes within about 40 s, and after a deliberate
+departure it makes three failed attempts and then goes quiet rather than fighting the operator —
+the failure mode of `e6f4139`, where the bridge fought another app for the communication route.
+
+This approximation is weaker than the agreed policy in one specific way: **a deliberate
+disconnection still costs three attempts.** If the operator switches Bluetooth off and stays
+nearby, the Pi will try three times before giving up. That is a few seconds of pointless radio
+activity, not a functional problem, which is why the reason-code work was not treated as blocking.
+Build it if the three attempts ever prove to be a nuisance in practice.

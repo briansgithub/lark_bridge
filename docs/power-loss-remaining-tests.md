@@ -115,3 +115,35 @@ factor.
 **This still blocks the power-cut campaign, and now for a stronger reason than "arm refuses":** a
 campaign whose forensic record is a journal that corrupts itself unprompted cannot distinguish
 damage caused by a power cut from damage that was going to happen anyway.
+
+## Update 2026-08-23 — the campaign ran, partially
+
+Defect 5 is resolved (journal moved to RAM, `d016aa1`), which unblocked `powerlossctl arm` and the
+cuts themselves. Two physical cuts were performed; full results in `E14`.
+
+**Now covered:**
+
+- Idle cut — recovered clean, `READY`, pairing intact, 0 failed units
+- **Mid-call cut** — recovered clean, pairing intact, phone reconnected unaided in ~20 s, and a
+  **fresh call afterwards passed** with `aec_verified: True` and no quantum collapse
+- Phone auto-reconnect — measured as **absent**, then fixed in `cd5dbd4`
+- Idle write volume — cut 98%, which shrinks the exposure window every remaining item below is
+  measured against
+
+**Still not covered**, and still worth doing before this is trusted unattended:
+
+- **Cumulative cuts.** n=2 says nothing about drift over dozens of engine cycles, which is what a
+  car actually does.
+- **Early-boot cut** (1-5 s in), while the guard is choosing a config slot. This is the window the
+  design most fears and it remains unexercised.
+- **Cut during a persistent write** to the config or pairing slots.
+- **A/B slot recovery has still never executed.** `config_slot: a` stayed valid throughout, so the
+  fallback to slot B is untested code on the recovery path — the worst kind.
+- **LARKDATA unmountable fallback.**
+- **Pairing survival across N cuts** rather than across two.
+- Brownouts and rapid off/on cycling, as opposed to clean ~10 s outages.
+
+**Changed premise:** no logs survive a cut now, by design. Post-cut forensics rely on the storage
+guard's verdict and `invariants.py`. That is a deliberate trade for an appliance that is diagnosed
+over SSH while parked, and it is reversible by flipping `Storage` in the journald drop-in, where
+the persistent sizing is retained and marked inert for exactly that purpose.
