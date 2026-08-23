@@ -345,5 +345,58 @@ node_latency_frames = "1920"
                 supervisor.load_settings(config)
 
 
+class FailedIsNotTerminalTests(unittest.TestCase):
+    """FAILED must not strand a live call.
+
+    E13 measured the old behaviour: five AEC host deaths in a burst left the unit
+    permanently dead with the call still up, the far end arriving on the downlink at
+    -12 dBFS, and the speaker at -200 dBFS. update_signature() only resets `attempts`
+    when (call_up, lark, output_up) changes, and nothing had changed, so nothing ever
+    retried.
+    """
+
+    # (call_up, lark, output_up) -- the tuple tick() computes. Pre-set it so the first
+    # tick does not look like a fresh generation and reset attempts, which is what a real
+    # supervisor mid-call would already have done.
+    SIGNATURE = (True, "lark", True)
+
+    def _failed_graph(self) -> supervisor.CallGraph:
+        settings = supervisor.Settings(aec=supervisor.AecSettings(enabled=True))
+        graph = supervisor.CallGraph(settings)
+        graph.signature = self.SIGNATURE
+        for _ in range(supervisor.MAX_BUILD_ATTEMPTS):
+            graph.fail("native AEC owner exited")
+        return graph
+
+    def test_reaching_failed_still_schedules_a_retry(self) -> None:
+        graph = self._failed_graph()
+        self.assertEqual(graph.state, supervisor.State.FAILED)
+        self.assertGreater(
+            graph.next_attempt, 0.0, "FAILED must schedule a retry, not stop forever"
+        )
+
+    def test_failed_does_not_retry_immediately(self) -> None:
+        """The cap exists to stop a hot rebuild loop; that must survive the fix."""
+        graph = self._failed_graph()
+        nodes = {"lark": {}, graph.settings.hfp_sink: {}, graph.settings.hfp_source: {},
+                 graph.settings.wired_output: {}}
+        with mock.patch.object(supervisor, "NativeAecHost", FakeHost):
+            graph.tick(nodes, [], "lark")
+        self.assertEqual(graph.state, supervisor.State.FAILED)
+        self.assertEqual(graph.attempts, supervisor.MAX_BUILD_ATTEMPTS)
+
+    def test_failed_retries_once_the_interval_elapses(self) -> None:
+        graph = self._failed_graph()
+        graph.next_attempt = 0.0  # pretend FAILED_RETRY_SECONDS has passed
+        nodes = {"lark": {}, graph.settings.hfp_sink: {}, graph.settings.hfp_source: {},
+                 graph.settings.wired_output: {}}
+        with mock.patch.object(supervisor, "NativeAecHost", FakeHost):
+            graph.tick(nodes, [], "lark")
+        self.assertNotEqual(
+            graph.state, supervisor.State.FAILED, "FAILED must be escapable without a signature change"
+        )
+        self.assertEqual(graph.attempts, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
