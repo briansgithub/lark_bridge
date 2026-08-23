@@ -1,6 +1,6 @@
 # E12 — Does the AEC crackle fix hold on a real call, and is the output loud enough?
 
-- **Status:** CRACKLE FIX CONFIRMED on a live call. Gain documented. Echo suppression not retested.
+- **Status:** CRACKLE FIX CONFIRMED on a live call. Gain documented. Echo suppression PASSES for the first time.
 - **Gates milestone:** wired AEC release
 - **Owner / date:** Claude / 2026-08-22
 
@@ -105,6 +105,55 @@ costs effective bit depth on a 16-bit PWM output that has little to spare.
 - Do not reach for `webrtc.gain_control`: WebRTC's AGC acts on the capture path, not the render
   path, so it will not make the far end louder.
 
+## Echo suppression: passes for the first time
+
+Measured on the live call with the speaker roughly 1 m from the Lark. Single-talk: the operator
+is the far end, so nobody speaks at the Lark and it hears only speaker echo. That is the easiest
+case for an AEC, so this is close to a best case rather than a typical one.
+
+Three taps: `reference` = `bridge.aec.sink` monitor (the echo source), `raw` = the Lark,
+`clean` = the **HFP sink monitor** -- what is actually handed to Bluetooth for the phone.
+
+| Quantity | Value |
+|---|---:|
+| **Suppression** | **12.04 dB** (gate: 10 dB) -- **PASS**, no failures |
+| `raw` correlation with reference | **0.9505** @ 20 ms lag |
+| `clean` correlation with reference | **0.2893** |
+| `raw` / `clean` correlated level | -41.05 / -53.09 dBFS |
+
+Compare E10: **1.77 dB median, FAIL**.
+
+**The correlation collapse is the load-bearing evidence, not the level drop.** A stage that merely
+attenuated everything uniformly would leave correlation high while the level fell. Correlation
+falling from 0.95 to 0.29 means the far-end component specifically was removed.
+
+That distinction also survives the main confound. The `clean` tap is the 16 kHz HFP sink, so
+everything above 8 kHz is discarded by the SCO leg regardless of what the AEC does, which could
+flatter a level-only measurement. It cannot explain the correlation collapse: a band-limited copy
+of the echo would still correlate strongly with the reference.
+
+### Hypothesis for why this now passes when E10 failed
+
+E10 measured an echo path of **~372.5 ms** and described "unstable WebRTC adaptation" -- a profile
+that began above 18 dB internally, then degraded to near 0 dB before partly recovering. Here the
+echo path measures **20 ms** and suppression is stable across the capture.
+
+E12 also measured the unfixed pipeline running **405 ms behind** while the fixed one adds no
+measurable delay. A plausible causal chain is that the crackle fix incidentally fixed convergence:
+an APM given a short, stable delay can lock onto it, where one chasing a backlog of hundreds of
+milliseconds cannot.
+
+**This is a hypothesis, not a result.** n=1, and the fixtures differ -- E10 used a generated
+stimulus at a calibrated level through a different speaker. It should be tested by re-running
+E10's calibrated speaker protocol on the fixed build before anyone claims the AEC is repaired.
+
+### What this does not establish
+
+- **No double-talk.** Nobody spoke at the Lark, so near-end preservation is untested -- the AEC
+  could be suppressing the near-end talker just as hard and this measurement would not notice.
+- **n=1**, one 25 s capture, one speaker at one distance and level.
+- `latency_reliable: false` in the report; the incremental-latency figure was correctly withheld.
+
 ## Incident: E08 controller wedge reproduced, plus a recovery gap
 
 The first (invalid) A/B ran **four supervisor restarts in ~2.5 minutes during active SCO**, and the
@@ -136,8 +185,10 @@ The second A/B used a single restart and did not wedge.
 - **The analog measurement leg was dropped.** The aux now drives the speaker, so there is no
   electrical end-to-end confirmation of the DAC and cable. The digital tap (~66 dB SNR against the
   analog leg's ~27 dB) carried all quantitative evidence.
-- **Echo suppression was not retested.** E10's failure (1.77 dB against a 10 dB gate) stands
-  unchanged. The speaker/Lark fixture is now in place, so this is newly possible.
+- **Echo suppression passed at 12.04 dB**, but single-talk only and n=1. Near-end preservation
+  and double-talk remain untested, and E10's calibrated protocol has not been re-run on the fixed
+  build.
+- **The far-end path failed silently twice** during this session, costing two captures.
 
 ## Verdict
 
@@ -145,12 +196,32 @@ The second A/B used a single restart and did not wedge.
 bearing: without it, a live call drives the graph to `min-quantum` 256, produces 34× the sink
 underruns, and puts the playback path 405 ms behind.
 
-**On `audio.aec.enabled`:** the crackle argument for disabling it is gone. The open question is
-whether the AEC earns its CPU when its suppression still fails E10's gate. Recommend keeping it
-enabled and settling that with a suppression measurement on the now-available speaker fixture,
-rather than disabling a stage that is no longer causing harm.
+**On `audio.aec.enabled`: keep it enabled.** Both arguments for disabling it have gone. The crackle
+it was blamed for is fixed, and its suppression passes its gate for the first time at 12.04 dB
+against E10's 1.77 dB. It is doing useful work for ~16.7 % of one core.
+
+That rests on a single-talk n=1 measurement, so revisit it after double-talk and near-end
+preservation are tested.
+
+## Finding: a healthy-looking graph can be carrying no audio
+
+Twice during this session the far end went silent while the supervisor reported `ACTIVE` with
+`verified: true`, `missing: []` and `unexpected: []`. Tapping the HFP downlink directly
+(`bluez_input`) showed **-84.29 dBFS, the idle floor** -- identical on every silent capture. The
+Pi's graph was intact end to end; the phone had simply stopped sending over SCO.
+
+**The supervisor validates link topology, not signal presence.** A bridge can therefore look
+perfectly healthy and be completely silent, which is indistinguishable from working until someone
+speaks. A liveness check -- downlink level over a window -- would catch it, and belongs either in
+the supervisor or in the status file.
+
+Related, and correct behaviour rather than a defect: `bridge.aec.source` cannot be tapped while the
+supervisor runs. `remove_dangerous_autolinks` enforces exclusive consumption and unlinks any
+consumer that is not the `bridge.mic` loopback, which is what stops the cleaned mic signal leaking.
+Instrumentation must use the HFP sink monitor instead.
 
 ## Next action
 
-Measure echo suppression on the live call with the speaker fixture, and hand the `bridge-btfw`
-recovery gap plus the restart-churn trigger hypothesis to the fault-injection campaign.
+Hand three items to the fault-injection campaign: the `bridge-btfw` recovery gap, the
+restart-churn wedge trigger, and the silent-but-ACTIVE liveness gap. Re-run E10's calibrated
+speaker protocol on the fixed build to test whether the crackle fix really did repair convergence.
