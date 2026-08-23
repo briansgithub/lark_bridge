@@ -88,8 +88,23 @@ new_root_kib=$(( new_root_bytes / 1024 ))
 log "verified offline target $DEVICE"
 log "shrinking $partition_two to ${new_root_kib} KiB; LARKDATA begins at sector $data_start"
 resize2fs "$partition_two" "${new_root_kib}K"
-parted -s "$DEVICE" unit s resizepart 2 "${root_end}s"
-parted -s "$DEVICE" unit s mkpart primary ext4 "${data_start}s" 100%
+
+# parted -s is documented as script mode, but parted 3.6 still refuses a SHRINKING
+# resizepart with "Warning: Shrinking a partition can cause data loss, are you sure you
+# want to continue?" and exits rather than proceeding. Measured on this unit during E14:
+# the ext4 shrink completed and the table edit did not, leaving a smaller filesystem
+# inside an unchanged partition. Safe, because that is the harmless direction, but stuck
+# -- and on an unattended run it stops the whole conversion.
+#
+# sfdisk takes the specification on stdin and is genuinely non-interactive, so the table
+# edit is driven with that instead. The geometry is unchanged: both partitions are still
+# described by the values computed above from disk sectors alone.
+sfdisk --no-reread --force -N 2 "$DEVICE" >/dev/null <<SFDISK_SPEC
+start=${partition_start}, size=$(( root_end - partition_start + 1 )), type=83
+SFDISK_SPEC
+sfdisk --no-reread --force --append "$DEVICE" >/dev/null <<SFDISK_SPEC
+start=${data_start}, size=${data_sectors}, type=83
+SFDISK_SPEC
 partprobe "$DEVICE"
 udevadm settle
 partition_three="$(lsblk -nrpo NAME,PARTN "$DEVICE" | awk '$2 == 3 {print $1}')"
