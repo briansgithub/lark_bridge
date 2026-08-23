@@ -107,9 +107,13 @@ costs effective bit depth on a 16-bit PWM output that has little to spare.
 
 ## Echo suppression: passes for the first time
 
-Measured on the live call with the speaker roughly 1 m from the Lark. Single-talk: the operator
-is the far end, so nobody speaks at the Lark and it hears only speaker echo. That is the easiest
-case for an AEC, so this is close to a best case rather than a typical one.
+Measured on the live call with the speaker roughly 1 m from the Lark.
+
+**This was NOT single-talk, contrary to how it was first written up.** The operator is physically
+in the same room as both microphones, so while they spoke into the far-end USB mic the Lark heard
+*two* copies of that speech: their voice directly through the air, and the same speech returning
+from the speaker as echo. An earlier draft of this section claimed "nobody speaks at the Lark",
+which is wrong, and the operator caught it.
 
 Three taps: `reference` = `bridge.aec.sink` monitor (the echo source), `raw` = the Lark,
 `clean` = the **HFP sink monitor** -- what is actually handed to Bluetooth for the phone.
@@ -147,10 +151,36 @@ milliseconds cannot.
 stimulus at a calibrated level through a different speaker. It should be tested by re-running
 E10's calibrated speaker protocol on the fixed build before anyone claims the AEC is repaired.
 
+### Does the co-located talker invalidate the 12.04 dB?
+
+Probably not the number, but definitely the framing.
+
+The lag argument is what saves the measurement. `correlated_level` searches non-negative lags only,
+and the two copies sit on opposite sides of zero relative to the `reference` tap:
+
+- **Echo**: reference -> APM -> playback -> DAC -> speaker -> ~1 m of air -> Lark. Tens of
+  milliseconds. The measured peak is **+20 ms at 0.95 correlation**, which fits.
+- **Direct voice**: mouth -> Lark is ~3 ms, but that same speech only reaches the `reference` tap
+  after PC -> Discord -> phone -> SCO -> Pi, on the order of 100-300 ms. Relative to the reference
+  it therefore lands at a **negative** lag, which is never searched.
+
+So the +20 ms peak is the echo, and the direct voice raises total RMS in both `raw` and `clean`
+without contributing to either correlated level. Suppression is not obviously inflated by it.
+
+What the confound does destroy is the claim that this was a clean best case:
+
+- The APM saw **near-end speech essentially continuously**, so its double-talk logic was active
+  throughout. This is closer to sustained double-talk than to single-talk -- arguably a *harder*
+  condition, not an easier one, which if anything makes 12.04 dB more impressive and less
+  representative at the same time.
+- **Near-end preservation remains completely untested, and now matters more.** Nobody has checked
+  whether the AEC is also chewing up the Lark wearer's voice, and this fixture cannot answer it
+  because the near-end and far-end talkers were the same person saying the same words.
+
 ### What this does not establish
 
-- **No double-talk.** Nobody spoke at the Lark, so near-end preservation is untested -- the AEC
-  could be suppressing the near-end talker just as hard and this measurement would not notice.
+- **Near-end preservation and true double-talk.** Needs a near-end talker who is *not* the far-end
+  talker, or a recorded far-end source so the two are uncorrelated.
 - **n=1**, one 25 s capture, one speaker at one distance and level.
 - `latency_reliable: false` in the report; the incremental-latency figure was correctly withheld.
 
@@ -185,9 +215,9 @@ The second A/B used a single restart and did not wedge.
 - **The analog measurement leg was dropped.** The aux now drives the speaker, so there is no
   electrical end-to-end confirmation of the DAC and cable. The digital tap (~66 dB SNR against the
   analog leg's ~27 dB) carried all quantitative evidence.
-- **Echo suppression passed at 12.04 dB**, but single-talk only and n=1. Near-end preservation
-  and double-talk remain untested, and E10's calibrated protocol has not been re-run on the fixed
-  build.
+- **Echo suppression passed at 12.04 dB**, but n=1 and with the far-end talker co-located with the
+  near-end mic, so the Lark heard the same speech twice. Near-end preservation is untested and
+  E10's calibrated protocol has not been re-run on the fixed build.
 - **The far-end path failed silently twice** during this session, costing two captures.
 
 ## Verdict
@@ -200,8 +230,8 @@ underruns, and puts the playback path 405 ms behind.
 it was blamed for is fixed, and its suppression passes its gate for the first time at 12.04 dB
 against E10's 1.77 dB. It is doing useful work for ~16.7 % of one core.
 
-That rests on a single-talk n=1 measurement, so revisit it after double-talk and near-end
-preservation are tested.
+That rests on an n=1 measurement taken with the far-end talker in the same room as the near-end
+mic. Revisit after a proper near-end preservation and double-talk test with uncorrelated talkers.
 
 ## Finding: a healthy-looking graph can be carrying no audio
 
