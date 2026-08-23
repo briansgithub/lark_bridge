@@ -206,7 +206,7 @@ def device_path(device_mac: str, objects: dict[str, dict] | None = None) -> str 
         for path, interfaces in tree.items()
         if path.endswith(suffix) and "org.bluez.Device1" in interfaces
     ]
-    return sorted(matches)[0] if matches else None
+    return min(matches) if matches else None
 
 
 def adapter_for_device(device_mac: str) -> Adapter | None:
@@ -233,7 +233,10 @@ def is_paired(device_mac: str, objects: dict[str, dict] | None = None) -> bool:
     return bool(_device_property(tree[path], "Paired")) if path else False
 
 
-def _act(verb: str, device_mac: str, adapter: Adapter | None, timeout: float):
+def _act(
+    verb: str, device_mac: str, adapter: Adapter | None, timeout: float
+) -> tuple[bool, str]:
+    path: str | None
     if adapter is not None:
         path = path_for(adapter, device_mac)
     else:

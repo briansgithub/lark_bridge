@@ -27,8 +27,11 @@ its own bookkeeping: during occurrence 3 a `disconnect` returned "Disconnection 
 while the kernel logged `command 0x0406 tx timeout` — the command never reached the controller.
 
 The only signal that discriminated was **issuing a command and seeing whether it is answered**.
-That is what this does: `hciconfig hci0 version` (Read Local Version). One HCI round trip per
-probe against SCO's ~133 frames/s, i.e. not a meaningful addition to UART load.
+That is what this does: `hciconfig <call adapter> version` (Read Local Version). One HCI round
+trip per probe against SCO's ~133 frames/s, i.e. not a meaningful addition to UART load.
+
+The adapter is resolved per probe from the phone's bond, never hardcoded: since 2026-08-23 there
+are two controllers, and the one carrying the call is whichever holds the bond.
 
 `Frame reassembly failed` is deliberately NOT used as a trigger: in occurrence 4 it was logged
 **3 minutes 26 seconds** after the actual desync. It is a lagging indicator.
@@ -51,6 +54,8 @@ import subprocess
 import sys
 import time
 
+import btadapters
+
 REPO = os.environ.get("BRIDGE_REPO", "/home/admin/rpi-lark-bridge")
 BT_RESET = os.path.join(REPO, "scripts", "bt-reset.sh")
 
@@ -72,6 +77,37 @@ FAILURES_TO_ACT = int(os.environ.get("BRIDGE_WD_FAILURES", "2"))
 PROBE_TIMEOUT = float(os.environ.get("BRIDGE_WD_PROBE_TIMEOUT", "20"))
 
 PHONE_MAC = os.environ.get("BRIDGE_PHONE_MAC", "5C:33:7B:CB:BF:C5")
+
+# Which controller carries the call. Resolved from the phone's own bond rather than
+# configured, because the bond already records the answer and a second source of truth is
+# a second thing to get wrong. BRIDGE_CALL_ADAPTER overrides it by BD address for the
+# coexistence experiment, which deliberately moves the call to the other radio.
+#
+# This is never `hci0`: with a dongle present, the index that carries the call is whatever
+# holds the bond, and index order is not stable across boots.
+CALL_ADAPTER = os.environ.get("BRIDGE_CALL_ADAPTER", "")
+
+
+def call_adapter() -> btadapters.Adapter | None:
+    """The controller the phone is bonded on, re-resolved every time it is needed.
+
+    Deliberately not cached: a controller that is unbound and rebound during recovery can
+    come back as a different hciX, and a stale handle would then point the next probe --
+    or the next reset -- at the wrong radio. With two controllers that is not a harmless
+    mistake; resetting the radio carrying the speaker link during a call would drop it.
+    """
+    if CALL_ADAPTER:
+        return btadapters.adapter_by_address(CALL_ADAPTER)
+    owner = btadapters.adapter_for_device(PHONE_MAC)
+    if owner is not None:
+        return owner
+    # No bond visible: bluetoothd may not be up yet, or the pairing database did not
+    # mount. Fall back to the onboard controller, which is where every bond has lived
+    # historically and which is the one this recovery ladder was written for.
+    for adapter in btadapters.adapters():
+        if adapter.bus == "UART":
+            return adapter
+    return None
 # Wait before initiating to the phone ourselves, so we do not race Android's own reconnect.
 # Trap 5: the Pi should normally let Android initiate -- but measured 2026-08-17, the Pixel
 # sometimes will NOT re-initiate after a Bluetooth toggle, and in a car nobody can tap it.
@@ -97,9 +133,16 @@ def controller_answers() -> bool:
     Read Local Version Information via hciconfig. On a wedged controller this returns
     "Can't read version info hci0: Connection timed out (110)" and a non-zero exit.
     """
+    adapter = call_adapter()
+    if adapter is None:
+        # We cannot even name the controller to probe. That is our problem or bluetoothd's,
+        # not evidence of a wedge, and resetting on it would be a guess with a live call as
+        # the stake. Same reasoning as the missing-hciconfig case below.
+        log.error("no call adapter could be resolved — treating as UNKNOWN, not failed")
+        return True
     try:
         r = subprocess.run(
-            ["hciconfig", "hci0", "version"],
+            ["hciconfig", adapter.hci, "version"],
             capture_output=True, text=True, timeout=PROBE_TIMEOUT, check=False,
         )
     except subprocess.TimeoutExpired:
@@ -119,10 +162,19 @@ def recover() -> bool:
     if not os.path.exists(BT_RESET):
         log.error("%s not found — cannot recover", BT_RESET)
         return False
-    log.warning("running bt-reset.sh")
+    adapter = call_adapter()
+    if adapter is None:
+        log.error("no call adapter could be resolved — refusing to reset a guessed radio")
+        return False
+    # Name the target explicitly. bt-reset.sh defaults to hci0, which stopped being a safe
+    # default the moment a second controller existed: resetting the wrong radio mid-call
+    # would drop the link it was not even trying to fix.
+    environment = dict(os.environ, BRIDGE_HCI=adapter.hci)
+    log.warning("running bt-reset.sh against %s (%s)", adapter.hci, adapter.address)
     try:
         r = subprocess.run(
-            ["/bin/bash", BT_RESET], capture_output=True, text=True, timeout=300, check=False
+            ["/bin/bash", BT_RESET], capture_output=True, text=True, timeout=300,
+            check=False, env=environment,
         )
     except subprocess.SubprocessError as exc:
         log.error("bt-reset.sh failed to run: %s", exc)
@@ -135,16 +187,14 @@ def recover() -> bool:
 
 
 def phone_connected() -> bool:
-    try:
-        r = subprocess.run(
-            ["bluetoothctl", "info", PHONE_MAC],
-            capture_output=True, text=True, timeout=15, check=False,
-        )
-    except subprocess.SubprocessError:
-        return False
-    # Deliberately only trusted for the POSITIVE case here; a wedge is detected by the active
+    # Reads the Connected property of the phone's own D-Bus object. `bluetoothctl info`
+    # resolved the MAC against whichever adapter bluetoothd last called default, which with
+    # a dongle present is the one holding no bonds -- so it reported "not connected" for a
+    # phone that was connected perfectly well, and the reconnect logic below acted on that.
+    #
+    # Deliberately only trusted for the POSITIVE case; a wedge is detected by the active
     # probe above, never by this.
-    return "Connected: yes" in r.stdout
+    return btadapters.is_connected(PHONE_MAC)
 
 
 def reconnect_phone() -> None:
@@ -155,16 +205,13 @@ def reconnect_phone() -> None:
     # Deliberately does not restate a duration: callers know how long the phone has been
     # gone, this function does not, and printing RECONNECT_DELAY here reported a number
     # that was simply wrong when called from the absence path.
-    log.info("initiating connect to %s", PHONE_MAC)
-    try:
-        r = subprocess.run(
-            ["bluetoothctl", "connect", PHONE_MAC],
-            capture_output=True, text=True, timeout=45, check=False,
-        )
-    except subprocess.SubprocessError as exc:
-        log.error("connect failed to run: %s", exc)
+    adapter = call_adapter()
+    if adapter is None:
+        log.error("no call adapter could be resolved — not initiating")
         return
-    log.info("connect result: %s", (r.stdout or "").strip().splitlines()[-1:] or "no output")
+    log.info("initiating connect to %s from %s", PHONE_MAC, adapter.hci)
+    ok, detail = btadapters.connect(PHONE_MAC, adapter)
+    log.info("connect %s: %s", "succeeded" if ok else "failed", detail)
 
 
 def main() -> int:
@@ -184,10 +231,15 @@ def main() -> int:
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
 
+    adapter = call_adapter()
     log.info(
-        "watching hci0: probe every %.0fs, act after %d consecutive failures",
+        "watching %s: probe every %.0fs, act after %d consecutive failures",
+        f"{adapter.hci} ({adapter.address})" if adapter else "<unresolved call adapter>",
         PROBE_INTERVAL, FAILURES_TO_ACT,
     )
+    for other in btadapters.adapters():
+        if adapter is None or other.hci != adapter.hci:
+            log.info("other controller present: %s %s on %s", other.hci, other.address, other.bus)
 
     failures = 0
     backoff = BACKOFF_START
