@@ -83,6 +83,12 @@ def verify_recorder_links(module, expected: set[tuple[str, str]]) -> None:
         )
 
 
+def is_pwm_output(node: str) -> bool:
+    """True for the Pi's onboard bcm2835 PWM sink, which is the only output whose volume
+    ceiling is a bit-depth argument rather than a level preference."""
+    return node.startswith("alsa_output.platform-") and "mailbox" in node
+
+
 def output_volume(node: str) -> tuple[float, bool]:
     graph = subprocess.run(
         ["pw-dump"],
@@ -197,8 +203,15 @@ def main() -> int:
         raise SystemExit("Lark or wired output is absent")
     wired_volume, wired_muted = output_volume(output_node)
     if wired_muted:
-        raise SystemExit("wired output is muted")
-    if wired_volume > 0.86:
+        raise SystemExit("output is muted")
+    # The 0.85 ceiling is an argument about the bcm2835 PWM DAC specifically, not about
+    # output level in general: E12 measured 86% as hardware unity there, so anything above
+    # it is digital gain above unity on a 16-bit PWM output with little headroom to spare.
+    # None of that reasoning transfers to an A2DP sink, which is a digital transport -- and
+    # rig/pi/measure/a2dp-cal.sh deliberately sets those to unity precisely because a sink
+    # volume below 1.0 silently costs headroom there. Applying the PWM cap to a Bluetooth
+    # sink would reject the correct setting.
+    if is_pwm_output(output_node) and wired_volume > 0.86:
         raise SystemExit(
             f"wired output volume {wired_volume:.2f} exceeds the measured-safe 0.85 setting"
         )
