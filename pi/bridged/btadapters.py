@@ -206,7 +206,15 @@ def device_path(device_mac: str, objects: dict[str, dict] | None = None) -> str 
         for path, interfaces in tree.items()
         if path.endswith(suffix) and "org.bluez.Device1" in interfaces
     ]
-    return min(matches) if matches else None
+    if not matches:
+        return None
+    # A device bonded on BOTH adapters has two paths, and the one that matters is the one
+    # it is actually connected on. Measured 2026-08-23: after the iWorld was paired on the
+    # dongle it stayed bonded on the onboard radio too, so a plain lowest-path rule named
+    # hci0 while the A2DP stream was live on hci1 -- which would have pointed the survival
+    # poller and the SCO counters at the wrong controller and quietly measured nothing.
+    connected = [p for p in matches if _device_property(tree[p], "Connected")]
+    return min(connected) if connected else min(matches)
 
 
 def adapter_for_device(device_mac: str) -> Adapter | None:
