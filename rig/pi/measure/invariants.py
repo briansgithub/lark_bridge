@@ -116,6 +116,38 @@ def configured_quantum() -> int:
     return 0
 
 
+def bluetooth_state() -> dict:
+    """Controller, ACL link, and SCO voice link -- three separate things.
+
+    Recorded per sample because a fault that takes Bluetooth down with it looks identical,
+    from the supervisor's side, to a call simply ending. E13 spent a round trip guessing
+    between those after the fact.
+
+    `hcitool con` separates the layers that matter:
+      ACL present, no eSCO  -> phone is connected but there is no call audio
+      no ACL                -> the Bluetooth link itself dropped
+      both                  -> voice link is up
+
+    Note pactl does NOT list HFP nodes, so counting bluez entries there always returns 0
+    even mid-call. pw-link sees them.
+    """
+    controller = "unknown"
+    for line in run(["hciconfig", "hci0"]).splitlines():
+        if "UP RUNNING" in line:
+            controller = "up"
+            break
+        if "DOWN" in line:
+            controller = "down"
+            break
+    connections = run(["hcitool", "con"])
+    return {
+        "controller": controller,
+        "acl": "ACL" in connections,
+        "sco": "SCO" in connections,  # matches both SCO and eSCO
+        "bluez_ports": sum(1 for line in run(["pw-link", "-l"]).splitlines() if "bluez" in line),
+    }
+
+
 def resource_counts(status: dict) -> dict:
     modules = run(["pactl", "list", "short", "modules"]).splitlines()
     procs = run(["pgrep", "-c", "-f", "pw-loopback"]).strip()
@@ -207,6 +239,7 @@ def check(status: dict, status_error: str | None) -> tuple[list[dict], dict]:
         "graph_quantum": quantum,
         "configured_quantum": configured,
         "link_count": len(links),
+        "bluetooth": bluetooth_state(),
         "resources": resource_counts(status),
     }
     return violations, observations
