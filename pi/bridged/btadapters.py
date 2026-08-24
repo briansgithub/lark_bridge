@@ -196,12 +196,30 @@ def default_radio_lock_path() -> Path:
 
 @contextmanager
 def speaker_radio_lock(
-    path: Path | None = None, *, blocking: bool = True
+    path: Path | None = None,
+    *,
+    blocking: bool = True,
+    cancelled: Callable[[], bool] | None = None,
 ) -> Iterator[bool]:
-    """Hold the cross-process speaker transaction lock, or yield False nonblocking."""
+    """Hold the cross-process speaker transaction lock, or yield False nonblocking.
+
+    A cancellable blocking acquisition is used by the RFCOMM service.  A plain blocking
+    ``flock`` cannot observe service shutdown while another process owns the radio.
+    """
     target = path or default_radio_lock_path()
     if fcntl is None:
-        acquired = _host_radio_lock.acquire(blocking=blocking)
+        if blocking and cancelled is not None:
+            acquired = False
+            while not acquired:
+                if cancelled():
+                    raise BluetoothOperationCancelled(
+                        "operation cancelled while waiting for the speaker radio"
+                    )
+                acquired = _host_radio_lock.acquire(blocking=False)
+                if not acquired:
+                    time.sleep(0.05)
+        else:
+            acquired = _host_radio_lock.acquire(blocking=blocking)
         try:
             yield acquired
         finally:
@@ -218,12 +236,24 @@ def speaker_radio_lock(
         handle = target.open("r", encoding="utf-8")
     acquired = False
     try:
-        flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
-        try:
-            fcntl.flock(handle.fileno(), flags)
-            acquired = True
-        except BlockingIOError:
-            acquired = False
+        if blocking and cancelled is not None:
+            while not acquired:
+                if cancelled():
+                    raise BluetoothOperationCancelled(
+                        "operation cancelled while waiting for the speaker radio"
+                    )
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    acquired = True
+                except BlockingIOError:
+                    time.sleep(0.05)
+        else:
+            flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
+            try:
+                fcntl.flock(handle.fileno(), flags)
+                acquired = True
+            except BlockingIOError:
+                acquired = False
         yield acquired
     finally:
         if acquired:
@@ -441,26 +471,39 @@ def adapters(objects: dict[str, dict] | None = None) -> list[Adapter]:
     return sorted(found, key=lambda adapter: (adapter.address == "", adapter.address))
 
 
-def adapter_by_address(address: str) -> Adapter | None:
+def adapter_by_address(
+    address: str, objects: dict[str, dict] | None = None
+) -> Adapter | None:
     wanted = address.strip().upper()
-    for adapter in adapters():
+    for adapter in adapters(objects):
         if adapter.address == wanted:
             return adapter
     return None
 
 
-def managed_objects() -> dict[str, dict]:
+def managed_objects(
+    *,
+    cancelled: Callable[[], bool] | None = None,
+    heartbeat: Callable[[], None] | None = None,
+) -> dict[str, dict]:
     """BlueZ's object tree, or an empty dict if bluetoothd is not answering.
 
     Empty is deliberately indistinguishable from "no devices": callers must treat an absent
     device as "cannot act", never as "device is gone, take recovery action".
     """
-    code, out, _ = _run(
-        [
-            "busctl", "--system", "--json=short", "call", BLUEZ, "/",
-            "org.freedesktop.DBus.ObjectManager", "GetManagedObjects",
-        ]
-    )
+    command = [
+        "busctl", "--system", "--json=short", "call", BLUEZ, "/",
+        "org.freedesktop.DBus.ObjectManager", "GetManagedObjects",
+    ]
+    if cancelled is not None or heartbeat is not None:
+        code, out, _ = _run_cancellable(
+            command,
+            timeout=QUERY_TIMEOUT,
+            cancelled=cancelled,
+            heartbeat=heartbeat,
+        )
+    else:
+        code, out, _ = _run(command)
     if code != 0:
         return {}
     try:

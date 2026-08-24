@@ -180,7 +180,7 @@ def _new_error(
 def _valid_request_id(value: Any) -> bool:
     if value is None:
         return True
-    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
         return False
     return len(str(value)) <= MAX_ID_CHARS
 
@@ -200,6 +200,9 @@ def _load_operation_settings(status: dict[str, Any]) -> supervisor.Settings:
 
 def _resolve_speaker_controller(
     status: dict[str, Any],
+    *,
+    cancelled: Callable[[], bool] | None = None,
+    heartbeat: Callable[[], None] | None = None,
 ) -> tuple[supervisor.Settings, btadapters.Adapter, dict[str, dict]]:
     """Resolve the permanent address afresh and reject the call-owning controller."""
     settings = _load_operation_settings(status)
@@ -209,10 +212,10 @@ def _resolve_speaker_controller(
         raise btadapters.BluetoothOperationError(
             "devices.output.adapter must be a canonical uppercase controller address"
         )
-    adapter = btadapters.adapter_by_address(canonical)
+    tree = btadapters.managed_objects(cancelled=cancelled, heartbeat=heartbeat)
+    adapter = btadapters.adapter_by_address(canonical, tree)
     if adapter is None or adapter.address != canonical:
         raise btadapters.BluetoothOperationError("configured controller is not visible to BlueZ")
-    tree = btadapters.managed_objects()
     live_address = str(
         ((((tree.get(adapter.path) or {}).get("org.bluez.Adapter1") or {}).get("Address") or {}).get(
             "data"
@@ -415,10 +418,23 @@ def _handle_scan(
     # Supersession is immediate. A failed/cancelled scan deliberately leaves no token.
     state.scan = None
     try:
-        _settings, adapter, _tree = _resolve_speaker_controller(status)
-        with btadapters.speaker_radio_lock(blocking=True) as acquired:
+        with btadapters.speaker_radio_lock(
+            blocking=True,
+            cancelled=lambda: _cancelled(state, cancelled),
+        ) as acquired:
             if not acquired:  # blocking Linux acquisition should not return False
                 raise btadapters.BluetoothOperationError("speaker radio lock unavailable")
+            _settings, adapter, _tree = _resolve_speaker_controller(
+                status,
+                cancelled=lambda: _cancelled(state, cancelled),
+                heartbeat=lambda: _emit_progress(
+                    request_id,
+                    "scanning",
+                    progress,
+                    elapsed_ms=0,
+                    duration_ms=int(btadapters.DISCOVERY_SECONDS * 1000),
+                ),
+            )
 
             def scan_progress(elapsed_ms: int, duration_ms: int) -> None:
                 if _cancelled(state, cancelled):
@@ -505,7 +521,10 @@ def _wait_for_services(
     while time.monotonic() < deadline:
         if cancelled():
             raise OperationCancelled("request owner disconnected during service resolution")
-        tree = btadapters.managed_objects()
+        tree = btadapters.managed_objects(
+            cancelled=cancelled,
+            heartbeat=lambda: _emit_progress(request_id, "resolving_services", progress),
+        )
         if not _controller_matches(adapter, tree):
             raise btadapters.BluetoothOperationError(
                 "speaker controller disappeared during service resolution"
@@ -535,7 +554,10 @@ def _wait_for_connected(
     while time.monotonic() < deadline:
         if cancelled():
             raise OperationCancelled("request owner disconnected while connecting")
-        tree = btadapters.managed_objects()
+        tree = btadapters.managed_objects(
+            cancelled=cancelled,
+            heartbeat=lambda: _emit_progress(request_id, "connecting", progress),
+        )
         if not _controller_matches(adapter, tree):
             raise btadapters.BluetoothOperationError(
                 "speaker controller disappeared while connecting"
@@ -562,7 +584,11 @@ def _wait_for_audio(
     while time.monotonic() < deadline:
         if cancelled():
             raise OperationCancelled("request owner disconnected while waiting for audio")
-        if not _controller_matches(adapter, btadapters.managed_objects()):
+        tree = btadapters.managed_objects(
+            cancelled=cancelled,
+            heartbeat=lambda: _emit_progress(request_id, "waiting_for_audio", progress),
+        )
+        if not _controller_matches(adapter, tree):
             raise btadapters.BluetoothOperationError(
                 "speaker controller disappeared while waiting for audio"
             )
@@ -612,6 +638,18 @@ def _handle_pair_select(
     ):
         return _new_error(request_id, "stale_result", "validating")
 
+    # The token's 60-second deadline is an admission deadline, not a transaction deadline.
+    # Capture it before waiting for the cross-process radio lock; once accepted, a valid
+    # request may finish after the scan token itself expires.
+    accepted_record = state.scan
+    accepted_scan_result = bool(
+        accepted_record is not None
+        and isinstance(scan_id, str)
+        and scan_id == accepted_record.scan_id
+        and time.monotonic() < accepted_record.valid_until_monotonic
+        and output_id in accepted_record.results
+    )
+
     adapter: btadapters.Adapter | None = None
     snapshot: SelectionSnapshot | None = None
     new_bond = False
@@ -635,30 +673,39 @@ def _handle_pair_select(
 
     try:
         phase("validating")
-        _settings, adapter, tree = _resolve_speaker_controller(status)
-        with btadapters.speaker_radio_lock(blocking=True) as acquired:
+        with btadapters.speaker_radio_lock(
+            blocking=True,
+            cancelled=owner_gone,
+        ) as acquired:
             if not acquired:
                 raise TransactionFailure(
                     "speaker_adapter_unavailable", "validating", "speaker radio lock unavailable"
                 )
+            # Resolve the permanent address only after the transaction owns the radio.  A
+            # controller can disappear and return with a different hciX while lock acquisition
+            # waits; carrying a pre-lock object path into Pair/ConnectProfile would then target
+            # stale controller state.
+            try:
+                status = read_status(status_path)
+            except (OSError, json.JSONDecodeError) as exc:
+                raise TransactionFailure(
+                    "persistence_failed", "validating", f"bridge status unavailable: {exc}"
+                ) from exc
+            _settings, adapter, tree = _resolve_speaker_controller(
+                status,
+                cancelled=owner_gone,
+                heartbeat=lambda: phase("validating"),
+            )
 
             device = btadapters.device_properties(adapter, address, tree)
             already_ready = bool((device.get("Paired") or {}).get("data")) and _device_has_a2dp(
                 device
             )
-            record = state.scan
-            token_valid = bool(
-                record is not None
-                and isinstance(scan_id, str)
-                and scan_id == record.scan_id
-                and time.monotonic() < record.valid_until_monotonic
-                and output_id in record.results
-            )
-            if not already_ready and not token_valid:
+            if not already_ready and not accepted_scan_result:
                 raise TransactionFailure("stale_result", "validating")
 
-            if record is not None and output_id in record.results:
-                label = str(record.results[output_id]["label"])
+            if accepted_record is not None and output_id in accepted_record.results:
+                label = str(accepted_record.results[output_id]["label"])
             else:
                 shaped = outputs.discovery_results({address: None}, tree, adapter)
                 if shaped:
@@ -801,11 +848,12 @@ def _handle_pair_select(
                 _wait_for_rollback(snapshot, status_path)
         raise
     except btadapters.BluetoothOperationError as exc:
-        code = (
-            "connection_failed"
-            if current_phase in {"pinning_trust", "connecting", "waiting_for_audio"}
-            else "speaker_adapter_unavailable"
-        )
+        if current_phase == "pairing":
+            code = "pairing_timeout"
+        elif current_phase in {"pinning_trust", "connecting", "waiting_for_audio"}:
+            code = "connection_failed"
+        else:
+            code = "speaker_adapter_unavailable"
         failure = TransactionFailure(code, current_phase, str(exc))
     except TransactionFailure as exc:
         failure = exc
@@ -981,7 +1029,8 @@ def serve_connection(
         if not line:
             disconnected.set()
             return
-        if len(line) > MAX_LINE_BYTES or not line.endswith(b"\n"):
+        close_after_response = len(line) > MAX_LINE_BYTES or not line.endswith(b"\n")
+        if close_after_response:
             response = {"id": None, "ok": False, "error": "request is too large"}
         else:
             try:
@@ -1003,6 +1052,11 @@ def serve_connection(
         try:
             write_object(response)
         except OperationCancelled:
+            return
+        if close_after_response:
+            # ``readline(limit)`` leaves the rest of an oversized physical line buffered.
+            # Continuing would let that suffix masquerade as a second JSON command.
+            disconnected.set()
             return
 
 

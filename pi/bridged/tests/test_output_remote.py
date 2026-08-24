@@ -1,12 +1,33 @@
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import output_remote
+
+
+class ScriptedSocket:
+    def __init__(self, payload: bytes) -> None:
+        self.input = io.BytesIO(payload)
+        self.output = io.BytesIO()
+
+    def makefile(self, *_args, **_kwargs):
+        owner = self
+
+        class Stream:
+            def readline(self, limit: int) -> bytes:
+                return owner.input.readline(limit)
+
+            def write(self, value: bytes) -> int:
+                return owner.output.write(value)
+
+        return Stream()
+
 
 STATUS = {
     "output": {
@@ -70,6 +91,24 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(response["outputs"][0]["setup_state"], "ready")
         self.assertFalse(response["call_active"])
 
+    def test_list_and_status_keep_legacy_fields_and_types(self) -> None:
+        listed = self.request({"id": 4, "op": "list"})
+        status = self.request({"id": 9, "op": "status"})
+
+        self.assertEqual(
+            set(listed),
+            {"id", "ok", "outputs", "desired_id", "chosen_id", "reason", "call_active"},
+        )
+        self.assertEqual(
+            set(listed["outputs"][0]),
+            {"id", "label", "kind", "available", "connected", "setup_state"},
+        )
+        self.assertIsInstance(listed["outputs"], list)
+        self.assertIsInstance(listed["outputs"][0]["available"], bool)
+        self.assertIsInstance(listed["outputs"][0]["connected"], bool)
+        self.assertIsInstance(listed["reason"], str)
+        self.assertEqual({**listed, "id": 9}, status)
+
     def test_set_uses_durable_non_chiming_cli_path(self) -> None:
         seen = {}
 
@@ -99,6 +138,32 @@ class ProtocolTests(unittest.TestCase):
         response = self.request({"id": 6, "op": "set", "output_id": "bogus"}, runner)
         self.assertFalse(response["ok"])
         self.assertFalse(called)
+
+    def test_nonintegral_or_structured_request_ids_are_not_reflected(self) -> None:
+        for request_id in (1.5, True, [1], {"spoof": 1}):
+            with self.subTest(request_id=request_id):
+                response = self.request({"id": request_id, "op": "list"})
+                self.assertEqual(response, {"id": None, "ok": False, "error": "invalid request id"})
+
+    def test_oversized_line_cannot_smuggle_a_command_in_its_suffix(self) -> None:
+        payload = (
+            b"x" * (output_remote.MAX_LINE_BYTES + 1)
+            + b'{"id":8,"op":"set","output_id":"wired:jack"}\n'
+        )
+        sock = ScriptedSocket(payload)
+        runner_calls = []
+
+        with mock.patch.object(
+            output_remote,
+            "handle_request",
+            side_effect=lambda *_args, **_kwargs: runner_calls.append(True),
+        ):
+            output_remote.serve_connection(sock)
+
+        frames = sock.output.getvalue().splitlines()
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(json.loads(frames[0])["error"], "request is too large")
+        self.assertEqual(runner_calls, [])
 
     def test_needs_setup_output_is_refused_without_running_cli(self) -> None:
         changed = json.loads(json.dumps(STATUS))

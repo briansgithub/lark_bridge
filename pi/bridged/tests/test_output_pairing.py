@@ -165,6 +165,50 @@ class PairSelectTests(unittest.TestCase):
         self.assertEqual(response["error_code"], "stale_result")
         pair.assert_not_called()
 
+    def test_token_valid_at_acceptance_survives_radio_lock_wait(self) -> None:
+        state = scan_state()
+
+        class ExpiringLock:
+            def __enter__(self):
+                assert state.scan is not None
+                state.scan.valid_until_monotonic = 0.0
+                return True
+
+            def __exit__(self, *_args):
+                return False
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                mock.patch.object(
+                    output_remote,
+                    "_resolve_speaker_controller",
+                    return_value=(mock.Mock(), ADAPTER, tree(paired=False, a2dp=False)),
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(
+                    output_remote.btadapters,
+                    "speaker_radio_lock",
+                    return_value=ExpiringLock(),
+                )
+            )
+            pair = stack.enter_context(
+                mock.patch.object(
+                    output_remote.btadapters,
+                    "pair_device",
+                    return_value=btadapters.PairResult(False, detail="timed out"),
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(
+                    output_remote.btadapters, "remove_device", return_value=(True, "x")
+                )
+            )
+            response = self.request(state)
+
+        self.assertEqual(response["error_code"], "pairing_timeout")
+        pair.assert_called_once()
+
     def test_pair_timeout_rolls_back_only_new_target_object(self) -> None:
         with ExitStack() as stack:
             self.common(stack, tree(paired=False, a2dp=False))
@@ -405,6 +449,15 @@ class ScanProtocolTests(unittest.TestCase):
     def test_scan_progress_token_supersession_and_no_selection_side_effects(self) -> None:
         observed_tree = tree(paired=False, a2dp=False)
         progress = []
+        ordering = []
+
+        class Lock:
+            def __enter__(self):
+                ordering.append("lock")
+                return True
+
+            def __exit__(self, *_args):
+                return False
 
         def discover(_adapter, **kwargs):
             kwargs["progress"](0, 12_000)
@@ -415,16 +468,23 @@ class ScanProtocolTests(unittest.TestCase):
             mock.patch.object(
                 output_remote,
                 "_resolve_speaker_controller",
-                return_value=(mock.Mock(), ADAPTER, observed_tree),
+                side_effect=lambda _status, **_kwargs: (
+                    ordering.append("resolve")
+                    or (mock.Mock(), ADAPTER, observed_tree)
+                ),
             ),
             mock.patch.object(
-                output_remote.btadapters, "speaker_radio_lock", return_value=nullcontext(True)
+                output_remote.btadapters, "speaker_radio_lock", return_value=Lock()
             ),
             mock.patch.object(output_remote.btadapters, "discover_bredr", side_effect=discover),
             mock.patch.object(output_remote.btadapters, "managed_objects", return_value=observed_tree),
             mock.patch.object(output_remote.secrets, "token_urlsafe", side_effect=["one", "two"]),
             mock.patch.object(output_remote.btadapters, "pair_device") as pair,
             mock.patch.object(output_remote.btadapters, "connect_profile") as connect,
+            mock.patch.object(output_remote.btadapters, "pin_to_adapter") as trust,
+            mock.patch.object(output_remote.btadapters, "remove_device") as remove,
+            mock.patch.object(output_remote, "_seal_pairing") as seal,
+            mock.patch.object(output_remote.bridgectl, "remember_startup_output") as remember,
             mock.patch.object(output_remote.supervisor, "write_desire") as desire,
         ):
             first = output_remote.handle_request(
@@ -451,8 +511,13 @@ class ScanProtocolTests(unittest.TestCase):
             "duration_ms": 12_000,
         })
         self.assertTrue(first["call_active"])
+        self.assertEqual(ordering[:2], ["lock", "resolve"])
         pair.assert_not_called()
         connect.assert_not_called()
+        trust.assert_not_called()
+        remove.assert_not_called()
+        seal.assert_not_called()
+        remember.assert_not_called()
         desire.assert_not_called()
 
     def test_failed_scan_invalidates_previous_token(self) -> None:
