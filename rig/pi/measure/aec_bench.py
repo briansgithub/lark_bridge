@@ -137,6 +137,11 @@ def node_id(node: str) -> str:
         raise RuntimeError(f"could not resolve PipeWire id for {node}") from exc
 
 
+def effective_node_latency(override: int | None, configured: int | None) -> int | None:
+    """Use production tuning unless an instrument run explicitly overrides it."""
+    return configured if override is None else override
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
@@ -259,11 +264,14 @@ def main() -> int:
         if value is not None:
             replacements[field] = value
     tuning = dataclasses.replace(tuning, **replacements)
+    node_latency_frames = effective_node_latency(
+        args.node_latency_frames, tuning.node_latency_frames
+    )
     host = module.NativeAecHost(
         tuning,
         lark,
         output_node,
-        latency_frames=args.node_latency_frames,
+        latency_frames=node_latency_frames,
         play_delay_frames=args.play_delay_frames,
     )
     recorders: list[subprocess.Popen[bytes]] = []
@@ -475,7 +483,7 @@ def main() -> int:
         "lark": lark,
         "wired_output": output_node,
         "wired_output_volume": wired_volume,
-        "node_latency_frames": args.node_latency_frames,
+        "node_latency_frames": node_latency_frames,
         "play_delay_frames": args.play_delay_frames,
         "internal_debug_wav": args.internal_debug_wav,
         "tone_dbfs": args.tone_dbfs,

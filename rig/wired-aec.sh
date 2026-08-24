@@ -8,6 +8,23 @@ usage() {
   exit 2
 }
 
+run_speaker_preflight() {
+  local local_dir="$1" remote rc
+  remote="/tmp/larkbridge-speaker-preflight-$(timestamp)"
+  mkdir -p "$local_dir"
+  pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/speaker_preflight.py --out '$remote'" \
+    > "$local_dir/speaker-preflight.json" 2> "$local_dir/speaker-preflight.err"
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    ok "speaker preflight PASS"
+  elif [ "$rc" -eq 78 ]; then
+    warn "speaker not detected at the Lark; wake or reconnect it before continuing"
+  else
+    err "speaker preflight failed; no acoustic benchmark was started"
+  fi
+  return "$rc"
+}
+
 speaker_series() {
   local label="$1" mode="$2" default_runs="$3"
   shift 3
@@ -44,6 +61,7 @@ speaker_series() {
     if [ "$has_profile" -eq 0 ]; then
       trial_args+=(--profile-name "$label-trial-$trial")
     fi
+    run_speaker_preflight "$local_trial" || return $?
     escaped=""
     for argument in "${trial_args[@]}"; do
       printf -v quoted '%q' "$argument"
@@ -120,6 +138,7 @@ speaker_paired() {
         --profile-name "pair-$pair-$profile"
       )
       [ "$profile" = baseline ] || run_args+=("${candidate_args[@]}")
+      run_speaker_preflight "$local_trial" || return $?
       escaped=""
       for argument in "${run_args[@]}"; do
         printf -v quoted '%q' "$argument"
@@ -165,6 +184,7 @@ speaker_thermal() {
     escaped+=" $quoted"
   done
   info "running gated speaker-only AEC thermal screen"
+  run_speaker_preflight "$dir" || return $?
   pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_thermal.py --out '$remote'$escaped" \
     > "$dir/thermal-run.json" 2> "$dir/thermal-run.err" || fail=1
   for artifact in thermal.json runtime-samples.json runtime-summary.json pw-top.txt \
@@ -259,6 +279,7 @@ case "$command" in
     remote="/var/tmp/wired-aec-bench-$(timestamp)"
     fail=0
     info "running low-level AUX/speaker/Lark AEC capture"
+    run_speaker_preflight "$dir" || exit $?
     pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote' $*" \
       > "$dir/bench-run.json" 2> "$dir/bench-run.err" || fail=1
     scp -q "$(pi_host):$remote/stimulus.wav" "$dir/" 2>/dev/null || true
