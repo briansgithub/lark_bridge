@@ -252,6 +252,17 @@ def play_chime(node: str) -> bool:
         return False
 
 
+def target_adapter(target: dict[str, Any]):
+    """Resolve a status candidate by permanent controller address, with legacy fallback."""
+    if btadapters is None:
+        return None
+    address = target.get("adapter_address")
+    if address:
+        return btadapters.adapter_by_address(str(address))
+    hci = target.get("adapter")
+    return next((a for a in btadapters.adapters() if a.hci == hci), None) if hci else None
+
+
 def do_set(args: argparse.Namespace) -> int:
     status = read_status()
     candidates = outputs_of(status)
@@ -273,10 +284,8 @@ def do_set(args: argparse.Namespace) -> int:
     # earlier version pinned trust only inside the paging branch, which skipped the connected
     # speaker that actually had the wrong flag.
     speaker_adapter = None
-    if target["kind"] == "a2dp" and btadapters is not None and target.get("adapter"):
-        speaker_adapter = next(
-            (a for a in btadapters.adapters() if a.hci == target["adapter"]), None
-        )
+    if target["kind"] == "a2dp" and btadapters is not None:
+        speaker_adapter = target_adapter(target)
         if speaker_adapter is not None:
             pin = btadapters.pin_to_adapter(target["address"], speaker_adapter)
             if pin.changed:
@@ -337,9 +346,7 @@ def do_rename(args: argparse.Namespace) -> int:
         raise SystemExit("only Bluetooth outputs can be renamed; the wired jack is named by ALSA")
     if btadapters is None:
         raise SystemExit("btadapters unavailable; cannot rename")
-    adapter = None
-    if target.get("adapter"):
-        adapter = next((a for a in btadapters.adapters() if a.hci == target["adapter"]), None)
+    adapter = target_adapter(target)
     ok, detail = btadapters.set_alias(target["address"], args.name, adapter)
     if not ok:
         raise SystemExit(f"rename failed: {detail}")

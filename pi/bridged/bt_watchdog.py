@@ -237,8 +237,8 @@ def reconnect_phone() -> None:
     log.info("connect %s: %s", "succeeded" if ok else "failed", detail)
 
 
-def desired_speaker() -> tuple[str, str | None] | None:
-    """The speaker the user chose, as (address, adapter_hci), or None.
+def desired_speaker() -> tuple[str, str | None, str | None] | None:
+    """The chosen speaker as (device address, adapter address, diagnostic hci), or None.
 
     Read from the supervisor's published status rather than recomputed here. The supervisor
     already resolves config defaults, the runtime override and the candidate list every poll,
@@ -260,25 +260,43 @@ def desired_speaker() -> tuple[str, str | None] | None:
         if candidate.get("id") == desired_id:
             if candidate.get("connected"):
                 return None
-            return str(candidate.get("address") or ""), candidate.get("adapter")
+            return (
+                str(candidate.get("address") or ""),
+                candidate.get("adapter_address"),
+                candidate.get("adapter"),
+            )
     # Chosen but not in the candidate list at all: the bond is gone, not merely asleep.
     return None
 
 
-def reconnect_speaker(address: str, adapter_hci: str | None) -> bool:
+def reconnect_speaker(
+    address: str, adapter_address: str | None, adapter_hci: str | None
+) -> bool:
     """Page the chosen speaker on ITS OWN adapter, A2DP profile only."""
-    adapter = None
-    if adapter_hci:
+    adapter = (
+        btadapters.adapter_by_address(adapter_address) if adapter_address else None
+    )
+    if adapter is None and not adapter_address and adapter_hci:
         adapter = next((a for a in btadapters.adapters() if a.hci == adapter_hci), None)
-    if adapter is not None:
-        # Idempotent, and it costs no LARKDATA write when already correct. Without it a
-        # speaker can be paged successfully and then have its own reconnection refused.
-        pin = btadapters.pin_to_adapter(address, adapter)
-        if pin.changed:
-            log.warning("speaker trust corrected: %s", ", ".join(pin.changed))
-        if not pin.ok:
-            log.error("speaker trust pinning failed: %s", "; ".join(pin.failures))
-            return False
+    if adapter is None:
+        log.error(
+            "speaker adapter unavailable (address=%s, last hci=%s)",
+            adapter_address or "<legacy status>",
+            adapter_hci or "<none>",
+        )
+        return False
+    powered, detail = btadapters.power_on(adapter)
+    if not powered:
+        log.error("speaker adapter power recovery failed: %s", detail)
+        return False
+    # Idempotent, and it costs no LARKDATA write when already correct. Without it a
+    # speaker can be paged successfully and then have its own reconnection refused.
+    pin = btadapters.pin_to_adapter(address, adapter)
+    if pin.changed:
+        log.warning("speaker trust corrected: %s", ", ".join(pin.changed))
+    if not pin.ok:
+        log.error("speaker trust pinning failed: %s", "; ".join(pin.failures))
+        return False
     ok, detail = btadapters.connect_profile(address, adapter)
     log.info("speaker connect %s: %s", "succeeded" if ok else "failed", detail)
     return ok

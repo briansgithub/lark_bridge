@@ -69,6 +69,7 @@ class Output:
     node: str | None
     connected: bool
     adapter: str | None = None
+    adapter_address: str | None = None
     address: str | None = None
 
     @property
@@ -85,6 +86,7 @@ class Output:
             "present": self.present,
             "connected": self.connected,
             "adapter": self.adapter,
+            "adapter_address": self.adapter_address,
             "address": self.address,
         }
 
@@ -161,6 +163,14 @@ def a2dp_outputs(
     """
     tree = objects if objects is not None else btadapters.managed_objects()
     by_address: dict[str, dict[str, Any]] = {}
+    adapter_addresses = {
+        path.split("/")[-1]: str(
+            (((interfaces.get("org.bluez.Adapter1") or {}).get("Address") or {}).get("data"))
+            or ""
+        ).upper()
+        for path, interfaces in tree.items()
+        if "org.bluez.Adapter1" in interfaces
+    }
 
     for path, interfaces in sorted(tree.items()):
         device = interfaces.get("org.bluez.Device1")
@@ -178,15 +188,18 @@ def a2dp_outputs(
             continue
 
         adapter = path.split("/")[3]
+        adapter_address = adapter_addresses.get(adapter) or None
         connected = bool(prop("Connected"))
         entry = by_address.get(address)
         # Preference order, highest first. Recomputed rather than short-circuited so the
         # comparison is visible.
-        rank = (2 if connected else 0) + (1 if adapter == speaker_adapter else 0)
+        preferred_adapter = speaker_adapter in {adapter, adapter_address}
+        rank = (2 if connected else 0) + (1 if preferred_adapter else 0)
         if entry is None or rank > entry["rank"]:
             by_address[address] = {
                 "rank": rank,
                 "adapter": adapter,
+                "adapter_address": adapter_address,
                 "connected": connected,
                 "label": str(prop("Alias") or prop("Name") or address),
             }
@@ -199,6 +212,7 @@ def a2dp_outputs(
             node=find_a2dp_node(nodes, address),
             connected=entry["connected"],
             adapter=entry["adapter"],
+            adapter_address=entry["adapter_address"],
             address=address,
         )
         for address, entry in by_address.items()

@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -50,6 +51,7 @@ BLUEZ = "org.bluez"
 # a watchdog poll loop is not blocked for a whole cycle by a device that is genuinely gone.
 CONNECT_TIMEOUT = 45.0
 QUERY_TIMEOUT = 15.0
+POWER_SETTLE_SECONDS = 3.0
 
 
 @dataclass(frozen=True)
@@ -483,6 +485,43 @@ def is_powered(adapter: Adapter, objects: dict[str, dict] | None = None) -> bool
     tree = objects if objects is not None else managed_objects()
     entry = (tree.get(adapter.path) or {}).get("org.bluez.Adapter1") or {}
     return bool((entry.get("Powered") or {}).get("data"))
+
+
+def power_on(adapter: Adapter) -> tuple[bool, str]:
+    """Unblock and power one controller, addressed by its already-resolved identity.
+
+    BlueZ restores adapter power across a daemon restart, but systemd-rfkill can restore a
+    stale per-port soft block first. On the two-controller rig that left the USB speaker
+    controller present in D-Bus but unusable until an operator manually unblocked it. The
+    watchdog is root-scoped specifically so this recovery belongs there.
+
+    Verify the property after the write even when busctl reports an error. The Pi's BlueZ
+    stack has been observed to apply Powered=true and then return a failure while the adapter
+    is registering; the resulting state, not that misleading reply, owns the outcome.
+    """
+    if is_blocked(adapter) is True and not unblock(adapter):
+        return False, f"could not clear rfkill{adapter.rfkill_index} for {adapter.address}"
+    if is_powered(adapter):
+        return True, f"{adapter.address}: already powered"
+    code, _, err = _run(
+        [
+            "busctl",
+            "--system",
+            "set-property",
+            BLUEZ,
+            adapter.path,
+            "org.bluez.Adapter1",
+            "Powered",
+            "b",
+            "true",
+        ]
+    )
+    deadline = time.monotonic() + POWER_SETTLE_SECONDS
+    while time.monotonic() < deadline:
+        if is_powered(adapter):
+            return True, adapter.path
+        time.sleep(0.1)
+    return False, f"{adapter.path}: {err.strip() or 'exit ' + str(code)}"
 
 
 def describe() -> dict:

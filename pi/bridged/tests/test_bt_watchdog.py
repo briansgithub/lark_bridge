@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import bt_watchdog
@@ -8,17 +11,76 @@ import btadapters
 
 
 class SpeakerReconnectTests(unittest.TestCase):
+    def test_status_round_trips_permanent_adapter_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            status = Path(directory) / "status.json"
+            status.write_text(
+                json.dumps(
+                    {
+                        "output": {
+                            "desired_id": "a2dp:C9:5C:FD:6E:28:46",
+                            "candidates": [
+                                {
+                                    "id": "a2dp:C9:5C:FD:6E:28:46",
+                                    "address": "C9:5C:FD:6E:28:46",
+                                    "adapter_address": "A0:AD:9F:73:6C:24",
+                                    "adapter": "hci7",
+                                    "connected": False,
+                                }
+                            ],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.object(bt_watchdog, "STATUS_PATH", str(status)):
+                wanted = bt_watchdog.desired_speaker()
+        self.assertEqual(
+            wanted,
+            ("C9:5C:FD:6E:28:46", "A0:AD:9F:73:6C:24", "hci7"),
+        )
+
     def test_trust_failure_prevents_a_misleading_connect_attempt(self) -> None:
         adapter = btadapters.Adapter("hci1", "A0:AD:9F:73:6C:24", "USB", 1)
         failed = btadapters.TrustPinResult(False, failures=("D-Bus refused",))
         with (
-            mock.patch.object(bt_watchdog.btadapters, "adapters", return_value=[adapter]),
+            mock.patch.object(
+                bt_watchdog.btadapters, "adapter_by_address", return_value=adapter
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "powered")
+            ),
             mock.patch.object(bt_watchdog.btadapters, "pin_to_adapter", return_value=failed),
             mock.patch.object(bt_watchdog.btadapters, "connect_profile") as connect,
         ):
             self.assertFalse(
-                bt_watchdog.reconnect_speaker("C9:5C:FD:6E:28:46", "hci1")
+                bt_watchdog.reconnect_speaker(
+                    "C9:5C:FD:6E:28:46", adapter.address, "hci7"
+                )
             )
+        connect.assert_not_called()
+
+    def test_power_failure_prevents_trust_and_connect(self) -> None:
+        adapter = btadapters.Adapter("hci7", "A0:AD:9F:73:6C:24", "USB", 4)
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters, "adapter_by_address", return_value=adapter
+            ) as resolve,
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "power_on",
+                return_value=(False, "rfkill refused"),
+            ),
+            mock.patch.object(bt_watchdog.btadapters, "pin_to_adapter") as pin,
+            mock.patch.object(bt_watchdog.btadapters, "connect_profile") as connect,
+        ):
+            self.assertFalse(
+                bt_watchdog.reconnect_speaker(
+                    "C9:5C:FD:6E:28:46", adapter.address, "hci1"
+                )
+            )
+        resolve.assert_called_once_with(adapter.address)
+        pin.assert_not_called()
         connect.assert_not_called()
 
 

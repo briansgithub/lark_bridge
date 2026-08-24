@@ -49,6 +49,21 @@ failure_policy = "fail_closed"
             with self.assertRaisesRegex(TypeError, "noise_suppression"):
                 supervisor.load_settings(config)
 
+    def test_output_controller_is_stored_by_permanent_address(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "bridge.toml"
+            config.write_text(
+                """
+[devices.output]
+address = "C9:5C:FD:6E:28:46"
+adapter = "A0:AD:9F:73:6C:24"
+""",
+                encoding="utf-8",
+            )
+            settings = supervisor.load_settings(config)
+        self.assertEqual(settings.desired_output, "a2dp:C9:5C:FD:6E:28:46")
+        self.assertEqual(settings.speaker_adapter, "A0:AD:9F:73:6C:24")
+
 
 class IdentityAndGraphTests(unittest.TestCase):
     def setUp(self) -> None:

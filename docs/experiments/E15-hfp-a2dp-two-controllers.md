@@ -124,6 +124,15 @@ adapter with `ConnectProfile(0000110b)`, with its own budget (5 attempts, 30 s a
 separate from the phone's. Measured: a force-disconnected Boombox was back **15 s later,
 unattended, during a live call**, and the supervisor returned the output to it on its next poll.
 
+The 2026-08-24 continuation closed the boot-time variant too. Output status now publishes the
+speaker controller's permanent address (`A0:AD:9F:73:6C:24`) alongside diagnostic `hci1`, and the
+watchdog resolves the permanent address on every attempt. With rfkill index 1 deliberately soft
+blocked, the first watchdog attempt cleared only that controller, waited for BlueZ to confirm
+`Powered=true`, and reconnected the Boombox. A post-recovery acoustic preflight measured the
+speaker at the Lark 33.02 dB above idle with no clipping. The initial implementation exposed one
+real timing edge -- BlueZ applied `Powered=true` just after returning a D-Bus error -- so power
+recovery now owns the verified property after a bounded settle wait rather than the call result.
+
 The speaker's budget is spent on a timer rather than on absence, unlike the phone's. A speaker
 that is switched off should cost a few quiet retries and then silence, because pages are ACL
 traffic and E03 is explicit about what ACL traffic near an active call costs.
