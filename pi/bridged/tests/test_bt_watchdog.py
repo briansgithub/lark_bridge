@@ -11,6 +11,37 @@ import bt_watchdog
 import btadapters
 
 
+class RecoveryBookkeepingTests(unittest.TestCase):
+    def test_noop_or_failed_recovery_keeps_state_eligible_for_retry(self) -> None:
+        with (
+            mock.patch.object(bt_watchdog, "recover", return_value=False) as recover,
+            mock.patch.object(bt_watchdog.time, "sleep") as sleep,
+            mock.patch.object(bt_watchdog, "reconnect_phone") as reconnect,
+            mock.patch.object(bt_watchdog.time, "monotonic") as monotonic,
+        ):
+            state = bt_watchdog.attempt_recovery(2, 100.0, 240.0)
+        recover.assert_called_once_with()
+        sleep.assert_not_called()
+        reconnect.assert_not_called()
+        monotonic.assert_not_called()
+        self.assertEqual(state, (2, 100.0, 240.0))
+
+    def test_successful_recovery_resets_failures_and_advances_backoff(self) -> None:
+        with (
+            mock.patch.object(bt_watchdog, "recover", return_value=True) as recover,
+            mock.patch.object(bt_watchdog, "RECONNECT", True),
+            mock.patch.object(bt_watchdog, "RECONNECT_DELAY", 20.0),
+            mock.patch.object(bt_watchdog.time, "sleep") as sleep,
+            mock.patch.object(bt_watchdog, "reconnect_phone") as reconnect,
+            mock.patch.object(bt_watchdog.time, "monotonic", return_value=500.0),
+        ):
+            state = bt_watchdog.attempt_recovery(3, 100.0, 240.0)
+        recover.assert_called_once_with()
+        sleep.assert_called_once_with(20.0)
+        reconnect.assert_called_once_with()
+        self.assertEqual(state, (0, 500.0, 480.0))
+
+
 class SpeakerReconnectTests(unittest.TestCase):
     def test_speaker_retry_runs_when_due_and_resets_after_success(self) -> None:
         wanted = ("C9:5C:FD:6E:28:46", "A0:AD:9F:73:6C:24", "hci1")
