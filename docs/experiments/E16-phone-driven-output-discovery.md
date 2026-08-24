@@ -169,6 +169,78 @@ Hardware/Pixel acceptance, BlueZ command-output confirmation on version 5.82,
 live RFCOMM cancellation timing, reboot/power-cut persistence, and all Android
 UI/tile/permission work remain explicitly unvalidated here.
 
+## Independent pre-deployment review — 2026-08-24
+
+The Pi implementation at `63e225ff321d46f4bbe63e7edce57f3a487408a6` and
+Android implementation at `f1da4ec7ad7696dd9f426f462fb2518a05a33e7a` were
+reviewed field by field and hardened in Pi commit `7fe508a` and Android commit
+`1abb852`. The review was host-only: it did not deploy, scan, pair, connect,
+change trust, select an output, or operate live Bluetooth hardware.
+
+Review findings and corrections:
+
+- Pi now closes an RFCOMM connection after an oversized physical line. The old
+  bounded `readline` rejected the prefix but left the suffix buffered, allowing
+  that suffix to be interpreted as a second command. Request IDs are restricted
+  to bounded strings or integers, so structured and non-integral spoof IDs are
+  not reflected.
+- The shared speaker-radio lock is cancellable during acquisition. Scan and
+  pair/select resolve the configured permanent controller from one fresh BlueZ
+  object tree only after owning that lock, so an `hciX` remap while waiting
+  cannot carry a stale object path into discovery, Pair, trust, RemoveDevice, or
+  ConnectProfile. Cancellable BlueZ object queries now reap their helper on
+  RFCOMM loss or shutdown.
+- Pair/select captures scan-token validity when the request is admitted, before
+  waiting for the radio lock. A token valid at admission may therefore finish
+  after its 60-second deadline, while a stale or mismatched token still reaches
+  no Bluetooth or persistence mutation. Pairing-stage controller/helper loss is
+  reported as `pairing_timeout`, matching the stable error contract.
+- Android now bounds Pi response lines at 64 KiB, uses strict UTF-8, rejects a
+  mismatched request ID, accepts multiple correlated progress frames, and
+  requires `done=true` on the final `scan`/`pair_select` frame while preserving
+  the legacy one-frame `list`/`status`/`set` responses.
+- Android does not queue a radio operation while disconnected and does not
+  replay `set`, `scan`, or `pair_select` after RFCOMM loss; reconnection lists Pi
+  state instead. Lifecycle and Quick Settings refreshes remain list-only. A new
+  scan immediately discards the superseded token/results, passive refreshes no
+  longer clear a pending operation's busy state, and only the selected discovery
+  row shows setup progress.
+- The reviewed Pi route and rollback ordering remains: scan has no pairing,
+  trust, connection, desire, or configuration path; pair/select cannot write
+  the durable or runtime choice before the exact-controller A2DP node exists;
+  failure restores the exact prior config/desire before its final response; the
+  old output link is never explicitly disconnected. Wrong-controller-only bonds
+  remain visible as `needs_setup` but unavailable, nonroutable, and refused by
+  ordinary `set`. The watchdog resolves only the permanent adapter address and
+  skips a locked speaker page without spending its retry budget; call recovery
+  remains independent.
+
+Exact review validation:
+
+- GNU Make is not installed in this Windows environment, so `make test-py`
+  could not be invoked as a wrapper. Its exact Python constituents were run
+  using
+  `B:\Desktop\W\Hardware_write\rpi_lark_mic_bridge\.venv\Scripts\python.exe`:
+  bridged pytest **138 passed, 9 subtests passed**; rig boot unittest **10
+  passed**; Pi power-loss unittest **15 passed, 1 skipped**; rig power-loss
+  unittest **2 passed**; scripts power-loss unittest **2 passed**.
+- Ruff on the five reviewed Pi modules and six focused test modules: **all
+  checks passed**. Mypy 2.3.1 with `--follow-imports=skip` on `btadapters.py`,
+  `output_remote.py`, `outputs.py`, `bridgectl.py`, and `bt_watchdog.py`:
+  **success, no issues in 5 source files**.
+- Android
+  `gradlew.bat testDebugUnitTest assembleDebug --no-daemon`: **BUILD
+  SUCCESSFUL**, 42 actionable tasks; `BridgeOutputProtocolTest`: **7 tests, 0
+  failures/errors/skips**. A separate parsed-manifest assertion confirmed
+  `BLUETOOTH_SCAN`, `ACCESS_FINE_LOCATION`, and `ACCESS_COARSE_LOCATION` are
+  absent and `BLUETOOTH_CONNECT` is present.
+
+Review verdict: **host implementation approved for a controlled,
+hardware-authorized acceptance deployment**. **Production deployment remains a
+no-go** until the open Hardware and Pixel acceptance criteria below pass on the
+actual Pi, Pixel, BlueZ 5.82 controller split, and representative Just Works
+speaker, including live cancellation timing and reboot/power-cut persistence.
+
 ## Decision-complete implementation contract
 
 ### Product boundary and controller identity
