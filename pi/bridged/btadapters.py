@@ -855,7 +855,10 @@ def pair_device(
         # BlueZ restricts temporary-agent registration on this appliance's system
         # bus.  The user service has a non-interactive sudo grant; use it only for
         # this short-lived NoInputNoOutput agent, which is torn down in finally.
-        agent = _LineProcess(["sudo", "-n", "bluetoothctl", "--agent", "NoInputNoOutput"])
+        # Do not also pass bluetoothctl's --agent option: that registers at startup,
+        # so the explicit `agent NoInputNoOutput` command below toggles it straight
+        # back off before Pair can run.
+        agent = _LineProcess(["sudo", "-n", "bluetoothctl"])
         agent.send(f"select {adapter.address}")
         agent.send("agent NoInputNoOutput")
         agent.send("default-agent")
