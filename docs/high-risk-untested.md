@@ -1,6 +1,6 @@
 # High-risk untested areas
 
-- **Owner / date:** Claude / 2026-08-23
+- **Owner / date:** Claude + Codex / 2026-08-24
 - **Scope:** the in-car call bridge as deployed on the hardened (read-only root) card
 
 A consolidated list of what could still bite, ranked by risk to the in-car use case rather than by
@@ -19,12 +19,13 @@ latent bug here is invisible until the exact moment it is needed.
 
 ### 1. The A/B config slot fallback has never executed
 
-`config_slot: a` has been valid on every single boot ever observed, so the fallback to slot B has
-**never run outside host tests**. The entire point of the alternating checksummed slots is to
-survive a corrupted primary, and that path is unproven on real storage.
+The Mode 1 startup choice has now been written to slot B and validated by `lark_state.py status`,
+including stable speaker/controller identities and the existing AEC settings. But the Pi has not
+booted from that new slot, and choosing the older valid slot after corruption has **never run
+outside host tests**. Both the new default and the fallback path remain unproven at boot.
 
-*Test:* deliberately corrupt slot A, boot, assert the guard selects B and the appliance still takes
-a call. Cheap and entirely automatable — no operator needed.
+*Test:* first boot and assert slot B materializes Mode 1. Then deliberately corrupt the newest slot,
+boot, assert the guard selects the older valid slot and the appliance still takes a call.
 
 ### 2. A power cut during early boot
 
@@ -64,6 +65,11 @@ user hears audio from the phone and has no reason to connect that to anything on
 `bluetoothctl connect` restores the ACL; restoring SCO is not automatable from the Pi, because
 Android has already decided where the call belongs.
 
+The AudioInputRouter app is now installed on the Pixel and its one-action LarkBridge route,
+background operation, process restart and interrupted-mute recovery pass without a call. That is a
+promising mitigation, not closure: its re-assertion has not yet been exercised against Discord
+after a live audio-stack restart.
+
 Risk in a car: any crash or restart of the audio stack mid-drive silently removes the bridge from
 the call. Arguably not the supervisor's defect, but it is the product's.
 
@@ -83,17 +89,18 @@ attributed to the nearest available cause. A wedge in a car means no call until 
 
 ## Tier 3 — gaps in what the reconnect work covers
 
-### 8. The reconnect budget can exhaust while the Pi stays powered
+### 8. A reconnect budget can exhaust while the Pi stays powered
 
-`RECONNECT_ATTEMPTS=3`, and the budget resets **only on a successful connection**. In a car this is
-normally fine, because the Pi power-cycles with the engine and a fresh boot resets the budget.
+The phone has 3 attempts and the speaker has a separate 5-attempt budget; each resets **only on a
+successful connection**. In a car this is normally fine, because the Pi power-cycles with the
+engine and a fresh boot resets the budgets.
 
 **But if the Pi is on power that stays live with the engine off**, a phone that leaves for the day
 exhausts three attempts and the Pi then never tries again — so the phone will not reconnect when the
 driver returns, and there is no SSH to intervene. Untested, and the failure is silent.
 
-*Test:* leave the Pi powered, take the phone out of range past the budget, return, and see whether
-the link is re-established.
+*Test:* leave the Pi powered, take each peer out of range past its budget, return, and see whether
+both links are re-established without intervention.
 
 ### 9. Intentional-versus-unintentional disconnects are not distinguished
 
@@ -103,26 +110,36 @@ currently tell "drove out of range" from "user chose another device".
 
 ---
 
+### 10. Mode 1 AEC and speaker return are not yet repeatable results
+
+The first real-call AEC measurement passed at **13.26 dB** and the operator heard clean playback,
+but the corrected synthetic pair measured **7.88 dB** and **0.01 dB**. Before a third trial, the
+Boombox dropped A2DP; acoustic preflight detected no sound and correctly stopped the series. A
+single good call plus a contradictory pair is not a shippable distribution.
+
+*Test:* repeat real-call AEC captures and complete the speaker out-of-range/return sequence, always
+gating each trial on sound measured back at the Lark.
+
 ## Tier 4 — durability and provenance
 
-### 10. Cumulative power cuts
+### 11. Cumulative power cuts
 
 **n=2.** Two cuts say nothing about drift over dozens of engine cycles, which is exactly what a car
 does. Pairing survival, slot integrity and filesystem health have only been checked across two
 events.
 
-### 11. Brownouts and rapid cycling
+### 12. Brownouts and rapid cycling
 
 Both cuts were clean ~10 s outages. A sagging supply or a fast off/on — the realistic behaviour of a
 car's electrical system on cranking — is untested and is a harder case than a clean cut.
 
-### 12. A clean re-conversion has never been run end to end
+### 13. A clean re-conversion has never been run end to end
 
 E14 records that fixes 1-4 were applied to the card's lower filesystem **by hand as well as to the
 scripts**. So the current card is correct, but nobody has proven the fixed scripts alone reproduce
 it. This matters the moment a second unit is built, or this card is ever re-imaged.
 
-### 13. The BlueZ bind-mount ordering has had no stress
+### 14. The BlueZ bind-mount ordering has had no stress
 
 The `x-systemd.requires-mounts-for` entry works, but no reboot-ordering stress was applied. If it
 ever loses the race, pairing is not where BlueZ expects it at start.

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import subprocess
+import tempfile
+import tomllib
 import unittest
 from argparse import Namespace
+from pathlib import Path
 from unittest import mock
 
 import bridgectl
@@ -113,6 +117,118 @@ class SelectionSafetyTests(unittest.TestCase):
         ):
             self.assertEqual(bridgectl.do_set(args), 1)
         write_desire.assert_not_called()
+
+    def test_failed_startup_commit_does_not_change_the_live_selection(self) -> None:
+        status = {
+            "call": {"hfp_nodes_present": False},
+            "config_path": "/tmp/bridge.toml",
+            "output": {"candidates": [WIRED]},
+        }
+        args = Namespace(
+            selector="wired",
+            connect=True,
+            force=False,
+            chime=False,
+            remember=True,
+        )
+        with (
+            mock.patch.object(bridgectl, "read_status", return_value=status),
+            mock.patch.object(
+                bridgectl,
+                "remember_startup_output",
+                return_value=(False, "slot unavailable"),
+            ),
+            mock.patch.object(bridgectl.supervisor, "write_desire") as write_desire,
+        ):
+            self.assertEqual(bridgectl.do_set(args), 1)
+        write_desire.assert_not_called()
+
+
+class StartupConfigTests(unittest.TestCase):
+    BASE = """# operator comment
+[audio.aec]
+enabled = true
+node_latency_frames = 1920
+"""
+
+    def test_bluetooth_default_preserves_audio_and_uses_stable_adapter_address(self) -> None:
+        candidate = bridgectl.startup_config_for(BOOMBOX, self.BASE)
+        document = tomllib.loads(candidate)
+
+        self.assertTrue(document["audio"]["aec"]["enabled"])
+        self.assertEqual(document["audio"]["aec"]["node_latency_frames"], 1920)
+        self.assertEqual(document["bridge"]["mode"], "bluetooth")
+        self.assertTrue(document["bridge"]["fallback_to_wired"])
+        self.assertEqual(document["devices"]["output"]["id"], BOOMBOX["id"])
+        self.assertEqual(document["devices"]["output"]["address"], BOOMBOX["address"])
+        self.assertEqual(
+            document["devices"]["output"]["adapter"],
+            BOOMBOX["adapter_address"],
+        )
+        self.assertTrue(document["devices"]["output"]["reconnect"])
+        self.assertIn("# operator comment", candidate)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bridge.toml"
+            path.write_text(candidate, encoding="utf-8")
+            settings = bridgectl.supervisor.load_settings(path)
+        self.assertEqual(settings.mode, "bluetooth")
+        self.assertEqual(settings.desired_output, BOOMBOX["id"])
+        self.assertEqual(settings.speaker_adapter, BOOMBOX["adapter_address"])
+        self.assertTrue(settings.aec.enabled)
+
+    def test_wired_default_removes_stale_speaker_identity(self) -> None:
+        current = bridgectl.startup_config_for(BOOMBOX, self.BASE)
+        candidate = bridgectl.startup_config_for(WIRED, current)
+        document = tomllib.loads(candidate)
+        output = document["devices"]["output"]
+
+        self.assertEqual(document["bridge"]["mode"], "bluetooth-wired")
+        self.assertEqual(output, {"id": WIRED["id"]})
+
+    def test_missing_permanent_adapter_address_is_refused(self) -> None:
+        with self.assertRaisesRegex(ValueError, "controller addresses"):
+            bridgectl.startup_config_for(
+                dict(BOOMBOX, adapter_address=None),
+                self.BASE,
+            )
+
+    def test_commit_uses_the_existing_ab_slot_writer(self) -> None:
+        captured: dict[str, str] = {}
+
+        def commit(command, **_kwargs):
+            source = Path(command[-1])
+            captured["candidate"] = source.read_text(encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, stdout="b\n", stderr="")
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            config = base / "bridge.toml"
+            config.write_text(self.BASE, encoding="utf-8")
+            with (
+                mock.patch.object(
+                    bridgectl.supervisor,
+                    "default_status_path",
+                    return_value=base / "runtime" / "bridge-status.json",
+                ),
+                mock.patch.object(bridgectl.subprocess, "run", side_effect=commit) as run,
+            ):
+                ok, detail = bridgectl.remember_startup_output(
+                    BOOMBOX,
+                    config,
+                    tool_path=Path("/installed/lark_state.py"),
+                )
+
+        self.assertTrue(ok)
+        self.assertIn("slot b", detail)
+        self.assertEqual(
+            tomllib.loads(captured["candidate"])["devices"]["output"]["id"],
+            BOOMBOX["id"],
+        )
+        command = run.call_args.args[0]
+        self.assertEqual(command[:5], [
+            "sudo", "-n", "python3", str(Path("/installed/lark_state.py")), "config-write"
+        ])
 
 
 if __name__ == "__main__":

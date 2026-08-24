@@ -126,10 +126,25 @@ pi_sync() {
 # ---------------------------------------------------------------- phone access
 
 adb_bin() {
-  local local_adb="$RIG_ROOT/adb/platform-tools/adb.exe"
+  local local_adb="$RIG_ROOT/adb/platform-tools/adb.exe" sdk_root="" sdk_adb=""
   if [ -x "$local_adb" ]; then printf '%s\n' "$local_adb"
   elif command -v adb >/dev/null 2>&1; then command -v adb
-  else return 1; fi
+  else
+    # Android Studio installs platform-tools outside PATH by default on Windows. The
+    # control host already has a complete SDK, so requiring a second private download
+    # made `rig phone-state` report "adb not installed" while the Pixel was attached and
+    # Android builds worked. Prefer an explicit SDK root, then the standard local-app-data
+    # location. cygpath is part of the Git Bash runtime this rig already requires.
+    if [ -n "${ANDROID_SDK_ROOT:-}" ]; then
+      sdk_root="$ANDROID_SDK_ROOT"
+    elif [ -n "${ANDROID_HOME:-}" ]; then
+      sdk_root="$ANDROID_HOME"
+    elif [ -n "${LOCALAPPDATA:-}" ] && command -v cygpath >/dev/null 2>&1; then
+      sdk_root="$(cygpath -u "$LOCALAPPDATA")/Android/Sdk"
+    fi
+    sdk_adb="$sdk_root/platform-tools/adb.exe"
+    [ -n "$sdk_root" ] && [ -x "$sdk_adb" ] && printf '%s\n' "$sdk_adb" || return 1
+  fi
 }
 
 phone() {

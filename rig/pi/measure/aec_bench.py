@@ -142,6 +142,25 @@ def effective_node_latency(override: int | None, configured: int | None) -> int 
     return configured if override is None else override
 
 
+def effective_output(module, configured: str, explicit: str | None) -> str:
+    """Measure the same selected output that the acoustic preflight just verified.
+
+    This used to fall back unconditionally to ``settings.wired_output``. Once Mode 1
+    added a runtime Bluetooth selection, that made the harness preflight the Boombox and
+    then benchmark the unplugged AUX jack -- a convincing-looking false AEC failure.
+    An explicit instrument target still wins; a missing or corrupt status file retains
+    the legacy wired fallback.
+    """
+    if explicit:
+        return explicit
+    try:
+        status = json.loads(module.default_status_path().read_text(encoding="utf-8"))
+        selected = ((status.get("output") or {}).get("chosen") or {}).get("node")
+    except (OSError, json.JSONDecodeError):
+        selected = None
+    return str(selected) if selected else configured
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
@@ -203,9 +222,9 @@ def main() -> int:
     if module.AEC_SOURCE in nodes or module.AEC_SINK in nodes:
         raise SystemExit("AEC nodes already exist; refusing a second instance")
     lark = module.find_lark(nodes, settings)
-    output_node = args.output or settings.wired_output
+    output_node = effective_output(module, settings.wired_output, args.output)
     if lark is None or output_node not in nodes:
-        raise SystemExit("Lark or wired output is absent")
+        raise SystemExit("Lark or selected output is absent")
     wired_volume, wired_muted = output_volume(output_node)
     if wired_muted:
         raise SystemExit("output is muted")
