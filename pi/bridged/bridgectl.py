@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import struct
 import subprocess
 import sys
@@ -391,6 +392,7 @@ def remember_startup_output(
     runtime = supervisor.default_status_path().parent
     runtime.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None
+    active_temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
             "w",
@@ -402,16 +404,27 @@ def remember_startup_output(
         ) as handle:
             handle.write(candidate)
             temporary = Path(handle.name)
+
+        # Prepare the live mirror before committing the A/B slot. After config-write returns,
+        # only one same-filesystem rename remains; this keeps the verifier and any later
+        # supervisor restart aligned with the slot that the next boot will restore.
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=config_path.parent,
+            prefix=f".{config_path.name}.",
+            suffix=".new",
+            delete=False,
+        ) as handle:
+            handle.write(candidate)
+            handle.flush()
+            os.fsync(handle.fileno())
+            active_temporary = Path(handle.name)
+        active_temporary.chmod(config_path.stat().st_mode & 0o777)
+
+        state_tool = str(tool_path or state_tool_path())
         result = subprocess.run(
-            [
-                "sudo",
-                "-n",
-                "python3",
-                str(tool_path or state_tool_path()),
-                "config-write",
-                "--source",
-                str(temporary),
-            ],
+            ["sudo", "-n", "python3", state_tool, "config-write", "--source", str(temporary)],
             capture_output=True,
             text=True,
             timeout=20,
@@ -421,12 +434,34 @@ def remember_startup_output(
             detail = (result.stderr or result.stdout).strip() or f"exit {result.returncode}"
             return False, f"persistent configuration rejected: {detail}"
         slot = result.stdout.strip()
+        try:
+            os.replace(active_temporary, config_path)
+        except OSError as exc:
+            # config-write has already advanced the durable pointer. Restore the old active
+            # file into a fresh slot so a failed live rename cannot create a split-brain boot.
+            rollback = subprocess.run(
+                ["sudo", "-n", "python3", state_tool, "config-write", "--source", str(config_path)],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            if rollback.returncode == 0:
+                return False, f"active configuration update failed and was rolled back: {exc}"
+            detail = (rollback.stderr or rollback.stdout).strip() or f"exit {rollback.returncode}"
+            return False, (
+                f"choice reached slot {slot or '?'} but the active mirror failed: {exc}; "
+                f"rollback also failed: {detail}"
+            )
+        active_temporary = None
         return True, f"saved in recovery-safe configuration slot {slot or '?'}"
     except (OSError, subprocess.SubprocessError) as exc:
         return False, f"persistent configuration failed: {exc}"
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+        if active_temporary is not None:
+            active_temporary.unlink(missing_ok=True)
 
 
 def do_set(args: argparse.Namespace) -> int:

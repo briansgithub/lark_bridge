@@ -219,8 +219,11 @@ node_latency_frames = 1920
                     tool_path=Path("/installed/lark_state.py"),
                 )
 
+            active = tomllib.loads(config.read_text(encoding="utf-8"))
+
         self.assertTrue(ok)
         self.assertIn("slot b", detail)
+        self.assertEqual(active["devices"]["output"]["id"], BOOMBOX["id"])
         self.assertEqual(
             tomllib.loads(captured["candidate"])["devices"]["output"]["id"],
             BOOMBOX["id"],
@@ -229,6 +232,39 @@ node_latency_frames = 1920
         self.assertEqual(command[:5], [
             "sudo", "-n", "python3", str(Path("/installed/lark_state.py")), "config-write"
         ])
+
+    def test_failed_live_mirror_rolls_the_persistent_pointer_back(self) -> None:
+        commits = []
+
+        def commit(command, **_kwargs):
+            commits.append(command)
+            return subprocess.CompletedProcess(command, 0, stdout="b\n", stderr="")
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            config = base / "bridge.toml"
+            config.write_text(self.BASE, encoding="utf-8")
+            with (
+                mock.patch.object(
+                    bridgectl.supervisor,
+                    "default_status_path",
+                    return_value=base / "runtime" / "bridge-status.json",
+                ),
+                mock.patch.object(bridgectl.subprocess, "run", side_effect=commit),
+                mock.patch.object(bridgectl.os, "replace", side_effect=OSError("rename refused")),
+            ):
+                ok, detail = bridgectl.remember_startup_output(
+                    BOOMBOX,
+                    config,
+                    tool_path=Path("/installed/lark_state.py"),
+                )
+
+            self.assertEqual(config.read_text(encoding="utf-8"), self.BASE)
+
+        self.assertFalse(ok)
+        self.assertIn("rolled back", detail)
+        self.assertEqual(len(commits), 2)
+        self.assertEqual(commits[1][-1], str(config))
 
 
 if __name__ == "__main__":
