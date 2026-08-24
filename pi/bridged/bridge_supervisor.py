@@ -47,6 +47,13 @@ DEFAULT_LARK_COMPONENT = "USB3547:0407"
 DEFAULT_WIRED_OUT = "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
 DEFAULT_PHONE_MAC = "5C:33:7B:CB:BF:C5"
 
+# Sentinel for tick()'s output argument, distinct from None. None means "nothing is
+# playable"; this means "the caller does not participate in output selection, apply the
+# pre-selection rule". Overloading None for both meanings was ambiguous enough to produce a
+# wrong test within minutes of being written, so the two cases are now separate values. A NUL
+# byte cannot occur in a PipeWire node name, so this can never collide with a real one.
+DERIVE_OUTPUT = chr(0) + "derive-output"
+
 AEC_SOURCE = "bridge.aec.source"
 AEC_SINK = "bridge.aec.sink"
 AEC_CAPTURE = "echo-cancel-capture"
@@ -95,6 +102,17 @@ class Settings:
     phone_mac: str = DEFAULT_PHONE_MAC
     status_path: Path = Path("/tmp/bridge-status.json")
     config_path: Path | None = None
+    # Where call audio goes. `wired_output` above remains the Mode 1W default and the
+    # terminal fallback; these three describe how a different output can be chosen.
+    #
+    # `desired_output` is only the BOOT-TIME default. Runtime selection cannot live in
+    # config: load_settings() runs exactly once in main() and there is no reload path, so a
+    # config-driven selector would need a restart, and restarting the supervisor during
+    # active SCO is the suspected trigger for the E08 controller wedge.
+    mode: str = "bluetooth-wired"
+    desired_output: str | None = None
+    speaker_adapter: str | None = None
+    fallback_to_wired: bool = True
 
     @property
     def hfp_sink(self) -> str:
@@ -133,6 +151,77 @@ def toml_bool(data: dict[str, Any], key: str, default: bool) -> bool:
 
 def default_config_path() -> Path:
     return Path(__file__).resolve().parents[2] / "config" / "bridge.toml"
+
+
+def desire_path() -> Path:
+    """Where a front-end writes the user's chosen output.
+
+    A FILE, not a socket, and that is a deliberate simplification. The supervisor's unit is
+    sandboxed with ProtectSystem=strict and ReadWritePaths=%t, so $XDG_RUNTIME_DIR is the one
+    place it may touch; it already polls every POLL_SECONDS, so a file gives a bounded ~2 s
+    latency with no server loop, no protocol version to get wrong and no second address
+    family. Any front-end -- a CLI over SSH, the phone bridge -- writes this one file.
+
+    It lives on tmpfs on purpose. The DURABLE default is config's [devices.output]; this is
+    the runtime override, so selecting an output costs zero LARKDATA writes and cannot
+    threaten the ~65 KB/120 s idle-write bar E14 set.
+    """
+    return default_status_path().parent / "bridge-output.json"
+
+
+def read_desire(path: Path | None = None) -> str | None:
+    """The currently requested output id, or None to mean 'use the configured default'."""
+    target = path or desire_path()
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    value = data.get("desired_id")
+    return str(value) if value else None
+
+
+def write_desire(output_id: str | None, source: str = "unknown", path: Path | None = None) -> None:
+    """Record a selection. Atomic, so a reader never sees a half-written file."""
+    target = path or desire_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"desired_id": output_id, "source": source, "timestamp": time.time()}
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=target.parent, prefix=".bridge-output-", delete=False
+    ) as handle:
+        json.dump(payload, handle, indent=2)
+        handle.write(chr(10))
+        temporary = Path(handle.name)
+    os.replace(temporary, target)
+
+
+def resolve_output(nodes: NodeMap, settings: Settings, desired_id: str | None):
+    """Decide which node call audio should go to. Returns (node_name, report_or_None).
+
+    The import is deliberately lazy. rig/pi/measure/aec_bench.py loads this file by path with
+    importlib, so pi/bridged is NOT on sys.path in that process; a module-level `import
+    outputs` would break the AEC bench. When outputs is unavailable the behaviour collapses
+    to exactly what shipped before -- the configured wired output if present, else nothing.
+    """
+    try:
+        import outputs as outputs_module
+    except ImportError:
+        node = settings.wired_output if settings.wired_output in nodes else None
+        return node, None
+
+    candidates = outputs_module.candidates(
+        nodes, speaker_adapter=settings.speaker_adapter
+    )
+    resolution = outputs_module.resolve(
+        desired_id or settings.desired_output,
+        candidates,
+        fallback=settings.fallback_to_wired,
+        prefer_speaker=settings.mode == "bluetooth",
+    )
+    report = {
+        "candidates": [c.as_dict() for c in candidates],
+        **resolution.as_dict(),
+    }
+    return resolution.node, report
 
 
 def default_status_path() -> Path:
@@ -183,6 +272,22 @@ def load_settings(path: Path | None = None) -> Settings:
     if not phone or phone == "AA:BB:CC:DD:EE:FF":
         phone = DEFAULT_PHONE_MAC
 
+    bridge_data = data.get("bridge") or {}
+    mode = str(bridge_data.get("mode", "bluetooth-wired"))
+    fallback_to_wired = toml_bool(bridge_data, "fallback_to_wired", True)
+
+    # [devices.output] accepts either an explicit output id ("wired:<node>" / "a2dp:<MAC>")
+    # or the plain `address` the example file has always documented. The example's
+    # placeholder is treated as unset so a copied-but-unedited config does not point the
+    # bridge at a MAC that does not exist.
+    output_data = (data.get("devices") or {}).get("output") or {}
+    desired_output = str(output_data.get("id", "") or "").strip() or None
+    if desired_output is None:
+        address = str(output_data.get("address", "") or "").strip().upper()
+        if address and address != "11:22:33:44:55:66":
+            desired_output = f"a2dp:{address}"
+    speaker_adapter = str(output_data.get("adapter", "") or "").strip() or None
+
     status_value = os.environ.get("BRIDGE_STATUS")
     return Settings(
         aec=AecSettings(
@@ -205,6 +310,10 @@ def load_settings(path: Path | None = None) -> Settings:
         phone_mac=os.environ.get("BRIDGE_PHONE_MAC", phone).upper(),
         status_path=Path(status_value) if status_value else default_status_path(),
         config_path=config_path,
+        mode=os.environ.get("BRIDGE_MODE", mode),
+        desired_output=os.environ.get("BRIDGE_OUTPUT", desired_output) or None,
+        speaker_adapter=os.environ.get("BRIDGE_SPEAKER_ADAPTER", speaker_adapter) or None,
+        fallback_to_wired=fallback_to_wired,
     )
 
 
@@ -522,6 +631,14 @@ class CallGraph:
         self.verified = False
         self.last_failure: str | None = None
         self.unexpected_links: LinkList = []
+        # The output node in force for this generation. None until the first tick; callers
+        # that predate output selection (the test suite, and any tick() without an explicit
+        # node) fall back to the configured wired output via output_target.
+        self.output_node: str | None = None
+
+    @property
+    def output_target(self) -> str:
+        return self.output_node or self.settings.wired_output
 
     def teardown(self, reason: str) -> None:
         if self.aec_host is not None:
@@ -569,14 +686,14 @@ class CallGraph:
             self.aec_host = NativeAecHost(
                 self.settings.aec,
                 lark,
-                self.settings.wired_output,
+                self.output_target,
                 latency_frames=self.settings.aec.node_latency_frames,
                 play_delay_frames=self.settings.aec.play_delay_frames,
             )
             self.aec_host.start()
             return
         self.callout = Loopback(
-            "bridge.callout", self.settings.hfp_source, self.settings.wired_output, 2
+            "bridge.callout", self.settings.hfp_source, self.output_target, 2
         )
         self.microphone = Loopback("bridge.mic", lark, self.settings.hfp_sink, 1)
         self.callout.start()
@@ -617,7 +734,7 @@ class CallGraph:
         if self.settings.aec.enabled:
             if (lark, AEC_CAPTURE) not in links:
                 return False
-            if (AEC_PLAYBACK, self.settings.wired_output) not in links:
+            if (AEC_PLAYBACK, self.output_target) not in links:
                 return False
         self.unexpected_links = unexpected_call_links(
             links,
@@ -630,17 +747,42 @@ class CallGraph:
         )
         return not self.unexpected_links
 
-    def tick(self, nodes: NodeMap, links: LinkList, lark: str | None) -> None:
+    def tick(
+        self,
+        nodes: NodeMap,
+        links: LinkList,
+        lark: str | None,
+        output_node: str | None = DERIVE_OUTPUT,
+    ) -> None:
         call_up = self.settings.hfp_sink in nodes and self.settings.hfp_source in nodes
-        output_up = self.settings.wired_output in nodes
-        signature = (call_up, lark, output_up)
+
+        # DERIVE_OUTPUT means the caller does not do output selection -- the test suite and
+        # any pre-selection caller -- so fall back to exactly the old rule. An explicit None
+        # means the resolver looked and found nothing playable, which is a different thing.
+        resolved = (
+            (self.settings.wired_output if self.settings.wired_output in nodes else None)
+            if output_node == DERIVE_OUTPUT
+            else output_node
+        )
+        self.output_node = resolved
+
+        # IDENTITY, not presence. This used to be `output_up`, a bool, which was harmless
+        # while there was exactly one possible output and it was always there. With a
+        # selectable output the bool is actively wrong: switching from the wired jack to a
+        # speaker leaves it True both before and after, so the signature would not change,
+        # so update_signature() would not rebuild, so the switch would silently do nothing
+        # while every status field claimed success.
+        #
+        # Carrying the node name also collapses the old presence test into the same value:
+        # None means nothing is playable, which is what `not output_up` used to mean.
+        signature = (call_up, lark, resolved)
         self.update_signature(signature)
 
         if not call_up:
             self.teardown("call down")
             self.state = State.CALL_DOWN
             return
-        if lark is None or not output_up:
+        if lark is None or resolved is None:
             self.teardown("required physical endpoint absent")
             self.state = State.DISCOVERING
             return
@@ -730,7 +872,7 @@ class CallGraph:
                 ]
             )
         if self.aec_host is not None and lark is not None:
-            expected.extend([(lark, AEC_CAPTURE), (AEC_PLAYBACK, self.settings.wired_output)])
+            expected.extend([(lark, AEC_CAPTURE), (AEC_PLAYBACK, self.output_target)])
         missing = [pair for pair in expected if pair not in links]
         return {
             "timestamp": time.time(),
@@ -742,7 +884,7 @@ class CallGraph:
                 "hfp_source": self.settings.hfp_source if call_up else None,
                 "hfp_sink": self.settings.hfp_sink if call_up else None,
                 "wired_output": (
-                    self.settings.wired_output if self.settings.wired_output in nodes else None
+                    self.output_target if self.output_target in nodes else None
                 ),
             },
             "aec": {
@@ -863,6 +1005,8 @@ def main() -> int:
 
     last_metrics = 0.0
     metrics: dict[str, Any] = {}
+    output_report: dict[str, Any] | None = None
+    last_output: str | None = None
     while not stopping:
         nodes = pw_nodes()
         links = pw_links()
@@ -872,7 +1016,16 @@ def main() -> int:
             links = links or []
         else:
             lark = find_lark(nodes, settings)
-            graph.tick(nodes, links, lark)
+            desired = read_desire()
+            output_node, output_report = resolve_output(nodes, settings, desired)
+            if output_node != last_output:
+                log.info(
+                    "output resolved to %s (desired %s)",
+                    output_node,
+                    desired or settings.desired_output or "<unset>",
+                )
+                last_output = output_node
+            graph.tick(nodes, links, lark, output_node)
 
         now = time.monotonic()
         if now - last_metrics >= 10:
@@ -881,6 +1034,11 @@ def main() -> int:
         lark = find_lark(nodes, settings) if nodes else None
         status = graph.status(nodes, links, lark)
         status["system"] = metrics
+        # Publish the candidate list and the resolution so a front-end -- a CLI, the phone
+        # bridge -- can render a selector by reading one atomic file, with no socket and no
+        # privilege beyond reading $XDG_RUNTIME_DIR.
+        status["output"] = output_report or {}
+        status["mode"] = settings.mode
         try:
             write_status(settings.status_path, status)
         except OSError as exc:
