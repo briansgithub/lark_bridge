@@ -216,6 +216,26 @@ def recover() -> bool:
     return ok
 
 
+def attempt_recovery(
+    failures: int, last_recovery: float, backoff: float
+) -> tuple[int, float, float]:
+    """Run recovery and advance its bookkeeping only after an actual recovery.
+
+    ``bt-reset.sh`` begins with its own liveness probe.  A controller that answers that
+    one command between repeated watchdog failures returns without ``RECOVERED``.  That
+    is an inconclusive/no-op attempt, not a completed recovery: recording it as one would
+    suppress the next attempt behind an increased backoff while the call remains wedged.
+    """
+    if not recover():
+        log.warning("recovery made no change — keeping failure state for prompt retry")
+        return failures, last_recovery, backoff
+
+    if RECONNECT:
+        time.sleep(RECONNECT_DELAY)
+        reconnect_phone()
+    return 0, time.monotonic(), min(backoff * 2, BACKOFF_MAX)
+
+
 def phone_connected() -> bool:
     # Reads the Connected property of the phone's own D-Bus object. `bluetoothctl info`
     # resolved the MAC against whichever adapter bluetoothd last called default, which with
@@ -447,12 +467,9 @@ def main() -> int:
                         since, backoff,
                     )
                 else:
-                    if recover() and RECONNECT:
-                        time.sleep(RECONNECT_DELAY)
-                        reconnect_phone()
-                    last_recovery = time.monotonic()
-                    backoff = min(backoff * 2, BACKOFF_MAX)
-                    failures = 0
+                    failures, last_recovery, backoff = attempt_recovery(
+                        failures, last_recovery, backoff
+                    )
 
         time.sleep(PROBE_INTERVAL)
 
