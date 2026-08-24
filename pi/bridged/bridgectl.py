@@ -267,6 +267,28 @@ def do_set(args: argparse.Namespace) -> int:
     # case stays gated and only the cross-adapter case is allowed. This previously refused
     # unconditionally while the watchdog paged anyway -- two components disagreeing about one
     # safety question, which is worse than either answer alone.
+    # Trust hygiene runs on SELECTION, not only when a page is needed. An already-connected
+    # but untrusted speaker is precisely the churn case: BlueZ refuses its next incoming
+    # connection with `a2dp.c:auth_cb() Access denied`, so it drops and cannot come back. An
+    # earlier version pinned trust only inside the paging branch, which skipped the connected
+    # speaker that actually had the wrong flag.
+    speaker_adapter = None
+    if target["kind"] == "a2dp" and btadapters is not None and target.get("adapter"):
+        speaker_adapter = next(
+            (a for a in btadapters.adapters() if a.hci == target["adapter"]), None
+        )
+        if speaker_adapter is not None:
+            pin = btadapters.pin_to_adapter(target["address"], speaker_adapter)
+            if pin.changed:
+                print(f"trust: {', '.join(pin.changed)}", file=sys.stderr)
+            if not pin.ok:
+                print(
+                    f"cannot select {target['label']}: trust pinning failed: "
+                    f"{'; '.join(pin.failures)}",
+                    file=sys.stderr,
+                )
+                return 1
+
     needs_connect = target["kind"] == "a2dp" and not target["present"]
     shares_call_radio = bool(
         target.get("adapter") and target["adapter"] == _call_adapter(status)
@@ -284,12 +306,7 @@ def do_set(args: argparse.Namespace) -> int:
         elif btadapters is None:
             print("btadapters unavailable; recording the choice without connecting.", file=sys.stderr)
         else:
-            adapter = None
-            if target.get("adapter"):
-                adapter = next(
-                    (a for a in btadapters.adapters() if a.hci == target["adapter"]), None
-                )
-            ok, detail = btadapters.connect_profile(target["address"], adapter)
+            ok, detail = btadapters.connect_profile(target["address"], speaker_adapter)
             print(f"connect {target['label']}: {'ok' if ok else 'failed'} ({detail})", file=sys.stderr)
 
     supervisor.write_desire(target["id"], source="bridgectl")

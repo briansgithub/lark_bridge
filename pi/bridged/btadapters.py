@@ -70,6 +70,15 @@ class Adapter:
         return self.bus == "USB"
 
 
+@dataclass(frozen=True)
+class TrustPinResult:
+    """Outcome of making exactly one adapter authoritative for a device."""
+
+    ok: bool
+    changed: tuple[str, ...] = ()
+    failures: tuple[str, ...] = ()
+
+
 def _run(command: list[str], timeout: float = QUERY_TIMEOUT) -> tuple[int, str, str]:
     try:
         result = subprocess.run(
@@ -343,6 +352,93 @@ def set_alias(device_mac: str, alias: str, adapter: Adapter | None = None) -> tu
     if code == 0:
         return True, path
     return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
+
+
+def set_trusted(device_mac: str, trusted: bool, adapter: Adapter | None = None) -> tuple[bool, str]:
+    """Set Trusted on one bond. Reads first, so an unchanged value costs no write.
+
+    BlueZ persists Trusted into the bond's info file on LARKDATA, and E14 set an idle-write
+    bar of ~65 KB/120 s, so this must not be called unconditionally in a poll loop.
+    """
+    if adapter is not None:
+        path = path_for(adapter, device_mac)
+    else:
+        resolved = device_path(device_mac)
+        if resolved is None:
+            return False, f"no bond for {device_mac} on any adapter"
+        path = resolved
+    code, out, _ = _run(
+        ["busctl", "--system", "get-property", BLUEZ, path, "org.bluez.Device1", "Trusted"]
+    )
+    if code == 0 and out.strip().split()[-1:] == ["true" if trusted else "false"]:
+        return True, f"{path}: already {trusted}"
+    code, _, err = _run(
+        [
+            "busctl", "--system", "set-property", BLUEZ, path,
+            "org.bluez.Device1", "Trusted", "b", "true" if trusted else "false",
+        ]
+    )
+    if code == 0:
+        return True, path
+    return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
+
+
+def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
+    """Trust a device on ONE adapter and untrust it everywhere else.
+
+    Both halves are necessary and each was learned from a failure on the unit:
+
+      * TRUSTED on the owning adapter, because BlueZ refuses an untrusted device's incoming
+        connection -- logged as `a2dp.c:auth_cb() Access denied: org.bluez.Error.Rejected`.
+        Having untrusted the Boombox by hand while freeing an adapter, the speaker then
+        churned: it kept trying to connect and kept being rejected, which read as a flaky
+        speaker and silently voided three switch measurements.
+      * UNTRUSTED elsewhere, because a device bonded and trusted on both adapters bounces
+        between them -- measured on the iWorld -- and a speaker that bounces onto the radio
+        carrying the call is the exact contention E03 spent days on.
+
+    Idempotent, so it is safe to call whenever a speaker is selected.
+    """
+    tree = managed_objects()
+    suffix = "/dev_" + device_mac.strip().upper().replace(":", "_")
+    wanted = path_for(adapter, device_mac)
+    matches = [
+        (path, interfaces)
+        for path, interfaces in sorted(tree.items())
+        if path.endswith(suffix) and "org.bluez.Device1" in interfaces
+    ]
+    if wanted not in {path for path, _interfaces in matches}:
+        return TrustPinResult(
+            ok=False,
+            failures=(f"no bond for {device_mac} on {adapter.hci}",),
+        )
+
+    changed: list[str] = []
+    wanted_interfaces = next(interfaces for path, interfaces in matches if path == wanted)
+    if not bool(_device_property(wanted_interfaces, "Trusted")):
+        ok, detail = set_trusted(device_mac, True, adapter)
+        if not ok:
+            # Keep any trusted duplicate intact until the intended adapter is trustworthy.
+            # Otherwise one failed D-Bus write can leave the speaker trusted nowhere.
+            return TrustPinResult(ok=False, failures=(detail,))
+        changed.append(f"{adapter.hci}:trusted=True")
+
+    failures: list[str] = []
+    for path, interfaces in matches:
+        if path == wanted or not bool(_device_property(interfaces, "Trusted")):
+            continue
+        hci = path.split("/")[3]
+        other = Adapter(hci=hci, address="", bus="unknown", rfkill_index=None)
+        ok, detail = set_trusted(device_mac, False, other)
+        if ok:
+            changed.append(f"{hci}:trusted=False")
+        else:
+            failures.append(detail)
+    return TrustPinResult(
+        ok=not failures,
+        changed=tuple(changed),
+        failures=tuple(failures),
+    )
 
 
 def unblock(adapter: Adapter) -> bool:

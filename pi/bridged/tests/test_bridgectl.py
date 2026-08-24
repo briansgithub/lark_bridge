@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import unittest
+from argparse import Namespace
+from unittest import mock
 
 import bridgectl
+import btadapters
 
 
 def candidate(output_id: str, label: str, kind: str = "a2dp", present: bool = True) -> dict:
@@ -77,6 +80,27 @@ class StatusParsingTests(unittest.TestCase):
         self.assertTrue(bridgectl._call_is_up({"call": {"hfp_nodes_present": True}}))
         self.assertFalse(bridgectl._call_is_up({"call": {"hfp_nodes_present": False}}))
         self.assertFalse(bridgectl._call_is_up({}))
+
+
+class SelectionSafetyTests(unittest.TestCase):
+    def test_trust_failure_does_not_record_the_selection(self) -> None:
+        adapter = btadapters.Adapter("hci1", "A0:AD:9F:73:6C:24", "USB", 1)
+        failed = btadapters.TrustPinResult(False, failures=("D-Bus refused",))
+        status = {
+            "call": {"hfp_nodes_present": False},
+            "output": {"candidates": [BOOMBOX]},
+        }
+        args = Namespace(selector="boombox", connect=True, force=False, chime=False)
+        with (
+            mock.patch.object(bridgectl, "read_status", return_value=status),
+            mock.patch.object(bridgectl.btadapters, "adapters", return_value=[adapter]),
+            mock.patch.object(
+                bridgectl.btadapters, "pin_to_adapter", return_value=failed
+            ),
+            mock.patch.object(bridgectl.supervisor, "write_desire") as write_desire,
+        ):
+            self.assertEqual(bridgectl.do_set(args), 1)
+        write_desire.assert_not_called()
 
 
 if __name__ == "__main__":
