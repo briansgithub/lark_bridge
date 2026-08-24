@@ -124,9 +124,17 @@ downlink topology gaps were both **0.0 s**, the final graph was `ACTIVE`, and a 
 supervisor restart recovered the call graph. A post-reconnect acoustic preflight then confirmed
 actual Boombox playback at the Lark mic with a **31.88 dB** level margin and no clipping.
 
-This is strong hardware-topology evidence, but it is not yet the live-call acceptance result.
-Repeat the switch during a real Discord or phone call and verify the far end retains the uplink
-before closing the original finding.
+**Live-call acceptance now passes.** During a real Discord call, with a deterministic
+speech-shaped source sent from the far-end PC through Stereo Mix, the wired -> A2DP selection
+applied in **0.498 s**. At 50 ms sampling the observed uplink and downlink topology gaps were
+both **0.0 s**, and the graph remained `ACTIVE`.
+
+The simultaneous acoustic capture showed the far-end stimulus arriving at the Pi and appearing
+at the Lark only after the Bluetooth switch, with **0.83 correlation**. The aggregate AEC
+suppression was **13.26 dB**, no capture clipped, and the operator confirmed all three subjective
+acceptance points: the far end continued hearing the Lark through the switch, the Boombox played
+the far-end source after the switch, and playback was clean with no crackling. The original
+5.9-second uplink-loss finding is closed.
 
 ### 8. The Boombox drops its A2DP link when idle, and nothing re-establishes it
 
