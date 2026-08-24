@@ -37,11 +37,25 @@ supervisor and the root-scoped watchdog can share this module.
 
 from __future__ import annotations
 
+import importlib
 import json
+import os
+import queue
+import re
+import signal
 import subprocess
+import threading
 import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+try:  # Linux production path; the fallback keeps host tests importable on Windows.
+    fcntl: Any = importlib.import_module("fcntl")
+except ImportError:  # pragma: no cover - exercised by the Windows checkout
+    fcntl = None
 
 SYS_BLUETOOTH = Path("/sys/class/bluetooth")
 SYS_RFKILL = Path("/sys/class/rfkill")
@@ -52,6 +66,24 @@ BLUEZ = "org.bluez"
 CONNECT_TIMEOUT = 45.0
 QUERY_TIMEOUT = 15.0
 POWER_SETTLE_SECONDS = 3.0
+DISCOVERY_SECONDS = 12.0
+DISCOVERY_START_TIMEOUT = 5.0
+CHILD_EXIT_SECONDS = 2.0
+PAIR_TIMEOUT = 45.0
+SERVICE_RESOLUTION_TIMEOUT = 15.0
+MAC_RE = re.compile(r"^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$")
+DEVICE_PATH_RE = re.compile(
+    r"(?P<path>/org/bluez/hci[^/\s\"']+/dev_(?P<mac>(?:[0-9A-Fa-f]{2}_){5}[0-9A-Fa-f]{2}))"
+)
+RSSI_RE = re.compile(r"(?:RSSI|rssi)[^\r\n-]*(-?\d{1,3})")
+
+
+class BluetoothOperationError(RuntimeError):
+    """A bounded controller operation could not finish safely."""
+
+
+class BluetoothOperationCancelled(BluetoothOperationError):
+    """The owner disappeared or shutdown was requested."""
 
 
 @dataclass(frozen=True)
@@ -81,6 +113,124 @@ class TrustPinResult:
     failures: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class DiscoveryRun:
+    """Addresses observed inside one completed, controller-specific inquiry window."""
+
+    observations: dict[str, int | None]
+    started_monotonic: float
+    completed_monotonic: float
+
+
+@dataclass(frozen=True)
+class PairResult:
+    ok: bool
+    pin_requested: bool = False
+    detail: str = ""
+
+
+def canonical_mac(value: object) -> str | None:
+    """Return one canonical public Bluetooth address, rejecting loose/partial syntax."""
+    candidate = str(value).strip().upper() if isinstance(value, str) else ""
+    return candidate if MAC_RE.fullmatch(candidate) else None
+
+
+class DiscoveryAccumulator:
+    """Filter BlueZ monitor events to one adapter and one exact inquiry interval."""
+
+    def __init__(self, adapter_path: str, started: float, deadline: float) -> None:
+        self.adapter_path = adapter_path.rstrip("/")
+        self.started = started
+        self.deadline = deadline
+        self.observations: dict[str, int | None] = {}
+
+    def add(self, observed_at: float, line: str) -> None:
+        # The contract says after discovery started and before its deadline. Events queued
+        # before StartDiscovery must not become results merely because we read them later.
+        if observed_at <= self.started or observed_at >= self.deadline:
+            return
+        parsed = parse_discovery_event(line, self.adapter_path)
+        if parsed is None:
+            return
+        address, rssi = parsed
+        previous = self.observations.get(address)
+        if address not in self.observations or (
+            rssi is not None and (previous is None or rssi > previous)
+        ):
+            self.observations[address] = rssi
+
+
+def parse_discovery_event(line: str, adapter_path: str) -> tuple[str, int | None] | None:
+    """Parse one busctl monitor event without accepting another controller's object."""
+    match = DEVICE_PATH_RE.search(line)
+    if match is None or not match.group("path").startswith(adapter_path.rstrip("/") + "/dev_"):
+        return None
+    # A remembered object's Connected/Trusted churn is not an inquiry observation. BlueZ
+    # discovery either adds the object or changes discovery-fed identity/radio properties.
+    if "InterfacesAdded" not in line and not re.search(
+        r'\b(?:RSSI|Class|Name|Alias|UUIDs|AddressType|TxPower)\b', line
+    ):
+        return None
+    address = match.group("mac").replace("_", ":").upper()
+    if canonical_mac(address) is None:
+        return None
+    rssi_match = RSSI_RE.search(line)
+    rssi = int(rssi_match.group(1)) if rssi_match else None
+    if rssi is not None and not -127 <= rssi <= 20:
+        rssi = None
+    return address, rssi
+
+
+_host_radio_lock = threading.Lock()
+
+
+def default_radio_lock_path() -> Path:
+    """The shared user-runtime lock used by output control and the root watchdog."""
+    configured = os.environ.get("BRIDGE_OUTPUT_RADIO_LOCK")
+    if configured:
+        return Path(configured)
+    default_uid = str(os.getuid()) if hasattr(os, "getuid") else "1000"
+    uid = os.environ.get("BRIDGE_USER_UID", default_uid)
+    return Path(f"/run/user/{uid}/bridge-output-radio.lock")
+
+
+@contextmanager
+def speaker_radio_lock(
+    path: Path | None = None, *, blocking: bool = True
+) -> Iterator[bool]:
+    """Hold the cross-process speaker transaction lock, or yield False nonblocking."""
+    target = path or default_radio_lock_path()
+    if fcntl is None:
+        acquired = _host_radio_lock.acquire(blocking=blocking)
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                _host_radio_lock.release()
+        return
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = target.open("a+", encoding="utf-8")
+    except PermissionError:
+        # The root watchdog may create the 0644 inode before the uid-1000 service starts.
+        # flock only needs an open descriptor; read-only keeps both creation orders valid.
+        handle = target.open("r", encoding="utf-8")
+    acquired = False
+    try:
+        flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
+        try:
+            fcntl.flock(handle.fileno(), flags)
+            acquired = True
+        except BlockingIOError:
+            acquired = False
+        yield acquired
+    finally:
+        if acquired:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+
+
 def _run(command: list[str], timeout: float = QUERY_TIMEOUT) -> tuple[int, str, str]:
     try:
         result = subprocess.run(
@@ -91,6 +241,131 @@ def _run(command: list[str], timeout: float = QUERY_TIMEOUT) -> tuple[int, str, 
     except OSError as exc:
         return 127, "", str(exc)
     return result.returncode, result.stdout, result.stderr
+
+
+def _terminate_process(process: subprocess.Popen[str]) -> None:
+    """Bounded process-group cleanup shared by discovery, agents, and D-Bus calls."""
+    if process.poll() is not None:
+        process.wait()
+        return
+    try:
+        if os.name == "posix":
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)  # type: ignore[attr-defined]
+        else:  # pragma: no cover - production is Linux
+            process.terminate()
+        process.wait(timeout=CHILD_EXIT_SECONDS)
+        return
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    try:
+        if os.name == "posix":
+            os.killpg(  # type: ignore[attr-defined]
+                os.getpgid(process.pid),  # type: ignore[attr-defined]
+                signal.SIGKILL,  # type: ignore[attr-defined]
+            )
+        else:  # pragma: no cover - production is Linux
+            process.kill()
+        process.wait(timeout=CHILD_EXIT_SECONDS)
+    except (OSError, subprocess.TimeoutExpired):
+        process.kill()
+        process.wait()
+
+
+class _LineProcess:
+    """A long-lived child whose output is timestamped as it arrives."""
+
+    def __init__(self, command: list[str]) -> None:
+        self.process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            start_new_session=os.name == "posix",
+        )
+        self.lines: queue.Queue[tuple[float, str]] = queue.Queue()
+        self.reader = threading.Thread(target=self._read, daemon=True)
+        self.reader.start()
+
+    def _read(self) -> None:
+        assert self.process.stdout is not None
+        for line in self.process.stdout:
+            self.lines.put((time.monotonic(), line))
+
+    def send(self, command: str) -> None:
+        if self.process.poll() is not None or self.process.stdin is None:
+            raise BluetoothOperationError(f"child exited before {command!r}")
+        self.process.stdin.write(command.rstrip("\n") + "\n")
+        self.process.stdin.flush()
+
+    def get(self, timeout: float) -> tuple[float, str] | None:
+        try:
+            return self.lines.get(timeout=max(0.0, timeout))
+        except queue.Empty:
+            return None
+
+    def drain(self) -> list[tuple[float, str]]:
+        found: list[tuple[float, str]] = []
+        while True:
+            try:
+                found.append(self.lines.get_nowait())
+            except queue.Empty:
+                return found
+
+    def stop(self, *commands: str) -> None:
+        if self.process.poll() is None:
+            for command in commands:
+                try:
+                    self.send(command)
+                except (BluetoothOperationError, BrokenPipeError, OSError):
+                    break
+            try:
+                self.process.wait(timeout=CHILD_EXIT_SECONDS)
+            except subprocess.TimeoutExpired:
+                _terminate_process(self.process)
+        else:
+            self.process.wait()
+        self.reader.join(timeout=CHILD_EXIT_SECONDS)
+
+
+def _run_cancellable(
+    command: list[str],
+    *,
+    timeout: float,
+    cancelled: Callable[[], bool] | None = None,
+    heartbeat: Callable[[], None] | None = None,
+) -> tuple[int, str, str]:
+    """Run a short D-Bus helper with liveness callbacks and guaranteed group reap."""
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=os.name == "posix",
+        )
+    except OSError as exc:
+        return 127, "", str(exc)
+    deadline = time.monotonic() + timeout
+    next_heartbeat = time.monotonic()
+    try:
+        while process.poll() is None:
+            now = time.monotonic()
+            if cancelled is not None and cancelled():
+                raise BluetoothOperationCancelled("operation owner disconnected")
+            if now >= deadline:
+                _terminate_process(process)
+                return 124, "", "timed out"
+            if heartbeat is not None and now >= next_heartbeat:
+                heartbeat()
+                next_heartbeat = now + 1.0
+            time.sleep(min(0.1, max(0.0, deadline - now)))
+        stdout, stderr = process.communicate()
+        return int(process.returncode or 0), stdout, stderr
+    except BaseException:
+        _terminate_process(process)
+        raise
 
 
 def _bus_type(hci: str) -> str:
@@ -198,9 +473,135 @@ def _device_property(interfaces: dict, name: str):
     return ((interfaces.get("org.bluez.Device1") or {}).get(name) or {}).get("data")
 
 
+def device_properties(
+    adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
+) -> dict:
+    """The explicit Device1 property map on one already-resolved controller."""
+    tree = objects if objects is not None else managed_objects()
+    return (tree.get(path_for(adapter, device_mac)) or {}).get("org.bluez.Device1") or {}
+
+
+def device_property(
+    adapter: Adapter,
+    device_mac: str,
+    name: str,
+    objects: dict[str, dict] | None = None,
+):
+    return (device_properties(adapter, device_mac, objects).get(name) or {}).get("data")
+
+
+def paired_on(
+    adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
+) -> bool:
+    return bool(device_property(adapter, device_mac, "Paired", objects))
+
+
+def connected_on(
+    adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
+) -> bool:
+    return bool(device_property(adapter, device_mac, "Connected", objects))
+
+
 def path_for(adapter: Adapter, device_mac: str) -> str:
     """The path a bond WOULD have on this adapter. Does not assert that it exists."""
     return f"{adapter.path}/dev_" + device_mac.strip().upper().replace(":", "_")
+
+
+def discover_bredr(
+    adapter: Adapter,
+    *,
+    duration: float = DISCOVERY_SECONDS,
+    cancelled: Callable[[], bool] | None = None,
+    progress: Callable[[int, int], None] | None = None,
+) -> DiscoveryRun:
+    """Own one explicit-controller BR/EDR inquiry and return only in-window events.
+
+    ``bluetoothctl`` owns the BlueZ discovery client for the whole interval. A separate
+    ``busctl monitor`` child supplies object paths, which is what lets us reject events from
+    the call controller even when both controllers report the same public device address.
+    """
+    if duration != DISCOVERY_SECONDS:
+        raise ValueError("speaker discovery duration is fixed at 12 seconds")
+    if canonical_mac(adapter.address) != adapter.address:
+        raise BluetoothOperationError("speaker controller has no canonical permanent address")
+
+    owner: _LineProcess | None = None
+    monitor: _LineProcess | None = None
+    started: float | None = None
+    accumulator: DiscoveryAccumulator | None = None
+    try:
+        monitor = _LineProcess(["busctl", "--system", "--json=short", "monitor", BLUEZ])
+        owner = _LineProcess(["bluetoothctl"])
+        owner.send(f"select {adapter.address}")
+        select_deadline = time.monotonic() + DISCOVERY_START_TIMEOUT
+        selected = False
+        while time.monotonic() < select_deadline:
+            if cancelled is not None and cancelled():
+                raise BluetoothOperationCancelled("scan owner disconnected")
+            item = owner.get(min(0.1, select_deadline - time.monotonic()))
+            if item is None:
+                if owner.process.poll() is not None:
+                    break
+                continue
+            line = item[1]
+            if adapter.address in line and "Controller" in line and "not available" not in line:
+                selected = True
+                break
+            if "not available" in line or "Failed" in line:
+                break
+        if not selected:
+            raise BluetoothOperationError("configured speaker controller could not be selected")
+
+        owner.send("scan bredr")
+        start_deadline = time.monotonic() + DISCOVERY_START_TIMEOUT
+        while time.monotonic() < start_deadline:
+            if cancelled is not None and cancelled():
+                raise BluetoothOperationCancelled("scan owner disconnected")
+            item = owner.get(min(0.1, start_deadline - time.monotonic()))
+            if item is None:
+                if owner.process.poll() is not None:
+                    break
+                continue
+            line = item[1]
+            if "Discovery started" in line or (
+                adapter.address in line and "Discovering: yes" in line
+            ):
+                started = time.monotonic()
+                break
+            if "Failed to start discovery" in line or "not available" in line:
+                break
+        if started is None:
+            raise BluetoothOperationError("BR/EDR discovery did not start")
+
+        deadline = started + duration
+        accumulator = DiscoveryAccumulator(adapter.path, started, deadline)
+        if progress is not None:
+            progress(0, int(duration * 1000))
+        next_progress = started + 1.0
+        while True:
+            now = time.monotonic()
+            if now >= deadline:
+                break
+            if cancelled is not None and cancelled():
+                raise BluetoothOperationCancelled("scan owner disconnected")
+            if owner.process.poll() is not None or monitor.process.poll() is not None:
+                raise BluetoothOperationError("discovery helper exited early")
+            item = monitor.get(min(0.1, deadline - now))
+            if item is not None:
+                accumulator.add(item[0], item[1])
+            now = time.monotonic()
+            if progress is not None and now >= next_progress and now < deadline:
+                progress(min(int((now - started) * 1000), 11_999), int(duration * 1000))
+                next_progress += 1.0
+        completed = time.monotonic()
+        return DiscoveryRun(dict(accumulator.observations), started, completed)
+    finally:
+        # Stop only if this operation positively observed StartDiscovery success.
+        if owner is not None:
+            commands = ("scan off", "quit") if started is not None else ("quit",)
+            owner.stop(*commands)
+        if monitor is not None:
+            monitor.stop()
 
 
 def device_path(device_mac: str, objects: dict[str, dict] | None = None) -> str | None:
@@ -291,6 +692,9 @@ def connect_profile(
     adapter: Adapter | None = None,
     uuid: str = A2DP_SINK_UUID,
     timeout: float | None = None,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+    heartbeat: Callable[[], None] | None = None,
 ) -> tuple[bool, str]:
     """Bring up ONE profile, defaulting to A2DP Sink.
 
@@ -310,16 +714,163 @@ def connect_profile(
         if resolved is None:
             return False, f"no bond for {device_mac} on any adapter"
         path = resolved
+    command = [
+        "busctl", "--system", "call", BLUEZ, path,
+        "org.bluez.Device1", "ConnectProfile", "s", uuid,
+    ]
+    effective_timeout = timeout if timeout is not None else CONNECT_TIMEOUT
+    if cancelled is not None or heartbeat is not None:
+        code, _, err = _run_cancellable(
+            command,
+            timeout=effective_timeout,
+            cancelled=cancelled,
+            heartbeat=heartbeat,
+        )
+    else:
+        code, _, err = _run(command, timeout=effective_timeout)
+    if code == 0:
+        return True, path
+    return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
+
+
+def cancel_pairing(device_mac: str, adapter: Adapter) -> None:
+    """Best-effort cancellation on the one explicit object used by Pair."""
+    _run(
+        [
+            "busctl", "--system", "call", BLUEZ, path_for(adapter, device_mac),
+            "org.bluez.Device1", "CancelPairing",
+        ],
+        timeout=QUERY_TIMEOUT,
+    )
+
+
+def remove_device(device_mac: str, adapter: Adapter) -> tuple[bool, str]:
+    """Remove exactly one adapter-owned object; never address a duplicate implicitly."""
+    path = path_for(adapter, device_mac)
     code, _, err = _run(
         [
-            "busctl", "--system", "call", BLUEZ, path,
-            "org.bluez.Device1", "ConnectProfile", "s", uuid,
+            "busctl", "--system", "call", BLUEZ, adapter.path,
+            "org.bluez.Adapter1", "RemoveDevice", "o", path,
         ],
-        timeout=timeout if timeout is not None else CONNECT_TIMEOUT,
+        timeout=QUERY_TIMEOUT,
     )
     if code == 0:
         return True, path
     return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
+
+
+_PIN_MARKERS = (
+    "request pin",
+    "enter pin",
+    "request passkey",
+    "enter passkey",
+    "confirm passkey",
+    "confirmation request",
+    "display passkey",
+    "display pin",
+)
+
+
+def pair_device(
+    device_mac: str,
+    adapter: Adapter,
+    *,
+    timeout: float = PAIR_TIMEOUT,
+    cancelled: Callable[[], bool] | None = None,
+    heartbeat: Callable[[], None] | None = None,
+) -> PairResult:
+    """Pair one explicit Device1 with one temporary NoInputNoOutput agent."""
+    address = canonical_mac(device_mac)
+    if address is None:
+        return PairResult(False, detail="invalid Bluetooth device address")
+    agent: _LineProcess | None = None
+    pin_requested = False
+    started = time.monotonic()
+
+    def inspect_agent() -> None:
+        nonlocal pin_requested
+        assert agent is not None
+        for _observed, line in agent.drain():
+            lowered = line.casefold()
+            if any(marker in lowered for marker in _PIN_MARKERS):
+                pin_requested = True
+
+    def is_cancelled() -> bool:
+        inspect_agent()
+        return pin_requested or (cancelled is not None and cancelled())
+
+    def pulse() -> None:
+        inspect_agent()
+        if heartbeat is not None:
+            heartbeat()
+
+    try:
+        agent = _LineProcess(["bluetoothctl", "--agent", "NoInputNoOutput"])
+        agent.send(f"select {adapter.address}")
+        agent.send("agent NoInputNoOutput")
+        agent.send("default-agent")
+        register_deadline = min(started + 3.0, started + timeout)
+        registered = False
+        while time.monotonic() < register_deadline:
+            if cancelled is not None and cancelled():
+                raise BluetoothOperationCancelled("pairing owner disconnected")
+            item = agent.get(min(0.1, register_deadline - time.monotonic()))
+            if item is None:
+                if agent.process.poll() is not None:
+                    break
+                continue
+            lowered = item[1].casefold()
+            if any(marker in lowered for marker in _PIN_MARKERS):
+                pin_requested = True
+                break
+            if "default agent request successful" in lowered:
+                registered = True
+                break
+            if "failed" in lowered:
+                break
+        if pin_requested:
+            cancel_pairing(address, adapter)
+            return PairResult(False, True, "pairing requested a PIN or passkey")
+        if not registered:
+            return PairResult(False, detail="temporary NoInputNoOutput agent did not register")
+
+        remaining = max(0.1, started + timeout - time.monotonic())
+        path = path_for(adapter, address)
+        try:
+            code, _, err = _run_cancellable(
+                ["busctl", "--system", "call", BLUEZ, path, "org.bluez.Device1", "Pair"],
+                timeout=remaining,
+                cancelled=is_cancelled,
+                heartbeat=pulse,
+            )
+        except BluetoothOperationCancelled:
+            inspect_agent()
+            if pin_requested:
+                cancel_pairing(address, adapter)
+                return PairResult(False, True, "pairing requested a PIN or passkey")
+            raise
+        inspect_agent()
+        if pin_requested:
+            cancel_pairing(address, adapter)
+            return PairResult(False, True, "pairing requested a PIN or passkey")
+        if code != 0:
+            cancel_pairing(address, adapter)
+            return PairResult(False, detail=err.strip() or f"Pair exited {code}")
+
+        deadline = started + timeout
+        while time.monotonic() < deadline:
+            if cancelled is not None and cancelled():
+                raise BluetoothOperationCancelled("pairing owner disconnected")
+            if paired_on(adapter, address):
+                return PairResult(True, detail=path)
+            if heartbeat is not None:
+                heartbeat()
+            time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+        cancel_pairing(address, adapter)
+        return PairResult(False, detail="Paired=true was not observed before the deadline")
+    finally:
+        if agent is not None:
+            agent.stop("agent off", "quit")
 
 
 def disconnect(device_mac: str, adapter: Adapter | None = None) -> tuple[bool, str]:

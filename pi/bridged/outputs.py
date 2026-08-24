@@ -52,6 +52,8 @@ A2DP_PROFILE = "a2dp-sink"
 
 WIRED_PREFIX = "alsa_output."
 BLUEZ_PREFIX = "bluez_output."
+MAX_SCAN_RESULTS = 128
+MAX_LABEL_CHARS = 128
 
 
 @dataclass(frozen=True)
@@ -71,11 +73,12 @@ class Output:
     adapter: str | None = None
     adapter_address: str | None = None
     address: str | None = None
+    setup_state: str = "ready"
 
     @property
     def present(self) -> bool:
         """True when this output can be routed to *right now* -- it has a live graph node."""
-        return self.node is not None
+        return self.setup_state == "ready" and self.node is not None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -88,6 +91,7 @@ class Output:
             "adapter": self.adapter,
             "adapter_address": self.adapter_address,
             "address": self.address,
+            "setup_state": self.setup_state,
         }
 
 
@@ -183,8 +187,12 @@ def a2dp_outputs(
         uuids = [str(u).lower() for u in (prop("UUIDs") or [])]
         if A2DP_SINK_UUID not in uuids:
             continue
+        # Discovery objects explicitly say Paired=false. Older recorded fixtures predate
+        # that property, so an absent value remains compatible with their bonded snapshot.
+        if prop("Paired") is False:
+            continue
         address = str(prop("Address") or "").upper()
-        if not address:
+        if btadapters.canonical_mac(address) is None:
             continue
 
         adapter = path.split("/")[3]
@@ -193,8 +201,12 @@ def a2dp_outputs(
         entry = by_address.get(address)
         # Preference order, highest first. Recomputed rather than short-circuited so the
         # comparison is visible.
-        preferred_adapter = speaker_adapter in {adapter, adapter_address}
-        rank = (2 if connected else 0) + (1 if preferred_adapter else 0)
+        preferred_adapter = bool(speaker_adapter and speaker_adapter == adapter_address)
+        # A bond on the dedicated controller always owns the public entry. A connected
+        # duplicate on the call controller must never outrank it and smuggle that node into
+        # routing. With no target bond, connection remains useful only for deterministic
+        # diagnostics; the public entry is still needs_setup/unavailable below.
+        rank = (4 if preferred_adapter else 0) + (2 if connected else 0)
         if entry is None or rank > entry["rank"]:
             by_address[address] = {
                 "rank": rank,
@@ -202,6 +214,7 @@ def a2dp_outputs(
                 "adapter_address": adapter_address,
                 "connected": connected,
                 "label": str(prop("Alias") or prop("Name") or address),
+                "ready": preferred_adapter,
             }
 
     outputs = [
@@ -209,17 +222,104 @@ def a2dp_outputs(
             id=a2dp_id(address),
             kind="a2dp",
             label=entry["label"],
-            node=find_a2dp_node(nodes, address),
-            connected=entry["connected"],
+            node=(
+                find_a2dp_node(nodes, address)
+                if entry["ready"] and entry["connected"]
+                else None
+            ),
+            connected=bool(entry["connected"] and entry["ready"]),
             adapter=entry["adapter"],
             adapter_address=entry["adapter_address"],
             address=address,
+            setup_state="ready" if entry["ready"] else "needs_setup",
         )
         for address, entry in by_address.items()
     ]
     # Connected first, then alphabetical, so a list shown to a human is stable between polls.
     outputs.sort(key=lambda o: (not o.connected, o.label.lower()))
     return outputs
+
+
+def _property(device: dict, name: str) -> Any:
+    return (device.get(name) or {}).get("data")
+
+
+def _device_class(value: Any) -> int | None:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value, 0)
+        except ValueError:
+            return None
+    return None
+
+
+def _audio_confidence(device: dict) -> str:
+    uuids = [str(value).lower() for value in (_property(device, "UUIDs") or [])]
+    if A2DP_SINK_UUID in uuids:
+        return "confirmed"
+    device_class = _device_class(_property(device, "Class"))
+    if device_class is not None and (
+        device_class & 0x1F00 == 0x0400  # Audio/Video major device class
+        or device_class & 0x040000  # Rendering service class
+    ):
+        return "likely"
+    return "unknown"
+
+
+def _display_label(device: dict, address: str) -> str:
+    for key in ("Alias", "Name"):
+        value = str(_property(device, key) or "").strip()
+        if value:
+            return value[:MAX_LABEL_CHARS]
+    return f"Bluetooth device {address[-5:]}"
+
+
+def discovery_results(
+    observations: dict[str, int | None],
+    objects: dict[str, dict],
+    adapter: btadapters.Adapter,
+) -> list[dict[str, Any]]:
+    """Shape one scan's observed addresses into the fixed E16 public result schema."""
+    found: list[dict[str, Any]] = []
+    for raw_address, rssi in observations.items():
+        address = btadapters.canonical_mac(raw_address)
+        if address is None:
+            continue
+        device = (objects.get(btadapters.path_for(adapter, address)) or {}).get(
+            "org.bluez.Device1"
+        ) or {}
+        uuids = [str(value).lower() for value in (_property(device, "UUIDs") or [])]
+        ready = bool(_property(device, "Paired")) and A2DP_SINK_UUID in uuids
+        found.append(
+            {
+                "output_id": a2dp_id(address),
+                "label": _display_label(device, address),
+                "rssi_dbm": rssi if isinstance(rssi, int) and not isinstance(rssi, bool) else None,
+                "audio_confidence": _audio_confidence(device),
+                "setup_state": "ready" if ready else "needs_setup",
+                "duplicate_name_discriminator": None,
+            }
+        )
+
+    found.sort(
+        key=lambda item: (
+            item["rssi_dbm"] is None,
+            -(item["rssi_dbm"] if item["rssi_dbm"] is not None else -128),
+            item["label"].casefold(),
+            item["output_id"],
+        )
+    )
+    found = found[:MAX_SCAN_RESULTS]
+    counts: dict[str, int] = {}
+    for item in found:
+        key = item["label"].strip().casefold()
+        counts[key] = counts.get(key, 0) + 1
+    for item in found:
+        if counts[item["label"].strip().casefold()] > 1:
+            item["duplicate_name_discriminator"] = item["output_id"][-5:]
+    return found
 
 
 def candidates(

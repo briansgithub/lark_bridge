@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest import mock
 
@@ -36,6 +37,23 @@ class SpeakerReconnectTests(unittest.TestCase):
         reconnect.assert_called_once_with(*wanted)
         self.assertEqual(attempts, 1)
         self.assertEqual(next_try, 101.0 + bt_watchdog.SPEAKER_RETRY_SECONDS)
+
+    def test_busy_radio_lock_skips_without_spending_attempt_or_deadline(self) -> None:
+        wanted = ("C9:5C:FD:6E:28:46", "A0:AD:9F:73:6C:24", "hci1")
+        with (
+            mock.patch.object(bt_watchdog, "desired_speaker", return_value=wanted),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "speaker_radio_lock",
+                return_value=nullcontext(False),
+            ) as lock,
+            mock.patch.object(bt_watchdog, "reconnect_speaker") as reconnect,
+            mock.patch.object(bt_watchdog.time, "monotonic", return_value=100.0),
+        ):
+            attempts, next_try = bt_watchdog.service_speaker_reconnect(2, 99.0)
+        self.assertEqual((attempts, next_try), (2, 99.0))
+        reconnect.assert_not_called()
+        lock.assert_called_once_with(bt_watchdog.RADIO_LOCK_PATH, blocking=False)
 
     def test_status_round_trips_permanent_adapter_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -106,6 +124,19 @@ class SpeakerReconnectTests(unittest.TestCase):
                 )
             )
         resolve.assert_called_once_with(adapter.address)
+        pin.assert_not_called()
+        connect.assert_not_called()
+
+    def test_missing_permanent_address_never_falls_back_to_diagnostic_hci(self) -> None:
+        with (
+            mock.patch.object(bt_watchdog.btadapters, "adapters") as adapters,
+            mock.patch.object(bt_watchdog.btadapters, "pin_to_adapter") as pin,
+            mock.patch.object(bt_watchdog.btadapters, "connect_profile") as connect,
+        ):
+            self.assertFalse(
+                bt_watchdog.reconnect_speaker("C9:5C:FD:6E:28:46", None, "hci1")
+            )
+        adapters.assert_not_called()
         pin.assert_not_called()
         connect.assert_not_called()
 

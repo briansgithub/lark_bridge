@@ -256,14 +256,14 @@ def play_chime(node: str) -> bool:
 
 
 def target_adapter(target: dict[str, Any]):
-    """Resolve a status candidate by permanent controller address, with legacy fallback."""
+    """Resolve a status candidate only by its permanent controller address."""
     if btadapters is None:
         return None
     address = target.get("adapter_address")
-    if address:
-        return btadapters.adapter_by_address(str(address))
-    hci = target.get("adapter")
-    return next((a for a in btadapters.adapters() if a.hci == hci), None) if hci else None
+    canonical = btadapters.canonical_mac(address)
+    if canonical is None or canonical != address:
+        return None
+    return btadapters.adapter_by_address(canonical)
 
 
 def _toml_value(value: str | bool) -> str:
@@ -343,6 +343,8 @@ def startup_config_for(target: dict[str, Any], current: str) -> str:
     output_id = str(target.get("id") or "")
     if kind not in {"wired", "a2dp"} or not output_id:
         raise ValueError("output has no persistable identity")
+    if len(output_id) > 512 or not output_id.startswith(f"{kind}:"):
+        raise ValueError("output has an invalid stable id")
     candidate = patch_toml_table(
         current,
         "bridge",
@@ -351,16 +353,24 @@ def startup_config_for(target: dict[str, Any], current: str) -> str:
             "fallback_to_wired": True,
         },
     )
+    current_document = tomllib.loads(current)
+    current_adapter = str(
+        (((current_document.get("devices") or {}).get("output") or {}).get("adapter")) or ""
+    ).strip()
     output_values: dict[str, str | bool | None] = {
         "id": output_id,
         "address": None,
-        "adapter": None,
+        # This is the appliance's dedicated radio identity, not a property of whichever
+        # output is selected. Keep it when the user switches back to the wire.
+        "adapter": current_adapter or None,
         "reconnect": None,
     }
     if kind == "a2dp":
         address = str(target.get("address") or "").upper()
         adapter = str(target.get("adapter_address") or "").upper()
-        if not address or not adapter:
+        valid_address = btadapters is not None and btadapters.canonical_mac(address) == address
+        valid_adapter = btadapters is not None and btadapters.canonical_mac(adapter) == adapter
+        if not valid_address or not valid_adapter or output_id != f"a2dp:{address}":
             raise ValueError(
                 "Bluetooth startup choices require the speaker and controller addresses"
             )
@@ -377,46 +387,44 @@ def state_tool_path() -> Path:
     return Path(__file__).resolve().parents[1] / "powerloss" / "lark_state.py"
 
 
-def remember_startup_output(
-    target: dict[str, Any],
+def _commit_startup_payload(
+    payload: bytes,
     config_path: Path,
     *,
     tool_path: Path | None = None,
 ) -> tuple[bool, str]:
-    """Commit a next-boot default through LARKDATA's checksummed A/B slots."""
+    """Commit exact bytes to the durable slot and active mirror as one recoverable step."""
     try:
-        candidate = startup_config_for(target, config_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
+        tomllib.loads(payload.decode("utf-8"))
+        config_path.read_bytes()
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         return False, f"cannot prepare startup configuration: {exc}"
-
     runtime = supervisor.default_status_path().parent
     runtime.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None
     active_temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
+            "wb",
             dir=runtime,
             prefix=".bridge-startup-output-",
             suffix=".toml",
             delete=False,
         ) as handle:
-            handle.write(candidate)
+            handle.write(payload)
             temporary = Path(handle.name)
 
         # Prepare the live mirror before committing the A/B slot. After config-write returns,
         # only one same-filesystem rename remains; this keeps the verifier and any later
         # supervisor restart aligned with the slot that the next boot will restore.
         with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
+            "wb",
             dir=config_path.parent,
             prefix=f".{config_path.name}.",
             suffix=".new",
             delete=False,
         ) as handle:
-            handle.write(candidate)
+            handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
             active_temporary = Path(handle.name)
@@ -464,10 +472,41 @@ def remember_startup_output(
             active_temporary.unlink(missing_ok=True)
 
 
+def remember_startup_output(
+    target: dict[str, Any],
+    config_path: Path,
+    *,
+    tool_path: Path | None = None,
+) -> tuple[bool, str]:
+    """Commit a next-boot default through LARKDATA's checksummed A/B slots."""
+    try:
+        candidate = startup_config_for(target, config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
+        return False, f"cannot prepare startup configuration: {exc}"
+    return _commit_startup_payload(candidate.encode("utf-8"), config_path, tool_path=tool_path)
+
+
+def restore_startup_config(
+    snapshot: bytes,
+    config_path: Path,
+    *,
+    tool_path: Path | None = None,
+) -> tuple[bool, str]:
+    """Restore the exact pre-transaction config through the same A/B commit path."""
+    return _commit_startup_payload(snapshot, config_path, tool_path=tool_path)
+
+
 def do_set(args: argparse.Namespace) -> int:
     status = read_status()
     candidates = outputs_of(status)
     target = resolve_selector(args.selector, candidates)
+
+    if target.get("setup_state", "ready") != "ready":
+        print(
+            f"cannot select {target['label']}: speaker setup is required on the dedicated radio",
+            file=sys.stderr,
+        )
+        return 1
 
     # Powering a speaker on is a page. E07 measured paging during active SCO as its own
     # failure mode -- but that was ONE controller, where the page and the voice link competed
@@ -487,17 +526,22 @@ def do_set(args: argparse.Namespace) -> int:
     speaker_adapter = None
     if target["kind"] == "a2dp" and btadapters is not None:
         speaker_adapter = target_adapter(target)
-        if speaker_adapter is not None:
-            pin = btadapters.pin_to_adapter(target["address"], speaker_adapter)
-            if pin.changed:
-                print(f"trust: {', '.join(pin.changed)}", file=sys.stderr)
-            if not pin.ok:
-                print(
-                    f"cannot select {target['label']}: trust pinning failed: "
-                    f"{'; '.join(pin.failures)}",
-                    file=sys.stderr,
-                )
-                return 1
+        if speaker_adapter is None:
+            print(
+                f"cannot select {target['label']}: permanent speaker controller is unavailable",
+                file=sys.stderr,
+            )
+            return 1
+        pin = btadapters.pin_to_adapter(target["address"], speaker_adapter)
+        if pin.changed:
+            print(f"trust: {', '.join(pin.changed)}", file=sys.stderr)
+        if not pin.ok:
+            print(
+                f"cannot select {target['label']}: trust pinning failed: "
+                f"{'; '.join(pin.failures)}",
+                file=sys.stderr,
+            )
+            return 1
 
     if getattr(args, "remember", False):
         config_path = Path(

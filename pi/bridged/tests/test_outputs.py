@@ -18,17 +18,23 @@ def device(
     alias: str = "",
     connected: bool = False,
     a2dp: bool = True,
+    paired: bool | None = None,
     extra_uuids: tuple[str, ...] = (),
 ) -> dict:
     uuids = list(extra_uuids)
     if a2dp:
         uuids.append(outputs.A2DP_SINK_UUID)
+    properties = {
+        "Address": {"data": address},
+        "Alias": {"data": alias or address},
+        "Connected": {"data": connected},
+        "UUIDs": {"data": uuids},
+    }
+    if paired is not None:
+        properties["Paired"] = {"data": paired}
     return {
         "org.bluez.Device1": {
-            "Address": {"data": address},
-            "Alias": {"data": alias or address},
-            "Connected": {"data": connected},
-            "UUIDs": {"data": uuids},
+            **properties,
         }
     }
 
@@ -116,14 +122,15 @@ class A2dpEnumerationTests(unittest.TestCase):
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0].adapter, "hci1", "must prefer the adapter it is connected on")
 
-    def test_speaker_adapter_breaks_the_tie_when_neither_is_connected(self) -> None:
+    def test_hci_name_is_not_accepted_as_speaker_controller_identity(self) -> None:
         key = f"dev_{IWORLD.replace(':', '_')}"
         tree = {
             f"/org/bluez/hci0/{key}": device(IWORLD),
             f"/org/bluez/hci1/{key}": device(IWORLD),
         }
         found = outputs.a2dp_outputs({}, tree, speaker_adapter="hci1")
-        self.assertEqual(found[0].adapter, "hci1")
+        self.assertEqual(found[0].adapter, "hci0")
+        self.assertEqual(found[0].setup_state, "needs_setup")
 
     def test_permanent_adapter_address_survives_hci_renumbering(self) -> None:
         key = f"dev_{IWORLD.replace(':', '_')}"
@@ -147,6 +154,84 @@ class A2dpEnumerationTests(unittest.TestCase):
             ),
         }
         self.assertEqual([o.label for o in outputs.a2dp_outputs({}, tree)], ["AAA", "ZZZ"])
+
+    def test_wrong_controller_bond_is_visible_but_never_available_or_routable(self) -> None:
+        speaker_radio = "A0:AD:9F:73:6C:24"
+        node = f"bluez_output.{BOOMBOX.replace(':', '_')}.3"
+        tree = {
+            "/org/bluez/hci0": adapter("B8:27:EB:43:8D:51"),
+            "/org/bluez/hci1": adapter(speaker_radio),
+            f"/org/bluez/hci0/dev_{BOOMBOX.replace(':', '_')}": device(
+                BOOMBOX, alias="Boombox", connected=True, paired=True
+            ),
+        }
+        found = outputs.a2dp_outputs(
+            {node: sink(node, profile="a2dp-sink")}, tree, speaker_adapter=speaker_radio
+        )
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].setup_state, "needs_setup")
+        self.assertFalse(found[0].connected)
+        self.assertFalse(found[0].present)
+        self.assertIsNone(found[0].node)
+
+        wired = outputs.Output("wired:jack", "wired", "jack", "jack", True)
+        resolved = outputs.resolve(found[0].id, [wired, found[0]])
+        self.assertEqual(resolved.chosen, wired)
+        self.assertEqual(resolved.desired_id, found[0].id)
+
+    def test_dedicated_bond_outranks_connected_wrong_controller_duplicate(self) -> None:
+        key = f"dev_{IWORLD.replace(':', '_')}"
+        speaker_radio = "A0:AD:9F:73:6C:24"
+        tree = {
+            "/org/bluez/hci0": adapter("B8:27:EB:43:8D:51"),
+            "/org/bluez/hci7": adapter(speaker_radio),
+            f"/org/bluez/hci0/{key}": device(IWORLD, connected=True, paired=True),
+            f"/org/bluez/hci7/{key}": device(IWORLD, connected=False, paired=True),
+        }
+        found = outputs.a2dp_outputs({}, tree, speaker_adapter=speaker_radio)
+        self.assertEqual(found[0].adapter, "hci7")
+        self.assertEqual(found[0].setup_state, "ready")
+        self.assertFalse(found[0].connected)
+
+
+class DiscoveryResultTests(unittest.TestCase):
+    def test_results_sort_shape_confidence_and_duplicate_discriminators(self) -> None:
+        speaker_radio = "A0:AD:9F:73:6C:24"
+        target = outputs.btadapters.Adapter("hci7", speaker_radio, "USB", 4)
+        first = "AA:BB:CC:DD:28:46"
+        second = "11:22:33:44:28:47"
+        third = "22:33:44:55:66:77"
+        tree = {
+            outputs.btadapters.path_for(target, first): device(
+                first, alias="Same Name", paired=True
+            ),
+            outputs.btadapters.path_for(target, second): device(
+                second, alias="same name", a2dp=False, paired=False
+            ),
+            outputs.btadapters.path_for(target, third): {
+                "org.bluez.Device1": {
+                    "Address": {"data": third},
+                    "Alias": {"data": ""},
+                    "Name": {"data": ""},
+                    "Class": {"data": 0x0400},
+                    "Paired": {"data": False},
+                    "UUIDs": {"data": []},
+                }
+            },
+        }
+        shaped = outputs.discovery_results(
+            {first: -70, second: -40, third: None}, tree, target
+        )
+        self.assertEqual([item["output_id"] for item in shaped], [
+            outputs.a2dp_id(second), outputs.a2dp_id(first), outputs.a2dp_id(third)
+        ])
+        self.assertEqual(shaped[0]["audio_confidence"], "unknown")
+        self.assertEqual(shaped[1]["audio_confidence"], "confirmed")
+        self.assertEqual(shaped[1]["setup_state"], "ready")
+        self.assertEqual(shaped[2]["audio_confidence"], "likely")
+        self.assertEqual(shaped[2]["label"], "Bluetooth device 66:77")
+        self.assertEqual(shaped[0]["duplicate_name_discriminator"], "28:47")
+        self.assertEqual(shaped[1]["duplicate_name_discriminator"], "28:46")
 
 
 class ResolveTests(unittest.TestCase):
