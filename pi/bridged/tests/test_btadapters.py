@@ -214,6 +214,18 @@ class ExplicitDeviceOperationTests(unittest.TestCase):
         self.assertIn(btadapters.A2DP_SINK_UUID, command)
         self.assertNotIn("Connect", command)
 
+    def test_blocking_radio_lock_can_be_cancelled_while_waiting(self) -> None:
+        btadapters._host_radio_lock.acquire()
+        try:
+            with (
+                mock.patch.object(btadapters, "fcntl", None),
+                self.assertRaises(btadapters.BluetoothOperationCancelled),
+                btadapters.speaker_radio_lock(cancelled=lambda: True),
+            ):
+                self.fail("cancelled lock acquisition must not enter the transaction")
+        finally:
+            btadapters._host_radio_lock.release()
+
     def test_pair_uses_temporary_noinput_agent_and_reaps_it(self) -> None:
         children = []
 
