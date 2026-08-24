@@ -232,6 +232,7 @@ class ExplicitDeviceOperationTests(unittest.TestCase):
 
     def test_pair_uses_temporary_noinput_agent_and_reaps_it(self) -> None:
         children = []
+        test_case = self
 
         class Process:
             def poll(self):
@@ -243,12 +244,18 @@ class ExplicitDeviceOperationTests(unittest.TestCase):
                 self.process = Process()
                 self.sent = []
                 self.stopped = ()
+                self.registration_observed = False
                 children.append(self)
 
             def send(self, command):
+                if command == "default-agent":
+                    test_case.assertTrue(self.registration_observed)
                 self.sent.append(command)
 
             def get(self, _timeout):
+                if not self.registration_observed:
+                    self.registration_observed = True
+                    return (0.0, "Agent registered")
                 return (0.0, "Default agent request successful")
 
             def drain(self):
@@ -266,12 +273,12 @@ class ExplicitDeviceOperationTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         agent = children[0]
-        self.assertEqual(agent.command, ["sudo", "-n", "bluetoothctl"])
-        self.assertNotIn("--agent", agent.command)
         self.assertEqual(
-            agent.sent,
-            [f"select {TARGET.address}", "agent NoInputNoOutput", "default-agent"],
+            agent.command,
+            ["sudo", "-n", "bluetoothctl", "--agent", "NoInputNoOutput"],
         )
+        self.assertEqual(agent.sent, ["default-agent"])
+        self.assertNotIn("agent NoInputNoOutput", agent.sent)
         self.assertEqual(agent.stopped, ("agent off", "quit"))
         self.assertEqual(run.call_args.args[0][-2:], ["org.bluez.Device1", "Pair"])
         self.assertIn(btadapters.path_for(TARGET, SPEAKER), run.call_args.args[0])
@@ -320,11 +327,15 @@ class ExplicitDeviceOperationTests(unittest.TestCase):
                 nonlocal active_agent
                 active_agent = self
                 self.process = Process()
+                self.registration_observed = False
 
             def send(self, _command):
                 pass
 
             def get(self, _timeout):
+                if not self.registration_observed:
+                    self.registration_observed = True
+                    return (0.0, "Agent registered")
                 return (0.0, "Default agent request successful")
 
             def drain(self):
