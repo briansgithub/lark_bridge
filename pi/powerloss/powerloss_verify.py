@@ -28,7 +28,12 @@ SYSTEM_UNITS = (
     "bridge-btwatchdog.service",
     "bridge-pairing-seal.timer",
 )
-USER_UNITS = ("pipewire.service", "wireplumber.service", "bridge-supervisor.service")
+USER_UNITS = (
+    "pipewire.service",
+    "wireplumber.service",
+    "bridge-supervisor.service",
+    "bridge-output-remote.service",
+)
 CRITICAL_LOG = re.compile(
     r"EXT4-fs (?:error|warning)|FAT-fs.*error|I/O error|Buffer I/O|"
     r"under-?voltage|watchdog.*(?:lockup|BUG)|journal.*corrupt",

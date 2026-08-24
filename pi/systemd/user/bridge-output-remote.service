@@ -1,0 +1,19 @@
+[Unit]
+Description=LarkBridge phone output selector
+After=bridge-supervisor.service
+Wants=bridge-supervisor.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/rpi-lark-bridge/pi/bridged/output_remote.py
+Restart=always
+RestartSec=5
+
+# This unit intentionally has no systemd sandbox directives. In a user unit, even PrivateTmp or
+# RestrictAddressFamilies activates a user namespace / no-new-privileges boundary: root-owned sudo
+# files appear as uid 65534 or setuid is disabled. The helper must invoke the existing audited
+# lark_state.py config transaction. It still runs as ordinary uid 1000, and this image already
+# grants that appliance account passwordless sudo for every existing control/recovery command.
+
+[Install]
+WantedBy=default.target
