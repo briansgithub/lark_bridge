@@ -161,7 +161,7 @@ The speaker's budget is spent on a timer rather than on absence, unlike the phon
 that is switched off should cost a few quiet retries and then silence, because pages are ACL
 traffic and E03 is explicit about what ACL traffic near an active call costs.
 
-### 10. A mid-call page on the OTHER radio does not disturb SCO
+### 9. A mid-call page on the OTHER radio does not disturb SCO
 
 E07 measured paging a device during active SCO as its own failure mode, and that was the
 reason to gate mid-call speaker pages. But E07 had **one** controller, where the page and the
@@ -180,7 +180,7 @@ Not attributable either way: dmesg showed 70 cumulative `Frame reassembly failed
 that counter spans the whole boot and includes the earlier controller wedge, so no delta was
 measured across the page.
 
-### 9. Android will not route a VoIP call to the bridge without a fresh HFP connection
+### 10. Android will not route a VoIP call to the bridge without a fresh HFP connection
 
 The Discord call sat in `MODE_IN_COMMUNICATION` with `Active communication device:
 type:speaker name:Pixel 7a` and `mScoAudioState: SCO_STATE_INACTIVE`, while the bridge was
@@ -207,7 +207,26 @@ unaided, and reopening the app repaired a deliberately interrupted global mute u
 mute-ownership state. These are idle-phone tests; Discord's mid-call route clobber and the E13
 audio-stack-restart case still need a live-call continuation.
 
-### 11. The selected startup output is now an explicit, recovery-safe choice
+### 11. Output selection now has a non-technical, phone-side control surface
+
+The Pixel now renders the Pi's live output registry as **Aux cable**, **Boombox**, **iWorld**, and
+**Soundcore Space A40**, including ready versus off/out-of-range state and the distinction between
+the remembered choice and a temporary fallback. The Android app publishes a paired RFCOMM service;
+the Pi connects outbound, validates requested ids against `bridge-status.json`, and routes explicit
+choices through `bridgectl --remember --no-chime`. Selection state never lives on the phone.
+
+Measured without touching a speaker: service discovery followed the app's dynamic RFCOMM channels
+(14 through 22 were observed) rather than the phone's existing HFP/PBAP channels, and the full
+candidate list round-tripped. Five Pi service restarts and three phone force-stop/reopen cycles all
+reconnected and repopulated the list unaided, kept the phone mic unmuted, preserved Boombox as the
+remembered default, and emitted no unintended selection request. With the sleeping Boombox absent,
+the app accurately showed Aux as the temporary fallback. The **Call speaker** Quick Settings tile
+was installed and its permission/component registration verified; it skips outputs that are off or
+out of range. The mutating phone-to-Pi path is unit tested but deliberately not exercised on
+hardware yet: per the acoustic safety rule, its first real speaker selection must be preceded by
+verified playback measured back at the Lark.
+
+### 12. The selected startup output is now an explicit, recovery-safe choice
 
 Runtime output selection remains in tmpfs: ordinary mid-call changes cause no LARKDATA writes
 and never restart the supervisor. `bridgectl output set <speaker> --remember` now separately

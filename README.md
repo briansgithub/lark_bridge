@@ -69,6 +69,12 @@ rig/rig output set boombox --remember
 rig/rig output set wired --remember
 ```
 
+The Android companion exposes the same candidates under **Where call sound plays** and adds a
+**Call speaker** Quick Settings tile. It talks to `output_remote.py` over the already-paired phone
+Bluetooth link, so it needs neither Wi-Fi nor an account. The Pi validates every id and performs
+the same `--remember --no-chime` transaction; the app is a thin control surface, not a second copy
+of selection state.
+
 ## Repository layout
 
 | Path | Contains |

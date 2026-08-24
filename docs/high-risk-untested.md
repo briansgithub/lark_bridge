@@ -120,26 +120,37 @@ single good call plus a contradictory pair is not a shippable distribution.
 *Test:* repeat real-call AEC captures and complete the speaker out-of-range/return sequence, always
 gating each trial on sound measured back at the Lark.
 
+### 11. The phone output selector has not yet changed hardware output
+
+RFCOMM discovery, candidate listing and app force-stop/reconnect pass on the real Pi and Pixel.
+The mutating request is unit tested through the durable CLI path, but was not sent while the
+operator was away because a real Bluetooth selection is speaker-dependent and must first pass the
+acoustic playback gate.
+
+*Test:* with verified Boombox playback at the Lark, select Aux and then Boombox from the app during
+a call. Assert the far end keeps hearing the Lark, the selected output changes, and the final A/B
+slot records Boombox without a supervisor restart.
+
 ## Tier 4 — durability and provenance
 
-### 11. Cumulative power cuts
+### 12. Cumulative power cuts
 
 **n=2.** Two cuts say nothing about drift over dozens of engine cycles, which is exactly what a car
 does. Pairing survival, slot integrity and filesystem health have only been checked across two
 events.
 
-### 12. Brownouts and rapid cycling
+### 13. Brownouts and rapid cycling
 
 Both cuts were clean ~10 s outages. A sagging supply or a fast off/on — the realistic behaviour of a
 car's electrical system on cranking — is untested and is a harder case than a clean cut.
 
-### 13. A clean re-conversion has never been run end to end
+### 14. A clean re-conversion has never been run end to end
 
 E14 records that fixes 1-4 were applied to the card's lower filesystem **by hand as well as to the
 scripts**. So the current card is correct, but nobody has proven the fixed scripts alone reproduce
 it. This matters the moment a second unit is built, or this card is ever re-imaged.
 
-### 14. The BlueZ bind-mount ordering has had no stress
+### 15. The BlueZ bind-mount ordering has had no stress
 
 The `x-systemd.requires-mounts-for` entry works, but no reboot-ordering stress was applied. If it
 ever loses the race, pairing is not where BlueZ expects it at start.

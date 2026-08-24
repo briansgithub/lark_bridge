@@ -122,6 +122,14 @@ install -m 0755 "$SOURCE_ROOT/pi/powerloss/powerloss_verify.py" "$ROOT_MOUNT/usr
 install -m 0644 "$SOURCE_ROOT/pi/systemd/system/bridge-storage-guard.service" "$ROOT_MOUNT/etc/systemd/system/bridge-storage-guard.service"
 install -m 0644 "$SOURCE_ROOT/pi/systemd/system/bridge-pairing-seal.service" "$ROOT_MOUNT/etc/systemd/system/bridge-pairing-seal.service"
 install -m 0644 "$SOURCE_ROOT/pi/systemd/system/bridge-pairing-seal.timer" "$ROOT_MOUNT/etc/systemd/system/bridge-pairing-seal.timer"
+install -d -o 1000 -g 1000 -m 0755 \
+    "$ROOT_MOUNT/home/admin/.config/systemd/user/default.target.wants"
+install -o 1000 -g 1000 -m 0644 "$SOURCE_ROOT/pi/systemd/user/bridge-output-remote.service" \
+    "$ROOT_MOUNT/home/admin/.config/systemd/user/bridge-output-remote.service"
+install -o 1000 -g 1000 -m 0755 "$SOURCE_ROOT/pi/bridged/output_remote.py" \
+    "$ROOT_MOUNT/home/admin/rpi-lark-bridge/pi/bridged/output_remote.py"
+ln -sfn ../bridge-output-remote.service \
+    "$ROOT_MOUNT/home/admin/.config/systemd/user/default.target.wants/bridge-output-remote.service"
 install -d -m 0755 "$ROOT_MOUNT/etc/systemd/system/bluetooth.service.d" "$ROOT_MOUNT/etc/systemd/system/user@1000.service.d"
 install -m 0644 "$SOURCE_ROOT/pi/systemd/system/bluetooth.service.d/10-larkbridge-storage-guard.conf" \
     "$ROOT_MOUNT/etc/systemd/system/bluetooth.service.d/10-larkbridge-storage-guard.conf"
