@@ -161,11 +161,28 @@ class ResolveTests(unittest.TestCase):
         self.assertFalse(got.desired_available)
         self.assertEqual(got.desired_id, self.absent_speaker.id, "the desire must not be rewritten")
 
-    def test_a_connected_speaker_beats_the_wire_when_the_desire_is_gone(self) -> None:
+    def test_mode1_prefers_a_connected_speaker_when_the_desire_is_gone(self) -> None:
         got = outputs.resolve(
-            self.absent_speaker.id, [self.wired, self.live_speaker, self.absent_speaker]
+            self.absent_speaker.id,
+            [self.wired, self.live_speaker, self.absent_speaker],
+            prefer_speaker=True,
         )
         self.assertEqual(got.chosen, self.live_speaker)
+
+    def test_mode1w_does_not_wander_onto_a_speaker_that_is_merely_switched_on(self) -> None:
+        """Mode 1W is the proven configuration and its whole point is the wired output.
+
+        Auto-selecting any bonded speaker that happened to be powered on nearby would be a
+        regression in the shipped fallback wearing a feature's clothes.
+        """
+        got = outputs.resolve(None, [self.wired, self.live_speaker], prefer_speaker=False)
+        self.assertEqual(got.chosen, self.wired)
+
+    def test_an_explicit_choice_outranks_the_mode_default(self) -> None:
+        got = outputs.resolve(
+            self.live_speaker.id, [self.wired, self.live_speaker], prefer_speaker=False
+        )
+        self.assertEqual(got.chosen, self.live_speaker, "the user's choice must win")
 
     def test_no_desire_still_resolves(self) -> None:
         self.assertEqual(outputs.resolve(None, [self.wired]).chosen, self.wired)

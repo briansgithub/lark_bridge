@@ -345,6 +345,96 @@ node_latency_frames = "1920"
                 supervisor.load_settings(config)
 
 
+class OutputSelectionTests(unittest.TestCase):
+    """Switching the output must actually rebuild the graph.
+
+    This is a regression test for a defect that would have been invisible. The rebuild
+    signature used to carry `output_up`, a bool meaning "some output is present". With one
+    hardcoded output that was fine. With a selectable output it is wrong in the worst
+    possible way: moving from the wired jack to a speaker leaves the bool True on both
+    sides, so update_signature() sees no change, so nothing is torn down or rebuilt -- and
+    the status file still reports ACTIVE and verified. Audio would keep coming out of the
+    old device while every observable said the switch had worked.
+    """
+
+    SPEAKER = "bluez_output.C9_5C_FD_6E_28_46.1"
+
+    def _graph(self) -> supervisor.CallGraph:
+        settings = supervisor.Settings(aec=supervisor.AecSettings(enabled=False))
+        return supervisor.CallGraph(settings)
+
+    def _nodes(self, graph: supervisor.CallGraph) -> dict:
+        return {
+            "lark": {},
+            graph.settings.hfp_sink: {},
+            graph.settings.hfp_source: {},
+            graph.settings.wired_output: {},
+            self.SPEAKER: {},
+        }
+
+    def test_changing_the_output_changes_the_signature(self) -> None:
+        graph = self._graph()
+        nodes = self._nodes(graph)
+        with mock.patch.object(supervisor, "Loopback", FakeLoopback):
+            graph.tick(nodes, [], "lark", graph.settings.wired_output)
+            first = graph.generation
+            graph.tick(nodes, [], "lark", self.SPEAKER)
+        self.assertGreater(graph.generation, first, "an output switch must rebuild the graph")
+        self.assertEqual(graph.output_node, self.SPEAKER)
+
+    def test_same_output_does_not_churn_the_graph(self) -> None:
+        """The other half: a steady output must NOT rebuild on every poll."""
+        graph = self._graph()
+        nodes = self._nodes(graph)
+        with mock.patch.object(supervisor, "Loopback", FakeLoopback):
+            graph.tick(nodes, [], "lark", self.SPEAKER)
+            first = graph.generation
+            graph.tick(nodes, [], "lark", self.SPEAKER)
+        self.assertEqual(graph.generation, first)
+
+    def test_no_output_is_discovering_not_active(self) -> None:
+        graph = self._graph()
+        graph.tick(self._nodes(graph), [], "lark", None)
+        self.assertEqual(graph.state, supervisor.State.DISCOVERING)
+
+    def test_the_callout_targets_the_selected_output(self) -> None:
+        graph = self._graph()
+        with mock.patch.object(supervisor, "Loopback", FakeLoopback):
+            graph.tick(self._nodes(graph), [], "lark", self.SPEAKER)
+        self.assertIsNotNone(graph.callout)
+        self.assertEqual(graph.callout.playback, self.SPEAKER)
+
+    def test_omitting_the_output_keeps_the_preselection_behaviour(self) -> None:
+        graph = self._graph()
+        with mock.patch.object(supervisor, "Loopback", FakeLoopback):
+            graph.tick(self._nodes(graph), [], "lark")
+        self.assertEqual(graph.output_node, graph.settings.wired_output)
+
+
+class DesireFileTests(unittest.TestCase):
+    """Runtime selection is a file on tmpfs, so it costs no LARKDATA writes."""
+
+    def test_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bridge-output.json"
+            self.assertIsNone(supervisor.read_desire(path))
+            supervisor.write_desire("a2dp:C9:5C:FD:6E:28:46", "cli", path)
+            self.assertEqual(supervisor.read_desire(path), "a2dp:C9:5C:FD:6E:28:46")
+
+    def test_clearing_reverts_to_the_configured_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bridge-output.json"
+            supervisor.write_desire("a2dp:AA:BB:CC:DD:EE:FF", "cli", path)
+            supervisor.write_desire(None, "cli", path)
+            self.assertIsNone(supervisor.read_desire(path))
+
+    def test_corrupt_file_reads_as_no_desire_rather_than_raising(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bridge-output.json"
+            path.write_text("{not json", encoding="utf-8")
+            self.assertIsNone(supervisor.read_desire(path))
+
+
 class FailedIsNotTerminalTests(unittest.TestCase):
     """FAILED must not strand a live call.
 
@@ -355,10 +445,17 @@ class FailedIsNotTerminalTests(unittest.TestCase):
     retried.
     """
 
-    # (call_up, lark, output_up) -- the tuple tick() computes. Pre-set it so the first
+    # (call_up, lark, output_node) -- the tuple tick() computes. Pre-set it so the first
     # tick does not look like a fresh generation and reset attempts, which is what a real
     # supervisor mid-call would already have done.
-    SIGNATURE = (True, "lark", True)
+    #
+    # The third element was `True` until output selection landed: a bool saying "an output
+    # is present". It is now the output NODE NAME, because presence cannot distinguish the
+    # wired jack from a speaker and so could not trigger a rebuild when the user switched
+    # between them. A stale bool here silently defeats this test's own premise -- it makes
+    # the first tick look like a generation change, which resets attempts and escapes
+    # FAILED for the wrong reason.
+    SIGNATURE = (True, "lark", supervisor.DEFAULT_WIRED_OUT)
 
     def _failed_graph(self) -> supervisor.CallGraph:
         settings = supervisor.Settings(aec=supervisor.AecSettings(enabled=True))

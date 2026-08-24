@@ -257,6 +257,7 @@ def resolve(
     outputs: list[Output],
     *,
     fallback: bool = True,
+    prefer_speaker: bool = False,
 ) -> Resolution:
     """Pick the live output. Never mutates the desire.
 
@@ -280,24 +281,23 @@ def resolve(
         )
         return Resolution(None, reason, desired_id, False)
 
-    # A connected speaker beats the wire: if something is on and bonded, the user almost
-    # certainly wants to hear it, and this is only reached when their explicit choice is
-    # unavailable anyway.
-    for output in outputs:
-        if output.kind == "a2dp" and output.present:
+    # Fallback ORDER follows the configured mode; an explicit desire, handled above, always
+    # outranks it. `prefer_speaker` is set for Mode 1 and clear for Mode 1W.
+    #
+    # This distinction is not cosmetic. Without it, a Mode 1W unit -- the proven, shipped
+    # configuration whose whole point is the wired output -- would silently move call audio
+    # to any bonded speaker that happened to be switched on nearby, purely because it was
+    # connected. That is a regression in the fallback, dressed up as a feature.
+    order = ("a2dp", "wired") if prefer_speaker else ("wired", "a2dp")
+    for kind in order:
+        for output in outputs:
+            if output.kind != kind or not output.present:
+                continue
+            noun = "a connected speaker" if kind == "a2dp" else "the wired output"
             reason = (
-                "desired output unavailable; using a connected speaker"
+                f"desired output unavailable; using {noun}"
                 if desired_id
-                else "no desired output set; using a connected speaker"
-            )
-            return Resolution(output, reason, desired_id, False)
-
-    for output in outputs:
-        if output.kind == "wired" and output.present:
-            reason = (
-                "desired output unavailable; fell back to the wired output"
-                if desired_id
-                else "no desired output set; using the wired output"
+                else f"no desired output set; using {noun}"
             )
             return Resolution(output, reason, desired_id, False)
 
