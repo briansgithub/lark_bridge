@@ -64,6 +64,11 @@ def main() -> int:
     parser.add_argument("--to", required=True, help="output id to switch to")
     parser.add_argument("--seconds", type=float, default=45.0)
     parser.add_argument("--switch-at", type=float, default=10.0)
+    parser.add_argument(
+        "--external-switch",
+        action="store_true",
+        help="observe a switch requested elsewhere (for example, from the phone UI)",
+    )
     parser.add_argument("--interval", type=float, default=0.2)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--max-uplink-gap", type=float, default=1.0)
@@ -119,15 +124,19 @@ def main() -> int:
         now = time.monotonic() - start
         if now >= args.seconds:
             break
-        if switched_at is None and now >= args.switch_at:
-            supervisor.write_desire(args.to, source="output_switch_probe")
-            switched_at = now
 
         status = {}
         try:
             status = json.loads(settings.status_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             pass
+        if switched_at is None:
+            if args.external_switch:
+                if (status.get("output") or {}).get("desired_id") == args.to:
+                    switched_at = now
+            elif now >= args.switch_at:
+                supervisor.write_desire(args.to, source="output_switch_probe")
+                switched_at = now
         chosen = ((status.get("output") or {}).get("chosen") or {}).get("node")
         current = links()
         samples.append(

@@ -302,6 +302,37 @@ def reconnect_speaker(
     return ok
 
 
+def service_speaker_reconnect(attempts: int, next_try: float) -> tuple[int, float]:
+    """Advance the speaker retry budget independently of the call-controller probe.
+
+    The speaker is deliberately on another controller.  A live SCO session can make the
+    call controller's legacy ``hciconfig version`` probe time out even while the stronger
+    recovery probe confirms that controller is alive.  Speaker recovery must not be nested
+    under that unrelated result, or one false phone-radio probe strands an awake speaker.
+    """
+    if not SPEAKER_RECONNECT:
+        return attempts, next_try
+
+    wanted = desired_speaker()
+    if wanted is None or not wanted[0]:
+        if attempts:
+            log.info("chosen speaker no longer needs paging")
+        return 0, next_try
+
+    now = time.monotonic()
+    if now < next_try or attempts >= SPEAKER_ATTEMPTS:
+        return attempts, next_try
+
+    attempts += 1
+    log.warning(
+        "chosen speaker %s is absent — paging (attempt %d/%d)",
+        wanted[0], attempts, SPEAKER_ATTEMPTS,
+    )
+    if reconnect_speaker(*wanted):
+        attempts = 0
+    return attempts, time.monotonic() + SPEAKER_RETRY_SECONDS
+
+
 def main() -> int:
     logging.basicConfig(
         level=os.environ.get("BRIDGE_LOG", "INFO").upper(),
@@ -341,6 +372,13 @@ def main() -> int:
     speaker_next_try = 0.0
 
     while not stopping:
+        # This is intentionally before and outside controller_answers().  The chosen
+        # speaker lives on hci1 and must keep recovering even if the independent hci0
+        # call-controller probe is inconclusive during SCO.
+        speaker_attempts, speaker_next_try = service_speaker_reconnect(
+            speaker_attempts, speaker_next_try
+        )
+
         if controller_answers():
             if failures:
                 log.info("controller answered again after %d failure(s)", failures)
@@ -382,37 +420,6 @@ def main() -> int:
                         )
                         reconnect_phone()
 
-            # The speaker, independently of the phone. Deliberately outside the RECONNECT
-            # branch above: losing the speaker and losing the phone are different faults with
-            # different budgets, and a phone that is present must not stop the speaker being
-            # recovered.
-            #
-            # This runs during a live call. E07 measured paging a device during active SCO as
-            # its own failure mode -- but that was ONE controller, where the page and the
-            # voice link competed for the same radio. Here the speaker is on hci1 and SCO is
-            # on hci0, so the premise does not hold. E15 measured one mid-call page on the
-            # other radio with SCO holding at its nominal 135 frames/s. The retry interval
-            # remains 30 s because n=1 is enough to permit the cross-radio case, not enough to
-            # justify aggressive paging.
-            if SPEAKER_RECONNECT:
-                wanted = desired_speaker()
-                if wanted is None or not wanted[0]:
-                    # Connected, not chosen, or no bond at all. All three mean there is
-                    # nothing to page, so the budget is fresh for the next real absence.
-                    if speaker_attempts:
-                        log.info("chosen speaker no longer needs paging")
-                    speaker_attempts = 0
-                else:
-                    now = time.monotonic()
-                    if now >= speaker_next_try and speaker_attempts < SPEAKER_ATTEMPTS:
-                        speaker_attempts += 1
-                        log.warning(
-                            "chosen speaker %s is absent — paging (attempt %d/%d)",
-                            wanted[0], speaker_attempts, SPEAKER_ATTEMPTS,
-                        )
-                        if reconnect_speaker(*wanted):
-                            speaker_attempts = 0
-                        speaker_next_try = time.monotonic() + SPEAKER_RETRY_SECONDS
         else:
             failures += 1
             log.warning("controller did not answer (%d/%d)", failures, FAILURES_TO_ACT)

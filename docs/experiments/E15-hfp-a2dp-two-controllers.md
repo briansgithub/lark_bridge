@@ -161,6 +161,22 @@ The speaker's budget is spent on a timer rather than on absence, unlike the phon
 that is switched off should cost a few quiet retries and then silence, because pages are ACL
 traffic and E03 is explicit about what ACL traffic near an active call costs.
 
+A later live selector run exposed a control-flow bug in that budget. Speaker recovery was
+described as independent but was still nested under the call controller's active-probe success
+branch. Once `hci0` stopped answering that probe, the awake Boombox received one page and then no
+later retries. The speaker scheduler now runs before and independently of the `hci0` result. The
+full host suite passes (**105 tests**), and the deployed fix reconnected the already-awake Boombox
+on `hci1` while the call-radio probe was failing. A direct post-recovery acoustic gate measured
+the speaker at the Lark with 30.23 dB tone margin and no clipping; after the call was reselected,
+speech measured 0.96 correlation and 17.45 dB AEC suppression.
+
+The same run also separated this speaker defect from the known call-controller wedge. `hci0`
+eventually required the established rung-6 firmware reload; that necessarily cleared Discord's
+SCO selection even though the phone ACL reconnected unaided. Discord then required its own
+`larkbridge-v2` call-output entry to be selected again. The watchdog fix must not suppress that
+recovery: E07 already proved that RX bytes can keep advancing briefly after HCI command responses
+fail, so passive traffic is not a safe substitute for the active probe.
+
 ### 9. A mid-call page on the OTHER radio does not disturb SCO
 
 E07 measured paging a device during active SCO as its own failure mode, and that was the
@@ -291,9 +307,11 @@ configuration that the storage guard will materialize is now present and checksu
 
 Orientation B, ≥10 repeats per orientation, the 60-minute soak, actual cold-boot dual-link
 establishment, mid-call power cut, a complete out-of-range/return acoustic run, and the full
-Mode 1W regression suite. AEC also needs repeated real-call measurements; the first one passes,
-but it is not yet a distribution. The newly installed phone router also needs a live Discord call
-to verify route re-assertion and the audio-stack-restart recovery it is intended to mitigate.
+Mode 1W regression suite. AEC also needs repeated real-call measurements; the first few pass,
+but they are not yet a distribution. A stock, non-privileged phone router cannot overrule
+Discord's active communication-route ownership: Discord must select the working `larkbridge-v2`
+entry after a full Bluetooth-stack recovery. Its menu currently renders two identically named
+entries, only the second of which established SCO on this Pixel, so that UX remains unresolved.
 
 ## Verdict
 

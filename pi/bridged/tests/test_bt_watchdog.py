@@ -11,6 +11,32 @@ import btadapters
 
 
 class SpeakerReconnectTests(unittest.TestCase):
+    def test_speaker_retry_runs_when_due_and_resets_after_success(self) -> None:
+        wanted = ("C9:5C:FD:6E:28:46", "A0:AD:9F:73:6C:24", "hci1")
+        with (
+            mock.patch.object(bt_watchdog, "desired_speaker", return_value=wanted),
+            mock.patch.object(bt_watchdog, "reconnect_speaker", return_value=True) as reconnect,
+            mock.patch.object(bt_watchdog.time, "monotonic", side_effect=[100.0, 101.0]),
+        ):
+            attempts, next_try = bt_watchdog.service_speaker_reconnect(2, 99.0)
+        reconnect.assert_called_once_with(*wanted)
+        self.assertEqual(attempts, 0)
+        self.assertEqual(next_try, 101.0 + bt_watchdog.SPEAKER_RETRY_SECONDS)
+
+    def test_speaker_retry_does_not_depend_on_call_controller_probe(self) -> None:
+        wanted = ("C9:5C:FD:6E:28:46", "A0:AD:9F:73:6C:24", "hci1")
+        with (
+            mock.patch.object(bt_watchdog, "desired_speaker", return_value=wanted),
+            mock.patch.object(bt_watchdog, "controller_answers", return_value=False) as probe,
+            mock.patch.object(bt_watchdog, "reconnect_speaker", return_value=False) as reconnect,
+            mock.patch.object(bt_watchdog.time, "monotonic", side_effect=[100.0, 101.0]),
+        ):
+            attempts, next_try = bt_watchdog.service_speaker_reconnect(0, 0.0)
+        probe.assert_not_called()
+        reconnect.assert_called_once_with(*wanted)
+        self.assertEqual(attempts, 1)
+        self.assertEqual(next_try, 101.0 + bt_watchdog.SPEAKER_RETRY_SECONDS)
+
     def test_status_round_trips_permanent_adapter_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             status = Path(directory) / "status.json"
