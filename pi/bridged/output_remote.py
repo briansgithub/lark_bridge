@@ -704,6 +704,42 @@ def _handle_pair_select(
             if not already_ready and not accepted_scan_result:
                 raise TransactionFailure("stale_result", "validating")
 
+            # BlueZ may expire an unpaired Device1 about 30 seconds after inquiry,
+            # while the deliberately longer scan token is still valid. Reacquire the
+            # selected address passively before Pair; ignore every other observation.
+            if not already_ready and not device:
+                phase("pairing")
+                rediscovery = btadapters.discover_bredr(
+                    adapter,
+                    duration=btadapters.DISCOVERY_SECONDS,
+                    cancelled=owner_gone,
+                    progress=lambda _elapsed, _duration: phase("pairing"),
+                )
+                if address not in rediscovery.observations:
+                    raise TransactionFailure(
+                        "pairing_timeout",
+                        "pairing",
+                        "selected speaker was not rediscovered",
+                    )
+                tree = btadapters.managed_objects(
+                    cancelled=owner_gone,
+                    heartbeat=lambda: phase("pairing"),
+                )
+                if not _controller_matches(adapter, tree):
+                    raise btadapters.BluetoothOperationError(
+                        "speaker controller changed during selected-device rediscovery"
+                    )
+                device = btadapters.device_properties(adapter, address, tree)
+                if not device:
+                    raise TransactionFailure(
+                        "pairing_timeout",
+                        "pairing",
+                        "selected speaker disappeared after rediscovery",
+                    )
+                already_ready = bool((device.get("Paired") or {}).get("data")) and _device_has_a2dp(
+                    device
+                )
+
             if accepted_record is not None and output_id in accepted_record.results:
                 label = str(accepted_record.results[output_id]["label"])
             else:

@@ -230,6 +230,87 @@ class PairSelectTests(unittest.TestCase):
         remove.assert_called_once_with(SPEAKER, ADAPTER)
         pin.assert_not_called()
 
+    def test_valid_scan_rediscovers_expired_device_before_pairing(self) -> None:
+        adapter_only = {
+            ADAPTER.path: {
+                "org.bluez.Adapter1": {
+                    "Address": {"data": ADAPTER.address},
+                    "Powered": {"data": True},
+                }
+            }
+        }
+        ordering = []
+        with ExitStack() as stack:
+            self.common(stack, adapter_only)
+            discover = stack.enter_context(
+                mock.patch.object(
+                    output_remote.btadapters,
+                    "discover_bredr",
+                    side_effect=lambda *_args, **_kwargs: (
+                        ordering.append("rediscover")
+                        or btadapters.DiscoveryRun({SPEAKER: -32}, 1.0, 13.0)
+                    ),
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(
+                    output_remote.btadapters,
+                    "managed_objects",
+                    return_value=tree(paired=False, a2dp=True),
+                )
+            )
+            pair = stack.enter_context(
+                mock.patch.object(
+                    output_remote.btadapters,
+                    "pair_device",
+                    side_effect=lambda *_args, **_kwargs: (
+                        ordering.append("pair")
+                        or btadapters.PairResult(False, detail="timed out")
+                    ),
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(
+                    output_remote.btadapters, "remove_device", return_value=(True, "x")
+                )
+            )
+            response = self.request(scan_state())
+
+        self.assertEqual(response["error_code"], "pairing_timeout")
+        self.assertEqual(ordering, ["rediscover", "pair"])
+        discover.assert_called_once()
+        self.assertEqual(discover.call_args.args, (ADAPTER,))
+        self.assertEqual(discover.call_args.kwargs["duration"], btadapters.DISCOVERY_SECONDS)
+        pair.assert_called_once()
+
+    def test_rediscovery_never_pairs_an_unselected_observation(self) -> None:
+        adapter_only = {
+            ADAPTER.path: {
+                "org.bluez.Adapter1": {
+                    "Address": {"data": ADAPTER.address},
+                    "Powered": {"data": True},
+                }
+            }
+        }
+        other = "11:22:33:44:55:66"
+        with ExitStack() as stack:
+            self.common(stack, adapter_only)
+            stack.enter_context(
+                mock.patch.object(
+                    output_remote.btadapters,
+                    "discover_bredr",
+                    return_value=btadapters.DiscoveryRun({other: -20}, 1.0, 13.0),
+                )
+            )
+            pair = stack.enter_context(mock.patch.object(output_remote.btadapters, "pair_device"))
+            remove = stack.enter_context(mock.patch.object(output_remote.btadapters, "remove_device"))
+            response = self.request(scan_state())
+
+        self.assertEqual(response["error_code"], "pairing_timeout")
+        self.assertIn("selected speaker was not rediscovered", response["error"])
+        pair.assert_not_called()
+        remove.assert_not_called()
+
     def test_pin_requirement_has_stable_error_and_new_bond_cleanup(self) -> None:
         with ExitStack() as stack:
             self.common(stack, tree(paired=False, a2dp=False))

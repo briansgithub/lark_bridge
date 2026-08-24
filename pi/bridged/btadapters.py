@@ -855,13 +855,12 @@ def pair_device(
         # BlueZ restricts temporary-agent registration on this appliance's system
         # bus.  The user service has a non-interactive sudo grant; use it only for
         # this short-lived NoInputNoOutput agent, which is torn down in finally.
-        # Do not also pass bluetoothctl's --agent option: that registers at startup,
-        # so the explicit `agent NoInputNoOutput` command below toggles it straight
-        # back off before Pair can run.
-        agent = _LineProcess(["sudo", "-n", "bluetoothctl"])
-        agent.send(f"select {adapter.address}")
-        agent.send("agent NoInputNoOutput")
-        agent.send("default-agent")
+        # This bluetoothctl build registers an agent at startup even without --agent.
+        # Specify the capability there, wait for that one registration to finish, and
+        # never issue the interactive `agent` toggle (which would unregister it).
+        agent = _LineProcess(
+            ["sudo", "-n", "bluetoothctl", "--agent", "NoInputNoOutput"]
+        )
         register_deadline = min(started + 3.0, started + timeout)
         registered = False
         while time.monotonic() < register_deadline:
@@ -876,7 +875,7 @@ def pair_device(
             if any(marker in lowered for marker in _PIN_MARKERS):
                 pin_requested = True
                 break
-            if "default agent request successful" in lowered:
+            if "agent registered" in lowered:
                 registered = True
                 break
             if "failed" in lowered:
@@ -886,6 +885,32 @@ def pair_device(
             return PairResult(False, True, "pairing requested a PIN or passkey")
         if not registered:
             return PairResult(False, detail="temporary NoInputNoOutput agent did not register")
+
+        agent.send("default-agent")
+        default_deadline = min(time.monotonic() + 3.0, started + timeout)
+        defaulted = False
+        while time.monotonic() < default_deadline:
+            if cancelled is not None and cancelled():
+                raise BluetoothOperationCancelled("pairing owner disconnected")
+            item = agent.get(min(0.1, default_deadline - time.monotonic()))
+            if item is None:
+                if agent.process.poll() is not None:
+                    break
+                continue
+            lowered = item[1].casefold()
+            if any(marker in lowered for marker in _PIN_MARKERS):
+                pin_requested = True
+                break
+            if "default agent request successful" in lowered:
+                defaulted = True
+                break
+            if "failed" in lowered:
+                break
+        if pin_requested:
+            cancel_pairing(address, adapter)
+            return PairResult(False, True, "pairing requested a PIN or passkey")
+        if not defaulted:
+            return PairResult(False, detail="temporary NoInputNoOutput agent was not made default")
 
         remaining = max(0.1, started + timeout - time.monotonic())
         path = path_for(adapter, address)
