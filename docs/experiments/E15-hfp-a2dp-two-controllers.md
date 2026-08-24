@@ -83,6 +83,67 @@ controller, and — after a forced firmware reload — re-established the phone 
 without intervention. `pi/bridged/bt_watchdog.py` listed exactly this as **STILL OWED**
 pending a live call. It is now observed once.
 
+### 7. Switching output mid-call costs 5.9 s of uplink
+
+Measured with `rig/pi/measure/output_switch_probe.py` on a live Discord call, wired jack ->
+Boombox, sampling `pw-link` at 0.2 s:
+
+| Gap | Seconds |
+|---|---:|
+| **Uplink** (`output.bridge.mic` -> phone HFP sink) | **5.9** |
+| Downlink (the chosen output receiving anything) | 0.5 |
+
+So for ~6 seconds after the user changes speakers, **the far end cannot hear them.** The
+mechanism is known and is not mysterious: `CallGraph.teardown()` stops `bridge.mic` along with
+`bridge.callout`, and with the AEC enabled the rebuild cannot avoid it -- the AEC module's
+playback target is fixed at load, so retargeting means restarting the module, which destroys
+`bridge.aec.source`, which is what `bridge.mic` captures from. The 5.9 s is then the sum of
+two 2 s supervisor polls plus module start and loopback attach.
+
+Three mitigations exist and none is implemented:
+
+1. **Relink instead of rebuild.** `echo-cancel-playback` is a real node; unlinking it from the
+   old sink and linking it to the new one would avoid restarting the AEC at all. Cheapest for
+   the user, most invasive to the graph, and it would need E10/E12's timing re-verified.
+2. **Skip the poll wait** for an output-only change, which is worth roughly 2 of the 5.9 s.
+3. **Accept and announce it.** A chime already plays on the new output; a "switching" tone on
+   the old one would at least make the gap legible rather than alarming.
+
+n=1. Two attempted repeats were correctly refused by the probe's own guards after the speaker
+dropped (see finding 8), so the number is one clean observation, not a distribution.
+
+### 8. The Boombox drops its A2DP link when idle, and nothing re-establishes it
+
+Observed repeatedly: after a couple of minutes with no audio flowing, the speaker disconnects.
+`desired` correctly stayed on the Boombox while `chosen` fell back to the wired output, which
+is the designed behaviour -- but nothing on the Pi ever pages it back.
+
+`bt_watchdog.py` reconnects the **phone** only. In a car this means the speaker silently
+goes away mid-drive and stays away. This is the single largest remaining gap for Mode 1 as a
+product, and it is separate from anything E03 or the coexistence work covers.
+
+### 9. Android will not route a VoIP call to the bridge without a fresh HFP connection
+
+The Discord call sat in `MODE_IN_COMMUNICATION` with `Active communication device:
+type:speaker name:Pixel 7a` and `mScoAudioState: SCO_STATE_INACTIVE`, while the bridge was
+bonded, ACL-connected, and its HFP state machine read `mCurrentState: Connected`. The blocker
+was `HeadsetService.mActiveDevice: null` -- Android had a connected headset it had not elected
+as active, and `Telecom.isInCall(): false` because Discord does not register with Telecom, so
+nothing in the Bluetooth stack believed a call existed.
+
+**Disconnecting and reconnecting the phone's bond from the Pi fixed it**: Android elects an
+active headset on a fresh connection. After the cycle, `mActiveDevice` was the bridge,
+`mCurrentState: AudioOn`, `Active communication device: bt_sco_hs larkbridge-v2`,
+`mScoAudioState: SCO_STATE_ACTIVE_INTERNAL`, and the supervisor reached ACTIVE with
+`aec_verified: True`.
+
+This is the same family as `docs/high-risk-untested.md` item 5 and E13 Finding 2, and it has a
+consequence for the roadmap: the reliable lever is `AudioManager.setCommunicationDevice()`,
+which needs an app on the phone. The existing `AudioInputRouter` project already implements
+exactly that, including `TYPE_BLUETOOTH_SCO` matched by address
+(`MicRouteController.kt:483-486`) and an explicit output override that wins over its own
+matching logic. It is **not currently installed on the Pixel**.
+
 ## Caveats — read these before believing the result
 
 - **n=1 for the dropout run and n=1 for orientation A survival.** E03's own methodology
