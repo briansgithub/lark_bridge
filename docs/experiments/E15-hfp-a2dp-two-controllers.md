@@ -198,9 +198,28 @@ active headset on a fresh connection. After the cycle, `mActiveDevice` was the b
 This is the same family as `docs/high-risk-untested.md` item 5 and E13 Finding 2, and it has a
 consequence for the roadmap: the reliable lever is `AudioManager.setCommunicationDevice()`,
 which needs an app on the phone. The existing `AudioInputRouter` project already implements
-exactly that, including `TYPE_BLUETOOTH_SCO` matched by address
-(`MicRouteController.kt:483-486`) and an explicit output override that wins over its own
-matching logic. It is **not currently installed on the Pixel**.
+exactly that, including `TYPE_BLUETOOTH_SCO` matched by address and an explicit output override
+that wins over its own matching logic. It is now installed on the Pixel. A one-action **Use
+LarkBridge for calls** flow selected the bridge, restored automatic output, and reached a verified
+route without the screen remaining open. The controller's bounded settle retry healed Android's
+initial phone-mic route in 3.7 s, a killed foreground-service process restarted and re-verified
+unaided, and reopening the app repaired a deliberately interrupted global mute using durable
+mute-ownership state. These are idle-phone tests; Discord's mid-call route clobber and the E13
+audio-stack-restart case still need a live-call continuation.
+
+### 11. The selected startup output is now an explicit, recovery-safe choice
+
+Runtime output selection remains in tmpfs: ordinary mid-call changes cause no LARKDATA writes
+and never restart the supervisor. `bridgectl output set <speaker> --remember` now separately
+patches a candidate configuration, validates it with the production loader, and commits it through
+the hardened image's existing checksummed A/B writer. A failed durable commit refuses the live
+change instead of leaving a partial result.
+
+On the hardware, remembering the Boombox advanced configuration slot A -> B. `lark_state.py
+status` validated slot B, whose stable identities are speaker `C9:5C:FD:6E:28:46` and controller
+`A0:AD:9F:73:6C:24`; it retains the 1920-frame AEC timing and wired fallback. The running call
+graph was not restarted. An actual reboot remains deferred to the power-loss campaign, but the
+configuration that the storage guard will materialize is now present and checksummed.
 
 ## Caveats — read these before believing the result
 
@@ -215,8 +234,13 @@ matching logic. It is **not currently installed on the Pixel**.
   partial confound across the survival comparison.
 - **The iWorld is an unreliable fixture.** It repeatedly bounced between adapters and refused
   connections with `br-connection-page-timeout`, consistent with E03's suspicion of it.
-- **No AEC measurement at all.** Hazard 1 — whether A2DP's added latency breaks echo
-  cancellation — is entirely unmeasured. It is the risk most likely to kill Mode 1.
+- **AEC is accepted only at n=1 on a real call.** That run measured 13.26 dB aggregate
+  suppression and passed subjectively, but synthetic speaker trials vary materially (7.88 dB for
+  sine and 0.01 dB for multitone in the latest corrected pair). Do not generalize one real-call
+  result into a population claim.
+- **The corrected synthetic series stopped after two trials.** Before trial 3 the Boombox dropped
+  A2DP and the acoustic preflight detected no speaker sound. The harness stopped rather than
+  measuring a fallback output; speaker-dependent work was paused until an operator can wake it.
 - **Orientation B unmeasured.** Call on the dongle, speaker on the onboard radio was planned
   and never run.
 - **Whether btrtl patches this dongle is unresolved.** No `RTL:` firmware lines appeared even
@@ -238,12 +262,19 @@ matching logic. It is **not currently installed on the Pixel**.
 4. **`systemd-rfkill` persists soft-block state keyed on USB port path.** The dongle arrived
    soft-blocked and so never ran controller setup, presenting as a dead adapter rather than a
    blocked one. Moving it between ports reproduced the block with a fresh rfkill index.
+5. **The acoustic harness preflighted one output and measured another.** After runtime output
+   selection was added, `speaker_preflight.py` correctly verified the chosen Boombox while
+   `aec_bench.py` silently retained its legacy `settings.wired_output` default. With AUX unplugged,
+   this produced a false three-trial AEC failure. The bench now defaults to the same selected node;
+   explicit instrument targets still override it.
 
 ## What remains
 
-AEC under A2DP latency (hazard 1), orientation B, ≥10 repeats per orientation, the 60-minute
-soak, cold-boot dual-link establishment, mid-call power cut, speaker out-of-range recovery, and
-the full Mode 1W regression suite.
+Orientation B, ≥10 repeats per orientation, the 60-minute soak, actual cold-boot dual-link
+establishment, mid-call power cut, a complete out-of-range/return acoustic run, and the full
+Mode 1W regression suite. AEC also needs repeated real-call measurements; the first one passes,
+but it is not yet a distribution. The newly installed phone router also needs a live Discord call
+to verify route re-assertion and the audio-stack-restart recovery it is intended to mitigate.
 
 ## Verdict
 
@@ -251,6 +282,6 @@ the full Mode 1W regression suite.
 the failure that one controller demonstrably still exhibits, measured the same day on the same
 rig with the same instrument. That is a real change in the risk.
 
-It is not the bar. Seven minutes at n=1 is not sixty minutes at n=10, and the AEC question the
-brief calls the likeliest killer has not been measured at all. Mode 1 stays **an option, not
-the default**, until those land.
+It is not the bar. Seven minutes at n=1 is not sixty minutes at n=10. The first real-call AEC
+measurement passes, but the two corrected synthetic trials disagree sharply and do not establish
+a distribution. Mode 1 stays **an option, not the default**, until those land.

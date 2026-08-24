@@ -4,6 +4,7 @@
     bridgectl output              # list the outputs, marking live and chosen
     bridgectl output set 2        # by list index
     bridgectl output set boombox  # by name, case-insensitive substring
+    bridgectl output set boombox --remember  # also make it the next-boot default
     bridgectl output set wired
     bridgectl output rename 2 "Car stereo"
     bridgectl output clear        # revert to the configured default
@@ -37,7 +38,9 @@ import math
 import struct
 import subprocess
 import sys
+import tempfile
 import time
+import tomllib
 import wave
 from pathlib import Path
 from typing import Any
@@ -262,6 +265,170 @@ def target_adapter(target: dict[str, Any]):
     return next((a for a in btadapters.adapters() if a.hci == hci), None) if hci else None
 
 
+def _toml_value(value: str | bool) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    # JSON's double-quoted string syntax is valid TOML for the identifiers stored here.
+    return json.dumps(value)
+
+
+def patch_toml_table(
+    text: str,
+    table: str,
+    values: dict[str, str | bool | None],
+) -> str:
+    """Update one TOML table without rewriting unrelated comments or formatting.
+
+    The hardened appliance deliberately ships without a TOML writer dependency.  A full
+    parse-and-reserialize would either add one to the boot-critical image or discard the
+    operator's comments.  These tables contain only simple scalar keys, so a narrow line
+    patch is both easier to audit and less destructive.  The completed document is parsed
+    again before it can reach the persistent slot.
+    """
+    lines = text.splitlines(keepends=True)
+    header = f"[{table}]"
+    start = next(
+        (index for index, line in enumerate(lines) if line.strip() == header),
+        None,
+    )
+    if start is None:
+        if lines and not lines[-1].endswith(("\n", "\r")):
+            lines[-1] += "\n"
+        if lines and lines[-1].strip():
+            lines.append("\n")
+        lines.append(header + "\n")
+        start = len(lines) - 1
+        end = len(lines)
+    else:
+        end = next(
+            (
+                index
+                for index in range(start + 1, len(lines))
+                if lines[index].lstrip().startswith("[")
+            ),
+            len(lines),
+        )
+
+    for key, value in values.items():
+        match = next(
+            (
+                index
+                for index in range(start + 1, end)
+                if lines[index].lstrip().startswith(f"{key} ")
+                or lines[index].lstrip().startswith(f"{key}=")
+            ),
+            None,
+        )
+        if value is None:
+            if match is not None:
+                del lines[match]
+                end -= 1
+            continue
+        replacement = f"{key} = {_toml_value(value)}\n"
+        if match is None:
+            lines.insert(end, replacement)
+            end += 1
+        else:
+            lines[match] = replacement
+
+    candidate = "".join(lines)
+    tomllib.loads(candidate)
+    return candidate
+
+
+def startup_config_for(target: dict[str, Any], current: str) -> str:
+    """Return a validated config that makes *target* the next-boot default."""
+    kind = str(target.get("kind") or "")
+    output_id = str(target.get("id") or "")
+    if kind not in {"wired", "a2dp"} or not output_id:
+        raise ValueError("output has no persistable identity")
+    candidate = patch_toml_table(
+        current,
+        "bridge",
+        {
+            "mode": "bluetooth" if kind == "a2dp" else "bluetooth-wired",
+            "fallback_to_wired": True,
+        },
+    )
+    output_values: dict[str, str | bool | None] = {
+        "id": output_id,
+        "address": None,
+        "adapter": None,
+        "reconnect": None,
+    }
+    if kind == "a2dp":
+        address = str(target.get("address") or "").upper()
+        adapter = str(target.get("adapter_address") or "").upper()
+        if not address or not adapter:
+            raise ValueError(
+                "Bluetooth startup choices require the speaker and controller addresses"
+            )
+        output_values.update(
+            {"address": address, "adapter": adapter, "reconnect": True}
+        )
+    return patch_toml_table(candidate, "devices.output", output_values)
+
+
+def state_tool_path() -> Path:
+    installed = Path("/usr/local/lib/rpi-lark-bridge/powerloss/lark_state.py")
+    if installed.exists():
+        return installed
+    return Path(__file__).resolve().parents[1] / "powerloss" / "lark_state.py"
+
+
+def remember_startup_output(
+    target: dict[str, Any],
+    config_path: Path,
+    *,
+    tool_path: Path | None = None,
+) -> tuple[bool, str]:
+    """Commit a next-boot default through LARKDATA's checksummed A/B slots."""
+    try:
+        candidate = startup_config_for(target, config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
+        return False, f"cannot prepare startup configuration: {exc}"
+
+    runtime = supervisor.default_status_path().parent
+    runtime.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=runtime,
+            prefix=".bridge-startup-output-",
+            suffix=".toml",
+            delete=False,
+        ) as handle:
+            handle.write(candidate)
+            temporary = Path(handle.name)
+        result = subprocess.run(
+            [
+                "sudo",
+                "-n",
+                "python3",
+                str(tool_path or state_tool_path()),
+                "config-write",
+                "--source",
+                str(temporary),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip() or f"exit {result.returncode}"
+            return False, f"persistent configuration rejected: {detail}"
+        slot = result.stdout.strip()
+        return True, f"saved in recovery-safe configuration slot {slot or '?'}"
+    except (OSError, subprocess.SubprocessError) as exc:
+        return False, f"persistent configuration failed: {exc}"
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def do_set(args: argparse.Namespace) -> int:
     status = read_status()
     candidates = outputs_of(status)
@@ -296,6 +463,16 @@ def do_set(args: argparse.Namespace) -> int:
                     file=sys.stderr,
                 )
                 return 1
+
+    if getattr(args, "remember", False):
+        config_path = Path(
+            status.get("config_path") or supervisor.default_config_path()
+        )
+        saved, detail = remember_startup_output(target, config_path)
+        if not saved:
+            print(f"cannot remember {target['label']}: {detail}", file=sys.stderr)
+            return 1
+        print(f"startup: {detail}", file=sys.stderr)
 
     needs_connect = target["kind"] == "a2dp" and not target["present"]
     shares_call_radio = bool(
@@ -390,6 +567,11 @@ def main(argv: list[str] | None = None) -> int:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="play a confirmation tone out of the selected output (default: yes)",
+    )
+    setter.add_argument(
+        "--remember",
+        action="store_true",
+        help="also use this output after a restart (commits one recovery-safe config slot)",
     )
     setter.set_defaults(func=do_set)
 

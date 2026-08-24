@@ -390,9 +390,10 @@ def main() -> int:
             # This runs during a live call. E07 measured paging a device during active SCO as
             # its own failure mode -- but that was ONE controller, where the page and the
             # voice link competed for the same radio. Here the speaker is on hci1 and SCO is
-            # on hci0, so the premise does not hold. It is nonetheless UNMEASURED, which is
-            # why the retry interval is 30 s rather than the 15 s probe cadence: if a mid-call
-            # page does disturb SCO, this errs towards disturbing it rarely.
+            # on hci0, so the premise does not hold. E15 measured one mid-call page on the
+            # other radio with SCO holding at its nominal 135 frames/s. The retry interval
+            # remains 30 s because n=1 is enough to permit the cross-radio case, not enough to
+            # justify aggressive paging.
             if SPEAKER_RECONNECT:
                 wanted = desired_speaker()
                 if wanted is None or not wanted[0]:
@@ -451,11 +452,10 @@ if __name__ == "__main__":
 #         running bt-reset.sh  ->  RECOVERED at rung 6
 #     and hci0 returned UP RUNNING PSCAN ISCAN with the version probe answering.
 #
-# STILL OWED — needs a live call and therefore the operator:
-#   * The acceptance criterion itself: after recovery, does **call audio return unaided**?
-#     The phone logged `resetBluetoothSco` and fell back to its earpiece during occurrence 5,
-#     so Android may not re-route on its own. If it does not, this must do more than reconnect
-#     — and the fix has to work with no PC present, so `adb` is not an option.
+# LIVE-CALL CONTINUATION — measured 2026-08-23 (E15):
+#   * After the watchdog recovered a wedged call radio, the phone and eSCO link returned
+#     unaided and the supervisor rebuilt an ACTIVE, AEC-verified graph. Observed once.
+# STILL OWED:
 #   * Detection latency against a REAL wedge rather than an absent adapter. An unbound driver
 #     fails the probe quickly; a wedged controller blocks until PROBE_TIMEOUT. The timing above
 #     assumes the latter; confirm it.

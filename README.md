@@ -16,9 +16,11 @@ full-duplex USB headset — while splitting the microphone and playback sides be
                                      └── Pi Pico ──USB──► Pixel 7a       (Mode 2)
 ```
 
-**Status: Mode 1W works end to end.** Speaking into the Lark A1 is heard by Discord on the
-Pixel 7a, through the bridge, over HFP with **mSBC wideband**. Spikes S1 and S2 pass; 15
-hardware tests pass. Spike S3 (HFP + A2DP on one radio) is the remaining gate. See
+**Status: Mode 1W works end to end; Mode 1 works as an opt-in two-controller mode.** Speaking
+into the Lark A1 is heard by Discord on the Pixel 7a over HFP with **mSBC wideband**. A second
+Bluetooth controller now carries A2DP independently, and a real-call wired-to-A2DP switch kept
+the Lark uplink uninterrupted while applying in 0.498 s. Mode 1 remains opt-in until the long
+reliability campaign is complete. See
 [`docs/BRINGUP-REPORT.md`](docs/BRINGUP-REPORT.md) for what is proven and what broke;
 [`PLAN.md`](PLAN.md) for the architecture.
 
@@ -43,14 +45,29 @@ to power the Pico that back-feeds the phone, and it is not obvious.
 
 | Mode | Microphone path | Call audio out | Radio does | Status |
 |---|---|---|---|---|
-| **1** Bluetooth bridge | Lark → Pi → HFP → Pixel | A2DP car stereo | HFP **+** A2DP | **Primary target.** Gated on spike S3 |
+| **1** Bluetooth bridge | Lark → Pi → HFP → Pixel | A2DP car stereo | HFP onboard + A2DP USB | **WORKING, opt-in.** Long reliability gate remains |
 | **1W** Bluetooth + wired | Lark → Pi → HFP → Pixel | USB DAC / 3.5 mm jack | HFP only | **WORKING** — proven end to end |
 | **2** USB headset bridge | Lark → Pi → Pico → Pixel | Pixel → Pico → Pi → any sink | nothing | Independent track |
 | **3** Diagnostics | raw devices exposed | — | — | Always available |
 
-Mode 1W exists because putting HFP/eSCO and A2DP on the Pi 3's single Broadcom radio is the
-project's biggest unknown. 1W removes that risk from the critical path, is roughly 200 ms lower
-latency on the audio you hear, and differs from Mode 1 by one config string. See `PLAN.md` §1.4.
+Mode 1W remains the proven fallback. One-radio HFP + A2DP still fails; Mode 1 therefore assigns
+the phone to the onboard controller and the speaker to a USB controller identified by its
+permanent address. See `PLAN.md` §1.4 and
+[`E15`](docs/experiments/E15-hfp-a2dp-two-controllers.md).
+
+## Choosing call output
+
+The selector accepts a list number, friendly-name fragment, or canonical id. A live choice is
+kept in RAM so changing it cannot churn persistent storage. Add `--remember` only when that
+choice should also become the next-boot default; it commits through the hardened image's
+checksummed A/B configuration slots without restarting an active call.
+
+```bash
+rig/rig output
+rig/rig output set boombox
+rig/rig output set boombox --remember
+rig/rig output set wired --remember
+```
 
 ## Repository layout
 
@@ -69,7 +86,8 @@ latency on the audio you hear, and differs from Mode 1 by one config string. See
 
 ## Getting started
 
-The rig drives the Pi over SSH and the phone over ADB. **S1 and S2 are done**; S3 is next:
+The rig drives the Pi over SSH and the phone over ADB. The original one-radio S3 result remains
+the negative control; E15 contains the two-radio continuation:
 
 ```bash
 sudo ./tests/stage-b-hfp/s1-sco-over-hci.sh        # Does SCO reach the host at all on this radio?
