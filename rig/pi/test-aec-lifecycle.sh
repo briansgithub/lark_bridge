@@ -10,6 +10,8 @@ HFP_SINK="bluez_output.${MAC_NODE}.1"
 HFP_SOURCE="bluez_input.${MAC_NODE}.0"
 CYCLES="${1:-10}"
 HOLD_SECONDS="${HOLD_SECONDS:-0}"
+SWITCH_TO="${SWITCH_TO:-}"
+SWITCH_EVIDENCE="${SWITCH_EVIDENCE:-/tmp/larkbridge-output-switch.json}"
 
 module_ids=()
 cleanup() {
@@ -97,6 +99,14 @@ for (( cycle=1; cycle<=CYCLES; cycle++ )); do
   if [ "$HOLD_SECONDS" != "0" ]; then
     echo "cycle $cycle: holding ACTIVE for ${HOLD_SECONDS}s" >&2
     sleep "$HOLD_SECONDS"
+  fi
+
+  if [ -n "$SWITCH_TO" ] && [ "$cycle" -eq 1 ]; then
+    echo "cycle $cycle: measuring live output retarget -> $SWITCH_TO" >&2
+    python3 ~/rpi-lark-bridge/rig/pi/measure/output_switch_probe.py \
+      --to "$SWITCH_TO" --seconds 8 --switch-at 2 --interval 0.05 \
+      --out "$SWITCH_EVIDENCE"
+    wait_active_verified
   fi
 
   if [ "$cycle" -eq $(( (CYCLES + 1) / 2 )) ]; then

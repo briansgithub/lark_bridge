@@ -83,7 +83,7 @@ controller, and — after a forced firmware reload — re-established the phone 
 without intervention. `pi/bridged/bt_watchdog.py` listed exactly this as **STILL OWED**
 pending a live call. It is now observed once.
 
-### 7. Switching output mid-call costs 5.9 s of uplink
+### 7. Output switching originally cost 5.9 s of uplink; live retarget is now sub-second
 
 Measured with `rig/pi/measure/output_switch_probe.py` on a live Discord call, wired jack ->
 Boombox, sampling `pw-link` at 0.2 s:
@@ -100,7 +100,7 @@ playback target is fixed at load, so retargeting means restarting the module, wh
 `bridge.aec.source`, which is what `bridge.mic` captures from. The 5.9 s is then the sum of
 two 2 s supervisor polls plus module start and loopback attach.
 
-Three mitigations exist and none is implemented:
+Three mitigations were identified:
 
 1. **Relink instead of rebuild.** `echo-cancel-playback` is a real node; unlinking it from the
    old sink and linking it to the new one would avoid restarting the AEC at all. Cheapest for
@@ -111,6 +111,22 @@ Three mitigations exist and none is implemented:
 
 n=1. Two attempted repeats were correctly refused by the probe's own guards after the speaker
 dropped (see finding 8), so the number is one clean observation, not a distribution.
+
+**Continuation (2026-08-24): mitigations 1 and 2 are implemented.** The supervisor now watches
+the desired-output file at 50 ms intervals while retaining its slower full-graph poll. For an
+output-only change it makes the new playback link before removing the old link, leaving the
+Lark uplink, `bridge.mic`, and the AEC host running. Exact playback-target validation prevents
+stale duplicate links, and a failed break rolls back the new link.
+
+On the real Pixel HFP + Lark + Boombox hardware topology, with a synthetic call endpoint, the
+wired -> A2DP selection applied in **0.476 s**. At 50 ms sampling the observed uplink and
+downlink topology gaps were both **0.0 s**, the final graph was `ACTIVE`, and a subsequent
+supervisor restart recovered the call graph. A post-reconnect acoustic preflight then confirmed
+actual Boombox playback at the Lark mic with a **31.88 dB** level margin and no clipping.
+
+This is strong hardware-topology evidence, but it is not yet the live-call acceptance result.
+Repeat the switch during a real Discord or phone call and verify the far end retains the uplink
+before closing the original finding.
 
 ### 8. The Boombox drops its A2DP link when idle, and nothing re-establishes it
 
