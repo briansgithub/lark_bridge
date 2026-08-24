@@ -54,6 +54,7 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import btadapters
 
@@ -143,6 +144,12 @@ SPEAKER_RETRY_SECONDS = float(os.environ.get("BRIDGE_WD_SPEAKER_RETRY", "30"))
 # The supervisor is user-scoped and this watchdog is root, so the status file has to be named
 # rather than derived: default_status_path() would resolve to /run/user/0 under root.
 STATUS_PATH = os.environ.get("BRIDGE_WD_STATUS", "/run/user/1000/bridge-status.json")
+RADIO_LOCK_PATH = Path(
+    os.environ.get(
+        "BRIDGE_OUTPUT_RADIO_LOCK",
+        str(Path(STATUS_PATH).with_name("bridge-output-radio.lock")),
+    )
+)
 
 BACKOFF_START = 60.0
 BACKOFF_MAX = 900.0
@@ -273,11 +280,12 @@ def reconnect_speaker(
     address: str, adapter_address: str | None, adapter_hci: str | None
 ) -> bool:
     """Page the chosen speaker on ITS OWN adapter, A2DP profile only."""
+    canonical = btadapters.canonical_mac(adapter_address)
     adapter = (
-        btadapters.adapter_by_address(adapter_address) if adapter_address else None
+        btadapters.adapter_by_address(canonical)
+        if canonical is not None and canonical == adapter_address
+        else None
     )
-    if adapter is None and not adapter_address and adapter_hci:
-        adapter = next((a for a in btadapters.adapters() if a.hci == adapter_hci), None)
     if adapter is None:
         log.error(
             "speaker adapter unavailable (address=%s, last hci=%s)",
@@ -323,14 +331,21 @@ def service_speaker_reconnect(attempts: int, next_try: float) -> tuple[int, floa
     if now < next_try or attempts >= SPEAKER_ATTEMPTS:
         return attempts, next_try
 
-    attempts += 1
-    log.warning(
-        "chosen speaker %s is absent — paging (attempt %d/%d)",
-        wanted[0], attempts, SPEAKER_ATTEMPTS,
-    )
-    if reconnect_speaker(*wanted):
-        attempts = 0
-    return attempts, time.monotonic() + SPEAKER_RETRY_SECONDS
+    # Scan/pair-select owns the radio as one transaction. A skipped watchdog page is not a
+    # failed attempt and must not move the deadline, or setup could silently consume the
+    # appliance's bounded reconnect budget.
+    with btadapters.speaker_radio_lock(RADIO_LOCK_PATH, blocking=False) as acquired:
+        if not acquired:
+            log.info("speaker setup owns the radio; reconnect page skipped")
+            return attempts, next_try
+        attempts += 1
+        log.warning(
+            "chosen speaker %s is absent — paging (attempt %d/%d)",
+            wanted[0], attempts, SPEAKER_ATTEMPTS,
+        )
+        if reconnect_speaker(*wanted):
+            attempts = 0
+        return attempts, time.monotonic() + SPEAKER_RETRY_SECONDS
 
 
 def main() -> int:

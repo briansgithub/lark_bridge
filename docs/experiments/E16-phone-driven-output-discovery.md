@@ -1,12 +1,14 @@
 # E16 — phone-driven output discovery baseline and contract
 
-Baseline recorded 2026-08-24. This is a read-only starting point for the next
-implementation pass; no pairing, scanning, connection, deployment, reboot, or
-Pixel capture was performed.
+Baseline recorded 2026-08-24. The baseline capture was read-only: no pairing,
+scanning, connection, deployment, reboot, or Pixel capture was performed. The
+Pi implementation described in the status section below was completed later
+from host fixtures only and likewise did not operate live Bluetooth hardware.
 
 The implementation contract below was recorded later the same day. It fixes the
 product, protocol, transaction, cleanup, UI, and acceptance decisions for the
-implementation pass; it does not report those behaviors as implemented or tested.
+implementation pass. The Pi status section distinguishes host-implemented and
+host-tested behavior from Android and hardware acceptance that remain open.
 
 ## Source checkpoints
 
@@ -100,6 +102,72 @@ peer whose name contains `larkbridge`.
 - Do not assume the status candidate list is the same as unprivileged
   `bluetoothctl devices`: the offline Soundcore entry is retained by the Pi's
   bonded-state enumeration.
+
+## Pi implementation status — 2026-08-24
+
+The Pi half of this contract is implemented in the checkpoint containing this
+update. No Android repository was modified and no command was deployed to or run
+against the Pi, Pixel, speaker controller, or a real Bluetooth device.
+
+Implemented behavior:
+
+- `btadapters.py` now owns the fixed 12-second BR/EDR discovery session, filters
+  timestamped BlueZ monitor events to the explicit adapter object, retains the
+  strongest RSSI, and guarantees `scan off`, monitor/owner process-group reap,
+  temporary `NoInputNoOutput` agent removal, explicit-path `Pair`,
+  `RemoveDevice`, trust writes, and A2DP-only `ConnectProfile` cleanup.
+- `outputs.py` adds the public `setup_state`, makes a wrong-controller bond
+  visible but unavailable/nonselectable/nonroutable, preserves valid offline
+  sticky selection, and shapes deterministic E16 discovery results including
+  confidence and duplicate-name discriminators.
+- `output_remote.py` preserves `list`/`status`/`set`, adds `call_active`, and
+  implements correlated progress plus final framing, one in-memory 60-second
+  scan token, strict identifier/MAC/controller validation, all seven
+  `pair_select` phases, new-bond-only rollback, and save ordering of pairing
+  seal → A/B config → runtime desire → supervisor route confirmation.
+- `bridgectl.py` refuses `needs_setup`, never falls back from a permanent
+  controller address to `hciX`, preserves the dedicated controller when wired
+  is selected, and exposes exact-byte A/B config restoration for transaction
+  rollback. `bt_watchdog.py` shares the advisory radio lock and skips a busy
+  speaker page without spending an attempt or moving its retry deadline; call
+  recovery remains outside that lock.
+
+Exact host validation from the Windows checkout, using
+`B:\Desktop\W\Hardware_write\rpi_lark_mic_bridge\.venv\Scripts\python.exe`:
+
+- `make test-py` could not start because GNU Make is not installed in this
+  checkout environment (`make` was not recognized). Its exact Python
+  constituents were run individually:
+  - from `pi/bridged`, `python -m pytest tests -q` → **133 passed, 5 subtests
+    passed**;
+  - `python -m unittest discover -s rig/boot/tests -p 'test_*.py'` → **10
+    passed**;
+  - `python -m unittest discover -s pi/powerloss/tests -p 'test_*.py'` → **15
+    passed, 1 skipped**;
+  - `python -m unittest discover -s rig/powerloss/tests -p 'test_*.py'` → **2
+    passed**;
+  - `python -m unittest discover -s scripts/powerloss/tests -p 'test_*.py'` →
+    **2 passed**.
+- Ruff 0.16.3 on the five changed Pi modules and their six focused test files →
+  **all checks passed**.
+- After the final root/user lock-file open-order hardening,
+  `pytest tests/test_btadapters.py tests/test_bt_watchdog.py -q` → **21 passed**;
+  scoped Ruff and mypy for those two modules also passed.
+- Mypy 2.3.1 with `--follow-imports=skip` on `bt_watchdog.py`,
+  `btadapters.py`, `outputs.py`, `output_remote.py`, and `bridgectl.py` →
+  **success, no issues in 5 source files**. The repository Make constituent
+  (`mypy bridge_supervisor.py bt_watchdog.py`) still reports the pre-existing,
+  untouched `bridge_supervisor.py:730` optional-value warning on this Windows
+  platform.
+- Black 26.5.1 check-only was run without rewriting files. It requests
+  reformatting for both touched files and untouched files read directly from
+  the contract commit (including `bridge_supervisor.py`, `bt_watchdog.py`, and
+  `outputs.py`), so this workspace/tool-version formatting mismatch remains
+  recorded rather than expanding E16 into a repository-wide rewrite.
+
+Hardware/Pixel acceptance, BlueZ command-output confirmation on version 5.82,
+live RFCOMM cancellation timing, reboot/power-cut persistence, and all Android
+UI/tile/permission work remain explicitly unvalidated here.
 
 ## Decision-complete implementation contract
 

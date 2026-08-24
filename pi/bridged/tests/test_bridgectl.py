@@ -97,6 +97,28 @@ class SelectionSafetyTests(unittest.TestCase):
             self.assertEqual(bridgectl.target_adapter(target), adapter)
         resolver.assert_called_once_with(adapter.address)
 
+    def test_target_adapter_never_falls_back_to_hci_index(self) -> None:
+        with mock.patch.object(bridgectl.btadapters, "adapters") as adapters:
+            self.assertIsNone(
+                bridgectl.target_adapter(dict(BOOMBOX, adapter_address=None, adapter="hci1"))
+            )
+        adapters.assert_not_called()
+
+    def test_needs_setup_is_rejected_before_trust_connect_or_desire(self) -> None:
+        target = dict(BOOMBOX, setup_state="needs_setup", present=False, node=None)
+        status = {"call": {"hfp_nodes_present": False}, "output": {"candidates": [target]}}
+        args = Namespace(selector=target["id"], connect=True, force=False, chime=False)
+        with (
+            mock.patch.object(bridgectl, "read_status", return_value=status),
+            mock.patch.object(bridgectl.btadapters, "pin_to_adapter") as pin,
+            mock.patch.object(bridgectl.btadapters, "connect_profile") as connect,
+            mock.patch.object(bridgectl.supervisor, "write_desire") as desire,
+        ):
+            self.assertEqual(bridgectl.do_set(args), 1)
+        pin.assert_not_called()
+        connect.assert_not_called()
+        desire.assert_not_called()
+
     def test_trust_failure_does_not_record_the_selection(self) -> None:
         adapter = btadapters.Adapter("hci1", "A0:AD:9F:73:6C:24", "USB", 1)
         failed = btadapters.TrustPinResult(False, failures=("D-Bus refused",))
@@ -177,14 +199,17 @@ node_latency_frames = 1920
         self.assertEqual(settings.speaker_adapter, BOOMBOX["adapter_address"])
         self.assertTrue(settings.aec.enabled)
 
-    def test_wired_default_removes_stale_speaker_identity(self) -> None:
+    def test_wired_default_preserves_dedicated_speaker_controller_identity(self) -> None:
         current = bridgectl.startup_config_for(BOOMBOX, self.BASE)
         candidate = bridgectl.startup_config_for(WIRED, current)
         document = tomllib.loads(candidate)
         output = document["devices"]["output"]
 
         self.assertEqual(document["bridge"]["mode"], "bluetooth-wired")
-        self.assertEqual(output, {"id": WIRED["id"]})
+        self.assertEqual(
+            output,
+            {"id": WIRED["id"], "adapter": BOOMBOX["adapter_address"]},
+        )
 
     def test_missing_permanent_adapter_address_is_refused(self) -> None:
         with self.assertRaisesRegex(ValueError, "controller addresses"):
@@ -192,6 +217,15 @@ node_latency_frames = 1920
                 dict(BOOMBOX, adapter_address=None),
                 self.BASE,
             )
+
+    def test_malformed_device_or_controller_identity_is_refused(self) -> None:
+        for changed in (
+            dict(BOOMBOX, address="not-a-mac"),
+            dict(BOOMBOX, adapter_address="hci1"),
+            dict(BOOMBOX, id="a2dp:00:00:00:00:00:00"),
+        ):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                bridgectl.startup_config_for(changed, self.BASE)
 
     def test_commit_uses_the_existing_ab_slot_writer(self) -> None:
         captured: dict[str, str] = {}
@@ -265,6 +299,35 @@ node_latency_frames = 1920
         self.assertIn("rolled back", detail)
         self.assertEqual(len(commits), 2)
         self.assertEqual(commits[1][-1], str(config))
+
+    def test_transaction_rollback_restores_exact_config_bytes_through_ab_writer(self) -> None:
+        original = b'# exact operator bytes\r\n[bridge]\r\nmode = "bluetooth-wired"\r\n'
+        captured = b""
+
+        def commit(command, **_kwargs):
+            nonlocal captured
+            captured = Path(command[-1]).read_bytes()
+            return subprocess.CompletedProcess(command, 0, stdout="a\n", stderr="")
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            config = base / "bridge.toml"
+            config.write_text(bridgectl.startup_config_for(BOOMBOX, self.BASE), encoding="utf-8")
+            with (
+                mock.patch.object(
+                    bridgectl.supervisor,
+                    "default_status_path",
+                    return_value=base / "runtime" / "bridge-status.json",
+                ),
+                mock.patch.object(bridgectl.subprocess, "run", side_effect=commit),
+            ):
+                ok, _detail = bridgectl.restore_startup_config(
+                    original, config, tool_path=Path("/installed/lark_state.py")
+                )
+            active = config.read_bytes()
+        self.assertTrue(ok)
+        self.assertEqual(captured, original)
+        self.assertEqual(active, original)
 
 
 if __name__ == "__main__":

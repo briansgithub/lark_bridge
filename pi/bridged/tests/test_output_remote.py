@@ -8,7 +8,6 @@ from pathlib import Path
 
 import output_remote
 
-
 STATUS = {
     "output": {
         "desired_id": "a2dp:AA:BB:CC:DD:EE:FF",
@@ -68,6 +67,8 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(response["chosen_id"], "wired:jack")
         self.assertEqual(response["outputs"][1]["label"], "Car stereo")
         self.assertNotIn("node", response["outputs"][0])
+        self.assertEqual(response["outputs"][0]["setup_state"], "ready")
+        self.assertFalse(response["call_active"])
 
     def test_set_uses_durable_non_chiming_cli_path(self) -> None:
         seen = {}
@@ -96,6 +97,27 @@ class ProtocolTests(unittest.TestCase):
             raise AssertionError
 
         response = self.request({"id": 6, "op": "set", "output_id": "bogus"}, runner)
+        self.assertFalse(response["ok"])
+        self.assertFalse(called)
+
+    def test_needs_setup_output_is_refused_without_running_cli(self) -> None:
+        changed = json.loads(json.dumps(STATUS))
+        changed["output"]["candidates"][1]["setup_state"] = "needs_setup"
+        called = False
+
+        def runner(*_args, **_kwargs):
+            nonlocal called
+            called = True
+            raise AssertionError
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bridge-status.json"
+            path.write_text(json.dumps(changed), encoding="utf-8")
+            response = output_remote.handle_request(
+                {"id": 7, "op": "set", "output_id": "a2dp:AA:BB:CC:DD:EE:FF"},
+                status_path=path,
+                runner=runner,
+            )
         self.assertFalse(response["ok"])
         self.assertFalse(called)
 
