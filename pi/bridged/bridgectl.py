@@ -33,7 +33,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import struct
+import subprocess
 import sys
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -149,6 +153,66 @@ def _call_is_up(status: dict[str, Any]) -> bool:
     return bool((status.get("call") or {}).get("hfp_nodes_present"))
 
 
+CHIME_HZ = (784.0, 1047.0)  # G5 then C6: a rising two-note figure, obviously deliberate
+CHIME_NOTE_S = 0.16
+CHIME_DBFS = -14.0
+
+
+def chime_path() -> Path:
+    """A short confirmation tone, generated once into tmpfs.
+
+    WHY AUDIBLE CONFIRMATION EXISTS AT ALL
+    --------------------------------------
+    The appliance is headless and in a car nobody can look at anything. A chime played OUT OF
+    THE NEWLY SELECTED OUTPUT is the only confirmation that demonstrates rather than claims:
+    the user hears which box it came from, so a stale list, a wrong MAC or a silent failure
+    cannot mislead them. A message on a screen they are not looking at cannot do that.
+
+    Two notes rather than one so it cannot be mistaken for call audio, hum, or a glitch.
+    Generated rather than shipped because there is no TTS on the appliance and a committed WAV
+    would be a binary blob in the repo for 0.3 s of sound.
+    """
+    # Derived from the supervisor's own runtime dir rather than rebuilding /run/user/<uid>:
+    # os.getuid() does not exist on the control PC, where the host test suite runs.
+    target = supervisor.default_status_path().parent / "bridge-chime.wav"
+    if target.exists():
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    rate = 48000
+    amplitude = 10 ** (CHIME_DBFS / 20.0)
+    frames = bytearray()
+    for note in CHIME_HZ:
+        count = int(rate * CHIME_NOTE_S)
+        for index in range(count):
+            # Raised-cosine envelope: a hard edge on a Bluetooth sink is a click, and a click
+            # is exactly the artefact the dropout detector is built to find.
+            envelope = 0.5 - 0.5 * math.cos(2 * math.pi * index / max(count - 1, 1))
+            value = int(32767 * amplitude * envelope * math.sin(2 * math.pi * note * index / rate))
+            frames += struct.pack("<hh", value, value)
+    with wave.open(str(target), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(bytes(frames))
+    return target
+
+
+def play_chime(node: str) -> bool:
+    """Play the confirmation into ONE explicit node. Never the default sink.
+
+    --target is not optional here. Letting PipeWire pick would play the confirmation
+    somewhere other than the thing being confirmed, which is worse than no confirmation.
+    """
+    try:
+        result = subprocess.run(
+            ["pw-play", "--target", node, str(chime_path())],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def do_set(args: argparse.Namespace) -> int:
     status = read_status()
     candidates = outputs_of(status)
@@ -180,6 +244,20 @@ def do_set(args: argparse.Namespace) -> int:
 
     supervisor.write_desire(target["id"], source="bridgectl")
     print(f"chose {target['label']}  [{target['id']}]")
+
+    # Re-read rather than trusting the pre-selection snapshot: the page above may have just
+    # made the node appear, and the chime has to go to the node that exists NOW.
+    node = target["node"]
+    if node is None:
+        refreshed = resolve_selector(target["id"], outputs_of(read_status()))
+        node = refreshed["node"]
+
+    if args.chime and node:
+        heard = play_chime(node)
+        print(f"chime -> {target['label']}: {'played' if heard else 'FAILED'}")
+    elif args.chime:
+        print(f"{target['label']} is not available yet; no chime to play", file=sys.stderr)
+
     print(f"the supervisor applies this within ~{supervisor.POLL_SECONDS:.0f}s")
     return 0
 
@@ -238,6 +316,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     setter.add_argument(
         "--force", action="store_true", help="page a speaker even during a live call"
+    )
+    setter.add_argument(
+        "--chime",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="play a confirmation tone out of the selected output (default: yes)",
     )
     setter.set_defaults(func=do_set)
 
