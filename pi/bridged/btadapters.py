@@ -260,16 +260,89 @@ def _act(
     return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
 
 
+# A2DP Sink. Connecting this profile specifically, rather than everything a device offers,
+# is what keeps a speaker from also becoming an HFP endpoint.
+A2DP_SINK_UUID = "0000110b-0000-1000-8000-00805f9b34fb"
+
+
 def connect(device_mac: str, adapter: Adapter | None = None) -> tuple[bool, str]:
     """Connect a bond on an EXPLICIT adapter. Returns (ok, detail).
 
     This is the call `bluetoothctl connect` cannot make safely with two controllers.
+
+    Prefer connect_profile() for speakers: this brings up everything the remote offers.
     """
     return _act("Connect", device_mac, adapter, CONNECT_TIMEOUT)
 
 
+def connect_profile(
+    device_mac: str,
+    adapter: Adapter | None = None,
+    uuid: str = A2DP_SINK_UUID,
+    timeout: float | None = None,
+) -> tuple[bool, str]:
+    """Bring up ONE profile, defaulting to A2DP Sink.
+
+    Why not plain Connect(): measured on the unit, the Monoprice Boombox advertises
+    0000111e (Handsfree) alongside 0000110b (A2DP Sink). Device1.Connect() brings up
+    everything on offer, so it can establish HFP *to the speaker* while the Pixel is already
+    the audio gateway on the other radio. Two HFP relationships is not a state this design
+    has any handling for, and by the time it collides the call is already broken.
+
+    It negotiated A2DP-only in the one observed run, but that was WirePlumber's role config
+    declining the rest, not us declining to ask. Asking for one profile makes it structural.
+    """
+    if adapter is not None:
+        path = path_for(adapter, device_mac)
+    else:
+        resolved = device_path(device_mac)
+        if resolved is None:
+            return False, f"no bond for {device_mac} on any adapter"
+        path = resolved
+    code, _, err = _run(
+        [
+            "busctl", "--system", "call", BLUEZ, path,
+            "org.bluez.Device1", "ConnectProfile", "s", uuid,
+        ],
+        timeout=timeout if timeout is not None else CONNECT_TIMEOUT,
+    )
+    if code == 0:
+        return True, path
+    return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
+
+
 def disconnect(device_mac: str, adapter: Adapter | None = None) -> tuple[bool, str]:
     return _act("Disconnect", device_mac, adapter, QUERY_TIMEOUT)
+
+
+def set_alias(device_mac: str, alias: str, adapter: Adapter | None = None) -> tuple[bool, str]:
+    """Rename a bonded device, so a human can find it in a list.
+
+    Devices name themselves badly. The Monoprice Boombox reports itself as "MP43247", which
+    is a model number and not something an owner would ever type or recognise. BlueZ stores
+    Alias per bond, so this is the correct place for a friendly name -- not a parallel
+    nickname table in our own config that could disagree with what every other tool shows.
+
+    This is a durable write (BlueZ persists it into the bond's info file on LARKDATA), but it
+    is a deliberate one-off user action, not a per-connect one, so it does not threaten the
+    idle-write budget.
+    """
+    if adapter is not None:
+        path = path_for(adapter, device_mac)
+    else:
+        resolved = device_path(device_mac)
+        if resolved is None:
+            return False, f"no bond for {device_mac} on any adapter"
+        path = resolved
+    code, _, err = _run(
+        [
+            "busctl", "--system", "set-property", BLUEZ, path,
+            "org.bluez.Device1", "Alias", "s", alias,
+        ]
+    )
+    if code == 0:
+        return True, path
+    return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
 
 
 def unblock(adapter: Adapter) -> bool:

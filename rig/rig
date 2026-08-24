@@ -15,6 +15,7 @@ rig — closed-loop test rig for rpi-lark-bridge
 
 CONTROL
   rig doctor                 one-screen health summary of the whole rig
+  rig output [set|rename|clear|status]   where call audio plays
   rig pi <cmd...>            run a command on the Pi
   rig phone <cmd...>         adb passthrough
   rig sync                   copy the repo to the Pi
@@ -110,6 +111,14 @@ case "$cmd" in
         exec "$f" "$@"
         ;;
     esac
+    ;;
+
+  output)
+    # Where call audio plays. Forwarded to bridgectl on the Pi rather than reimplemented
+    # here, so there is exactly one selector and the CLI the operator uses over SSH is the
+    # same code path the rig exercises.
+    require_pi
+    exec ssh -o BatchMode=yes "$(pi_host)"       "export XDG_RUNTIME_DIR=/run/user/\$(id -u); python3 ~/rpi-lark-bridge/pi/bridged/bridgectl.py output $*"
     ;;
 
   phone-state)  require_phone; exec "$RIG_ROOT/adb/audio-state.sh" "$@" ;;
