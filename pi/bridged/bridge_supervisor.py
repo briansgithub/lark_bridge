@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 POLL_SECONDS = 2.0
+OUTPUT_EVENT_POLL_SECONDS = 0.05
 BUILD_TIMEOUT_SECONDS = 10.0
 ATTACH_GRACE_SECONDS = 4.0
 MAX_BUILD_ATTEMPTS = 5
@@ -66,6 +67,7 @@ class State(str, Enum):
     CALL_DOWN = "CALL_DOWN"
     DISCOVERING = "DISCOVERING"
     BUILDING = "BUILDING"
+    SWITCHING = "SWITCHING"
     ACTIVE = "ACTIVE"
     DEGRADED = "DEGRADED"
     FAILED = "FAILED"
@@ -158,9 +160,9 @@ def desire_path() -> Path:
 
     A FILE, not a socket, and that is a deliberate simplification. The supervisor's unit is
     sandboxed with ProtectSystem=strict and ReadWritePaths=%t, so $XDG_RUNTIME_DIR is the one
-    place it may touch; it already polls every POLL_SECONDS, so a file gives a bounded ~2 s
-    latency with no server loop, no protocol version to get wrong and no second address
-    family. Any front-end -- a CLI over SSH, the phone bridge -- writes this one file.
+    place it may touch. The main loop watches this file's timestamp cheaply between full graph
+    polls, so selection wakes in tens of milliseconds without a server loop, protocol version,
+    or second address family. Any front-end -- CLI or phone bridge -- writes this one file.
 
     It lives on tmpfs on purpose. The DURABLE default is config's [devices.output]; this is
     the runtime override, so selecting an output costs zero LARKDATA writes and cannot
@@ -387,16 +389,32 @@ def find_lark(nodes: NodeMap, settings: Settings) -> str | None:
     return None
 
 
-def unlink(source: str, target: str) -> None:
+def link(source: str, target: str) -> bool:
     try:
-        subprocess.run(
+        result = subprocess.run(
+            ["pw-link", source, target],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("failed to create link %s -> %s: %s", source, target, exc)
+        return False
+
+
+def unlink(source: str, target: str) -> bool:
+    try:
+        result = subprocess.run(
             ["pw-link", "-d", source, target],
             capture_output=True,
             timeout=10,
             check=False,
         )
+        return result.returncode == 0
     except (OSError, subprocess.SubprocessError) as exc:
         log.warning("failed to remove link %s -> %s: %s", source, target, exc)
+        return False
 
 
 def set_aec_mute(muted: bool) -> bool:
@@ -456,7 +474,7 @@ class Loopback:
     def targets_verified(self, links: LinkList) -> bool:
         outputs = {target for source, target in links if source == self.out_node}
         inputs = {source for source, target in links if target == self.in_node}
-        return self.playback in outputs and self.capture in inputs
+        return outputs == {self.playback} and inputs == {self.capture}
 
     def stop(self, reason: str) -> None:
         if self.proc is None:
@@ -700,6 +718,42 @@ class CallGraph:
         self.microphone.start()
         self.routes_started = time.monotonic()
 
+    def can_switch_output_live(self) -> bool:
+        return bool(
+            self.state == State.ACTIVE
+            and self.verified
+            and self.microphone is not None
+            and self.microphone.running
+            and self.callout is not None
+            and self.callout.running
+            and (not self.settings.aec.enabled or self.aec_host is not None)
+            and (not self.settings.aec.enabled or self.aec_host.running)
+        )
+
+    def switch_output_live(self, target: str) -> bool:
+        """Make-before-break retargeting that leaves the microphone and AEC alive."""
+        old = self.output_node
+        if old is None or old == target or self.callout is None:
+            return False
+        playback_source = AEC_PLAYBACK if self.settings.aec.enabled else self.callout.out_node
+        log.info("switching output live: %s -> %s", old, target)
+        if not link(playback_source, target):
+            return False
+        if not unlink(playback_source, old):
+            # The old route still carries audio, so roll the new route back rather than
+            # leaving an unannounced two-speaker fan-out. A failed rollback is contained by
+            # fail(), which tears down the owner and therefore both links.
+            unlink(playback_source, target)
+            return False
+        self.output_node = target
+        self.callout.playback = AEC_SINK if self.settings.aec.enabled else target
+        if self.aec_host is not None:
+            self.aec_host.output = target
+        self.generation += 1
+        self.state = State.SWITCHING
+        self.last_failure = None
+        return True
+
     def start_aec_routes(self) -> None:
         set_aec_mute(True)
         self.callout = Loopback("bridge.callout", self.settings.hfp_source, AEC_SINK, 1)
@@ -734,7 +788,10 @@ class CallGraph:
         if self.settings.aec.enabled:
             if (lark, AEC_CAPTURE) not in links:
                 return False
-            if (AEC_PLAYBACK, self.output_target) not in links:
+            playback_targets = {
+                target for source, target in links if source == AEC_PLAYBACK
+            }
+            if playback_targets != {self.output_target}:
                 return False
         self.unexpected_links = unexpected_call_links(
             links,
@@ -764,19 +821,33 @@ class CallGraph:
             if output_node == DERIVE_OUTPUT
             else output_node
         )
-        self.output_node = resolved
-
-        # IDENTITY, not presence. This used to be `output_up`, a bool, which was harmless
-        # while there was exactly one possible output and it was always there. With a
-        # selectable output the bool is actively wrong: switching from the wired jack to a
-        # speaker leaves it True both before and after, so the signature would not change,
-        # so update_signature() would not rebuild, so the switch would silently do nothing
-        # while every status field claimed success.
-        #
-        # Carrying the node name also collapses the old presence test into the same value:
-        # None means nothing is playable, which is what `not output_up` used to mean.
-        signature = (call_up, lark, resolved)
+        old_output = self.output_node
+        signature = (call_up, lark)
+        endpoints_changed = signature != self.signature
         self.update_signature(signature)
+
+        if resolved != old_output:
+            if (
+                not endpoints_changed
+                and resolved is not None
+                and self.can_switch_output_live()
+            ):
+                if self.switch_output_live(resolved):
+                    # `links` is the snapshot from before the make-before-break operation.
+                    # Revalidate on the next fast tick rather than judging fresh state with
+                    # stale evidence.
+                    return
+                self.fail("live output retarget failed")
+                return
+            if not endpoints_changed and any(
+                item is not None for item in (self.aec_host, self.microphone, self.callout)
+            ):
+                self.generation += 1
+                self.teardown("output changed before graph became active")
+                self.attempts = 0
+                self.next_attempt = 0.0
+                self.last_failure = None
+            self.output_node = resolved
 
         if not call_up:
             self.teardown("call down")
@@ -973,6 +1044,22 @@ def write_status(path: Path, status: dict[str, Any]) -> None:
     os.replace(temporary, path)
 
 
+def desire_stamp(path: Path | None = None) -> int | None:
+    try:
+        return (path or desire_path()).stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def wait_for_next_tick(observed_desire: int | None, should_stop) -> None:
+    """Wake cheaply on an output choice without polling the full audio graph at 20 Hz."""
+    deadline = time.monotonic() + POLL_SECONDS
+    while not should_stop() and time.monotonic() < deadline:
+        if desire_stamp() != observed_desire:
+            return
+        time.sleep(OUTPUT_EVENT_POLL_SECONDS)
+
+
 def main() -> int:
     logging.basicConfig(
         level=os.environ.get("BRIDGE_LOG", "INFO").upper(),
@@ -1016,6 +1103,7 @@ def main() -> int:
             links = links or []
         else:
             lark = find_lark(nodes, settings)
+            observed_desire = desire_stamp()
             desired = read_desire()
             output_node, output_report = resolve_output(nodes, settings, desired)
             if output_node != last_output:
@@ -1043,7 +1131,10 @@ def main() -> int:
             write_status(settings.status_path, status)
         except OSError as exc:
             log.warning("status write failed: %s", exc)
-        time.sleep(POLL_SECONDS)
+        wait_for_next_tick(
+            observed_desire if nodes is not None and links is not None else desire_stamp(),
+            lambda: stopping,
+        )
 
     graph.teardown("supervisor shutting down")
     graph.state = State.CALL_DOWN

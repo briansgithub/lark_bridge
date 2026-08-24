@@ -5,11 +5,9 @@
 
 THE QUESTION
 ------------
-Changing the output rebuilds the call graph, and CallGraph.teardown() stops
-`bridge.mic` as well as `bridge.callout`. So switching where the far end is heard also
-drops the path carrying the USER'S OWN VOICE. That is acceptable if it is a second and
-unacceptable if it is ten, and the difference cannot be judged by ear -- E13 spent a round
-trip guessing at exactly this class of gap before it was measured properly.
+Output-only changes are intended to relink playback without rebuilding the microphone or
+AEC graph. This probe proves that implementation against the user-facing one-second gate;
+it does not infer success from a status message.
 
 So this measures two independent gaps around one switch:
 
@@ -68,6 +66,9 @@ def main() -> int:
     parser.add_argument("--switch-at", type=float, default=10.0)
     parser.add_argument("--interval", type=float, default=0.2)
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--max-uplink-gap", type=float, default=1.0)
+    parser.add_argument("--max-downlink-gap", type=float, default=1.0)
+    parser.add_argument("--max-apply-seconds", type=float, default=1.0)
     args = parser.parse_args()
 
     settings = supervisor.load_settings()
@@ -108,6 +109,7 @@ def main() -> int:
         )
         return 78
     started_from = already
+    started_from_node = ((opening.get("output") or {}).get("chosen") or {}).get("node")
 
     samples: list[dict] = []
     switched_at: float | None = None
@@ -161,7 +163,50 @@ def main() -> int:
         return {"seconds": round(worst, 2), "started_at": worst_start}
 
     before = [s for s in samples if switched_at is not None and s["t"] < switched_at]
+    applied = next(
+        (
+            sample
+            for sample in samples
+            if switched_at is not None
+            and sample["t"] >= switched_at
+            and sample["chosen"]
+            and sample["chosen"] != started_from_node
+            and sample["downlink"]
+        ),
+        None,
+    )
+    uplink_gap = longest_gap("uplink", switched_at or 0.0)
+    downlink_gap = longest_gap("downlink", switched_at or 0.0)
+    apply_seconds = (
+        round(float(applied["t"]) - switched_at, 3)
+        if applied is not None and switched_at is not None
+        else None
+    )
+    changed = len({str(s["chosen"]) for s in samples}) > 1
+    switch_took_effect = bool(
+        samples and samples[-1]["chosen"] and samples[-1]["uplink"] and changed
+    )
+    failures = []
+    if not switch_took_effect:
+        failures.append("output choice did not take effect with a healthy uplink")
+    if not before or not all(s["uplink"] for s in before):
+        failures.append("uplink was unhealthy before the switch")
+    if uplink_gap["seconds"] > args.max_uplink_gap:
+        failures.append(
+            f"uplink gap {uplink_gap['seconds']:.2f}s exceeds {args.max_uplink_gap:.2f}s"
+        )
+    if downlink_gap["seconds"] > args.max_downlink_gap:
+        failures.append(
+            f"downlink gap {downlink_gap['seconds']:.2f}s exceeds {args.max_downlink_gap:.2f}s"
+        )
+    if apply_seconds is None or apply_seconds > args.max_apply_seconds:
+        failures.append(
+            "selection apply time was not measurable"
+            if apply_seconds is None
+            else f"selection applied in {apply_seconds:.2f}s, above {args.max_apply_seconds:.2f}s"
+        )
     report = {
+        "verdict": "PASS" if not failures else "FAIL",
         "switch_from": started_from,
         "switch_to": args.to,
         "switched_at": round(switched_at, 2) if switched_at is not None else None,
@@ -171,17 +216,19 @@ def main() -> int:
         # A run whose uplink was already broken before the switch measures the fixture, not
         # the switch, so say so rather than quietly attributing it.
         "uplink_healthy_before_switch": all(s["uplink"] for s in before) if before else None,
-        "uplink_gap": longest_gap("uplink", switched_at or 0.0),
-        "downlink_gap": longest_gap("downlink", switched_at or 0.0),
+        "uplink_gap": uplink_gap,
+        "downlink_gap": downlink_gap,
+        "selection_apply_seconds": apply_seconds,
         "final_chosen": samples[-1]["chosen"] if samples else None,
         "final_state": samples[-1]["state"] if samples else None,
-        "chosen_changed_during_run": len({str(s["chosen"]) for s in samples}) > 1,
-        "switch_took_effect": bool(
-            samples
-            and samples[-1]["chosen"]
-            and samples[-1]["uplink"]
-            and len({str(s["chosen"]) for s in samples}) > 1
-        ),
+        "chosen_changed_during_run": changed,
+        "switch_took_effect": switch_took_effect,
+        "thresholds": {
+            "max_uplink_gap_s": args.max_uplink_gap,
+            "max_downlink_gap_s": args.max_downlink_gap,
+            "max_apply_s": args.max_apply_seconds,
+        },
+        "failures": failures,
     }
     # Print BEFORE writing: a 45 s run that fails on a missing directory should not throw the
     # measurement away, which is exactly what happened the first time this ran.
@@ -192,7 +239,7 @@ def main() -> int:
             args.out.write_text(json.dumps({"report": report, "samples": samples}, indent=2))
         except OSError as exc:
             print(f"could not save samples to {args.out}: {exc}", file=sys.stderr)
-    return 0
+    return 0 if not failures else 1
 
 
 if __name__ == "__main__":

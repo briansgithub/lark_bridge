@@ -216,10 +216,9 @@ def chime_path() -> Path:
 def wait_for_node(target: dict[str, Any], seconds: float = 6.0) -> str | None:
     """Wait briefly for a just-paged speaker's graph node to appear.
 
-    Polls the PipeWire graph directly, not the status file. The supervisor publishes at
-    POLL_SECONDS (2 s), so reading the file loses a race it did not need to enter: a page that
-    has just succeeded reliably reported "not available yet; no chime to play", which
-    suppresses the one confirmation the user actually gets.
+    Polls the PipeWire graph directly, not the status file. A page can finish between status
+    publications, so reading the file loses a race it did not need to enter and can suppress
+    the one confirmation the user actually gets.
     """
     if target["kind"] != "a2dp" or not target.get("address"):
         return None
@@ -329,7 +328,7 @@ def do_set(args: argparse.Namespace) -> int:
     elif args.chime:
         print(f"{target['label']} is not available yet; no chime to play", file=sys.stderr)
 
-    print(f"the supervisor applies this within ~{supervisor.POLL_SECONDS:.0f}s")
+    print("the supervisor applies this in under 1s")
     return 0
 
 

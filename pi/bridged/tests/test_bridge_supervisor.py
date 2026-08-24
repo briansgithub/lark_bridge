@@ -361,7 +361,7 @@ node_latency_frames = "1920"
 
 
 class OutputSelectionTests(unittest.TestCase):
-    """Switching the output must actually rebuild the graph.
+    """Output identity is enforced, and an in-progress graph never keeps a stale target.
 
     This is a regression test for a defect that would have been invisible. The rebuild
     signature used to carry `output_up`, a bool meaning "some output is present". With one
@@ -387,7 +387,7 @@ class OutputSelectionTests(unittest.TestCase):
             self.SPEAKER: {},
         }
 
-    def test_changing_the_output_changes_the_signature(self) -> None:
+    def test_changing_output_during_build_restarts_that_build(self) -> None:
         graph = self._graph()
         nodes = self._nodes(graph)
         with mock.patch.object(supervisor, "Loopback", FakeLoopback):
@@ -426,6 +426,145 @@ class OutputSelectionTests(unittest.TestCase):
         self.assertEqual(graph.output_node, graph.settings.wired_output)
 
 
+class LiveOutputSwitchTests(unittest.TestCase):
+    OLD = "alsa_output.platform-old.mailbox"
+    NEW = "bluez_output.C9_5C_FD_6E_28_46.1"
+
+    def active_graph(self, *, aec: bool) -> tuple[supervisor.CallGraph, str]:
+        settings = supervisor.Settings(aec=supervisor.AecSettings(enabled=aec))
+        graph = supervisor.CallGraph(settings)
+        lark = settings.lark_node
+        graph.signature = (True, lark)
+        graph.output_node = self.OLD
+        graph.state = supervisor.State.ACTIVE
+        graph.verified = True
+        graph.generation = 1
+        graph.microphone = FakeLoopback(
+            "bridge.mic", supervisor.AEC_SOURCE if aec else lark, settings.hfp_sink, 1
+        )
+        graph.callout = FakeLoopback(
+            "bridge.callout", settings.hfp_source, supervisor.AEC_SINK if aec else self.OLD, 1
+        )
+        graph.microphone.start()
+        graph.callout.start()
+        if aec:
+            graph.aec_host = FakeHost(settings.aec, lark, self.OLD)
+            graph.aec_host.start()
+        return graph, lark
+
+    def links_for(self, graph: supervisor.CallGraph, lark: str, output: str):
+        assert graph.microphone is not None and graph.callout is not None
+        links = [
+            (graph.microphone.capture, graph.microphone.in_node),
+            (graph.microphone.out_node, graph.microphone.playback),
+            (graph.callout.capture, graph.callout.in_node),
+            (graph.callout.out_node, graph.callout.playback),
+        ]
+        if graph.settings.aec.enabled:
+            links.extend(
+                [
+                    (lark, supervisor.AEC_CAPTURE),
+                    (supervisor.AEC_PLAYBACK, output),
+                ]
+            )
+        return links
+
+    def nodes_for(self, graph: supervisor.CallGraph, lark: str) -> dict:
+        nodes = {
+            lark: {},
+            graph.settings.hfp_source: {},
+            graph.settings.hfp_sink: {},
+            self.OLD: {},
+            self.NEW: {},
+        }
+        if graph.settings.aec.enabled:
+            nodes[supervisor.AEC_SOURCE] = {}
+            nodes[supervisor.AEC_SINK] = {}
+        return nodes
+
+    def test_aec_switch_is_make_before_break_and_keeps_uplink_alive(self) -> None:
+        graph, lark = self.active_graph(aec=True)
+        microphone = graph.microphone
+        host = graph.aec_host
+        events: list[tuple[str, str, str]] = []
+        with (
+            mock.patch.object(
+                supervisor,
+                "link",
+                side_effect=lambda source, target: events.append(("link", source, target)) or True,
+            ),
+            mock.patch.object(
+                supervisor,
+                "unlink",
+                side_effect=lambda source, target: events.append(("unlink", source, target)) or True,
+            ),
+            mock.patch.object(supervisor, "set_aec_mute") as mute,
+        ):
+            graph.tick(
+                self.nodes_for(graph, lark),
+                self.links_for(graph, lark, self.OLD),
+                lark,
+                self.NEW,
+            )
+
+        self.assertEqual(
+            events,
+            [
+                ("link", supervisor.AEC_PLAYBACK, self.NEW),
+                ("unlink", supervisor.AEC_PLAYBACK, self.OLD),
+            ],
+        )
+        self.assertIs(graph.microphone, microphone)
+        self.assertTrue(graph.microphone.running)
+        self.assertIs(graph.aec_host, host)
+        self.assertTrue(graph.aec_host.running)
+        self.assertEqual(graph.output_node, self.NEW)
+        self.assertEqual(graph.state, supervisor.State.SWITCHING)
+        mute.assert_not_called()
+
+    def test_non_aec_switch_retargets_only_downlink_loopback(self) -> None:
+        graph, _lark = self.active_graph(aec=False)
+        microphone = graph.microphone
+        assert graph.callout is not None
+        source = graph.callout.out_node
+        with (
+            mock.patch.object(supervisor, "link", return_value=True) as create,
+            mock.patch.object(supervisor, "unlink", return_value=True) as remove,
+        ):
+            self.assertTrue(graph.switch_output_live(self.NEW))
+        create.assert_called_once_with(source, self.NEW)
+        remove.assert_called_once_with(source, self.OLD)
+        self.assertIs(graph.microphone, microphone)
+        self.assertTrue(graph.microphone.running)
+        self.assertEqual(graph.callout.playback, self.NEW)
+
+    def test_failed_break_rolls_back_new_link(self) -> None:
+        graph, _lark = self.active_graph(aec=False)
+        assert graph.callout is not None
+        source = graph.callout.out_node
+        with (
+            mock.patch.object(supervisor, "link", return_value=True),
+            mock.patch.object(supervisor, "unlink", side_effect=[False, True]) as remove,
+        ):
+            self.assertFalse(graph.switch_output_live(self.NEW))
+        self.assertEqual(
+            remove.call_args_list,
+            [mock.call(source, self.OLD), mock.call(source, self.NEW)],
+        )
+        self.assertEqual(graph.output_node, self.OLD)
+
+
+class OutputWakeTests(unittest.TestCase):
+    def test_output_file_change_wakes_before_the_full_poll(self) -> None:
+        with (
+            mock.patch.object(supervisor, "desire_stamp", side_effect=[10, 11]),
+            mock.patch.object(supervisor.time, "monotonic", return_value=0.0),
+            mock.patch.object(supervisor.time, "sleep") as sleep,
+        ):
+            supervisor.wait_for_next_tick(10, lambda: False)
+        sleep.assert_called_once_with(supervisor.OUTPUT_EVENT_POLL_SECONDS)
+
+
 class DesireFileTests(unittest.TestCase):
     """Runtime selection is a file on tmpfs, so it costs no LARKDATA writes."""
 
@@ -460,17 +599,13 @@ class FailedIsNotTerminalTests(unittest.TestCase):
     retried.
     """
 
-    # (call_up, lark, output_node) -- the tuple tick() computes. Pre-set it so the first
+    # (call_up, lark) -- the endpoint tuple tick() computes. Pre-set it so the first
     # tick does not look like a fresh generation and reset attempts, which is what a real
     # supervisor mid-call would already have done.
     #
-    # The third element was `True` until output selection landed: a bool saying "an output
-    # is present". It is now the output NODE NAME, because presence cannot distinguish the
-    # wired jack from a speaker and so could not trigger a rebuild when the user switched
-    # between them. A stale bool here silently defeats this test's own premise -- it makes
-    # the first tick look like a generation change, which resets attempts and escapes
-    # FAILED for the wrong reason.
-    SIGNATURE = (True, "lark", supervisor.DEFAULT_WIRED_OUT)
+    # Output identity deliberately is not part of this tuple now: an output-only change is
+    # retargeted live and must not reset endpoint failure history or tear down the uplink.
+    SIGNATURE = (True, "lark")
 
     def _failed_graph(self) -> supervisor.CallGraph:
         settings = supervisor.Settings(aec=supervisor.AecSettings(enabled=True))
