@@ -32,6 +32,9 @@ connect_after_idle_seconds = 60
 [devices.output]
 # Bluetooth headphones or car stereo. Only used in mode = "bluetooth".
 address = "11:22:33:44:55:66"
+# Permanent address of the controller that owns this speaker bond. Never store hci0/hci1:
+# those names follow probe order and can change across boots.
+adapter = "22:33:44:55:66:77"
 # The Pi DOES initiate to this one, with exponential backoff.
 reconnect = true
 

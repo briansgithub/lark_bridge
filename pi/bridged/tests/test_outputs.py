@@ -33,6 +33,10 @@ def device(
     }
 
 
+def adapter(address: str) -> dict:
+    return {"org.bluez.Adapter1": {"Address": {"data": address}}}
+
+
 PHONE = "5C:33:7B:CB:BF:C5"
 BOOMBOX = "C9:5C:FD:6E:28:46"
 IWORLD = "50:D7:1B:74:34:D6"
@@ -120,6 +124,20 @@ class A2dpEnumerationTests(unittest.TestCase):
         }
         found = outputs.a2dp_outputs({}, tree, speaker_adapter="hci1")
         self.assertEqual(found[0].adapter, "hci1")
+
+    def test_permanent_adapter_address_survives_hci_renumbering(self) -> None:
+        key = f"dev_{IWORLD.replace(':', '_')}"
+        speaker_radio = "A0:AD:9F:73:6C:24"
+        tree = {
+            "/org/bluez/hci4": adapter("B8:27:EB:43:8D:51"),
+            "/org/bluez/hci7": adapter(speaker_radio),
+            f"/org/bluez/hci4/{key}": device(IWORLD),
+            f"/org/bluez/hci7/{key}": device(IWORLD),
+        }
+        found = outputs.a2dp_outputs({}, tree, speaker_adapter=speaker_radio)
+        self.assertEqual(found[0].adapter, "hci7")
+        self.assertEqual(found[0].adapter_address, speaker_radio)
+        self.assertEqual(found[0].as_dict()["adapter_address"], speaker_radio)
 
     def test_connected_speakers_sort_first(self) -> None:
         tree = {

@@ -17,6 +17,7 @@ def candidate(output_id: str, label: str, kind: str = "a2dp", present: bool = Tr
         "present": present,
         "connected": present,
         "adapter": "hci1" if kind == "a2dp" else None,
+        "adapter_address": "A0:AD:9F:73:6C:24" if kind == "a2dp" else None,
         "address": output_id.split(":", 1)[1] if kind == "a2dp" else None,
     }
 
@@ -83,6 +84,15 @@ class StatusParsingTests(unittest.TestCase):
 
 
 class SelectionSafetyTests(unittest.TestCase):
+    def test_target_adapter_prefers_permanent_address_over_stale_hci(self) -> None:
+        adapter = btadapters.Adapter("hci7", "A0:AD:9F:73:6C:24", "USB", 4)
+        target = dict(BOOMBOX, adapter="hci1", adapter_address=adapter.address)
+        with mock.patch.object(
+            bridgectl.btadapters, "adapter_by_address", return_value=adapter
+        ) as resolver:
+            self.assertEqual(bridgectl.target_adapter(target), adapter)
+        resolver.assert_called_once_with(adapter.address)
+
     def test_trust_failure_does_not_record_the_selection(self) -> None:
         adapter = btadapters.Adapter("hci1", "A0:AD:9F:73:6C:24", "USB", 1)
         failed = btadapters.TrustPinResult(False, failures=("D-Bus refused",))
@@ -93,7 +103,9 @@ class SelectionSafetyTests(unittest.TestCase):
         args = Namespace(selector="boombox", connect=True, force=False, chime=False)
         with (
             mock.patch.object(bridgectl, "read_status", return_value=status),
-            mock.patch.object(bridgectl.btadapters, "adapters", return_value=[adapter]),
+            mock.patch.object(
+                bridgectl.btadapters, "adapter_by_address", return_value=adapter
+            ),
             mock.patch.object(
                 bridgectl.btadapters, "pin_to_adapter", return_value=failed
             ),

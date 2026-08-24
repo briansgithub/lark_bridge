@@ -94,5 +94,43 @@ class TrustPinTests(unittest.TestCase):
         self.assertEqual(result.failures, ("duplicate D-Bus write failed",))
 
 
+class PowerTests(unittest.TestCase):
+    def test_stale_soft_block_is_cleared_before_powering(self) -> None:
+        with (
+            mock.patch.object(btadapters, "is_blocked", return_value=True),
+            mock.patch.object(btadapters, "unblock", return_value=True) as unblock,
+            mock.patch.object(btadapters, "is_powered", side_effect=[False, True]),
+            mock.patch.object(
+                btadapters, "_run", return_value=(1, "", "transition reply")
+            ) as run,
+        ):
+            ok, _detail = btadapters.power_on(TARGET)
+        self.assertTrue(ok, "verified Powered=true owns the outcome, not busctl's reply")
+        unblock.assert_called_once_with(TARGET)
+        self.assertIn(TARGET.path, run.call_args.args[0])
+
+    def test_unblock_failure_prevents_a_power_write(self) -> None:
+        with (
+            mock.patch.object(btadapters, "is_blocked", return_value=True),
+            mock.patch.object(btadapters, "unblock", return_value=False),
+            mock.patch.object(btadapters, "_run") as run,
+        ):
+            ok, detail = btadapters.power_on(TARGET)
+        self.assertFalse(ok)
+        self.assertIn("rfkill", detail)
+        run.assert_not_called()
+
+    def test_already_powered_is_idempotent(self) -> None:
+        with (
+            mock.patch.object(btadapters, "is_blocked", return_value=False),
+            mock.patch.object(btadapters, "is_powered", return_value=True),
+            mock.patch.object(btadapters, "_run") as run,
+        ):
+            ok, detail = btadapters.power_on(TARGET)
+        self.assertTrue(ok)
+        self.assertIn("already powered", detail)
+        run.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
