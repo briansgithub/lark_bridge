@@ -47,6 +47,7 @@ An unnecessary reset drops a live call and takes ~20 s to come back. So:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal
@@ -120,6 +121,28 @@ RECONNECT = os.environ.get("BRIDGE_WD_RECONNECT", "1") not in ("0", "false", "no
 # phone is actually connected, so a deliberate departure costs a few failed attempts and
 # then silence.
 RECONNECT_ATTEMPTS = int(os.environ.get("BRIDGE_WD_RECONNECT_ATTEMPTS", "3"))
+
+# ---------------------------------------------------------------- the speaker
+# Measured 2026-08-23: the Monoprice Boombox drops its A2DP link after a couple of minutes
+# with no audio flowing, and NOTHING on the Pi paged it back. The supervisor handled it
+# correctly -- the user's choice was remembered and the output fell back to the wired jack --
+# but in a car that means the speaker silently leaves mid-drive and stays gone, which makes
+# the whole of Mode 1 unusable however well the radios coexist.
+#
+# Two ways this budget differs from the phone's, both deliberate:
+#
+#   * More attempts. A phone has an owner who can tap it; a speaker in the boot does not, and
+#     the failure is invisible until someone tries to listen.
+#   * Attempts are spent on a TIMER, not on absence. A speaker that is switched off should
+#     cost a few quiet retries and then silence, not a page every 15 s forever -- pages are
+#     ACL traffic and E03 is explicit about what ACL traffic near an active call costs.
+SPEAKER_RECONNECT = os.environ.get("BRIDGE_WD_SPEAKER_RECONNECT", "1") not in ("0", "false", "no")
+SPEAKER_ATTEMPTS = int(os.environ.get("BRIDGE_WD_SPEAKER_ATTEMPTS", "5"))
+SPEAKER_RETRY_SECONDS = float(os.environ.get("BRIDGE_WD_SPEAKER_RETRY", "30"))
+
+# The supervisor is user-scoped and this watchdog is root, so the status file has to be named
+# rather than derived: default_status_path() would resolve to /run/user/0 under root.
+STATUS_PATH = os.environ.get("BRIDGE_WD_STATUS", "/run/user/1000/bridge-status.json")
 
 BACKOFF_START = 60.0
 BACKOFF_MAX = 900.0
@@ -214,6 +237,44 @@ def reconnect_phone() -> None:
     log.info("connect %s: %s", "succeeded" if ok else "failed", detail)
 
 
+def desired_speaker() -> tuple[str, str | None] | None:
+    """The speaker the user chose, as (address, adapter_hci), or None.
+
+    Read from the supervisor's published status rather than recomputed here. The supervisor
+    already resolves config defaults, the runtime override and the candidate list every poll,
+    and a second implementation of that policy in the watchdog is a second thing to disagree
+    with. If the supervisor is not publishing, this returns None and the watchdog does
+    nothing -- which is correct: with no idea what the user wants, paging a guess is worse
+    than waiting.
+    """
+    try:
+        with open(STATUS_PATH, encoding="utf-8") as handle:
+            status = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    block = status.get("output") or {}
+    desired_id = block.get("desired_id")
+    if not desired_id or not str(desired_id).startswith("a2dp:"):
+        return None  # the wired jack needs no paging, and an unset choice is not ours to guess
+    for candidate in block.get("candidates") or []:
+        if candidate.get("id") == desired_id:
+            if candidate.get("connected"):
+                return None
+            return str(candidate.get("address") or ""), candidate.get("adapter")
+    # Chosen but not in the candidate list at all: the bond is gone, not merely asleep.
+    return None
+
+
+def reconnect_speaker(address: str, adapter_hci: str | None) -> bool:
+    """Page the chosen speaker on ITS OWN adapter, A2DP profile only."""
+    adapter = None
+    if adapter_hci:
+        adapter = next((a for a in btadapters.adapters() if a.hci == adapter_hci), None)
+    ok, detail = btadapters.connect_profile(address, adapter)
+    log.info("speaker connect %s: %s", "succeeded" if ok else "failed", detail)
+    return ok
+
+
 def main() -> int:
     logging.basicConfig(
         level=os.environ.get("BRIDGE_LOG", "INFO").upper(),
@@ -248,6 +309,9 @@ def main() -> int:
     phone_present = False
     phone_absent_since: float | None = None
     phone_attempts = 0
+
+    speaker_attempts = 0
+    speaker_next_try = 0.0
 
     while not stopping:
         if controller_answers():
@@ -290,6 +354,37 @@ def main() -> int:
                             absent, phone_attempts, RECONNECT_ATTEMPTS,
                         )
                         reconnect_phone()
+
+            # The speaker, independently of the phone. Deliberately outside the RECONNECT
+            # branch above: losing the speaker and losing the phone are different faults with
+            # different budgets, and a phone that is present must not stop the speaker being
+            # recovered.
+            #
+            # This runs during a live call. E07 measured paging a device during active SCO as
+            # its own failure mode -- but that was ONE controller, where the page and the
+            # voice link competed for the same radio. Here the speaker is on hci1 and SCO is
+            # on hci0, so the premise does not hold. It is nonetheless UNMEASURED, which is
+            # why the retry interval is 30 s rather than the 15 s probe cadence: if a mid-call
+            # page does disturb SCO, this errs towards disturbing it rarely.
+            if SPEAKER_RECONNECT:
+                wanted = desired_speaker()
+                if wanted is None or not wanted[0]:
+                    # Connected, not chosen, or no bond at all. All three mean there is
+                    # nothing to page, so the budget is fresh for the next real absence.
+                    if speaker_attempts:
+                        log.info("chosen speaker no longer needs paging")
+                    speaker_attempts = 0
+                else:
+                    now = time.monotonic()
+                    if now >= speaker_next_try and speaker_attempts < SPEAKER_ATTEMPTS:
+                        speaker_attempts += 1
+                        log.warning(
+                            "chosen speaker %s is absent — paging (attempt %d/%d)",
+                            wanted[0], speaker_attempts, SPEAKER_ATTEMPTS,
+                        )
+                        if reconnect_speaker(*wanted):
+                            speaker_attempts = 0
+                        speaker_next_try = time.monotonic() + SPEAKER_RETRY_SECONDS
         else:
             failures += 1
             log.warning("controller did not answer (%d/%d)", failures, FAILURES_TO_ACT)

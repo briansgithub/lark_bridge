@@ -37,6 +37,7 @@ import math
 import struct
 import subprocess
 import sys
+import time
 import wave
 from pathlib import Path
 from typing import Any
@@ -153,6 +154,21 @@ def _call_is_up(status: dict[str, Any]) -> bool:
     return bool((status.get("call") or {}).get("hfp_nodes_present"))
 
 
+def _call_adapter(status: dict[str, Any]) -> str | None:
+    """Which controller carries the call, so a page can be judged against it."""
+    if btadapters is None:
+        return None
+    sink = (status.get("endpoints") or {}).get("hfp_sink")
+    if not sink:
+        return None
+    # bluez_output.5C_33_7B_CB_BF_C5.1 -> 5C:33:7B:CB:BF:C5
+    parts = str(sink).split(".")
+    if len(parts) < 2:
+        return None
+    adapter = btadapters.adapter_for_device(parts[1].replace("_", ":"))
+    return adapter.hci if adapter else None
+
+
 CHIME_HZ = (784.0, 1047.0)  # G5 then C6: a rising two-note figure, obviously deliberate
 CHIME_NOTE_S = 0.16
 CHIME_DBFS = -14.0
@@ -197,6 +213,29 @@ def chime_path() -> Path:
     return target
 
 
+def wait_for_node(target: dict[str, Any], seconds: float = 6.0) -> str | None:
+    """Wait briefly for a just-paged speaker's graph node to appear.
+
+    Polls the PipeWire graph directly, not the status file. The supervisor publishes at
+    POLL_SECONDS (2 s), so reading the file loses a race it did not need to enter: a page that
+    has just succeeded reliably reported "not available yet; no chime to play", which
+    suppresses the one confirmation the user actually gets.
+    """
+    if target["kind"] != "a2dp" or not target.get("address"):
+        return None
+    try:
+        import outputs as outputs_module
+    except ImportError:
+        return None
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        node = outputs_module.find_a2dp_node(supervisor.pw_nodes() or {}, target["address"])
+        if node:
+            return node
+        time.sleep(0.3)
+    return None
+
+
 def play_chime(node: str) -> bool:
     """Play the confirmation into ONE explicit node. Never the default sink.
 
@@ -218,17 +257,28 @@ def do_set(args: argparse.Namespace) -> int:
     candidates = outputs_of(status)
     target = resolve_selector(args.selector, candidates)
 
-    # Powering a speaker on is a page, and E07 measured paging a device during active SCO as
-    # its own failure mode -- distinct from, and additional to, E03's coexistence problem.
-    # Selecting is always allowed; only the page is gated.
+    # Powering a speaker on is a page. E07 measured paging during active SCO as its own
+    # failure mode -- but that was ONE controller, where the page and the voice link competed
+    # for the same radio. It is only a hazard here when the speaker shares an adapter with the
+    # call, and this gate says so rather than refusing every mid-call page.
+    #
+    # Measured 2026-08-23 on two radios: bt-watchdog paged the Boombox on hci1 during a live
+    # call and SCO on hci0 held at 135 frames/s, exactly nominal. n=1, so the same-adapter
+    # case stays gated and only the cross-adapter case is allowed. This previously refused
+    # unconditionally while the watchdog paged anyway -- two components disagreeing about one
+    # safety question, which is worse than either answer alone.
     needs_connect = target["kind"] == "a2dp" and not target["present"]
+    shares_call_radio = bool(
+        target.get("adapter") and target["adapter"] == _call_adapter(status)
+    )
     if needs_connect and args.connect:
-        if _call_is_up(status) and not args.force:
+        if _call_is_up(status) and shares_call_radio and not args.force:
             print(
-                f"{target['label']} is not connected, and a call is active.\n"
-                "Paging a speaker during a live call is a measured failure mode (E07), so it\n"
-                "was NOT attempted. The choice is recorded and will take effect when the\n"
-                "speaker connects. Use --force to page anyway.",
+                f"{target['label']} is not connected, a call is active, and the speaker is\n"
+                f"bonded on {target['adapter']} -- the same radio carrying the call. Paging\n"
+                "there during active SCO is a measured failure mode (E07), so it was NOT\n"
+                "attempted. The choice is recorded and takes effect when the speaker\n"
+                "connects. Use --force to page anyway, or bond it on the other adapter.",
                 file=sys.stderr,
             )
         elif btadapters is None:
@@ -245,12 +295,7 @@ def do_set(args: argparse.Namespace) -> int:
     supervisor.write_desire(target["id"], source="bridgectl")
     print(f"chose {target['label']}  [{target['id']}]")
 
-    # Re-read rather than trusting the pre-selection snapshot: the page above may have just
-    # made the node appear, and the chime has to go to the node that exists NOW.
-    node = target["node"]
-    if node is None:
-        refreshed = resolve_selector(target["id"], outputs_of(read_status()))
-        node = refreshed["node"]
+    node = target["node"] or wait_for_node(target, seconds=6.0)
 
     if args.chime and node:
         heard = play_chime(node)

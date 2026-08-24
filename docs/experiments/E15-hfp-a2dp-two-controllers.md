@@ -118,9 +118,34 @@ Observed repeatedly: after a couple of minutes with no audio flowing, the speake
 `desired` correctly stayed on the Boombox while `chosen` fell back to the wired output, which
 is the designed behaviour -- but nothing on the Pi ever pages it back.
 
-`bt_watchdog.py` reconnects the **phone** only. In a car this means the speaker silently
-goes away mid-drive and stays away. This is the single largest remaining gap for Mode 1 as a
-product, and it is separate from anything E03 or the coexistence work covers.
+`bt_watchdog.py` reconnected the **phone** only, so in a car the speaker would leave mid-drive
+and stay gone. **Now fixed and verified:** the watchdog pages the chosen speaker on its own
+adapter with `ConnectProfile(0000110b)`, with its own budget (5 attempts, 30 s apart) kept
+separate from the phone's. Measured: a force-disconnected Boombox was back **15 s later,
+unattended, during a live call**, and the supervisor returned the output to it on its next poll.
+
+The speaker's budget is spent on a timer rather than on absence, unlike the phone's. A speaker
+that is switched off should cost a few quiet retries and then silence, because pages are ACL
+traffic and E03 is explicit about what ACL traffic near an active call costs.
+
+### 10. A mid-call page on the OTHER radio does not disturb SCO
+
+E07 measured paging a device during active SCO as its own failure mode, and that was the
+reason to gate mid-call speaker pages. But E07 had **one** controller, where the page and the
+voice link competed for the same radio.
+
+Measured here with the speaker on `hci1` and the call on `hci0`: immediately after a
+successful page, **SCO on hci0 held at 135 frames/s — exactly nominal** — with the supervisor
+`ACTIVE` and `aec_verified: True`. E07's premise does not carry over to two radios.
+
+n=1, so the same-adapter case is still gated. The consequence is a consistency fix: `bridgectl`
+previously refused every mid-call page while the watchdog performed them anyway. Two
+components disagreeing about one safety question is worse than either answer, so the gate is
+now adapter-aware in both.
+
+Not attributable either way: dmesg showed 70 cumulative `Frame reassembly failed` lines, but
+that counter spans the whole boot and includes the earlier controller wedge, so no delta was
+measured across the page.
 
 ### 9. Android will not route a VoIP call to the bridge without a fresh HFP connection
 
