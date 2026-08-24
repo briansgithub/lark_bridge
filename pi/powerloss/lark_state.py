@@ -151,7 +151,10 @@ def write_config(root: Path, source: Path) -> str:
     return target
 
 
-def _pairing_entries(source: Path) -> list[dict[str, Any]]:
+PAIRING_SCAN_ATTEMPTS = 3
+
+
+def _pairing_entries_once(source: Path) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     for path in sorted(source.rglob("*")):
         relative = path.relative_to(source).as_posix()
@@ -163,13 +166,34 @@ def _pairing_entries(source: Path) -> list[dict[str, Any]]:
         entry: dict[str, Any] = {
             "mode": stat.S_IMODE(status.st_mode),
             "path": relative,
-            "type": "directory" if path.is_dir() else "file",
+            "type": "directory" if stat.S_ISDIR(status.st_mode) else "file",
         }
-        if path.is_file():
+        if stat.S_ISREG(status.st_mode):
             entry["sha256"] = sha256_file(path)
             entry["size"] = status.st_size
         entries.append(entry)
     return entries
+
+
+def _pairing_entries(source: Path) -> list[dict[str, Any]]:
+    """Return one stable-enough view of BlueZ state.
+
+    BlueZ writes settings through a temporary sibling and rename. A power cut can leave one
+    of those names visible just long enough for rglob() to enumerate it and then absent by
+    lstat() or hashing time. That is not pairing corruption; retrying produces the directory
+    view that actually exists. The caller still compares complete entry lists before sealing,
+    so retrying this narrow disappearance cannot bless a changing snapshot.
+    """
+    vanished: FileNotFoundError | None = None
+    for _attempt in range(PAIRING_SCAN_ATTEMPTS):
+        try:
+            return _pairing_entries_once(source)
+        except FileNotFoundError as error:
+            vanished = error
+    assert vanished is not None
+    raise StateError(
+        f"BlueZ state kept changing during {PAIRING_SCAN_ATTEMPTS} scans: {vanished}"
+    ) from vanished
 
 
 def validate_bluez_tree(source: Path, *, allow_empty: bool = True) -> None:
