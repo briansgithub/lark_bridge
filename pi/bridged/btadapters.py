@@ -852,7 +852,10 @@ def pair_device(
             heartbeat()
 
     try:
-        agent = _LineProcess(["bluetoothctl", "--agent", "NoInputNoOutput"])
+        # BlueZ restricts temporary-agent registration on this appliance's system
+        # bus.  The user service has a non-interactive sudo grant; use it only for
+        # this short-lived NoInputNoOutput agent, which is torn down in finally.
+        agent = _LineProcess(["sudo", "-n", "bluetoothctl", "--agent", "NoInputNoOutput"])
         agent.send(f"select {adapter.address}")
         agent.send("agent NoInputNoOutput")
         agent.send("default-agent")
