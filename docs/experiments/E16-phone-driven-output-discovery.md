@@ -241,6 +241,81 @@ no-go** until the open Hardware and Pixel acceptance criteria below pass on the
 actual Pi, Pixel, BlueZ 5.82 controller split, and representative Just Works
 speaker, including live cancellation timing and reboot/power-cut persistence.
 
+## Controlled deployment and non-call smoke — 2026-08-24
+
+The controlled deployment began from the reviewed Pi checkpoint `1b23ff0` and
+Android checkpoint `1abb852`. The Pi lower root was mounted read-only after
+each deployment. The final live and lower-root `btadapters.py` have identical
+SHA-256 `8c49c8af8ec2eff39ada1edbe77640445d1be4f583241350d6f19e01fa87b660`;
+`findmnt /media/root-ro` reports `/dev/mmcblk0p2 ext4 ro`. The persistent-state
+health check reports config slot `a` and pairing slot `b`, with no failures.
+
+Two deployment-only Pi corrections were made after live evidence exposed a
+missing system-bus privilege: commit
+`50be30e3c5908261ae64a994def1b8009bc65b48` runs the short-lived BlueZ
+discovery monitor through the existing passwordless `sudo -n` grant, and
+commit `73dac8eb9209a997ec4aa435bc42ed1050f6fd59` applies that same narrowly
+scoped grant to the temporary `bluetoothctl --agent NoInputNoOutput` process.
+Each correction was covered by the corresponding `btadapters` regression test
+and `python -m unittest discover -s tests` passed (**138 tests**) before
+deploy/reseal. Android’s correlated response parsing was corrected in
+`36596a127a102fc07bb143a3536854b3e3974224` and final Android HEAD
+`9ac3a5f34ee97c8bae1a8ccd7144f12754125275`; its unit/build run passed before
+installing APK SHA-256
+`570E0BCBA7D586946881A361AEB067200BFD00CCE86F72FB24125571003380ED`.
+A live RFCOMM `list` then completed and reported the Pi-owned output state.
+
+The explicit scan-only check used the USB speaker controller
+`A0:AD:9F:73:6C:24` (`hci1`). Passive BlueZ/PipeWire/RFCOMM/persistent-state
+monitors showed the Soundcore Space A40 (`98:47:44:CD:73:DE`) only on `hci1`,
+with A2DP Sink UUID and RSSI from -29 to -33 dBm. Before selection it caused no
+pair/bond/trust/connection transition, A2DP PipeWire node, desired-output
+change, or durable configuration change.
+
+For the user-driven A40 row selection, the monitor recorded the temporary
+privileged pairing agent launch at 18:28:53 EDT. The discovered `hci1` A40
+object disappeared at 18:28:54.039 before any `Paired`, `Bonded`, `Trusted`,
+or `Connected` transition. No A40 PipeWire node appeared and no durable write
+occurred. The terminal RFCOMM error was not journaled, so the result is a
+bounded failed/rolled-back setup attempt rather than a successful pairing.
+The one explicitly authorized Pixel screen inspection and an ADB UI hierarchy
+both showed A40 as **Needs setup on LarkBridge** afterwards; no further Pixel
+screenshots or automated taps were made.
+
+The safe baseline after this attempt is the wired Aux output
+`wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback`: it is both
+`desired_id` and `chosen.id`, present and connected. An unintended earlier
+iWorld selection was immediately corrected through the normal Pi control path;
+both durable config copies were aligned back to that exact wired ID and contain
+no A2DP address/reconnect preference. iWorld remains unchanged (hci0
+paired/bonded, untrusted/disconnected; hci1 paired/bonded/trusted/disconnected).
+The pre-existing A40 call-controller bond also remains present on hci0
+(paired/bonded/trusted, disconnected), while hci1 has no A40 bond. Because the
+new speaker-controller pairing never validated, the contract correctly did not
+untrust the pre-existing hci0 A40 bond; therefore the requested
+``old duplicate preserved and untrusted'' success assertion is **not met**.
+
+This smoke establishes RFCOMM list operation, passive scan isolation, and
+failure rollback to Aux. It does **not** establish successful A40 pairing,
+speaker-controller trust pinning, A2DP connection, PipeWire node creation,
+durable A40 selection, Boombox audio preflight/pickup, reboot/power-cut
+persistence, or a call test. No power cut was performed.
+
+### Handoff to agent 7
+
+Do not issue another scan, pair/select, Pixel UI action, or production change
+without new explicit authorization. The next blocking fact to diagnose is why
+the freshly discovered `hci1` A40 object vanished between scan completion and
+the user-driven pair/select; the exact terminal RFCOMM error was unavailable
+from the deployed service journal. A future authorized retry must begin from
+the preserved Aux baseline, use the configured USB controller address, keep
+the passive BlueZ/PipeWire/RFCOMM/durable-state monitors running across the
+scan-to-selection handoff, and require the user to put A40 back into pairing
+mode. It must not claim success unless it observes the hci1 A40 bond, A2DP
+Sink/node, target selection and persistence, plus hci0 A40 untrusted. Boombox
+audio work remains blocked pending the required preflight proving both speaker
+output and Lark pickup (ask the user to wake it if either is absent).
+
 ## Decision-complete implementation contract
 
 ### Product boundary and controller identity
