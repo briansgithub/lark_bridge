@@ -266,10 +266,8 @@ class ExplicitDeviceOperationTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         agent = children[0]
-        self.assertEqual(
-            agent.command,
-            ["sudo", "-n", "bluetoothctl", "--agent", "NoInputNoOutput"],
-        )
+        self.assertEqual(agent.command, ["sudo", "-n", "bluetoothctl"])
+        self.assertNotIn("--agent", agent.command)
         self.assertEqual(
             agent.sent,
             [f"select {TARGET.address}", "agent NoInputNoOutput", "default-agent"],
