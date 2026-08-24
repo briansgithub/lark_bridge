@@ -573,7 +573,11 @@ def discover_bredr(
     started: float | None = None
     accumulator: DiscoveryAccumulator | None = None
     try:
-        monitor = _LineProcess(["busctl", "--system", "--json=short", "monitor", BLUEZ])
+        # Monitoring the system bus is privileged on the deployed image.  The user
+        # services do have a passwordless sudo grant, while an unprivileged monitor
+        # exits immediately with AccessDenied and turns every otherwise-valid scan
+        # into "discovery helper exited early".
+        monitor = _LineProcess(["sudo", "-n", "busctl", "--system", "--json=short", "monitor", BLUEZ])
         owner = _LineProcess(["bluetoothctl"])
         owner.send(f"select {adapter.address}")
         select_deadline = time.monotonic() + DISCOVERY_START_TIMEOUT
