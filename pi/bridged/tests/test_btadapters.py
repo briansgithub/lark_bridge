@@ -197,6 +197,10 @@ class DiscoveryTests(unittest.TestCase):
             btadapters.discover_bredr(TARGET, cancelled=cancelled)
 
         monitor, owner = instances
+        self.assertEqual(
+            monitor.command,
+            ["sudo", "-n", "busctl", "--system", "--json=short", "monitor", btadapters.BLUEZ],
+        )
         self.assertEqual(owner.sent[:2], [f"select {TARGET.address}", "scan bredr"])
         self.assertEqual(owner.stopped, ("scan off", "quit"))
         self.assertEqual(monitor.stopped, ())
