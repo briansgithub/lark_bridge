@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 MODULE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MODULE))
@@ -90,6 +91,33 @@ class PairingTransactions(unittest.TestCase):
 
             with self.assertRaises(lark_state.StateError):
                 lark_state.validate_pairing_slot(root, "a")
+
+    def test_a_vanished_bluez_temporary_file_is_retried(self) -> None:
+        """Reproduce the boot failure left by an interrupted BlueZ settings rename."""
+        with tempfile.TemporaryDirectory() as directory:
+            live = Path(directory) / "live"
+            self.bluez_tree(live, "A" * 32)
+            temporary = live / "adapter/settings.DY24T3"
+            temporary.write_text("incomplete", encoding="utf-8")
+            original_lstat = Path.lstat
+            vanished = False
+
+            def lstat_with_one_vanish(path: Path):
+                nonlocal vanished
+                if path == temporary and not vanished:
+                    vanished = True
+                    temporary.unlink()
+                    raise FileNotFoundError(temporary)
+                return original_lstat(path)
+
+            with mock.patch.object(Path, "lstat", lstat_with_one_vanish):
+                entries = lark_state._pairing_entries(live)
+
+            self.assertTrue(vanished)
+            self.assertNotIn(
+                "adapter/settings.DY24T3",
+                {entry["path"] for entry in entries},
+            )
 
     @unittest.skipIf(os.name == "nt", "ordinary Windows users cannot create symlinks")
     def test_restore_preserves_live_symlink(self) -> None:
