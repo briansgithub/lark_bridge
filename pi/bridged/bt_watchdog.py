@@ -270,6 +270,15 @@ def reconnect_speaker(address: str, adapter_hci: str | None) -> bool:
     adapter = None
     if adapter_hci:
         adapter = next((a for a in btadapters.adapters() if a.hci == adapter_hci), None)
+    if adapter is not None:
+        # Idempotent, and it costs no LARKDATA write when already correct. Without it a
+        # speaker can be paged successfully and then have its own reconnection refused.
+        pin = btadapters.pin_to_adapter(address, adapter)
+        if pin.changed:
+            log.warning("speaker trust corrected: %s", ", ".join(pin.changed))
+        if not pin.ok:
+            log.error("speaker trust pinning failed: %s", "; ".join(pin.failures))
+            return False
     ok, detail = btadapters.connect_profile(address, adapter)
     log.info("speaker connect %s: %s", "succeeded" if ok else "failed", detail)
     return ok
@@ -397,10 +406,9 @@ def main() -> int:
                         since, backoff,
                     )
                 else:
-                    if recover():
-                        if RECONNECT:
-                            time.sleep(RECONNECT_DELAY)
-                            reconnect_phone()
+                    if recover() and RECONNECT:
+                        time.sleep(RECONNECT_DELAY)
+                        reconnect_phone()
                     last_recovery = time.monotonic()
                     backoff = min(backoff * 2, BACKOFF_MAX)
                     failures = 0
