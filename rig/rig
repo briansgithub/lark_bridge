@@ -23,6 +23,7 @@ CONTROL
   rig powerloss <command>    manual abrupt-power-loss campaign
   rig setup-adb              download + extract platform-tools on this PC
   rig wired-aec <command>    baseline/test/fault-test/soak/collect
+  rig speaker-preflight      verify selected speaker playback reaches the Lark
 
 HARDWARE LADDER
   rig unit <id>              run one unit test   (U01, U10, U40 ...)
@@ -75,6 +76,12 @@ case "$cmd" in
 
   setup-adb)   exec "$RIG_ROOT/adb/setup.sh" "$@" ;;
   wired-aec)   exec "$RIG_ROOT/wired-aec.sh" "$@" ;;
+  speaker-preflight)
+    require_pi
+    stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    exec ssh -o BatchMode=yes "$(pi_host)" \
+      "export XDG_RUNTIME_DIR=/run/user/\$(id -u); python3 ~/rpi-lark-bridge/rig/pi/measure/speaker_preflight.py --out /tmp/larkbridge-speaker-preflight-$stamp $*"
+    ;;
 
   unit)
     sub="${1:-}"; shift || true
