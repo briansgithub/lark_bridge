@@ -1174,7 +1174,11 @@ def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
     )
 
 
-def unblock(adapter: Adapter) -> bool:
+def unblock(
+    adapter: Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> bool:
     """Clear a soft rfkill on ONE adapter. Root only.
 
     Never `rfkill unblock bluetooth`: that is class-wide, and its matching `rfkill block
@@ -1191,11 +1195,15 @@ def unblock(adapter: Adapter) -> bool:
     """
     if adapter.rfkill_index is None:
         return False
+    if cancelled is not None and cancelled():
+        raise BluetoothOperationCancelled("watchdog shutdown requested")
     if _run(["rfkill", "unblock", str(adapter.rfkill_index)])[0] == 0:
         return True
     # PATH on a non-login shell often lacks /usr/sbin, and writing the sysfs attribute
     # needs no binary at all.
     try:
+        if cancelled is not None and cancelled():
+            raise BluetoothOperationCancelled("watchdog shutdown requested")
         (SYS_RFKILL / f"rfkill{adapter.rfkill_index}" / "soft").write_text("0")
         return True
     except OSError:
@@ -1218,7 +1226,11 @@ def is_powered(adapter: Adapter, objects: dict[str, dict] | None = None) -> bool
     return bool((entry.get("Powered") or {}).get("data"))
 
 
-def power_on(adapter: Adapter) -> tuple[bool, str]:
+def power_on(
+    adapter: Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
     """Unblock and power one controller, addressed by its already-resolved identity.
 
     BlueZ restores adapter power across a daemon restart, but systemd-rfkill can restore a
@@ -1230,10 +1242,12 @@ def power_on(adapter: Adapter) -> tuple[bool, str]:
     stack has been observed to apply Powered=true and then return a failure while the adapter
     is registering; the resulting state, not that misleading reply, owns the outcome.
     """
-    if is_blocked(adapter) is True and not unblock(adapter):
+    if is_blocked(adapter) is True and not unblock(adapter, cancelled=cancelled):
         return False, f"could not clear rfkill{adapter.rfkill_index} for {adapter.address}"
     if is_powered(adapter):
         return True, f"{adapter.address}: already powered"
+    if cancelled is not None and cancelled():
+        raise BluetoothOperationCancelled("watchdog shutdown requested")
     code, _, err = _run(
         [
             "busctl",
@@ -1249,6 +1263,8 @@ def power_on(adapter: Adapter) -> tuple[bool, str]:
     )
     deadline = time.monotonic() + POWER_SETTLE_SECONDS
     while time.monotonic() < deadline:
+        if cancelled is not None and cancelled():
+            raise BluetoothOperationCancelled("watchdog shutdown requested")
         if is_powered(adapter):
             return True, adapter.path
         time.sleep(0.1)

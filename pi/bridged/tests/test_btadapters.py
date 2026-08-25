@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import btadapters
@@ -106,7 +107,7 @@ class PowerTests(unittest.TestCase):
         ):
             ok, _detail = btadapters.power_on(TARGET)
         self.assertTrue(ok, "verified Powered=true owns the outcome, not busctl's reply")
-        unblock.assert_called_once_with(TARGET)
+        unblock.assert_called_once_with(TARGET, cancelled=None)
         self.assertIn(TARGET.path, run.call_args.args[0])
 
     def test_unblock_failure_prevents_a_power_write(self) -> None:
@@ -130,6 +131,18 @@ class PowerTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIn("already powered", detail)
         run.assert_not_called()
+
+    def test_shutdown_is_checked_before_each_power_mutation(self) -> None:
+        checks = iter((False, True))
+        with (
+            mock.patch.object(btadapters, "is_blocked", return_value=True),
+            mock.patch.object(btadapters, "_run", return_value=(1, "", "failed")) as run,
+            mock.patch.object(Path, "write_text") as write_text,
+            self.assertRaises(btadapters.BluetoothOperationCancelled),
+        ):
+            btadapters.unblock(TARGET, cancelled=lambda: next(checks))
+        run.assert_called_once_with(["rfkill", "unblock", str(TARGET.rfkill_index)])
+        write_text.assert_not_called()
 
 
 class DiscoveryTests(unittest.TestCase):

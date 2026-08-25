@@ -66,6 +66,10 @@ class ProbeStatus(str, Enum):
     UNKNOWN = "unknown"
 
 
+class RecoveryCancelled(RuntimeError):
+    """Shutdown was requested before the next recovery mutation."""
+
+
 @dataclass(frozen=True)
 class RecoveryResult:
     ok: bool
@@ -255,37 +259,70 @@ def _command_ok(command: list[str], timeout: float = 20.0) -> bool:
         return False
 
 
-def cycle_hci(adapter: btadapters.Adapter) -> bool:
+def _before_mutation(cancelled: Callable[[], bool] | None) -> None:
+    if cancelled is not None and cancelled():
+        raise RecoveryCancelled("watchdog shutdown requested")
+
+
+def _settle(seconds: float, cancelled: Callable[[], bool] | None) -> None:
+    if cancelled is None:
+        time.sleep(seconds)
+        return
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        _before_mutation(cancelled)
+        time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
+
+
+def cycle_hci(
+    adapter: btadapters.Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> bool:
+    _before_mutation(cancelled)
     down = _command_ok(["hciconfig", adapter.hci, "down"])
-    time.sleep(1)
+    _settle(1, cancelled)
+    _before_mutation(cancelled)
     up = _command_ok(["hciconfig", adapter.hci, "up"])
-    time.sleep(2)
+    _settle(2, cancelled)
     return down and up
 
 
-def cycle_rfkill(adapter: btadapters.Adapter) -> bool:
+def cycle_rfkill(
+    adapter: btadapters.Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> bool:
     """Cycle one rfkill index; a device class is never an accepted target."""
     if adapter.rfkill_index is None:
         return False
     index = str(adapter.rfkill_index)
+    _before_mutation(cancelled)
     blocked = _command_ok(["rfkill", "block", index])
-    time.sleep(1)
+    _settle(1, cancelled)
+    _before_mutation(cancelled)
     unblocked = _command_ok(["rfkill", "unblock", index])
     if blocked and unblocked:
-        time.sleep(2)
+        _settle(2, cancelled)
         return True
     soft = SYS_RFKILL / f"rfkill{index}" / "soft"
     try:
+        _before_mutation(cancelled)
         soft.write_text("1", encoding="utf-8")
-        time.sleep(1)
+        _settle(1, cancelled)
+        _before_mutation(cancelled)
         soft.write_text("0", encoding="utf-8")
-        time.sleep(2)
+        _settle(2, cancelled)
         return True
     except OSError:
         return False
 
 
-def rebind_usb(adapter: btadapters.Adapter) -> bool:
+def rebind_usb(
+    adapter: btadapters.Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> bool:
     """Unbind/rebind exactly the currently resolved USB interface."""
     interface = adapter.usb_interface or ""
     if (
@@ -296,10 +333,12 @@ def rebind_usb(adapter: btadapters.Adapter) -> bool:
         return False
     driver = SYS_USB_DRIVERS / "btusb"
     try:
+        _before_mutation(cancelled)
         (driver / "unbind").write_text(interface + "\n", encoding="utf-8")
-        time.sleep(2)
+        _settle(2, cancelled)
+        _before_mutation(cancelled)
         (driver / "bind").write_text(interface + "\n", encoding="utf-8")
-        time.sleep(5)
+        _settle(5, cancelled)
         return True
     except OSError:
         return False
@@ -311,47 +350,46 @@ def targeted_recovery(
     *,
     verify: Callable[[], bool] | None = None,
     refresh: Callable[[], btadapters.Adapter] | None = None,
+    cancelled: Callable[[], bool] | None = None,
 ) -> RecoveryResult:
     """Run only exact-target recovery rungs and stop at the first answered probe."""
     check = verify or (lambda: wait_for_role_answer(roles, role))
     current = refresh or (lambda: resolve_role(roles, role))
 
     try:
+        _before_mutation(cancelled)
         adapter = current()
+        _before_mutation(cancelled)
+        powered, detail = btadapters.power_on(adapter, cancelled=cancelled)
+        if powered and check():
+            return RecoveryResult(True, "power-on", detail)
+
+        device = recovery_device(roles, role)
+        if device is not None:
+            _before_mutation(cancelled)
+            btadapters.disconnect(device, adapter)
+            _settle(1, cancelled)
+            if check():
+                return RecoveryResult(True, "device-disconnect", device)
+
+        _before_mutation(cancelled)
+        adapter = current()
+        if cycle_hci(adapter, cancelled=cancelled) and check():
+            return RecoveryResult(True, "hci-down-up", adapter.hci)
+
+        _before_mutation(cancelled)
+        adapter = current()
+        if cycle_rfkill(adapter, cancelled=cancelled) and check():
+            return RecoveryResult(True, "rfkill-index", str(adapter.rfkill_index))
+
+        _before_mutation(cancelled)
+        adapter = current()
+        if rebind_usb(adapter, cancelled=cancelled) and check():
+            return RecoveryResult(True, "usb-interface-rebind", adapter.usb_interface or "")
     except controller_roles.ControllerRoleError as exc:
         return RecoveryResult(False, "resolve", f"{exc.code}: {exc.detail}")
-
-    powered, detail = btadapters.power_on(adapter)
-    if powered and check():
-        return RecoveryResult(True, "power-on", detail)
-
-    device = recovery_device(roles, role)
-    if device is not None:
-        btadapters.disconnect(device, adapter)
-        time.sleep(1)
-        if check():
-            return RecoveryResult(True, "device-disconnect", device)
-
-    try:
-        adapter = current()
-    except controller_roles.ControllerRoleError as exc:
-        return RecoveryResult(False, "resolve", f"{exc.code}: {exc.detail}")
-    if cycle_hci(adapter) and check():
-        return RecoveryResult(True, "hci-down-up", adapter.hci)
-
-    try:
-        adapter = current()
-    except controller_roles.ControllerRoleError as exc:
-        return RecoveryResult(False, "resolve", f"{exc.code}: {exc.detail}")
-    if cycle_rfkill(adapter) and check():
-        return RecoveryResult(True, "rfkill-index", str(adapter.rfkill_index))
-
-    try:
-        adapter = current()
-    except controller_roles.ControllerRoleError as exc:
-        return RecoveryResult(False, "resolve", f"{exc.code}: {exc.detail}")
-    if rebind_usb(adapter) and check():
-        return RecoveryResult(True, "usb-interface-rebind", adapter.usb_interface or "")
+    except (RecoveryCancelled, btadapters.BluetoothOperationCancelled) as exc:
+        return RecoveryResult(False, "cancelled", str(exc))
     return RecoveryResult(False, "exhausted", "all exact-target recovery rungs failed")
 
 
@@ -368,18 +406,49 @@ def attempt_recovery(
         state.last_action = "backoff"
         return False
     result = recover()
-    state.last_attempt = observed
     state.last_action = result.action
     state.last_error = None if result.ok else result.detail
-    state.backoff = min(state.backoff * 2, BACKOFF_MAX)
     if not result.ok:
         return False
+    state.last_attempt = observed
+    state.backoff = min(state.backoff * 2, BACKOFF_MAX)
     state.failures = 0
     state.recoveries += 1
     state.last_recovery = observed
     state.reconnect_attempts = 0
     state.reconnect_next = observed + RECONNECT_DELAY
     return True
+
+
+def record_failure_and_recover(
+    roles: controller_roles.ControllerRoles,
+    role: str,
+    state: RecoveryState,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+    recover: Callable[[], RecoveryResult] | None = None,
+) -> bool:
+    """Spend one failure only while the role's complete destructive ladder is allowed."""
+    operation = recover or (
+        lambda: targeted_recovery(roles, role, cancelled=cancelled)
+    )
+    lock = (
+        btadapters.speaker_radio_lock(OUTPUT_RADIO_LOCK, blocking=False)
+        if role == "output"
+        else nullcontext(True)
+    )
+    with lock as acquired:
+        if not acquired:
+            state.last_action = "output-radio-busy"
+            return False
+        try:
+            _before_mutation(cancelled)
+        except RecoveryCancelled as exc:
+            state.last_action = "cancelled"
+            state.last_error = str(exc)
+            return False
+        state.failures += 1
+        return attempt_recovery(state, operation)
 
 
 def reconnect_budget(role: str) -> int:
@@ -507,10 +576,11 @@ def main(argv: list[str] | None = None) -> int:
                     state.backoff = BACKOFF_START
                 service_reconnect(roles, args.role, state)
             elif result is ProbeStatus.FAILED:
-                state.failures += 1
-                attempt_recovery(
+                record_failure_and_recover(
+                    roles,
+                    args.role,
                     state,
-                    lambda: targeted_recovery(roles, args.role),
+                    cancelled=lambda: stopping,
                 )
             write_state(state, adapter)
             time.sleep(PROBE_INTERVAL)

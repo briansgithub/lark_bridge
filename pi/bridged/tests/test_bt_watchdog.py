@@ -124,9 +124,9 @@ class IndependentStateTests(unittest.TestCase):
             )
         )
         self.assertFalse(bt_watchdog.attempt_recovery(call, recover, now=501.0))
-        self.assertEqual((call.failures, call.backoff), (3, 480.0))
-        self.assertEqual(call.last_attempt, 500.0)
-        self.assertEqual(recover.call_count, 1)
+        self.assertEqual((call.failures, call.backoff), (3, 240.0))
+        self.assertEqual(call.last_attempt, 0.0)
+        self.assertEqual(recover.call_count, 2)
         self.assertEqual((output.failures, output.backoff), (2, 60.0))
 
     def test_state_files_are_separate(self) -> None:
@@ -146,6 +146,53 @@ class IndependentStateTests(unittest.TestCase):
 
 
 class TargetedRecoveryTests(unittest.TestCase):
+    def test_output_transaction_lock_covers_the_complete_destructive_ladder(self) -> None:
+        state = bt_watchdog.RecoveryState("output", failures=1)
+        lock_active = False
+
+        class Lock:
+            def __enter__(self):
+                nonlocal lock_active
+                lock_active = True
+                return True
+
+            def __exit__(self, *_args):
+                nonlocal lock_active
+                lock_active = False
+
+        def recover() -> bt_watchdog.RecoveryResult:
+            self.assertTrue(lock_active)
+            return bt_watchdog.RecoveryResult(True, "hci-down-up")
+
+        with mock.patch.object(
+            bt_watchdog.btadapters, "speaker_radio_lock", return_value=Lock()
+        ) as lock:
+            self.assertTrue(
+                bt_watchdog.record_failure_and_recover(
+                    roles(), "output", state, recover=recover
+                )
+            )
+        lock.assert_called_once_with(bt_watchdog.OUTPUT_RADIO_LOCK, blocking=False)
+        self.assertFalse(lock_active)
+        self.assertEqual(state.failures, 0)
+
+    def test_busy_output_transaction_spends_no_failure_or_recovery_attempt(self) -> None:
+        state = bt_watchdog.RecoveryState("output", failures=1, backoff=240.0)
+        recover = mock.Mock()
+        with mock.patch.object(
+            bt_watchdog.btadapters,
+            "speaker_radio_lock",
+            return_value=nullcontext(False),
+        ):
+            self.assertFalse(
+                bt_watchdog.record_failure_and_recover(
+                    roles(), "output", state, recover=recover
+                )
+            )
+        self.assertEqual((state.failures, state.backoff), (1, 240.0))
+        self.assertEqual(state.last_action, "output-radio-busy")
+        recover.assert_not_called()
+
     def test_full_ladder_uses_only_the_call_controller_exact_targets(self) -> None:
         commands: list[list[str]] = []
 
@@ -203,6 +250,69 @@ class TargetedRecoveryTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.action, "device-disconnect")
         disconnect.assert_called_once_with(SPEAKER_ADDRESS, OUTPUT)
+
+    def test_shutdown_is_checked_immediately_before_every_recovery_mutation(self) -> None:
+        checks = 0
+
+        def cancelled() -> bool:
+            nonlocal checks
+            checks += 1
+            # Allow resolve and power-on, then stop before the device disconnect.
+            return checks >= 3
+
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ) as power_on,
+            mock.patch.object(
+                bt_watchdog, "recovery_device", return_value=SPEAKER_ADDRESS
+            ),
+            mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
+        ):
+            result = bt_watchdog.targeted_recovery(
+                roles(),
+                "output",
+                refresh=lambda: OUTPUT,
+                verify=lambda: False,
+                cancelled=cancelled,
+            )
+        self.assertEqual(result.action, "cancelled")
+        power_on.assert_called_once_with(OUTPUT, cancelled=cancelled)
+        disconnect.assert_not_called()
+
+    def test_hci_rfkill_and_usb_helpers_recheck_shutdown_between_commands(self) -> None:
+        calls: list[list[str]] = []
+
+        def run(command, **_kwargs):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with mock.patch.object(bt_watchdog.subprocess, "run", side_effect=run):
+            checks = iter((False, False, True))
+            with self.assertRaises(bt_watchdog.RecoveryCancelled):
+                bt_watchdog.cycle_hci(CALL, cancelled=lambda: next(checks))
+        self.assertEqual(calls, [["hciconfig", CALL.hci, "down"]])
+
+        calls.clear()
+        with mock.patch.object(bt_watchdog.subprocess, "run", side_effect=run):
+            checks = iter((False, False, True))
+            with self.assertRaises(bt_watchdog.RecoveryCancelled):
+                bt_watchdog.cycle_rfkill(CALL, cancelled=lambda: next(checks))
+        self.assertEqual(calls, [["rfkill", "block", str(CALL.rfkill_index)]])
+
+        with tempfile.TemporaryDirectory() as directory:
+            driver = Path(directory) / "btusb"
+            driver.mkdir()
+            (driver / "unbind").touch()
+            (driver / "bind").touch()
+            checks = iter((False, False, True))
+            with (
+                mock.patch.object(bt_watchdog, "SYS_USB_DRIVERS", Path(directory)),
+                self.assertRaises(bt_watchdog.RecoveryCancelled),
+            ):
+                bt_watchdog.rebind_usb(CALL, cancelled=lambda: next(checks))
+            self.assertEqual((driver / "unbind").read_text().strip(), CALL.usb_interface)
+            self.assertEqual((driver / "bind").read_text(), "")
 
     def test_automatic_source_contains_no_global_recovery_action(self) -> None:
         source = Path(bt_watchdog.__file__).read_text(encoding="utf-8")
