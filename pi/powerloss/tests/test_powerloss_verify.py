@@ -123,5 +123,25 @@ class FinalControllerReadinessTests(unittest.TestCase):
         self.assertNotIn("bridge-btwatchdog.service", powerloss_verify.SYSTEM_UNITS)
 
 
+class RestartReadinessTests(unittest.TestCase):
+    def test_clean_boot_requires_zero_restart_records(self) -> None:
+        self.assertEqual(powerloss_verify.service_restart_failures("normal boot"), (0, []))
+
+        count, failures = powerloss_verify.service_restart_failures(
+            "Scheduled restart job\nservice recovered"
+        )
+        self.assertEqual(count, 1)
+        self.assertEqual(
+            failures, ["current boot contains 1 service restart record(s)"]
+        )
+
+    def test_multiple_restart_records_do_not_pass_as_bounded(self) -> None:
+        count, failures = powerloss_verify.service_restart_failures(
+            "Scheduled restart job\nScheduled restart job"
+        )
+        self.assertEqual(count, 2)
+        self.assertTrue(failures)
+
+
 if __name__ == "__main__":
     unittest.main()

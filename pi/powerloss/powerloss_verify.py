@@ -159,6 +159,14 @@ def published_controller_failures(
     return failures
 
 
+def service_restart_failures(current_boot_log: str) -> tuple[int, list[str]]:
+    """A later clean-boot readiness run permits no systemd restart record."""
+    count = current_boot_log.count("Scheduled restart job")
+    if count:
+        return count, [f"current boot contains {count} service restart record(s)"]
+    return 0, []
+
+
 def main() -> int:
     failures: list[str] = []
     details: dict[str, Any] = {}
@@ -334,10 +342,9 @@ def main() -> int:
         failures.append(
             "current boot contains critical storage, power, or watchdog errors"
         )
-    restart_count = current_log["stdout"].count("Scheduled restart job")
+    restart_count, restart_failures = service_restart_failures(current_log["stdout"])
     details["service_restart_count"] = restart_count
-    if restart_count > 2:
-        failures.append("current boot contains a service restart loop")
+    failures.extend(restart_failures)
 
     result = {
         "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
