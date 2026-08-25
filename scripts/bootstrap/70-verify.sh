@@ -14,6 +14,7 @@ done
 [ "$BOOT_ONLY" -eq 1 ] || { printf 'ERROR: --boot-only is required\n' >&2; exit 2; }
 
 STATE_ROOT="${BRIDGE_BOOT_STATE_ROOT:-/var/lib/rpi-lark-bridge/boot-transactions}"
+SOURCE_ROOT="${BRIDGE_SOURCE_ROOT:-/home/admin/rpi-lark-bridge}"
 transaction="${BRIDGE_BOOT_TRANSACTION:-}"
 if [ -z "$transaction" ] && [ -L "$STATE_ROOT/current" ]; then
     transaction="$STATE_ROOT/$(readlink "$STATE_ROOT/current")"
@@ -31,12 +32,15 @@ while IFS=$'\t' read -r expected source target; do
     if [ "$actual" = "$expected" ]; then ok "hash $target"; else bad "hash mismatch $target ($source)"; fi
 done < "$transaction/deployed-hashes.tsv"
 
-verifier=/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh
-grep -Fq BRIDGE_BTFW_VERIFY_ONLY_V2 "$verifier" || bad "Bluetooth verifier marker missing"
-if grep -Eq 'Write_SCO_PCM_Int_Param|0x3f[[:space:]]+0x1c' "$verifier"; then
-    bad "legacy SCO controller write returned"
-else
-    ok "Bluetooth verifier is read-only"
+call_controller="$(cat "$transaction/call-controller" 2>/dev/null || printf onboard)"
+if [ "$call_controller" = onboard ]; then
+    verifier=/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh
+    grep -Fq BRIDGE_BTFW_VERIFY_ONLY_V2 "$verifier" || bad "Bluetooth verifier marker missing"
+    if grep -Eq 'Write_SCO_PCM_Int_Param|0x3f[[:space:]]+0x1c' "$verifier"; then
+        bad "legacy SCO controller write returned"
+    else
+        ok "Bluetooth verifier is read-only"
+    fi
 fi
 
 legacy=/home/admin/.config/pipewire/pipewire.conf.d/20-bridge-endpoints.conf
@@ -87,17 +91,37 @@ show_lacks() {
 
 show_has bridge-tuning.service After systemd-modules-load.service
 show_has bridge-tuning.service Before bluetooth.service
-show_has bridge-tuning.service Before bridge-btfw.service
-show_has bridge-tuning.service Before bridge-btwatchdog.service
+show_has bridge-tuning.service Before bridge-btwatchdog@call.service
 show_lacks bridge-tuning.service After multi-user.target
-show_has bridge-btfw.service After bluetooth.service
-show_has bridge-btfw.service Requires bluetooth.service
-show_has bridge-btfw.service PartOf bluetooth.service
-show_lacks bridge-btfw.service Before bridge.target
+if systemctl is-active --quiet bridge-tuning.service; then ok "bridge-tuning.service active"; else bad "bridge-tuning.service inactive"; fi
 
-for unit in bridge-tuning.service bridge-btfw.service; do
-    if systemctl is-active --quiet "$unit"; then ok "$unit active"; else bad "$unit inactive"; fi
-done
+if [ "$call_controller" = usb-bt500 ]; then
+    controller_report="$({
+        python3 "$SOURCE_ROOT/pi/bridged/controller_roles.py" --policy final-usb status
+    } 2>&1)" && {
+        ok "strict USB call-controller identity is ready"
+        printf '[boot-verify] controller roles: %s\n' "$controller_report"
+    } || {
+        bad "strict USB call-controller identity failed: $controller_report"
+    }
+    for unit in bridge-btwatchdog@call.service; do
+        if systemctl is-active --quiet "$unit"; then ok "$unit active"; else bad "$unit inactive"; fi
+        if systemctl is-enabled --quiet "$unit"; then ok "$unit enabled"; else bad "$unit disabled"; fi
+    done
+    for unit in bridge-btfw.service bridge-btwatchdog.service bridge-btwatchdog@output.service; do
+        if systemctl is-active --quiet "$unit"; then bad "$unit unexpectedly active"; else ok "$unit inactive"; fi
+        if systemctl is-enabled --quiet "$unit"; then bad "$unit unexpectedly enabled"; else ok "$unit disabled"; fi
+    done
+else
+    show_has bridge-tuning.service Before bridge-btfw.service
+    show_has bridge-btfw.service After bluetooth.service
+    show_has bridge-btfw.service Requires bluetooth.service
+    show_has bridge-btfw.service PartOf bluetooth.service
+    show_lacks bridge-btfw.service Before bridge.target
+    for unit in bridge-btfw.service bridge-btwatchdog.service; do
+        if systemctl is-active --quiet "$unit"; then ok "$unit active"; else bad "$unit inactive"; fi
+    done
+fi
 
 barrier=/etc/systemd/system/user@1000.service.d/10-login-barrier.conf
 if [ -L "$barrier" ] && [ "$(readlink "$barrier")" = /dev/null ]; then
@@ -122,6 +146,8 @@ fi
 systemd-analyze verify \
     /etc/systemd/system/bridge-tuning.service \
     /etc/systemd/system/bridge-btfw.service \
+    /etc/systemd/system/bridge-btwatchdog@.service \
+    /etc/systemd/system/bridge-btwatchdog.service \
     /etc/systemd/system/bridge-boot-trial-rollback.service \
     /etc/systemd/system/bridge-boot-trial-rollback.timer || bad "systemd unit verification"
 

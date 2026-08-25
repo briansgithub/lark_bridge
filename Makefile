@@ -71,6 +71,8 @@ test-host: test-py test-pico-host ## All tests that need no hardware
 .PHONY: test-py
 test-py: venv ## pytest for bridged/bridgectl against recorded fixtures
 	$(VENV)/bin/pytest "$(PY_DIR)/tests" -q
+	$(VENV)/bin/pytest "$(REPO_ROOT)/tools" -q
+	$(VENV)/bin/pytest "$(REPO_ROOT)/pi/scripts/test_install_release.py" -q
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/rig/boot/tests" -p 'test_*.py'
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/pi/powerloss/tests" -p 'test_*.py'
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/rig/powerloss/tests" -p 'test_*.py'
