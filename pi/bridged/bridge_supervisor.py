@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -21,7 +22,10 @@ import tomllib
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import controller_roles
 
 POLL_SECONDS = 2.0
 OUTPUT_EVENT_POLL_SECONDS = 0.05
@@ -59,6 +63,7 @@ AEC_SOURCE = "bridge.aec.source"
 AEC_SINK = "bridge.aec.sink"
 AEC_CAPTURE = "echo-cancel-capture"
 AEC_PLAYBACK = "echo-cancel-playback"
+VOLUME_PERCENT_RE = re.compile(r"/\s*([0-9]+(?:\.[0-9]+)?)%\s*/")
 
 log = logging.getLogger("bridge-supervisor")
 
@@ -71,6 +76,7 @@ class State(str, Enum):
     ACTIVE = "ACTIVE"
     DEGRADED = "DEGRADED"
     FAILED = "FAILED"
+    SAFE = "SAFE"
 
 
 @dataclass(frozen=True)
@@ -115,6 +121,10 @@ class Settings:
     desired_output: str | None = None
     speaker_adapter: str | None = None
     fallback_to_wired: bool = True
+    controller_roles: controller_roles.ControllerRoles | None = None
+    # ``None`` keeps deliberately minimal test/bench Settings free from host mixer I/O.
+    # load_settings() supplies the production default and validates the durable value.
+    wired_output_volume: float | None = None
 
     @property
     def hfp_sink(self) -> str:
@@ -196,7 +206,14 @@ def write_desire(output_id: str | None, source: str = "unknown", path: Path | No
     os.replace(temporary, target)
 
 
-def resolve_output(nodes: NodeMap, settings: Settings, desired_id: str | None):
+def resolve_output(
+    nodes: NodeMap,
+    settings: Settings,
+    desired_id: str | None,
+    *,
+    bluez_objects: dict[str, dict] | None = None,
+    output_controller_ready: bool = True,
+):
     """Decide which node call audio should go to. Returns (node_name, report_or_None).
 
     The import is deliberately lazy. rig/pi/measure/aec_bench.py loads this file by path with
@@ -211,8 +228,12 @@ def resolve_output(nodes: NodeMap, settings: Settings, desired_id: str | None):
         return node, None
 
     candidates = outputs_module.candidates(
-        nodes, speaker_adapter=settings.speaker_adapter
+        nodes,
+        objects=bluez_objects,
+        speaker_adapter=settings.speaker_adapter,
     )
+    if not output_controller_ready:
+        candidates = [candidate for candidate in candidates if candidate.kind != "a2dp"]
     resolution = outputs_module.resolve(
         desired_id or settings.desired_output,
         candidates,
@@ -241,7 +262,24 @@ def load_settings(path: Path | None = None) -> Settings:
     else:
         log.warning("config %s is absent; retaining safe AEC-off defaults", config_path)
 
-    aec_data = (data.get("audio") or {}).get("aec") or {}
+    # Keep the AEC bench importable by loading the role module only when settings are read.
+    import controller_roles as controller_roles_module
+
+    roles = None
+    if controller_roles_module.has_controller_role_fields(data):
+        roles = controller_roles_module.parse_controller_roles(data)
+
+    audio_data = data.get("audio") or {}
+    if not isinstance(audio_data, dict):
+        raise TypeError("audio must be a TOML table")
+    raw_wired_volume = audio_data.get("wired_output_volume", 0.85)
+    if isinstance(raw_wired_volume, bool) or not isinstance(raw_wired_volume, (int, float)):
+        raise TypeError("audio.wired_output_volume must be a number")
+    wired_output_volume = float(raw_wired_volume)
+    if not 0.0 <= wired_output_volume <= 1.0:
+        raise ValueError("audio.wired_output_volume must be between 0.0 and 1.0")
+
+    aec_data = audio_data.get("aec") or {}
     enabled = toml_bool(aec_data, "enabled", False)
     if "BRIDGE_AEC_ENABLED" in os.environ:
         enabled = parse_bool(os.environ["BRIDGE_AEC_ENABLED"])
@@ -270,7 +308,11 @@ def load_settings(path: Path | None = None) -> Settings:
     if failure_policy != "fail_closed":
         raise ValueError("audio.aec.failure_policy must be 'fail_closed'")
 
-    phone = str(((data.get("devices") or {}).get("phone") or {}).get("address", ""))
+    phone = (
+        roles.phone_address
+        if roles is not None
+        else str(((data.get("devices") or {}).get("phone") or {}).get("address", ""))
+    )
     if not phone or phone == "AA:BB:CC:DD:EE:FF":
         phone = DEFAULT_PHONE_MAC
 
@@ -288,7 +330,30 @@ def load_settings(path: Path | None = None) -> Settings:
         address = str(output_data.get("address", "") or "").strip().upper()
         if address and address != "11:22:33:44:55:66":
             desired_output = f"a2dp:{address}"
-    speaker_adapter = str(output_data.get("adapter", "") or "").strip() or None
+    speaker_adapter = (
+        roles.output.address
+        if roles is not None and roles.output is not None
+        else str(output_data.get("adapter", "") or "").strip() or None
+    )
+
+    phone_override = os.environ.get("BRIDGE_PHONE_MAC")
+    if roles is not None and phone_override and phone_override.upper() != roles.phone_address:
+        raise ValueError("BRIDGE_PHONE_MAC cannot override the configured call role")
+    speaker_override = os.environ.get("BRIDGE_SPEAKER_ADAPTER")
+    if roles is not None and speaker_override:
+        if roles.output is None:
+            raise ValueError("BRIDGE_SPEAKER_ADAPTER requires a configured output role")
+        if speaker_override != roles.output.address:
+            raise ValueError("BRIDGE_SPEAKER_ADAPTER cannot override the configured output role")
+
+    selected_mode = os.environ.get("BRIDGE_MODE", mode)
+    selected_output = os.environ.get("BRIDGE_OUTPUT", desired_output) or None
+    if (
+        roles is not None
+        and roles.output is None
+        and (selected_mode == "bluetooth" or str(selected_output or "").lower().startswith("a2dp:"))
+    ):
+        raise ValueError("Bluetooth/A2DP output requires a configured output role")
 
     status_value = os.environ.get("BRIDGE_STATUS")
     return Settings(
@@ -309,14 +374,108 @@ def load_settings(path: Path | None = None) -> Settings:
         lark_node=os.environ.get("BRIDGE_LARK", DEFAULT_LARK),
         lark_component=os.environ.get("BRIDGE_LARK_COMPONENT", DEFAULT_LARK_COMPONENT),
         wired_output=os.environ.get("BRIDGE_WIRED_OUT", DEFAULT_WIRED_OUT),
-        phone_mac=os.environ.get("BRIDGE_PHONE_MAC", phone).upper(),
+        phone_mac=(phone_override or phone).upper(),
         status_path=Path(status_value) if status_value else default_status_path(),
         config_path=config_path,
-        mode=os.environ.get("BRIDGE_MODE", mode),
-        desired_output=os.environ.get("BRIDGE_OUTPUT", desired_output) or None,
-        speaker_adapter=os.environ.get("BRIDGE_SPEAKER_ADAPTER", speaker_adapter) or None,
+        mode=selected_mode,
+        desired_output=selected_output,
+        speaker_adapter=speaker_override or speaker_adapter,
         fallback_to_wired=fallback_to_wired,
+        controller_roles=roles,
+        wired_output_volume=wired_output_volume,
     )
+
+
+def inspect_controller_roles(
+    settings: Settings,
+    *,
+    policy: Any = None,
+    objects: dict[str, dict] | None = None,
+    inventory: list[Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, dict], list[Any]]:
+    """Resolve the configured roles from one BlueZ/sysfs snapshot."""
+    import btadapters
+    import controller_roles
+
+    selected_policy = policy or controller_roles.ReadinessPolicy.TRANSITIONAL
+    if settings.controller_roles is None:
+        return (
+            {
+                "policy": selected_policy.value,
+                "transitional_uart_call": False,
+                "ready": False,
+                "error": "controller role configuration is absent",
+                "call": {"required": True, "configured": False, "ready": False},
+                "output": {
+                    "required": False,
+                    "configured": False,
+                    "ready": True,
+                    "reason": "wired-output",
+                },
+            },
+            objects or {},
+            inventory or [],
+        )
+    tree = objects if objects is not None else btadapters.managed_objects()
+    observed = inventory if inventory is not None else btadapters.adapters(tree)
+    return (
+        controller_roles.controllers_status(
+            settings.controller_roles, observed, policy=selected_policy
+        ),
+        tree,
+        observed,
+    )
+
+
+def call_role_acceptance(
+    settings: Settings,
+    objects: dict[str, dict],
+    inventory: list[Any],
+) -> tuple[bool, str | None]:
+    """Accept HFP only when the Pixel is connected exclusively through BT500.
+
+    A stale or unpaired Device1 object on another adapter is harmless.  A second
+    *connected* object is not: PipeWire's phone-derived node names do not identify
+    which controller owns them, so ambiguity must fail closed.
+    """
+    import btadapters
+    import controller_roles
+
+    if settings.controller_roles is None:
+        return False, "controller role configuration is absent"
+    try:
+        call = controller_roles.resolve_controller(
+            settings.controller_roles.call,
+            inventory,
+            policy=controller_roles.ReadinessPolicy.TRANSITIONAL,
+        )
+    except controller_roles.ControllerRoleError as exc:
+        return False, f"{exc.code}: {exc.detail}"
+
+    connected = [
+        adapter
+        for adapter in inventory
+        if btadapters.connected_on(adapter, settings.controller_roles.phone_address, objects)
+    ]
+    if not any(adapter.address == call.address for adapter in connected):
+        return False, "Pixel is not connected on the call controller"
+    other = sorted({adapter.address for adapter in connected if adapter.address != call.address})
+    if other:
+        return False, "Pixel is also connected on another controller: " + ", ".join(other)
+    return True, None
+
+
+def accepted_call_nodes(
+    nodes: NodeMap,
+    settings: Settings,
+    accepted: bool,
+) -> NodeMap:
+    """Hide untrusted phone endpoints from the graph without altering diagnostics."""
+    filtered = dict(nodes)
+    if not accepted:
+        filtered.pop(settings.hfp_source, None)
+        filtered.pop(settings.hfp_sink, None)
+    return filtered
 
 
 NodeMap = dict[str, dict[str, Any]]
@@ -428,6 +587,55 @@ def set_aec_mute(muted: bool) -> bool:
         return result.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
+
+
+def read_sink_volume(node: str) -> float | None:
+    """Return a sink's common channel volume as a 0..1 value."""
+    try:
+        result = subprocess.run(
+            ["pactl", "get-sink-volume", node],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    channels = [float(value) / 100.0 for value in VOLUME_PERCENT_RE.findall(result.stdout)]
+    if not channels or max(channels) - min(channels) > 0.01:
+        return None
+    return sum(channels) / len(channels)
+
+
+def set_and_verify_sink_volume(
+    node: str, desired: float, *, tolerance: float = 0.01
+) -> tuple[bool, float | None, str | None]:
+    """Set one named sink and verify its observed mixer state before routing audio."""
+    try:
+        result = subprocess.run(
+            ["pactl", "set-sink-volume", node, f"{desired * 100:.2f}%"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return False, None, f"volume set failed: {exc}"
+    if result.returncode != 0:
+        detail = result.stderr.strip() or f"exit {result.returncode}"
+        return False, None, f"volume set failed: {detail}"
+    observed = read_sink_volume(node)
+    if observed is None:
+        return False, None, "volume verification returned no common channel value"
+    if abs(observed - desired) > tolerance:
+        return (
+            False,
+            observed,
+            f"volume mismatch: desired {desired:.3f}, observed {observed:.3f}",
+        )
+    return True, observed, None
 
 
 class Loopback:
@@ -560,9 +768,7 @@ class NativeAecHost:
             "}",
         ]
         if self.latency_frames is not None:
-            module_args.insert(
-                5, f"node.latency = {self.latency_frames}/{self.settings.rate}"
-            )
+            module_args.insert(5, f"node.latency = {self.latency_frames}/{self.settings.rate}")
         if self.play_delay_frames is not None:
             module_args.insert(
                 5,
@@ -653,6 +859,10 @@ class CallGraph:
         # that predate output selection (the test suite, and any tick() without an explicit
         # node) fall back to the configured wired output via output_target.
         self.output_node: str | None = None
+        self.output_volume_target: str | None = None
+        self.output_volume_observed: float | None = None
+        self.output_volume_verified = False
+        self.output_volume_error: str | None = None
 
     @property
     def output_target(self) -> str:
@@ -674,6 +884,28 @@ class CallGraph:
         self.routes_started = 0.0
         self.verified = False
         self.unexpected_links = []
+        self.output_volume_target = None
+        self.output_volume_observed = None
+        self.output_volume_verified = False
+        self.output_volume_error = None
+
+    def ensure_output_volume(self, target: str) -> bool:
+        """Verify the selected wired sink once per graph generation."""
+        desired = self.settings.wired_output_volume
+        if target != self.settings.wired_output or desired is None:
+            self.output_volume_target = target
+            self.output_volume_observed = None
+            self.output_volume_verified = True
+            self.output_volume_error = None
+            return True
+        if self.output_volume_target == target and self.output_volume_verified:
+            return True
+        ok, observed, error = set_and_verify_sink_volume(target, desired)
+        self.output_volume_target = target
+        self.output_volume_observed = observed
+        self.output_volume_verified = ok
+        self.output_volume_error = error
+        return ok
 
     def update_signature(self, signature: tuple[Any, ...]) -> None:
         if signature == self.signature:
@@ -710,15 +942,14 @@ class CallGraph:
             )
             self.aec_host.start()
             return
-        self.callout = Loopback(
-            "bridge.callout", self.settings.hfp_source, self.output_target, 2
-        )
+        self.callout = Loopback("bridge.callout", self.settings.hfp_source, self.output_target, 2)
         self.microphone = Loopback("bridge.mic", lark, self.settings.hfp_sink, 1)
         self.callout.start()
         self.microphone.start()
         self.routes_started = time.monotonic()
 
     def can_switch_output_live(self) -> bool:
+        aec_host = self.aec_host
         return bool(
             self.state == State.ACTIVE
             and self.verified
@@ -726,8 +957,8 @@ class CallGraph:
             and self.microphone.running
             and self.callout is not None
             and self.callout.running
-            and (not self.settings.aec.enabled or self.aec_host is not None)
-            and (not self.settings.aec.enabled or self.aec_host.running)
+            and (not self.settings.aec.enabled or aec_host is not None)
+            and (not self.settings.aec.enabled or (aec_host is not None and aec_host.running))
         )
 
     def switch_output_live(self, target: str) -> bool:
@@ -788,9 +1019,7 @@ class CallGraph:
         if self.settings.aec.enabled:
             if (lark, AEC_CAPTURE) not in links:
                 return False
-            playback_targets = {
-                target for source, target in links if source == AEC_PLAYBACK
-            }
+            playback_targets = {target for source, target in links if source == AEC_PLAYBACK}
             if playback_targets != {self.output_target}:
                 return False
         self.unexpected_links = unexpected_call_links(
@@ -826,12 +1055,38 @@ class CallGraph:
         endpoints_changed = signature != self.signature
         self.update_signature(signature)
 
+        if not call_up:
+            self.teardown("call down")
+            self.state = State.CALL_DOWN
+            return
+        if lark is None or resolved is None:
+            self.teardown("required physical endpoint absent")
+            self.state = State.DISCOVERING
+            return
+
+        # Mixer verification precedes both initial graph construction and a live switch
+        # back to AUX.  A failed set/read leaves every call route torn down.
+        if not self.ensure_output_volume(resolved):
+            volume_state = (
+                self.output_volume_target,
+                self.output_volume_observed,
+                self.output_volume_error,
+            )
+            reason = self.output_volume_error or "wired output volume did not verify"
+            self.teardown(reason)
+            (
+                self.output_volume_target,
+                self.output_volume_observed,
+                self.output_volume_error,
+            ) = volume_state
+            self.output_node = resolved
+            self.last_failure = reason
+            self.state = State.SAFE
+            log.error("call graph held SAFE: %s", reason)
+            return
+
         if resolved != old_output:
-            if (
-                not endpoints_changed
-                and resolved is not None
-                and self.can_switch_output_live()
-            ):
+            if not endpoints_changed and resolved is not None and self.can_switch_output_live():
                 if self.switch_output_live(resolved):
                     # `links` is the snapshot from before the make-before-break operation.
                     # Revalidate on the next fast tick rather than judging fresh state with
@@ -848,15 +1103,6 @@ class CallGraph:
                 self.next_attempt = 0.0
                 self.last_failure = None
             self.output_node = resolved
-
-        if not call_up:
-            self.teardown("call down")
-            self.state = State.CALL_DOWN
-            return
-        if lark is None or resolved is None:
-            self.teardown("required physical endpoint absent")
-            self.state = State.DISCOVERING
-            return
 
         # Safety sweep, before any build logic.
         #
@@ -877,9 +1123,7 @@ class CallGraph:
                 return
             # The burst that exhausted the attempts may be long over. Try again from
             # scratch rather than staying dead for the life of the call.
-            log.warning(
-                "retrying call graph from FAILED after %.0fs", FAILED_RETRY_SECONDS
-            )
+            log.warning("retrying call graph from FAILED after %.0fs", FAILED_RETRY_SECONDS)
             self.attempts = 0
             self.next_attempt = 0.0
             self.last_failure = None
@@ -954,9 +1198,7 @@ class CallGraph:
                 "lark": lark,
                 "hfp_source": self.settings.hfp_source if call_up else None,
                 "hfp_sink": self.settings.hfp_sink if call_up else None,
-                "wired_output": (
-                    self.output_target if self.output_target in nodes else None
-                ),
+                "wired_output": (self.output_target if self.output_target in nodes else None),
             },
             "aec": {
                 "enabled": self.settings.aec.enabled,
@@ -968,6 +1210,17 @@ class CallGraph:
                 "verified": self.verified and self.settings.aec.enabled,
                 "module_backend": ("native-pw-cli" if self.settings.aec.enabled else None),
                 "owner_pid": self.aec_host.pid if self.aec_host is not None else None,
+            },
+            "wired_output_volume": {
+                "required": bool(
+                    self.settings.wired_output_volume is not None
+                    and self.output_target == self.settings.wired_output
+                ),
+                "target": self.output_volume_target,
+                "desired": self.settings.wired_output_volume,
+                "observed": self.output_volume_observed,
+                "verified": self.output_volume_verified,
+                "error": self.output_volume_error,
             },
             "graph": {
                 "expected_links": expected,
@@ -1068,8 +1321,11 @@ def main() -> int:
     )
     try:
         settings = load_settings()
-    except (OSError, tomllib.TOMLDecodeError, ValueError) as exc:
+    except (OSError, tomllib.TOMLDecodeError, TypeError, ValueError) as exc:
         log.error("configuration rejected: %s", exc)
+        return 2
+    if settings.controller_roles is None:
+        log.error("configuration rejected: permanent call-controller identity is required")
         return 2
 
     reconcile_stale_pulse_aec()
@@ -1094,18 +1350,36 @@ def main() -> int:
     metrics: dict[str, Any] = {}
     output_report: dict[str, Any] | None = None
     last_output: str | None = None
+    controller_block: dict[str, Any] = {
+        "policy": "transitional",
+        "ready": False,
+        "error": "controller roles were not inspected",
+        "call": {},
+        "output": {},
+    }
     while not stopping:
+        controller_block, bluez_tree, controller_inventory = inspect_controller_roles(settings)
+        call_binding_accepted, call_binding_error = call_role_acceptance(
+            settings, bluez_tree, controller_inventory
+        )
         nodes = pw_nodes()
         links = pw_links()
+        observed_desire = desire_stamp()
         if nodes is None or links is None:
             graph.fail("PipeWire graph could not be inspected")
             nodes = nodes or {}
             links = links or []
         else:
+            accepted_nodes = accepted_call_nodes(nodes, settings, call_binding_accepted)
             lark = find_lark(nodes, settings)
-            observed_desire = desire_stamp()
             desired = read_desire()
-            output_node, output_report = resolve_output(nodes, settings, desired)
+            output_node, output_report = resolve_output(
+                nodes,
+                settings,
+                desired,
+                bluez_objects=bluez_tree,
+                output_controller_ready=bool((controller_block.get("output") or {}).get("ready")),
+            )
             if output_node != last_output:
                 log.info(
                     "output resolved to %s (desired %s)",
@@ -1113,14 +1387,24 @@ def main() -> int:
                     desired or settings.desired_output or "<unset>",
                 )
                 last_output = output_node
-            graph.tick(nodes, links, lark, output_node)
+            graph.tick(accepted_nodes, links, lark, output_node)
 
         now = time.monotonic()
         if now - last_metrics >= 10:
             metrics = runtime_metrics()
             last_metrics = now
         lark = find_lark(nodes, settings) if nodes else None
-        status = graph.status(nodes, links, lark)
+        accepted_nodes = accepted_call_nodes(nodes, settings, call_binding_accepted)
+        raw_hfp_nodes_present = settings.hfp_sink in nodes and settings.hfp_source in nodes
+        status = graph.status(accepted_nodes, links, lark)
+        status["call"].update(
+            {
+                "raw_hfp_nodes_present": raw_hfp_nodes_present,
+                "controller_binding_accepted": call_binding_accepted,
+                "controller_binding_error": call_binding_error,
+            }
+        )
+        status["controllers"] = controller_block
         status["system"] = metrics
         # Publish the candidate list and the resolution so a front-end -- a CLI, the phone
         # bridge -- can render a selector by reading one atomic file, with no socket and no
@@ -1139,7 +1423,16 @@ def main() -> int:
     graph.teardown("supervisor shutting down")
     graph.state = State.CALL_DOWN
     try:
-        write_status(settings.status_path, graph.status({}, [], None))
+        stopped_status = graph.status({}, [], None)
+        stopped_status["call"].update(
+            {
+                "raw_hfp_nodes_present": False,
+                "controller_binding_accepted": False,
+                "controller_binding_error": "supervisor stopped",
+            }
+        )
+        stopped_status["controllers"] = controller_block
+        write_status(settings.status_path, stopped_status)
     except OSError:
         pass
     log.info("stopped")

@@ -7,6 +7,57 @@ from pathlib import Path
 from unittest import mock
 
 import bridge_supervisor as supervisor
+import btadapters
+import controller_roles
+
+CALL_ADDRESS = "A0:AD:9F:73:6C:24"
+ONBOARD_ADDRESS = "B8:27:EB:43:8D:51"
+PHONE_ADDRESS = "5C:33:7B:CB:BF:C5"
+
+
+def role_settings(*, volume: float | None = None) -> supervisor.Settings:
+    roles = controller_roles.parse_controller_roles(
+        {
+            "bridge": {"mode": "bluetooth-wired"},
+            "devices": {
+                "phone": {
+                    "address": PHONE_ADDRESS,
+                    "adapter": CALL_ADDRESS,
+                    "adapter_product": "ASUS USB-BT500",
+                    "adapter_bus": "USB",
+                    "adapter_usb_vendor_id": "0b05",
+                    "adapter_usb_product_id": "1bf6",
+                },
+                "output": {"id": "wired:alsa_output.platform-test.stereo"},
+            },
+        }
+    )
+    return supervisor.Settings(
+        aec=supervisor.AecSettings(),
+        phone_mac=PHONE_ADDRESS,
+        controller_roles=roles,
+        wired_output_volume=volume,
+    )
+
+
+def role_adapter(
+    hci: str,
+    address: str = CALL_ADDRESS,
+    *,
+    bus: str = "USB",
+    product_id: str = "1bf6",
+) -> btadapters.Adapter:
+    return btadapters.Adapter(
+        hci,
+        address,
+        bus,
+        int(hci.removeprefix("hci")),
+        usb_vendor_id="0b05" if bus == "USB" else None,
+        usb_product_id=product_id if bus == "USB" else None,
+        usb_parent="1-1.2" if bus == "USB" else None,
+        usb_interface="1-1.2:1.0" if bus == "USB" else None,
+        driver="btusb" if bus == "USB" else "hci_uart",
+    )
 
 
 class SettingsTests(unittest.TestCase):
@@ -49,20 +100,138 @@ failure_policy = "fail_closed"
             with self.assertRaisesRegex(TypeError, "noise_suppression"):
                 supervisor.load_settings(config)
 
-    def test_output_controller_is_stored_by_permanent_address(self) -> None:
+    def test_single_call_controller_and_wired_output_load(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "bridge.toml"
             config.write_text(
                 """
-[devices.output]
-address = "C9:5C:FD:6E:28:46"
+[bridge]
+mode = "bluetooth-wired"
+
+[devices.phone]
+address = "5C:33:7B:CB:BF:C5"
 adapter = "A0:AD:9F:73:6C:24"
+adapter_product = "ASUS USB-BT500"
+adapter_bus = "USB"
+adapter_usb_vendor_id = "0b05"
+adapter_usb_product_id = "1bf6"
+
+[devices.output]
+id = "wired:alsa_output.platform-test.stereo"
+
+[audio]
+wired_output_volume = 0.85
 """,
                 encoding="utf-8",
             )
             settings = supervisor.load_settings(config)
-        self.assertEqual(settings.desired_output, "a2dp:C9:5C:FD:6E:28:46")
-        self.assertEqual(settings.speaker_adapter, "A0:AD:9F:73:6C:24")
+        self.assertEqual(settings.desired_output, "wired:alsa_output.platform-test.stereo")
+        self.assertIsNone(settings.speaker_adapter)
+        self.assertIsNotNone(settings.controller_roles)
+        assert settings.controller_roles is not None
+        self.assertEqual(settings.controller_roles.call.address, CALL_ADDRESS)
+        self.assertIsNone(settings.controller_roles.output)
+        self.assertEqual(settings.wired_output_volume, 0.85)
+
+    def test_invalid_wired_volume_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "bridge.toml"
+            config.write_text("[audio]\nwired_output_volume = 1.1\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "between"):
+                supervisor.load_settings(config)
+
+
+class ControllerBindingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.settings = role_settings()
+        self.call = role_adapter("hci4")
+        self.onboard = role_adapter("hci2", ONBOARD_ADDRESS, bus="UART")
+        self.inventory = [self.onboard, self.call]
+
+    def tree(
+        self,
+        *connected: btadapters.Adapter,
+        include_stale_onboard: bool = False,
+    ) -> dict[str, dict]:
+        tree = {
+            btadapters.path_for(adapter, PHONE_ADDRESS): {
+                "org.bluez.Device1": {"Connected": {"data": True}}
+            }
+            for adapter in connected
+        }
+        if include_stale_onboard and self.onboard not in connected:
+            tree[btadapters.path_for(self.onboard, PHONE_ADDRESS)] = {
+                "org.bluez.Device1": {
+                    "Connected": {"data": False},
+                    "Paired": {"data": True},
+                }
+            }
+        return tree
+
+    def test_call_binding_accepts_only_the_resolved_bt500(self) -> None:
+        accepted, error = supervisor.call_role_acceptance(
+            self.settings,
+            self.tree(self.call, include_stale_onboard=True),
+            self.inventory,
+        )
+        self.assertTrue(accepted)
+        self.assertIsNone(error)
+
+    def test_connected_onboard_or_duplicate_connections_fail_closed(self) -> None:
+        wrong = supervisor.call_role_acceptance(
+            self.settings, self.tree(self.onboard), self.inventory
+        )
+        duplicate = supervisor.call_role_acceptance(
+            self.settings, self.tree(self.call, self.onboard), self.inventory
+        )
+        self.assertFalse(wrong[0])
+        self.assertIn("not connected", wrong[1] or "")
+        self.assertFalse(duplicate[0])
+        self.assertIn(ONBOARD_ADDRESS, duplicate[1] or "")
+
+    def test_wrong_usb_identity_rejects_call_binding_and_status(self) -> None:
+        wrong_id = role_adapter("hci4", product_id="1d70")
+        status, _, _ = supervisor.inspect_controller_roles(
+            self.settings,
+            objects=self.tree(wrong_id),
+            inventory=[self.onboard, wrong_id],
+        )
+        accepted, error = supervisor.call_role_acceptance(
+            self.settings, self.tree(wrong_id), [self.onboard, wrong_id]
+        )
+        self.assertFalse(status["ready"])
+        self.assertIn("controller_identity_mismatch", status["call"]["error"])
+        self.assertFalse(accepted)
+        self.assertIn("controller_identity_mismatch", error or "")
+
+    def test_status_preserves_ready_wired_output_record(self) -> None:
+        status, tree, inventory = supervisor.inspect_controller_roles(
+            self.settings,
+            objects=self.tree(self.call),
+            inventory=self.inventory,
+        )
+        self.assertTrue(status["ready"])
+        self.assertEqual(status["call"]["configured_address"], CALL_ADDRESS)
+        self.assertEqual(status["call"]["observed_usb_id"], "0b05:1bf6")
+        self.assertEqual(status["call"]["hci"], "hci4")
+        self.assertFalse(status["output"]["required"])
+        self.assertTrue(status["output"]["ready"])
+        self.assertEqual(status["output"]["reason"], "wired-output")
+        self.assertEqual(tree, self.tree(self.call))
+        self.assertEqual(inventory, self.inventory)
+
+    def test_wrong_controller_hfp_nodes_are_hidden_from_the_graph(self) -> None:
+        nodes = {
+            self.settings.hfp_source: {},
+            self.settings.hfp_sink: {},
+            self.settings.lark_node: {},
+            self.settings.wired_output: {},
+        }
+        filtered = supervisor.accepted_call_nodes(nodes, self.settings, False)
+        self.assertNotIn(self.settings.hfp_source, filtered)
+        self.assertNotIn(self.settings.hfp_sink, filtered)
+        self.assertIn(self.settings.lark_node, filtered)
+        self.assertIn(self.settings.wired_output, filtered)
 
 
 class IdentityAndGraphTests(unittest.TestCase):
@@ -209,6 +378,91 @@ class FakeLoopback:
             self.out_node,
             self.playback,
         ) in links
+
+
+class WiredVolumeTests(unittest.TestCase):
+    def nodes(self, settings: supervisor.Settings) -> dict[str, dict]:
+        return {
+            settings.lark_node: {},
+            settings.wired_output: {},
+            settings.hfp_source: {},
+            settings.hfp_sink: {},
+        }
+
+    def test_pactl_set_is_followed_by_numeric_verification(self) -> None:
+        replies = [
+            mock.Mock(returncode=0, stdout="", stderr=""),
+            mock.Mock(
+                returncode=0,
+                stdout=(
+                    "Volume: front-left: 55705 / 85% / -4.22 dB, "
+                    "front-right: 55705 / 85% / -4.22 dB\n"
+                ),
+                stderr="",
+            ),
+        ]
+        with mock.patch.object(supervisor.subprocess, "run", side_effect=replies) as run:
+            ok, observed, error = supervisor.set_and_verify_sink_volume("alsa_output.test", 0.85)
+        self.assertTrue(ok)
+        self.assertEqual(observed, 0.85)
+        self.assertIsNone(error)
+        self.assertEqual(
+            run.call_args_list[0].args[0],
+            ["pactl", "set-sink-volume", "alsa_output.test", "85.00%"],
+        )
+
+    def test_failed_volume_verification_holds_graph_safe_and_unbuilt(self) -> None:
+        settings = role_settings(volume=0.85)
+        graph = supervisor.CallGraph(settings)
+        with (
+            mock.patch.object(
+                supervisor,
+                "set_and_verify_sink_volume",
+                return_value=(False, 1.0, "volume mismatch"),
+            ),
+            mock.patch.object(supervisor, "Loopback", FakeLoopback),
+        ):
+            graph.tick(self.nodes(settings), [], settings.lark_node)
+        self.assertEqual(graph.state, supervisor.State.SAFE)
+        self.assertEqual(graph.output_volume_observed, 1.0)
+        self.assertFalse(graph.output_volume_verified)
+        self.assertEqual(graph.output_volume_error, "volume mismatch")
+        self.assertIsNone(graph.microphone)
+        self.assertIsNone(graph.callout)
+
+    def test_verified_volume_precedes_build_and_is_reported(self) -> None:
+        settings = role_settings(volume=0.85)
+        graph = supervisor.CallGraph(settings)
+        events: list[str] = []
+
+        class OrderedLoopback(FakeLoopback):
+            def start(self) -> None:
+                events.append("build")
+                super().start()
+
+        def verify(_target: str, _desired: float):
+            events.append("volume")
+            return True, 0.85, None
+
+        with (
+            mock.patch.object(supervisor, "set_and_verify_sink_volume", side_effect=verify),
+            mock.patch.object(supervisor, "Loopback", OrderedLoopback),
+        ):
+            graph.tick(self.nodes(settings), [], settings.lark_node)
+        self.assertEqual(events[0], "volume")
+        self.assertEqual(graph.state, supervisor.State.BUILDING)
+        report = graph.status(self.nodes(settings), [], settings.lark_node)
+        self.assertEqual(
+            report["wired_output_volume"],
+            {
+                "required": True,
+                "target": settings.wired_output,
+                "desired": 0.85,
+                "observed": 0.85,
+                "verified": True,
+                "error": None,
+            },
+        )
 
 
 class CallGraphLifecycleTests(unittest.TestCase):
@@ -496,7 +750,8 @@ class LiveOutputSwitchTests(unittest.TestCase):
             mock.patch.object(
                 supervisor,
                 "unlink",
-                side_effect=lambda source, target: events.append(("unlink", source, target)) or True,
+                side_effect=lambda source, target: events.append(("unlink", source, target))
+                or True,
             ),
             mock.patch.object(supervisor, "set_aec_mute") as mute,
         ):
@@ -625,8 +880,12 @@ class FailedIsNotTerminalTests(unittest.TestCase):
     def test_failed_does_not_retry_immediately(self) -> None:
         """The cap exists to stop a hot rebuild loop; that must survive the fix."""
         graph = self._failed_graph()
-        nodes = {"lark": {}, graph.settings.hfp_sink: {}, graph.settings.hfp_source: {},
-                 graph.settings.wired_output: {}}
+        nodes = {
+            "lark": {},
+            graph.settings.hfp_sink: {},
+            graph.settings.hfp_source: {},
+            graph.settings.wired_output: {},
+        }
         with mock.patch.object(supervisor, "NativeAecHost", FakeHost):
             graph.tick(nodes, [], "lark")
         self.assertEqual(graph.state, supervisor.State.FAILED)
@@ -635,12 +894,18 @@ class FailedIsNotTerminalTests(unittest.TestCase):
     def test_failed_retries_once_the_interval_elapses(self) -> None:
         graph = self._failed_graph()
         graph.next_attempt = 0.0  # pretend FAILED_RETRY_SECONDS has passed
-        nodes = {"lark": {}, graph.settings.hfp_sink: {}, graph.settings.hfp_source: {},
-                 graph.settings.wired_output: {}}
+        nodes = {
+            "lark": {},
+            graph.settings.hfp_sink: {},
+            graph.settings.hfp_source: {},
+            graph.settings.wired_output: {},
+        }
         with mock.patch.object(supervisor, "NativeAecHost", FakeHost):
             graph.tick(nodes, [], "lark")
         self.assertNotEqual(
-            graph.state, supervisor.State.FAILED, "FAILED must be escapable without a signature change"
+            graph.state,
+            supervisor.State.FAILED,
+            "FAILED must be escapable without a signature change",
         )
         self.assertEqual(graph.attempts, 0)
 
