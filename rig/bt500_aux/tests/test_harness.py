@@ -226,6 +226,7 @@ class CampaignTests(unittest.TestCase):
         artifact = self.path / attempt["artifact"]
         self.assertTrue((artifact / "before.json").is_file())
         self.assertTrue((artifact / "aec-metrics.json").is_file())
+        self.assertTrue((artifact / "remote-capture" / "capture.marker").is_file())
 
     def test_timeout_is_an_evidence_failure_not_hardware_absence(self) -> None:
         self.subject.baseline()

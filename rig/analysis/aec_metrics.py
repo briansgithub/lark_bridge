@@ -48,7 +48,9 @@ def load_mono(path: Path, target_rate: int = 250) -> tuple[list[float], int]:
     return downsampled, rate // factor
 
 
-def load_energy_envelope(path: Path, envelope_rate: int = 100) -> tuple[list[float], int]:
+def load_energy_envelope(
+    path: Path, envelope_rate: int = 100
+) -> tuple[list[float], int]:
     with wave.open(str(path), "rb") as handle:
         channels = handle.getnchannels()
         width = handle.getsampwidth()
@@ -60,7 +62,9 @@ def load_energy_envelope(path: Path, envelope_rate: int = 100) -> tuple[list[flo
     mono = [values[index] / 32767.0 for index in range(0, len(values), channels)]
     block = max(rate // envelope_rate, 1)
     envelope = [
-        math.sqrt(statistics.fmean(value * value for value in mono[index : index + block]))
+        math.sqrt(
+            statistics.fmean(value * value for value in mono[index : index + block])
+        )
         for index in range(0, len(mono), block)
         if mono[index : index + block]
     ]
@@ -101,6 +105,36 @@ def correlated_level(
 
 def dbfs(value: float) -> float:
     return -200.0 if value <= 0 else 20 * math.log10(value)
+
+
+def reference_component_metrics(
+    reference: list[float], raw: list[float], clean: list[float], rate: int
+) -> dict[str, float | bool | None]:
+    """Measure only the far-end-correlated component during double-talk.
+
+    Total raw/clean RMS is not an echo metric when independent near-end speech is
+    present: a working AEC is supposed to preserve that speech in ``clean``.  The
+    projection returned by ``correlated_level`` isolates the reference component
+    so preserved near-end energy cannot turn successful cancellation into a fail.
+    """
+    raw_level, raw_lag, raw_correlation = correlated_level(reference, raw, rate)
+    clean_level, clean_lag, clean_correlation = correlated_level(reference, clean, rate)
+    raw_dbfs = dbfs(raw_level)
+    clean_dbfs = dbfs(clean_level)
+    latency_reliable = raw_correlation >= 0.3 and clean_correlation >= 0.3
+    return {
+        "raw_lag_ms": round(1000 * raw_lag / rate, 2),
+        "clean_lag_ms": round(1000 * clean_lag / rate, 2),
+        "incremental_clean_latency_ms": (
+            round(1000 * (clean_lag - raw_lag) / rate, 2) if latency_reliable else None
+        ),
+        "latency_reliable": latency_reliable,
+        "raw_correlation": round(raw_correlation, 4),
+        "clean_correlation": round(clean_correlation, 4),
+        "raw_correlated_dbfs": round(raw_dbfs, 2),
+        "clean_correlated_dbfs": round(clean_dbfs, 2),
+        "suppression_db": round(raw_dbfs - clean_dbfs, 2),
+    }
 
 
 def tail_metrics(path: Path, seconds: float) -> dict[str, float]:
@@ -224,7 +258,9 @@ def main() -> int:
                 raw_level = float(raw_component["tone_dbfs"])
                 clean_level = float(clean_component["tone_dbfs"])
                 reference_level = (
-                    float(first_channel(args.reference, frequency, args.skip)["tone_dbfs"])
+                    float(
+                        first_channel(args.reference, frequency, args.skip)["tone_dbfs"]
+                    )
                     if args.reference is not None
                     else None
                 )
@@ -259,34 +295,15 @@ def main() -> int:
             clean_samples, clean_rate = load_energy_envelope(args.clean)
             if ref_rate != raw_rate or ref_rate != clean_rate:
                 raise ValueError("reference/raw/clean analysis rates differ")
-            _, raw_lag, raw_correlation = correlated_level(
-                reference_samples, raw_samples, ref_rate
-            )
-            _, clean_lag, clean_correlation = correlated_level(
-                reference_samples, clean_samples, ref_rate
+            component = reference_component_metrics(
+                reference_samples, raw_samples, clean_samples, ref_rate
             )
             raw = first_channel(args.raw, None, args.skip)
             clean = first_channel(args.clean, None, args.skip)
-            raw_correlated = float(raw["rms_dbfs"])
-            clean_correlated = float(clean["rms_dbfs"])
-            suppression = round(raw_correlated - clean_correlated, 2)
-            latency_reliable = raw_correlation >= 0.3 and clean_correlation >= 0.3
-            components.append(
-                {
-                    "raw_lag_ms": round(1000 * raw_lag / ref_rate, 2),
-                    "clean_lag_ms": round(1000 * clean_lag / ref_rate, 2),
-                    "incremental_clean_latency_ms": (
-                        round(1000 * (clean_lag - raw_lag) / ref_rate, 2)
-                        if latency_reliable
-                        else None
-                    ),
-                    "latency_reliable": latency_reliable,
-                    "raw_correlation": round(raw_correlation, 4),
-                    "clean_correlation": round(clean_correlation, 4),
-                    "raw_correlated_dbfs": raw_correlated,
-                    "clean_correlated_dbfs": clean_correlated,
-                }
-            )
+            raw_correlated = float(component["raw_correlated_dbfs"])
+            clean_correlated = float(component["clean_correlated_dbfs"])
+            suppression = float(component["suppression_db"])
+            components.append(component)
         if raw_correlated < args.min_raw_tone_dbfs:
             failures.append(
                 f"raw correlated signal {raw_correlated:.2f} dBFS is below the measurable floor"

@@ -75,6 +75,7 @@ test-py: venv ## pytest for bridged/bridgectl against recorded fixtures
 	$(VENV)/bin/pytest "$(REPO_ROOT)/pi/scripts/test_install_release.py" -q
 	$(VENV)/bin/pytest "$(REPO_ROOT)/pi/scripts/test_onboard_bluetooth_config.py" -q
 	$(VENV)/bin/pytest "$(REPO_ROOT)/rig/bt500_aux/tests" -q
+	$(VENV)/bin/pytest "$(REPO_ROOT)/rig/analysis" -q
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/rig/boot/tests" -p 'test_*.py'
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/pi/powerloss/tests" -p 'test_*.py'
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/rig/powerloss/tests" -p 'test_*.py'

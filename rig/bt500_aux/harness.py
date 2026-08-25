@@ -543,9 +543,9 @@ class QualificationHarness:
                 remote_out=remote_out,
             )
             atomic_json(directory / "capture.json", capture)
+            self.backend.fetch_cycle(remote_out, directory / "remote-capture")
             metrics = self.backend.metrics(capture)
             atomic_json(directory / "aec-metrics.json", metrics)
-            self.backend.fetch_cycle(remote_out, directory / "remote-capture")
             after = self.backend.snapshot(full=True)
             atomic_json(directory / "after.json", after)
             summary = validate_cycle(before, capture, metrics, after, seconds)
