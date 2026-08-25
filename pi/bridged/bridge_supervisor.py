@@ -21,7 +21,10 @@ import tomllib
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import controller_roles
 
 POLL_SECONDS = 2.0
 OUTPUT_EVENT_POLL_SECONDS = 0.05
@@ -115,6 +118,7 @@ class Settings:
     desired_output: str | None = None
     speaker_adapter: str | None = None
     fallback_to_wired: bool = True
+    controller_roles: controller_roles.ControllerRoles | None = None
 
     @property
     def hfp_sink(self) -> str:
@@ -196,7 +200,14 @@ def write_desire(output_id: str | None, source: str = "unknown", path: Path | No
     os.replace(temporary, target)
 
 
-def resolve_output(nodes: NodeMap, settings: Settings, desired_id: str | None):
+def resolve_output(
+    nodes: NodeMap,
+    settings: Settings,
+    desired_id: str | None,
+    *,
+    bluez_objects: dict[str, dict] | None = None,
+    output_controller_ready: bool = True,
+):
     """Decide which node call audio should go to. Returns (node_name, report_or_None).
 
     The import is deliberately lazy. rig/pi/measure/aec_bench.py loads this file by path with
@@ -211,8 +222,12 @@ def resolve_output(nodes: NodeMap, settings: Settings, desired_id: str | None):
         return node, None
 
     candidates = outputs_module.candidates(
-        nodes, speaker_adapter=settings.speaker_adapter
+        nodes,
+        objects=bluez_objects,
+        speaker_adapter=settings.speaker_adapter,
     )
+    if not output_controller_ready:
+        candidates = [candidate for candidate in candidates if candidate.kind != "a2dp"]
     resolution = outputs_module.resolve(
         desired_id or settings.desired_output,
         candidates,
@@ -240,6 +255,15 @@ def load_settings(path: Path | None = None) -> Settings:
             data = tomllib.load(handle)
     else:
         log.warning("config %s is absent; retaining safe AEC-off defaults", config_path)
+
+    # Imported lazily because the AEC bench loads this module directly by file path from a
+    # directory that does not put pi/bridged on sys.path. Runtime configuration still has one
+    # strict parser; pure graph tests and the bench can retain their deliberately minimal setup.
+    import controller_roles as controller_roles_module
+
+    roles = None
+    if controller_roles_module.has_controller_role_fields(data):
+        roles = controller_roles_module.parse_controller_roles(data)
 
     aec_data = (data.get("audio") or {}).get("aec") or {}
     enabled = toml_bool(aec_data, "enabled", False)
@@ -270,7 +294,9 @@ def load_settings(path: Path | None = None) -> Settings:
     if failure_policy != "fail_closed":
         raise ValueError("audio.aec.failure_policy must be 'fail_closed'")
 
-    phone = str(((data.get("devices") or {}).get("phone") or {}).get("address", ""))
+    phone = roles.phone_address if roles is not None else str(
+        ((data.get("devices") or {}).get("phone") or {}).get("address", "")
+    )
     if not phone or phone == "AA:BB:CC:DD:EE:FF":
         phone = DEFAULT_PHONE_MAC
 
@@ -288,7 +314,18 @@ def load_settings(path: Path | None = None) -> Settings:
         address = str(output_data.get("address", "") or "").strip().upper()
         if address and address != "11:22:33:44:55:66":
             desired_output = f"a2dp:{address}"
-    speaker_adapter = str(output_data.get("adapter", "") or "").strip() or None
+    speaker_adapter = (
+        roles.output.address
+        if roles is not None
+        else str(output_data.get("adapter", "") or "").strip() or None
+    )
+
+    phone_override = os.environ.get("BRIDGE_PHONE_MAC")
+    if roles is not None and phone_override and phone_override.upper() != roles.phone_address:
+        raise ValueError("BRIDGE_PHONE_MAC cannot override the configured call role")
+    speaker_override = os.environ.get("BRIDGE_SPEAKER_ADAPTER")
+    if roles is not None and speaker_override and speaker_override != roles.output.address:
+        raise ValueError("BRIDGE_SPEAKER_ADAPTER cannot override the configured output role")
 
     status_value = os.environ.get("BRIDGE_STATUS")
     return Settings(
@@ -309,14 +346,84 @@ def load_settings(path: Path | None = None) -> Settings:
         lark_node=os.environ.get("BRIDGE_LARK", DEFAULT_LARK),
         lark_component=os.environ.get("BRIDGE_LARK_COMPONENT", DEFAULT_LARK_COMPONENT),
         wired_output=os.environ.get("BRIDGE_WIRED_OUT", DEFAULT_WIRED_OUT),
-        phone_mac=os.environ.get("BRIDGE_PHONE_MAC", phone).upper(),
+        phone_mac=(phone_override or phone).upper(),
         status_path=Path(status_value) if status_value else default_status_path(),
         config_path=config_path,
         mode=os.environ.get("BRIDGE_MODE", mode),
         desired_output=os.environ.get("BRIDGE_OUTPUT", desired_output) or None,
-        speaker_adapter=os.environ.get("BRIDGE_SPEAKER_ADAPTER", speaker_adapter) or None,
+        speaker_adapter=speaker_override or speaker_adapter,
         fallback_to_wired=fallback_to_wired,
+        controller_roles=roles,
     )
+
+
+def inspect_controller_roles(
+    settings: Settings,
+    *,
+    policy: Any = None,
+    objects: dict[str, dict] | None = None,
+    inventory: list[Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, dict], list[Any]]:
+    """Resolve both roles from one BlueZ/sysfs snapshot and publish diagnostics."""
+    import btadapters
+    import controller_roles
+
+    selected_policy = policy or controller_roles.ReadinessPolicy.TRANSITIONAL
+    if settings.controller_roles is None:
+        return (
+            {
+                "policy": selected_policy.value,
+                "transitional_uart_call": False,
+                "ready": False,
+                "error": "controller role configuration is absent",
+                "call": {},
+                "output": {},
+            },
+            objects or {},
+            inventory or [],
+        )
+    tree = objects if objects is not None else btadapters.managed_objects()
+    observed = inventory if inventory is not None else btadapters.adapters(tree)
+    return (
+        controller_roles.controllers_status(
+            settings.controller_roles, observed, policy=selected_policy
+        ),
+        tree,
+        observed,
+    )
+
+
+def call_role_acceptance(
+    settings: Settings,
+    objects: dict[str, dict],
+    inventory: list[Any],
+) -> tuple[bool, str | None]:
+    """Accept HFP only when the Pixel is exclusively connected through the call role."""
+    import btadapters
+    import controller_roles
+
+    if settings.controller_roles is None:
+        return False, "controller role configuration is absent"
+    try:
+        call = controller_roles.resolve_controller(
+            settings.controller_roles.call,
+            inventory,
+            policy=controller_roles.ReadinessPolicy.TRANSITIONAL,
+        )
+    except controller_roles.ControllerRoleError as exc:
+        return False, f"{exc.code}: {exc.detail}"
+
+    connected = [
+        adapter
+        for adapter in inventory
+        if btadapters.connected_on(adapter, settings.controller_roles.phone_address, objects)
+    ]
+    if not any(adapter.address == call.address for adapter in connected):
+        return False, "Pixel is not connected on the call controller"
+    other = sorted({adapter.address for adapter in connected if adapter.address != call.address})
+    if other:
+        return False, "Pixel is also connected on another controller: " + ", ".join(other)
+    return True, None
 
 
 NodeMap = dict[str, dict[str, Any]]
@@ -1071,6 +1178,9 @@ def main() -> int:
     except (OSError, tomllib.TOMLDecodeError, ValueError) as exc:
         log.error("configuration rejected: %s", exc)
         return 2
+    if settings.controller_roles is None:
+        log.error("configuration rejected: permanent controller roles are required")
+        return 2
 
     reconcile_stale_pulse_aec()
     graph = CallGraph(settings)
@@ -1094,18 +1204,41 @@ def main() -> int:
     metrics: dict[str, Any] = {}
     output_report: dict[str, Any] | None = None
     last_output: str | None = None
+    controller_block: dict[str, Any] = {
+        "policy": "transitional",
+        "ready": False,
+        "error": "controller roles were not inspected",
+        "call": {},
+        "output": {},
+    }
     while not stopping:
+        controller_block, bluez_tree, controller_inventory = inspect_controller_roles(settings)
+        call_binding_accepted, call_binding_error = call_role_acceptance(
+            settings, bluez_tree, controller_inventory
+        )
         nodes = pw_nodes()
         links = pw_links()
+        observed_desire = desire_stamp()
         if nodes is None or links is None:
             graph.fail("PipeWire graph could not be inspected")
             nodes = nodes or {}
             links = links or []
         else:
+            accepted_nodes = dict(nodes)
+            if not call_binding_accepted:
+                accepted_nodes.pop(settings.hfp_source, None)
+                accepted_nodes.pop(settings.hfp_sink, None)
             lark = find_lark(nodes, settings)
-            observed_desire = desire_stamp()
             desired = read_desire()
-            output_node, output_report = resolve_output(nodes, settings, desired)
+            output_node, output_report = resolve_output(
+                nodes,
+                settings,
+                desired,
+                bluez_objects=bluez_tree,
+                output_controller_ready=bool(
+                    (controller_block.get("output") or {}).get("ready")
+                ),
+            )
             if output_node != last_output:
                 log.info(
                     "output resolved to %s (desired %s)",
@@ -1113,14 +1246,29 @@ def main() -> int:
                     desired or settings.desired_output or "<unset>",
                 )
                 last_output = output_node
-            graph.tick(nodes, links, lark, output_node)
+            graph.tick(accepted_nodes, links, lark, output_node)
 
         now = time.monotonic()
         if now - last_metrics >= 10:
             metrics = runtime_metrics()
             last_metrics = now
         lark = find_lark(nodes, settings) if nodes else None
-        status = graph.status(nodes, links, lark)
+        accepted_nodes = dict(nodes)
+        raw_hfp_nodes_present = (
+            settings.hfp_sink in nodes and settings.hfp_source in nodes
+        )
+        if not call_binding_accepted:
+            accepted_nodes.pop(settings.hfp_source, None)
+            accepted_nodes.pop(settings.hfp_sink, None)
+        status = graph.status(accepted_nodes, links, lark)
+        status["call"].update(
+            {
+                "raw_hfp_nodes_present": raw_hfp_nodes_present,
+                "controller_binding_accepted": call_binding_accepted,
+                "controller_binding_error": call_binding_error,
+            }
+        )
+        status["controllers"] = controller_block
         status["system"] = metrics
         # Publish the candidate list and the resolution so a front-end -- a CLI, the phone
         # bridge -- can render a selector by reading one atomic file, with no socket and no
@@ -1139,7 +1287,16 @@ def main() -> int:
     graph.teardown("supervisor shutting down")
     graph.state = State.CALL_DOWN
     try:
-        write_status(settings.status_path, graph.status({}, [], None))
+        stopped_status = graph.status({}, [], None)
+        stopped_status["call"].update(
+            {
+                "raw_hfp_nodes_present": False,
+                "controller_binding_accepted": False,
+                "controller_binding_error": "supervisor stopped",
+            }
+        )
+        stopped_status["controllers"] = controller_block
+        write_status(settings.status_path, stopped_status)
     except OSError:
         pass
     log.info("stopped")

@@ -10,12 +10,53 @@ from pathlib import Path
 from unittest import mock
 
 import btadapters
+import controller_roles
 import output_remote
 
 SPEAKER = "C9:5C:FD:6E:28:46"
 OUTPUT_ID = f"a2dp:{SPEAKER}"
 PHONE = "5C:33:7B:CB:BF:C5"
-ADAPTER = btadapters.Adapter("hci7", "A0:AD:9F:73:6C:24", "USB", 4)
+ADAPTER = btadapters.Adapter(
+    "hci7",
+    "A0:AD:9F:73:6C:24",
+    "USB",
+    4,
+    usb_vendor_id="0b05",
+    usb_product_id="1bf6",
+)
+CALL_ADAPTER = btadapters.Adapter(
+    "hci2",
+    "B0:82:E2:25:18:36",
+    "USB",
+    2,
+    usb_vendor_id="0b05",
+    usb_product_id="1d70",
+)
+
+
+def roles() -> controller_roles.ControllerRoles:
+    return controller_roles.parse_controller_roles(
+        {
+            "devices": {
+                "phone": {
+                    "address": PHONE,
+                    "adapter": CALL_ADAPTER.address,
+                    "adapter_product": "ASUS USB-BT600",
+                    "adapter_bus": "USB",
+                    "adapter_usb_vendor_id": "0b05",
+                    "adapter_usb_product_id": "1d70",
+                },
+                "output": {
+                    "adapter": ADAPTER.address,
+                    "adapter_product": "ASUS USB-BT500",
+                    "adapter_bus": "USB",
+                    "adapter_usb_vendor_id": "0b05",
+                    "adapter_usb_product_id": "1bf6",
+                },
+            },
+            "bluetooth": {"allow_transitional_uart_call": False},
+        }
+    )
 
 
 def device(*, paired: bool, a2dp: bool, connected: bool = False) -> dict:
@@ -74,8 +115,20 @@ class PairSelectTests(unittest.TestCase):
         self.config = base / "bridge.toml"
         self.config.write_text(
             "[bridge]\nmode = \"bluetooth-wired\"\n"
+            "[devices.phone]\n"
+            f"address = \"{PHONE}\"\n"
+            f"adapter = \"{CALL_ADAPTER.address}\"\n"
+            "adapter_product = \"ASUS USB-BT600\"\n"
+            "adapter_bus = \"USB\"\n"
+            "adapter_usb_vendor_id = \"0b05\"\n"
+            "adapter_usb_product_id = \"1d70\"\n"
             "[devices.output]\nid = \"wired:jack\"\n"
-            f"adapter = \"{ADAPTER.address}\"\n",
+            f"adapter = \"{ADAPTER.address}\"\n"
+            "adapter_product = \"ASUS USB-BT500\"\n"
+            "adapter_bus = \"USB\"\n"
+            "adapter_usb_vendor_id = \"0b05\"\n"
+            "adapter_usb_product_id = \"1bf6\"\n"
+            "[bluetooth]\nallow_transitional_uart_call = false\n",
             encoding="utf-8",
         )
         self.status_path = base / "bridge-status.json"
@@ -626,18 +679,44 @@ class ScanProtocolTests(unittest.TestCase):
 
 
 class ControllerValidationTests(unittest.TestCase):
-    def test_noncanonical_config_never_falls_back_to_any_adapter(self) -> None:
-        settings = mock.Mock(speaker_adapter=ADAPTER.address.lower(), phone_mac=PHONE)
+    def test_missing_strict_config_never_falls_back_to_any_adapter(self) -> None:
+        settings = mock.Mock(controller_roles=None)
         with (
             mock.patch.object(output_remote, "_load_operation_settings", return_value=settings),
-            mock.patch.object(output_remote.btadapters, "adapter_by_address") as resolve,
+            mock.patch.object(output_remote.btadapters, "adapters") as resolve,
             self.assertRaises(btadapters.BluetoothOperationError),
         ):
             output_remote._resolve_speaker_controller({})
         resolve.assert_not_called()
 
+    def test_wrong_usb_identity_is_rejected_before_any_speaker_transaction(self) -> None:
+        wrong = btadapters.Adapter(
+            ADAPTER.hci,
+            ADAPTER.address,
+            "USB",
+            ADAPTER.rfkill_index,
+            usb_vendor_id="0b05",
+            usb_product_id="1d70",
+        )
+        live = {
+            wrong.path: {
+                "org.bluez.Adapter1": {
+                    "Address": {"data": wrong.address},
+                    "Powered": {"data": True},
+                }
+            }
+        }
+        settings = mock.Mock(controller_roles=roles())
+        with (
+            mock.patch.object(output_remote, "_load_operation_settings", return_value=settings),
+            mock.patch.object(output_remote.btadapters, "managed_objects", return_value=live),
+            mock.patch.object(output_remote.btadapters, "adapters", return_value=[wrong]),
+            self.assertRaisesRegex(btadapters.BluetoothOperationError, "identity_mismatch"),
+        ):
+            output_remote._resolve_speaker_controller({})
+
     def test_controller_holding_phone_bond_is_rejected(self) -> None:
-        settings = mock.Mock(speaker_adapter=ADAPTER.address, phone_mac=PHONE)
+        settings = mock.Mock(controller_roles=roles())
         live = {
             ADAPTER.path: {
                 "org.bluez.Adapter1": {
@@ -651,8 +730,8 @@ class ControllerValidationTests(unittest.TestCase):
         }
         with (
             mock.patch.object(output_remote, "_load_operation_settings", return_value=settings),
-            mock.patch.object(output_remote.btadapters, "adapter_by_address", return_value=ADAPTER),
             mock.patch.object(output_remote.btadapters, "managed_objects", return_value=live),
+            mock.patch.object(output_remote.btadapters, "adapters", return_value=[ADAPTER]),
             mock.patch.object(output_remote.btadapters, "is_blocked", return_value=False),
             self.assertRaises(btadapters.BluetoothOperationError),
         ):

@@ -29,6 +29,7 @@ from typing import Any
 import bridge_supervisor as supervisor
 import bridgectl
 import btadapters
+import controller_roles
 import outputs
 
 SERVICE_UUID = "6e0e6e72-3f13-4f7e-9d3f-87b6f5a43c11"
@@ -114,10 +115,10 @@ def parse_rfcomm_channel(text: str) -> int | None:
     return channel if 1 <= channel <= 30 else None
 
 
-def discover_channel(phone: str) -> int | None:
+def discover_channel(phone: str, local_address: str) -> int | None:
     try:
         result = subprocess.run(
-            ["sdptool", "browse", phone],
+            ["sdptool", "--device", local_address, "browse", phone],
             capture_output=True,
             text=True,
             timeout=12,
@@ -204,39 +205,85 @@ def _resolve_speaker_controller(
     cancelled: Callable[[], bool] | None = None,
     heartbeat: Callable[[], None] | None = None,
 ) -> tuple[supervisor.Settings, btadapters.Adapter, dict[str, dict]]:
-    """Resolve the permanent address afresh and reject the call-owning controller."""
+    """Resolve the strict output role afresh and reject the call-owning controller."""
     settings = _load_operation_settings(status)
-    configured = settings.speaker_adapter
-    canonical = btadapters.canonical_mac(configured)
-    if canonical is None or canonical != configured:
+    if settings.controller_roles is None:
         raise btadapters.BluetoothOperationError(
-            "devices.output.adapter must be a canonical uppercase controller address"
+            "strict controller role configuration is required"
         )
     tree = btadapters.managed_objects(cancelled=cancelled, heartbeat=heartbeat)
-    adapter = btadapters.adapter_by_address(canonical, tree)
-    if adapter is None or adapter.address != canonical:
-        raise btadapters.BluetoothOperationError("configured controller is not visible to BlueZ")
+    inventory = btadapters.adapters(tree)
+    try:
+        resolved = controller_roles.resolve_controller(
+            settings.controller_roles.output,
+            inventory,
+            policy=controller_roles.ReadinessPolicy.TRANSITIONAL,
+        )
+    except controller_roles.ControllerRoleError as exc:
+        raise btadapters.BluetoothOperationError(f"{exc.code}: {exc.detail}") from exc
+    if not isinstance(resolved, btadapters.Adapter):
+        raise btadapters.BluetoothOperationError("resolved output controller is invalid")
+    adapter = resolved
     live_address = str(
         ((((tree.get(adapter.path) or {}).get("org.bluez.Adapter1") or {}).get("Address") or {}).get(
             "data"
         ))
         or ""
     ).upper()
-    if live_address != canonical or not btadapters.is_powered(adapter, tree):
+    if live_address != settings.controller_roles.output.address or not btadapters.is_powered(
+        adapter, tree
+    ):
         raise btadapters.BluetoothOperationError("configured controller is missing or unpowered")
     if btadapters.is_blocked(adapter) is True:
         raise btadapters.BluetoothOperationError("configured controller is rfkilled")
 
-    phone = btadapters.canonical_mac(settings.phone_mac)
-    if phone is not None:
-        phone_device = btadapters.device_properties(adapter, phone, tree)
-        if bool((phone_device.get("Paired") or {}).get("data")) or bool(
-            (phone_device.get("Connected") or {}).get("data")
-        ):
-            raise btadapters.BluetoothOperationError(
-                "configured speaker controller owns the phone call bond"
-            )
+    phone = settings.controller_roles.phone_address
+    phone_device = btadapters.device_properties(adapter, phone, tree)
+    if bool((phone_device.get("Paired") or {}).get("data")) or bool(
+        (phone_device.get("Connected") or {}).get("data")
+    ):
+        raise btadapters.BluetoothOperationError(
+            "configured speaker controller owns the phone call bond"
+        )
     return settings, adapter, tree
+
+
+def _resolve_call_controller(
+    settings: supervisor.Settings,
+) -> tuple[btadapters.Adapter, dict[str, dict]]:
+    """Resolve the call role and require the Pixel exclusively on that controller."""
+    if settings.controller_roles is None:
+        raise btadapters.BluetoothOperationError("strict controller role configuration is required")
+    tree = btadapters.managed_objects()
+    inventory = btadapters.adapters(tree)
+    try:
+        resolved = controller_roles.resolve_controller(
+            settings.controller_roles.call,
+            inventory,
+            policy=controller_roles.ReadinessPolicy.TRANSITIONAL,
+        )
+    except controller_roles.ControllerRoleError as exc:
+        raise btadapters.BluetoothOperationError(f"{exc.code}: {exc.detail}") from exc
+    if not isinstance(resolved, btadapters.Adapter):
+        raise btadapters.BluetoothOperationError("resolved call controller is invalid")
+    adapter = resolved
+    if not btadapters.is_powered(adapter, tree):
+        raise btadapters.BluetoothOperationError("call controller is unpowered")
+    if btadapters.is_blocked(adapter) is True:
+        raise btadapters.BluetoothOperationError("call controller is rfkilled")
+    phone = settings.controller_roles.phone_address
+    if not btadapters.connected_on(adapter, phone, tree):
+        raise btadapters.BluetoothOperationError("Pixel is not connected on the call controller")
+    other = [
+        candidate.address
+        for candidate in inventory
+        if candidate.address != adapter.address and btadapters.connected_on(candidate, phone, tree)
+    ]
+    if other:
+        raise btadapters.BluetoothOperationError(
+            "Pixel is connected on another controller: " + ", ".join(sorted(other))
+        )
+    return adapter, tree
 
 
 def _controller_matches(adapter: btadapters.Adapter, tree: dict[str, dict]) -> bool:
@@ -1097,7 +1144,7 @@ def serve_connection(
 
 
 def run(
-    phone: str,
+    settings: supervisor.Settings,
     status_path: Path | None = None,
     *,
     state: RemoteState | None = None,
@@ -1105,7 +1152,14 @@ def run(
     global _active_socket
     active_state = state or _STATE
     while not active_state.stopping.is_set():
-        channel = discover_channel(phone)
+        try:
+            controller, _tree = _resolve_call_controller(settings)
+        except btadapters.BluetoothOperationError as exc:
+            log.info("call controller unavailable for output control: %s", exc)
+            active_state.stopping.wait(RETRY_SECONDS)
+            continue
+        phone = settings.controller_roles.phone_address if settings.controller_roles else ""
+        channel = discover_channel(phone, controller.address)
         if channel is None:
             active_state.stopping.wait(RETRY_SECONDS)
             continue
@@ -1115,6 +1169,7 @@ def run(
             ) as client:
                 _active_socket = client
                 client.settimeout(15)
+                client.bind((controller.address, 0))
                 client.connect((phone, channel))
                 client.settimeout(None)
                 log.info("phone output control connected on RFCOMM channel %s", channel)
@@ -1132,7 +1187,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--status", type=Path, help="override bridge-status.json (tests)")
     args = parser.parse_args(argv)
     settings = supervisor.load_settings()
-    phone = (args.phone or settings.phone_mac).strip().upper()
+    if settings.controller_roles is None:
+        raise SystemExit("strict controller role configuration is required")
+    phone = settings.controller_roles.phone_address
+    if args.phone is not None and args.phone.strip().upper() != phone:
+        raise SystemExit("--phone cannot override the configured controller roles")
     if btadapters.canonical_mac(phone) != phone:
         raise SystemExit("no phone Bluetooth address configured")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -1149,7 +1208,7 @@ def main(argv: list[str] | None = None) -> int:
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
-    run(phone, args.status, state=state)
+    run(settings, args.status, state=state)
     return 0
 
 

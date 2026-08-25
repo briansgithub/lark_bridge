@@ -7,6 +7,55 @@ from pathlib import Path
 from unittest import mock
 
 import bridge_supervisor as supervisor
+import btadapters
+import controller_roles
+
+CALL_ADDRESS = "B0:82:E2:25:18:36"
+OUTPUT_ADDRESS = "A0:AD:9F:73:6C:24"
+PHONE_ADDRESS = "5C:33:7B:CB:BF:C5"
+
+
+def role_settings() -> supervisor.Settings:
+    roles = controller_roles.parse_controller_roles(
+        {
+            "devices": {
+                "phone": {
+                    "address": PHONE_ADDRESS,
+                    "adapter": CALL_ADDRESS,
+                    "adapter_product": "ASUS USB-BT600",
+                    "adapter_bus": "USB",
+                    "adapter_usb_vendor_id": "0b05",
+                    "adapter_usb_product_id": "1d70",
+                },
+                "output": {
+                    "adapter": OUTPUT_ADDRESS,
+                    "adapter_product": "ASUS USB-BT500",
+                    "adapter_bus": "USB",
+                    "adapter_usb_vendor_id": "0b05",
+                    "adapter_usb_product_id": "1bf6",
+                },
+            },
+            "bluetooth": {"allow_transitional_uart_call": False},
+        }
+    )
+    return supervisor.Settings(
+        aec=supervisor.AecSettings(),
+        phone_mac=PHONE_ADDRESS,
+        speaker_adapter=OUTPUT_ADDRESS,
+        controller_roles=roles,
+    )
+
+
+def role_adapter(hci: str, address: str, product_id: str) -> btadapters.Adapter:
+    return btadapters.Adapter(
+        hci,
+        address,
+        "USB",
+        int(hci.removeprefix("hci")),
+        usb_vendor_id="0b05",
+        usb_product_id=product_id,
+        driver="btusb",
+    )
 
 
 class SettingsTests(unittest.TestCase):
@@ -54,15 +103,85 @@ failure_policy = "fail_closed"
             config = Path(directory) / "bridge.toml"
             config.write_text(
                 """
+[devices.phone]
+address = "5C:33:7B:CB:BF:C5"
+adapter = "B0:82:E2:25:18:36"
+adapter_product = "ASUS USB-BT600"
+adapter_bus = "USB"
+adapter_usb_vendor_id = "0b05"
+adapter_usb_product_id = "1d70"
+
 [devices.output]
 address = "C9:5C:FD:6E:28:46"
 adapter = "A0:AD:9F:73:6C:24"
+adapter_product = "ASUS USB-BT500"
+adapter_bus = "USB"
+adapter_usb_vendor_id = "0b05"
+adapter_usb_product_id = "1bf6"
+
+[bluetooth]
+allow_transitional_uart_call = false
 """,
                 encoding="utf-8",
             )
             settings = supervisor.load_settings(config)
         self.assertEqual(settings.desired_output, "a2dp:C9:5C:FD:6E:28:46")
         self.assertEqual(settings.speaker_adapter, "A0:AD:9F:73:6C:24")
+        self.assertIsNotNone(settings.controller_roles)
+
+    def test_partial_controller_role_configuration_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "bridge.toml"
+            config.write_text(
+                '[devices.output]\nadapter = "A0:AD:9F:73:6C:24"\n', encoding="utf-8"
+            )
+            with self.assertRaises(controller_roles.ControllerConfigError):
+                supervisor.load_settings(config)
+
+
+class ControllerBindingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.settings = role_settings()
+        self.call = role_adapter("hci4", CALL_ADDRESS, "1d70")
+        self.output = role_adapter("hci1", OUTPUT_ADDRESS, "1bf6")
+        self.inventory = [self.output, self.call]
+
+    def tree(self, *connected: btadapters.Adapter) -> dict[str, dict]:
+        return {
+            btadapters.path_for(adapter, PHONE_ADDRESS): {
+                "org.bluez.Device1": {"Connected": {"data": True}}
+            }
+            for adapter in connected
+        }
+
+    def test_hfp_is_accepted_only_on_the_resolved_call_controller(self) -> None:
+        accepted, error = supervisor.call_role_acceptance(
+            self.settings, self.tree(self.call), self.inventory
+        )
+        self.assertTrue(accepted)
+        self.assertIsNone(error)
+
+    def test_hfp_is_rejected_on_output_or_simultaneously_on_two_controllers(self) -> None:
+        output_only = supervisor.call_role_acceptance(
+            self.settings, self.tree(self.output), self.inventory
+        )
+        duplicate = supervisor.call_role_acceptance(
+            self.settings, self.tree(self.call, self.output), self.inventory
+        )
+        self.assertFalse(output_only[0])
+        self.assertIn("not connected", output_only[1] or "")
+        self.assertFalse(duplicate[0])
+        self.assertIn(OUTPUT_ADDRESS, duplicate[1] or "")
+
+    def test_status_snapshot_is_additive_and_uses_the_shared_roles(self) -> None:
+        status, tree, inventory = supervisor.inspect_controller_roles(
+            self.settings, objects=self.tree(self.call), inventory=self.inventory
+        )
+        self.assertTrue(status["ready"])
+        self.assertEqual(status["call"]["configured_address"], CALL_ADDRESS)
+        self.assertEqual(status["output"]["observed_usb_id"], "0b05:1bf6")
+        self.assertEqual(tree, self.tree(self.call))
+        self.assertEqual(inventory, self.inventory)
 
 
 class IdentityAndGraphTests(unittest.TestCase):

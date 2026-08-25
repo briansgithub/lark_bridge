@@ -171,6 +171,24 @@ class StartupConfigTests(unittest.TestCase):
 [audio.aec]
 enabled = true
 node_latency_frames = 1920
+
+[devices.phone]
+address = "5C:33:7B:CB:BF:C5"
+adapter = "B0:82:E2:25:18:36"
+adapter_product = "ASUS USB-BT600"
+adapter_bus = "USB"
+adapter_usb_vendor_id = "0b05"
+adapter_usb_product_id = "1d70"
+
+[devices.output]
+adapter = "A0:AD:9F:73:6C:24"
+adapter_product = "ASUS USB-BT500"
+adapter_bus = "USB"
+adapter_usb_vendor_id = "0b05"
+adapter_usb_product_id = "1bf6"
+
+[bluetooth]
+allow_transitional_uart_call = false
 """
 
     def test_bluetooth_default_preserves_audio_and_uses_stable_adapter_address(self) -> None:
@@ -186,6 +204,13 @@ node_latency_frames = 1920
         self.assertEqual(
             document["devices"]["output"]["adapter"],
             BOOMBOX["adapter_address"],
+        )
+        self.assertEqual(document["devices"]["output"]["adapter_bus"], "USB")
+        self.assertEqual(
+            document["devices"]["output"]["adapter_usb_product_id"], "1bf6"
+        )
+        self.assertEqual(
+            document["devices"]["phone"]["adapter"], "B0:82:E2:25:18:36"
         )
         self.assertTrue(document["devices"]["output"]["reconnect"])
         self.assertIn("# operator comment", candidate)
@@ -208,7 +233,14 @@ node_latency_frames = 1920
         self.assertEqual(document["bridge"]["mode"], "bluetooth-wired")
         self.assertEqual(
             output,
-            {"id": WIRED["id"], "adapter": BOOMBOX["adapter_address"]},
+            {
+                "id": WIRED["id"],
+                "adapter": BOOMBOX["adapter_address"],
+                "adapter_product": "ASUS USB-BT500",
+                "adapter_bus": "USB",
+                "adapter_usb_vendor_id": "0b05",
+                "adapter_usb_product_id": "1bf6",
+            },
         )
 
     def test_missing_permanent_adapter_address_is_refused(self) -> None:

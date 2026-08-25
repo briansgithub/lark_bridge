@@ -8,7 +8,38 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import btadapters
+import controller_roles
 import output_remote
+
+CALL_ADDRESS = "B0:82:E2:25:18:36"
+OUTPUT_ADDRESS = "A0:AD:9F:73:6C:24"
+PHONE_ADDRESS = "5C:33:7B:CB:BF:C5"
+
+
+def roles() -> controller_roles.ControllerRoles:
+    return controller_roles.parse_controller_roles(
+        {
+            "devices": {
+                "phone": {
+                    "address": PHONE_ADDRESS,
+                    "adapter": CALL_ADDRESS,
+                    "adapter_product": "ASUS USB-BT600",
+                    "adapter_bus": "USB",
+                    "adapter_usb_vendor_id": "0b05",
+                    "adapter_usb_product_id": "1d70",
+                },
+                "output": {
+                    "adapter": OUTPUT_ADDRESS,
+                    "adapter_product": "ASUS USB-BT500",
+                    "adapter_bus": "USB",
+                    "adapter_usb_vendor_id": "0b05",
+                    "adapter_usb_product_id": "1bf6",
+                },
+            },
+            "bluetooth": {"allow_transitional_uart_call": False},
+        }
+    )
 
 
 class ScriptedSocket:
@@ -68,6 +99,94 @@ class ChannelParsingTests(unittest.TestCase):
     def test_rejects_missing_or_invalid_channel(self) -> None:
         self.assertIsNone(output_remote.parse_rfcomm_channel("no service"))
         self.assertIsNone(output_remote.parse_rfcomm_channel("Channel: 31"))
+
+    def test_sdp_query_is_bound_to_the_permanent_call_address(self) -> None:
+        result = subprocess.CompletedProcess(
+            [],
+            0,
+            "Service Name: LarkBridge Output Control\n"
+            f"UUID 128: {output_remote.SERVICE_UUID}\nChannel: 17\n",
+            "",
+        )
+        with mock.patch.object(output_remote.subprocess, "run", return_value=result) as run:
+            self.assertEqual(
+                output_remote.discover_channel(PHONE_ADDRESS, CALL_ADDRESS), 17
+            )
+        self.assertEqual(
+            run.call_args.args[0],
+            ["sdptool", "--device", CALL_ADDRESS, "browse", PHONE_ADDRESS],
+        )
+
+
+class BoundRfcommTests(unittest.TestCase):
+    def test_outbound_socket_is_bound_to_the_resolved_call_controller(self) -> None:
+        call = btadapters.Adapter(
+            "hci4",
+            CALL_ADDRESS,
+            "USB",
+            4,
+            usb_vendor_id="0b05",
+            usb_product_id="1d70",
+        )
+        settings = mock.Mock(controller_roles=roles())
+        state = output_remote.RemoteState()
+
+        class Client:
+            def __init__(self) -> None:
+                self.bound = None
+                self.connected = None
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def settimeout(self, _value):
+                return None
+
+            def bind(self, value):
+                self.bound = value
+
+            def connect(self, value):
+                self.connected = value
+
+        client = Client()
+
+        def served(*_args, **_kwargs) -> None:
+            state.stopping.set()
+
+        with (
+            mock.patch.object(
+                output_remote, "_resolve_call_controller", return_value=(call, {})
+            ),
+            mock.patch.object(output_remote, "discover_channel", return_value=17) as discover,
+            mock.patch.object(output_remote.socket, "socket", return_value=client),
+            mock.patch.object(output_remote, "serve_connection", side_effect=served),
+        ):
+            output_remote.run(settings, state=state)
+
+        discover.assert_called_once_with(PHONE_ADDRESS, CALL_ADDRESS)
+        self.assertEqual(client.bound, (CALL_ADDRESS, 0))
+        self.assertEqual(client.connected, (PHONE_ADDRESS, 17))
+
+    def test_onboard_pixel_connection_is_not_inferred_as_the_call_role(self) -> None:
+        onboard = btadapters.Adapter("hci0", "B8:27:EB:43:8D:51", "UART", 0)
+        tree = {
+            btadapters.path_for(onboard, PHONE_ADDRESS): {
+                "org.bluez.Device1": {
+                    "Paired": {"data": True},
+                    "Connected": {"data": True},
+                }
+            }
+        }
+        settings = mock.Mock(controller_roles=roles())
+        with (
+            mock.patch.object(output_remote.btadapters, "managed_objects", return_value=tree),
+            mock.patch.object(output_remote.btadapters, "adapters", return_value=[onboard]),
+            self.assertRaisesRegex(btadapters.BluetoothOperationError, "controller_missing"),
+        ):
+            output_remote._resolve_call_controller(settings)
 
 
 class ProtocolTests(unittest.TestCase):
