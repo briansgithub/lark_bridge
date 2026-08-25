@@ -9,3 +9,4 @@ The archived plan is a line-ending-normalized copy of `H:\Downloads\bt600_plan.m
 3. The transitional onboard call role is represented with `adapter_bus = "UART"` and omitted USB VID/PID fields. Transitional readiness may accept it; final post-cutover readiness must reject it.
 4. Deliberate fault-injection verdicts may allow expected target-only teardown and re-enumeration events inside precisely timestamped injection windows. Any off-target event, target event outside the window, or unexplained disruption remains a failure.
 5. Take the source SD card offline/read-only before imaging or hashing it, to protect the sole physical rollback from host automount writes.
+6. The diagnose/fix/retest ceiling is five cycles per failure throughout this plan implementation. This supersedes the original two-cycle ceiling in `bt600_plan.md`.
