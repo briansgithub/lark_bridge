@@ -16,12 +16,21 @@ full-duplex USB headset — while splitting the microphone and playback sides be
                                      └── Pi Pico ──USB──► Pixel 7a       (Mode 2)
 ```
 
-**Status: Mode 1W works end to end; Mode 1 works as an opt-in two-controller mode.** Speaking
-into the Lark A1 is heard by Discord on the Pixel 7a over HFP with **mSBC wideband**. A second
-Bluetooth controller now carries A2DP independently, and a real-call wired-to-A2DP switch kept
-the Lark uplink uninterrupted while applying in 0.498 s. Mode 1 remains opt-in until the long
-reliability campaign is complete. See
+**Current branch status (`codex/bt500-aux-fast`, 2026-08-25): qualification in progress.** The
+single-controller implementation binds the Pixel call role to the USB-BT500 by permanent address,
+USB VID/PID, and current sysfs identity, and routes call output only to the Pi AUX sink. The Pixel
+is paired, bonded, and trusted specifically beneath that controller, and the two-minute
+AEC-disabled HFP/SCO transport gate passed. With AEC restored, objective AEC measurements passed:
+two acceptance-eligible double-talk cycles reached 16.09 dB and 12.69 dB suppression, while two
+echo-only diagnostics reached 37.47 dB and 37.95 dB. The user then stopped and deferred the
+remainder of the original five-cycle gate
+after provisionally accepting AEC. A 3,600-second active-call pre-persistence soak was attempted,
+but correctly did not start after the Pixel became unavailable and the opening state was
+`CALL_DOWN`. Immutable installation, reboot, and the final soak remain unqualified, so this branch
+is not a promoted release. Bluetooth speaker
+output, BT600, and steering-wheel control forwarding are deliberately deferred. See
 [`docs/BRINGUP-REPORT.md`](docs/BRINGUP-REPORT.md) for what is proven and what broke;
+[`docs/experiments/E17-bt500-aux-fast.md`](docs/experiments/E17-bt500-aux-fast.md) for this branch;
 [`PLAN.md`](PLAN.md) for the architecture.
 
 ---
@@ -31,10 +40,11 @@ reliability campaign is complete. See
 | Item | Notes |
 |---|---|
 | Raspberry Pi 3 Model B v1.2 | 1 GB RAM, onboard BCM43438 Bluetooth, 4× USB 2.0, Ethernet |
+| ASUS USB-BT500 | Required call controller for the current branch (`0b05:1bf6`) |
 | Raspberry Pi Pico (RP2040) | USB device capability; presents as the USB headset in Mode 2 |
 | Hollyland Lark A1 | USB-C receiver, capture-only UAC device |
 | Google Pixel 7a | Android 14 |
-| USB audio dongle | Cheap CM108-class UAC1 output — **recommended**, see Mode 1W |
+| AUX speaker | Pi 3.5 mm output; Harmony boombox is the current fixture |
 | Bluetooth headphones or car stereo | A2DP sink, for Mode 1 |
 
 Wiring for the Pi↔Pico link is in [`docs/hardware/wiring-pi-pico.md`](docs/hardware/wiring-pi-pico.md).
@@ -45,17 +55,21 @@ to power the Pico that back-feeds the phone, and it is not obvious.
 
 | Mode | Microphone path | Call audio out | Radio does | Status |
 |---|---|---|---|---|
-| **1** Bluetooth bridge | Lark → Pi → HFP → Pixel | A2DP car stereo | HFP onboard + A2DP USB | **WORKING, opt-in.** Long reliability gate remains |
-| **1W** Bluetooth + wired | Lark → Pi → HFP → Pixel | USB DAC / 3.5 mm jack | HFP only | **WORKING** — proven end to end |
+| **1** Bluetooth bridge | Lark → Pi → HFP → Pixel | A2DP car stereo | HFP + A2DP | **Deferred on this branch.** No Bluetooth-output claim |
+| **1W** Bluetooth + wired | Lark → Pi → HFP → Pixel | Pi 3.5 mm jack | USB-BT500 HFP only | **In qualification.** Transport passed; AEC provisionally accepted after 2/5 eligible cycles; five-cycle gate deferred |
 | **2** USB headset bridge | Lark → Pi → Pico → Pixel | Pixel → Pico → Pi → any sink | nothing | Independent track |
 | **3** Diagnostics | raw devices exposed | — | — | Always available |
 
-Mode 1W remains the proven fallback. One-radio HFP + A2DP still fails; Mode 1 therefore assigns
-the phone to the onboard controller and the speaker to a USB controller identified by its
-permanent address. See `PLAN.md` §1.4 and
-[`E15`](docs/experiments/E15-hfp-a2dp-two-controllers.md).
+The current target is intentionally narrower than the later dual-controller experiments: the
+onboard controller is retained only as rollback until USB-BT500 qualification passes, and output
+is wired AUX. See `PLAN.md` §1.4 and
+[`E17`](docs/experiments/E17-bt500-aux-fast.md).
 
 ## Choosing call output
+
+> The selector below documents the broader project interface. The current BT500+AUX release profile
+> fixes output to wired AUX; A2DP discovery/switching and the phone-side selector are not acceptance
+> claims for this branch.
 
 The selector accepts a list number, friendly-name fragment, or canonical id. A live choice is
 kept in RAM so changing it cannot churn persistent storage. Add `--remember` only when that
@@ -103,6 +117,24 @@ sudo ./tests/stage-b-hfp/s1-sco-over-hci.sh        # Does SCO reach the host at 
 
 Each writes a report into `docs/experiments/` and raw evidence into `docs/experiments/results/`.
 Read `PLAN.md` §8 before running them — the pass/fail branches matter more than the scripts.
+
+The BT500+AUX campaign has a resumable control plane. A cycle is never credited unless it proves
+the exact controller binding, AEC graph and timing, zero new transport errors, fresh call teardown
+and rejoin, and at least 10 dB measured suppression:
+
+```bash
+python -m rig.bt500_aux baseline
+python -m rig.bt500_aux cycle --campaign artifacts/bt500-aux/campaign-...
+python -m rig.bt500_aux campaign --campaign artifacts/bt500-aux/campaign-...
+python -m rig.bt500_aux soak --campaign artifacts/bt500-aux/campaign-...
+python -m rig.bt500_aux collect --campaign artifacts/bt500-aux/campaign-...
+```
+
+The current live record contains two such acceptance-eligible cycles, not five. Echo-only captures
+are retained as useful diagnostics but are not credited as double-talk acceptance cycles. The
+pre-persistence soak attempt is retained as not-started evidence rather than a pass or failure;
+release qualification still requires promotion, reboot validation, and a fresh full-duration
+active-call soak.
 
 ## Development
 
