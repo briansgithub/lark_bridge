@@ -7,6 +7,9 @@ entry under Unreleased, and each spike lands with a link to its experiment repor
 ## [Unreleased]
 
 ### Added
+- A build-ready dual-radio ESP port: ESP32-S31 gateway, ESP32-DevKitC-32UE output controller,
+  allocation-free shared protocol/audio core, exact SDK/component pins, Docker/CI builds, and a
+  first-hardware qualification runbook. All physical-device gates remain pending hardware.
 - `PLAN.md` — full architecture, feasibility assessment, repository design, milestones, test matrix,
   risk register and acceptance criteria.
 - M0 repository skeleton: build façade, linting, CI workflows, ADRs 0001–0008.
@@ -56,6 +59,8 @@ entry under Unreleased, and each spike lands with a link to its experiment repor
 - **ADR-0007** Fixed 48 kHz internal graph.
 - **ADR-0008** PlatformIO + arduino-pico is the primary firmware build; CMake + pico-sdk is the CI
   reference build; firmware sources stay Arduino-API-free so both compile identical code.
+- **ADR-0010** The active port uses an S31 Pixel/LARK gateway plus a separate ESP32 A2DP/AVRCP
+  output controller, with wired I2S audio and framed UART control between them.
 
 ### Known open risks
 - **R1/R2** — single-radio HFP+A2DP viability and SCO-over-HCI on the BCM43438 are unresolved until

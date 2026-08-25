@@ -10,6 +10,7 @@ add_library(bridge_common STATIC
     common/src/bridge_pcm.c
     common/src/bridge_link.c
     common/src/bridge_protocol.c
+    common/src/bridge_rate.c
     common/src/bridge_session.c
 )
 target_include_directories(bridge_common PUBLIC common/include)

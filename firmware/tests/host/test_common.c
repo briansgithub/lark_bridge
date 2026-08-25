@@ -1,6 +1,7 @@
 #include "bridge_pcm.h"
 #include "bridge_link.h"
 #include "bridge_protocol.h"
+#include "bridge_rate.h"
 #include "bridge_ring.h"
 #include "bridge_session.h"
 
@@ -208,9 +209,26 @@ static int test_session(void) {
     return 0;
 }
 
+static int test_rate_controller(void) {
+    bridge_rate_controller_t controller;
+    CHECK(!bridge_rate_controller_init(NULL, 100, 65536, 32768, 100));
+    CHECK(!bridge_rate_controller_init(&controller, 0, 65536, 32768, 100));
+    CHECK(bridge_rate_controller_init(&controller, 100, 65536, 32768, 100));
+    CHECK(bridge_rate_controller_update(&controller, 100) == 0);
+    CHECK(bridge_rate_controller_update(&controller, 90) == 15);
+    CHECK(bridge_rate_controller_update(&controller, 90) == 20);
+    CHECK(bridge_rate_controller_update(&controller, -1000) == 100);
+    CHECK(controller.correction_ppm == 100);
+    CHECK(bridge_rate_controller_update(&controller, 1100) == -100);
+    bridge_rate_controller_reset(&controller);
+    CHECK(controller.integral_error == 0 && controller.correction_ppm == 0);
+    return 0;
+}
+
 int main(void) {
     if (test_byte_ring() != 0 || test_frame_ring() != 0 || test_pcm() != 0 ||
-        test_protocol() != 0 || test_link_contract() != 0 || test_session() != 0) {
+        test_protocol() != 0 || test_link_contract() != 0 || test_session() != 0 ||
+        test_rate_controller() != 0) {
         return 1;
     }
     (void)puts("bridge common host tests passed");

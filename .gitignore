@@ -11,6 +11,11 @@ __pycache__/
 .pio/
 pico/build/
 pico/test/host/build/
+firmware/s31/sdkconfig
+firmware/s31/sdkconfig.old
+firmware/output/sdkconfig
+firmware/output/sdkconfig.old
+firmware/**/managed_components/
 *.uf2
 *.elf
 *.bin

@@ -1,4 +1,27 @@
-# rpi-lark-bridge
+# LarkBridge
+
+## Active ESP32 dual-radio port
+
+This worktree ports the bridge to an `ESP32-S31-FUNCTION-COREBOARD-1` plus an
+`ESP32-DEVKITC-32UE`. It is currently **BUILD-READY / PENDING HARDWARE**: firmware, simulations,
+exact toolchain pins, and the arrival procedure can be completed now, but no RF, USB, audio, AEC,
+power, or vehicle behavior is claimed until the ordered boards arrive.
+
+```text
+LARK TX ~~wireless~~> LARK USB-C receiver --USB-A adapter--> ESP32-S31
+Pixel 7a <---------- HFP + A2DP + AVRCP -------------------> ESP32-S31
+ESP32-S31 -------- internal I2S audio + UART control ------> ESP32-DevKitC-32UE
+ESP32-DevKitC-32UE <--------- A2DP + AVRCP ----------------> car / speaker
+```
+
+Start with [`ESP32_PORT_PLAN.md`](ESP32_PORT_PLAN.md), the frozen
+[architecture decision](docs/architecture/decisions/ADR-0010-esp32-dual-radio-bridge.md), the
+[firmware guide](firmware/README.md), and the
+[first-hardware runbook](firmware/docs/arrival-runbook.md). The prior Raspberry Pi implementation
+below remains as qualification evidence and a behavioral reference; it is not the active hardware
+architecture on this branch.
+
+## Raspberry Pi implementation history
 
 Abrupt-power-loss image preparation and the manual 50-cut acceptance campaign are
 documented in [`docs/power-loss-hardening.md`](docs/power-loss-hardening.md).
@@ -96,6 +119,8 @@ of selection state.
 
 | Path | Contains |
 |---|---|
+| [`ESP32_PORT_PLAN.md`](ESP32_PORT_PLAN.md) | Active two-board port phases, gates, and risks |
+| [`firmware/`](firmware/) | Shared core, S31 gateway, output-controller firmware, tools, and runbooks |
 | `PLAN.md` | The specification. Architecture, risks, milestones, test matrix, acceptance criteria. |
 | [`docs/BRINGUP-REPORT.md`](docs/BRINGUP-REPORT.md) | **Start here.** What is proven on real hardware, what broke, and the traps. |
 | `docs/` | Architecture, ADRs, hardware, operations, and **experiment reports with raw data** |
@@ -145,7 +170,10 @@ active-call soak.
 ```bash
 make help          # list targets
 make lint          # shellcheck, ruff, black --check, clang-format, dtc syntax
-make test-host     # pytest + Pico host unit tests. No hardware required.
+make test-host     # Python, Pico, and ESP portable tests. No hardware required.
+make esp-output    # exact IDF v6.0.2 Docker build for ESP32-DevKitC-32UE
+make esp-s31       # exact IDF v6.1-rc1 preview build for ESP32-S31
+make esp-build     # host tests plus both exact ESP-IDF builds
 make pio           # regenerate committed .pio.h headers from .pio sources
 make pico          # build firmware (PlatformIO)
 make pico-cmake    # build firmware (CMake reference build)

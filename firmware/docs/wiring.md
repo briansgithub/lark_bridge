@@ -20,9 +20,12 @@ delivered board documentation contradicts the 3.3-V interface.
 
 ## Power
 
-- Use one regulated 5-V supply sized for both boards and the LARK receiver; 5 V / 3 A is the
-  prototype baseline.
-- Split 5 V and ground in parallel. Do not power one board from the other board's 3.3-V regulator.
+- During bench programming and first integration, power each board through its own programming USB
+  connector. Join signal ground but leave the boards' 5-V header pins disconnected.
+- After functional qualification, use one regulated 5-V supply sized for both boards and the LARK
+  receiver; 5 V / 3 A is the prototype baseline.
+- Split final 5 V and ground in a protected star harness. Do not power one board from the other
+  board's 3.3-V regulator, and prevent either programming USB connector from back-feeding this rail.
 - The S31 USB-A host port powers the LARK receiver and is limited to 500 mA.
 - For a vehicle installation, the final supply needs a fuse, reverse-polarity protection, load-dump
   and transient protection, and ignition/power-loss qualification. A bench USB supply does not

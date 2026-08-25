@@ -7,6 +7,7 @@ SHELL       := /bin/bash
 
 REPO_ROOT   := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 PICO_DIR    := $(REPO_ROOT)/pico
+ESP_DIR     := $(REPO_ROOT)/firmware
 PY_DIR      := $(REPO_ROOT)/pi/bridged
 VENV        := $(REPO_ROOT)/.venv
 PY          := $(VENV)/bin/python
@@ -66,7 +67,7 @@ lint-dt: ## Device-tree overlay syntax check
 # ---------------------------------------------------------------------------- tests
 
 .PHONY: test-host
-test-host: test-py test-pico-host ## All tests that need no hardware
+test-host: test-py test-pico-host test-esp-host ## All tests that need no hardware
 
 .PHONY: test-py
 test-py: venv ## pytest for bridged/bridgectl against recorded fixtures
@@ -89,7 +90,24 @@ test-pico-host: ## Host-compiled unit tests for ring buffer / rate control
 		ctest --test-dir "$(PICO_DIR)/test/host/build" --output-on-failure; \
 	else echo "  (no host tests yet)"; fi
 
+.PHONY: test-esp-host
+test-esp-host: ## Build/test portable dual-ESP core and build tooling
+	python3 "$(ESP_DIR)/tools/build_firmware.py" host
+	python3 -m unittest discover -s "$(ESP_DIR)/tools/tests" -p 'test_*.py'
+
 # ---------------------------------------------------------------------------- firmware
+
+.PHONY: esp-output
+esp-output: ## Build ESP32 output firmware in the pinned IDF Docker image
+	python3 "$(ESP_DIR)/tools/build_firmware.py" output
+
+.PHONY: esp-s31
+esp-s31: ## Build ESP32-S31 gateway firmware in the pinned preview IDF Docker image
+	python3 "$(ESP_DIR)/tools/build_firmware.py" s31
+
+.PHONY: esp-build
+esp-build: ## Build both ESP firmware images using exact pinned containers
+	python3 "$(ESP_DIR)/tools/build_firmware.py" all
 
 .PHONY: pio
 pio: ## Regenerate committed .pio.h headers from .pio sources (see ADR-0008 / risk R16)
@@ -147,7 +165,8 @@ logs: ## Collect a diagnostic bundle into ./artifacts
 
 .PHONY: clean
 clean: ## Remove build outputs (keeps .venv and committed .pio.h)
-	rm -rf "$(PICO_DIR)/build" "$(PICO_DIR)/.pio" "$(PICO_DIR)/test/host/build"
+	rm -rf "$(PICO_DIR)/build" "$(PICO_DIR)/.pio" "$(PICO_DIR)/test/host/build" \
+		"$(ESP_DIR)/tests/host/build" "$(ESP_DIR)/s31/build" "$(ESP_DIR)/output/build"
 	find "$(REPO_ROOT)" -name '__pycache__' -type d -prune -exec rm -rf {} +
 	rm -rf "$(REPO_ROOT)"/.pytest_cache "$(REPO_ROOT)"/.ruff_cache "$(REPO_ROOT)"/.mypy_cache
 
