@@ -316,6 +316,243 @@ Sink/node, target selection and persistence, plus hci0 A40 untrusted. Boombox
 audio work remains blocked pending the required preflight proving both speaker
 output and Lark pickup (ask the user to wake it if either is absent).
 
+## Agent 7 live acceptance, bounded stop, and architecture pivot — 2026-08-24
+
+This section supersedes the handoff above. Agent 7 completed the authorized
+pairing fixes and began the live-call campaign, but stopped before any acoustic
+test after the call controller failed its mandatory quiet gate. No Pixel action
+was automated. The two authorized screen inspections were read-only; no further
+screenshots were taken. The raw evidence is preserved locally under:
+
+- `docs/experiments/results/E16/20260824T224344Z-monitor-smoke/` and
+  `20260824T224442Z-monitor-smoke2/` — passive-capture bring-up;
+- `20260824T224511Z-a40-retry1/`,
+  `20260824T224936Z-a40-retry2-be1c984/`, and
+  `20260824T225612Z-a40-retry3-be1c984/` — failed/non-attempt A40 cycles;
+- `20260824T230711Z-a40-retry4-13d5a6d/` — successful A40 transaction;
+- `20260824T231848Z-livecall-boombox-switch/` — synchronized live-call switch
+  capture, including the intrusive probe's result;
+- `20260824T232927Z-boombox-light-preflight/` — bounded controller diagnosis; and
+- `20260824T233854Z-watchdog-b002b7d-quiet/` — post-fix light quiet gate and
+  final Pi/Android/durable-state snapshots.
+
+These result directories and `rig/e16_live_capture.py` remain intentionally
+untracked. They are large local raw artifacts, one directory contains the
+explicitly authorized Pixel inspection, and the capture helper's full `btmon`
+plus PipeWire monitoring proved too intrusive for the later audio gate. They
+were preserved, not deleted or hidden, but are not part of this documentation
+checkpoint.
+
+### A40 pairing and selection — pass after two narrow corrections
+
+Retry 1 reached Android's exact terminal error at 18:46:12 EDT:
+`temporary NoInputNoOutput agent did not register`. The deployed command both
+started `bluetoothctl` with `--agent NoInputNoOutput` and sent an interactive
+`agent NoInputNoOutput`; on this build the latter toggled the already registered
+agent off. Commit `be1c984d9d3faf8f8b23e80e4b74bbca11e23df7` removed that
+double-registration path and added a focused regression assertion. A later
+authorized retry still returned `temporary NoInputNoOutput agent did not
+register; new-bond rollback failed: ... Does Not Exist`: BlueZ had expired the
+unpaired Device1 between the scan and user selection, and this `bluetoothctl`
+build also registers an agent at startup even without the option.
+
+Commit `13d5a6d7967a33995d316aa950e72c4a7384a6be` therefore made both live-proven
+corrections: wait separately for startup `Agent registered` and successful
+`RequestDefaultAgent`, and passively reacquire only the explicitly selected MAC
+on the permanent speaker controller if the unpaired object expired. It added
+transaction tests for rediscovery success, disappearance, cancellation, and
+rollback. The deployed live and lower-root files were resealed before retry 4.
+
+Retry 4 then completed the exact intended transaction on `hci1`
+(`A0:AD:9F:73:6C:24`):
+
+| EDT | Observed event |
+| --- | --- |
+| 19:09:44.248 | `RegisterAgent(NoInputNoOutput)` |
+| 19:09:44.260 | `RequestDefaultAgent` |
+| 19:09:44.285 | `Device1.Pair` on `/org/bluez/hci1/dev_98_47_44_CD_73_DE` |
+| 19:09:44.749 | target `Connected=true` |
+| 19:09:45.403 | target `Bonded=true` |
+| 19:09:45.982 | `Paired=true`, services resolved, A2DP Sink UUID present |
+| 19:09:46.110 | temporary agent unregistered |
+| 19:09:46.366 | hci1 target `Trusted=true` |
+| 19:09:46.424 | old hci0 duplicate `Trusted=false` |
+| 19:09:46.453 | A2DP-Sink-only `ConnectProfile` on hci1 |
+| 19:09:47.102 | target media control connected |
+| 19:09:50.258 | status first sampled A40 as both desired and chosen, ready and connected |
+| 19:09:50.428 | Android logged `pair_select completed` |
+
+The scan traces before selection contain A40 RSSI/Device1 observations on hci1
+but no Pair, trust write, ConnectProfile, A2DP node, selection, or persistence
+change. The first pairing/profile calls above occur only in the user-selected
+transaction and name hci1 explicitly. At final step-7 inspection A40 remains
+paired/bonded/trusted on hci1 and paired/bonded/**untrusted**/disconnected on
+hci0. Its former successful choice remains in durable config slot `b`; active
+slot `a` now contains Boombox. Thus scan-before-select safety, explicit
+hci1-only setup, duplicate untrust, A2DP node creation, selection, and
+persistence all pass. Reboot/power-cut restoration of A40 was not run.
+
+### Boombox live-call switch — route pass, continuity not accepted
+
+With Discord in `MODE_IN_COMMUNICATION`, Pixel on hci0 HFP/eSCO, and the
+Harmony Boombox awake, the user tapped its saved row once. The config write began
+at 19:20:16.158 EDT, the only initial profile call was A2DP Sink
+`ConnectProfile` on `/org/bluez/hci1/dev_C9_5C_FD_6E_28_46` at 19:20:17.065,
+and status first sampled Boombox as desired/chosen/connected at 19:20:20.278.
+No captured speaker connection call used hci0. Final state still has Boombox
+paired/bonded/trusted/connected on hci1, the matching PipeWire A2DP sink chosen,
+and active config plus slot `a` at SHA-256
+`8d8bb69020a246879ad94fac3736f54367e5b31e838b8a6751c57e867a5a06f4`.
+
+That capture cannot establish clean audio continuity. It ran full `btmon`, a
+large PipeWire monitor, and a 50 ms `pw-link` probe simultaneously. During it
+the USB hci1 device physically disappeared/re-enumerated four times:
+19:20:38.136/19:20:39.102, 19:21:26.006/19:21:26.990,
+19:21:51.615/19:21:52.582, and 19:22:28.474/19:22:29.446. BlueZ recorded no
+`Disconnect` or `DisconnectProfile` call; the only later actions were hci1
+A2DP-Sink `ConnectProfile` retries at 19:20:51.739 and 19:21:42.773. The
+operator's audible disconnect/reconnect report is real, but the hci1 churn
+coincided with unusually heavy instrumentation and did not recur under the
+later lightweight monitor, so it is an instrumentation/hardware confound, not
+an attributed product disconnect.
+
+The intrusive probe reported an 8.41 s uplink gap and 5.81 s downlink gap
+(1.0 s limits) and ended `FAIL`; those numbers coincide with controller resets
+and are retained as measured but not accepted as ordinary switch performance.
+More importantly, the onboard hci0 call controller independently stopped
+answering its active probe at 19:22:16.812 and 19:22:32.923. The watchdog began
+rung-6 recovery at 19:22:33.023. Android changed from the LarkBridge SCO route to
+earpiece/SCO inactive between 19:22:53.003 and 19:22:53.611 and restored the
+LarkBridge route at 19:23:39.651, a roughly 46.65 s interruption. Therefore the
+saved-route control operation passes, but the required call and Lark-uplink
+continuity assertion fails/blocks on hci0 hardware transport stability.
+
+No verification tone was played: the user reported speaker churn before the
+mandatory speaker-output/Lark-pickup gate, and subsequent lightweight diagnosis
+never produced a clean controller window. Silence was not scored as a software
+failure.
+
+### Watchdog bookkeeping fix and quiet-gate result
+
+The lightweight evidence then separated the two controllers. hci1/Boombox
+remained stable, but hci0 produced UART command timeouts and H4 reassembly
+bursts. At 19:28:34/19:28:50 the old watchdog reached 2/2 failures and invoked
+`bt-reset.sh`; the script's one-shot liveness check happened to answer and
+returned “nothing to do,” without `RECOVERED`. The old main loop nevertheless
+zeroed failures, stamped a recovery time, and doubled backoff to 240 s. A
+five-second passive sample later showed hci0 RX/SCO RX frozen while TX/SCO TX
+continued, and Android was on earpiece with SCO inactive. This was a real
+data-plane wedge hidden behind incorrect recovery bookkeeping.
+
+Commit `b002b7dee4ebc68cab87d10c213ca8927f0585c0` makes the narrow correction:
+only a `recover()` result that contains `RECOVERED` clears failures, advances
+`last_recovery`, doubles backoff, and starts reconnect handling. A failed or
+no-op recovery leaves all three values unchanged so the next safe probe remains
+eligible for prompt retry. It does not suppress active probes, relax thresholds,
+or conceal controller errors. Exact host validation from `pi/bridged` using
+`B:\Desktop\W\Hardware_write\rpi_lark_mic_bridge\.venv\Scripts\python.exe`:
+
+- `python -m pytest tests/test_bt_watchdog.py -q` — **9 passed**;
+- `python -m ruff check bt_watchdog.py tests/test_bt_watchdog.py` — **passed**;
+- `python -m mypy --follow-imports=skip bt_watchdog.py` — **passed**;
+- `python -m pytest tests -q` — **142 passed, 9 subtests passed**; and
+- `git diff --check` — **passed** before commit.
+
+The deployed live and immutable-lower `bt_watchdog.py` both have SHA-256
+`e3480abda32c6db796a3ade0c119b30467d1ed17e8b0ca72effe62eae927a8f8`.
+The corresponding live/lower hashes for the final A40 deployment are
+`e0796be68b74947923e13fcecb5f06f15e4865a9eb255c36021265bde824ecca`
+for `btadapters.py` and
+`a7bae8db82842173fcb65e06f7f8b913c4e65c2bd11efdeb0f8fed383a85ae1d`
+for `output_remote.py`.
+Recovery bundle
+`/var/lib/larkbridge-persist/recovery/deploy-20260824T233719Z-b002b7d`
+contains the prior file at SHA-256
+`e2973a4c9a3ff8098fae4b6a511e5d00ec8c472f9fc508fb5f39e9e584206773`.
+`/media/root-ro` is `/dev/mmcblk0p2 ext4 ro`; storage health is `READY`,
+persistent, with no reasons.
+
+The formal post-deploy lightweight quiet window ran from
+19:38:54.638 through 19:44:04 EDT (state samples through 19:43:56.548).
+hci0 emitted eight `Frame reassembly failed (-84)` messages at
+19:42:10.233–19:42:10.234 and another eight at
+19:44:03.705–19:44:03.706; seven more occurred immediately before the formal
+window at 19:38:13.397–19:38:13.398. No hci1 error/re-enumeration, watchdog
+recovery, or route change occurred in the window. A final five-second hci0
+sample still had bidirectional SCO movement, so this window caught recurrent
+framing corruption rather than a completed stall. That does not make it clean:
+E07 proved these messages can precede or lag the H4 desynchronization, and the
+same session already observed the frozen-RX form under light load.
+
+At the final snapshot the Pixel was connected on hci0; Discord remained
+`MODE_IN_COMMUNICATION` with active `larkbridge-v2`,
+`SCO_STATE_ACTIVE_INTERNAL`/`SCO_MODE_VIRTUAL_CALL`; bridge status was `ACTIVE`
+with HFP nodes; and Boombox remained desired/chosen/connected on hci1 with the
+A2DP node selected. This proves state preservation through the bounded window,
+not controller stability or acoustic continuity. The new watchdog's successful
+and no-op branches are regression-tested, but no post-deploy stall reached a
+recovery invocation before the bounded stop, so live execution of the new
+branch is not claimed.
+
+A final read-only handoff check at 20:07:58 EDT found the external call down and
+both A40 and Boombox disconnected. Durable desire remained Boombox, while the
+supervisor correctly chose the present wired Aux fallback. Both Bluetooth and
+watchdog services remained active, all three deployed live/lower file pairs
+still matched the hashes above, the lower root remained read-only, and storage
+health remained `READY`. Because the external fixture had changed, this is a
+preserved-state handoff snapshot, not another acceptance trial.
+
+### Step-7 acceptance verdict
+
+| Scenario | Verdict and evidence |
+| --- | --- |
+| A40 scan before selection | **PASS** — observation only; no candidate mutation before the user-selected transaction. |
+| A40 pair/select/persist | **PASS** — hci1 bond/trust/A2DP/node/route/durable choice; old hci0 duplicate preserved and untrusted. |
+| Saved Boombox selection | **CONTROL-PLANE PASS** — hci1-only A2DP, desired/chosen/durable state correct. |
+| Call and Lark uplink survive saved switching | **FAIL/BLOCKED** — call route later absent for about 46.65 s during hci0 recovery; no acoustic Lark continuity measurement was valid. |
+| Scan warning/scan during an active call and <=3 s automatic output recovery | **NOT RUN** — quiet gate failed first. |
+| Switch among Aux, Boombox, A40, and iWorld in one live call | **NOT RUN** — A40 succeeded outside the call and Boombox live selection occurred; the full matrix stopped at the gate. |
+| Speaker connection never uses the call controller | **PASS for captured A40 and Boombox flows** — Pair/ConnectProfile paths were hci1-only; hci0 received only the deliberate duplicate-untrust write. |
+| Closed-loop Boombox speech/AEC metrics | **NOT RUN** — no verification tone, so no new correlation, suppression, clipping, or dropout result. |
+| Previously observed crackling | **NOT RUN/NOT ATTRIBUTED** — user heard reconnect churn during the confounded heavy capture; no clean acoustic retest followed. |
+| Timeout, app reconnect, speaker sleep/reconnect, failed `pair_select` | **PARTIAL ONLY** — failed A40 attempts preserved the prior route and RFCOMM reconnect was observed, but the complete acceptance set was not exercised. |
+| Reboot/power-cut durability | **NOT RUN**. |
+
+**Agent 8 / power-cut readiness: NOT READY.** Do not run durability cuts against
+this architecture: the active-call baseline is already unstable, so a cut result
+would be uninterpretable. No additional watchdog tuning is authorized as a way
+to mask it.
+
+### Architecture pivot — user decision, 2026-08-24
+
+The onboard BCM43438/PL011 UART Bluetooth path is retired from the target
+architecture. The UART was required only because it is the Pi 3B onboard
+controller's HCI transport; routing mSBC SCO over HCI made every call audio frame
+share that 921600-baud H4 stream. E07 proved loss of H4 framing and measured the
+plausible latency mechanism (PIO/no DMA, 32-byte FIFO or about 347 microseconds
+of slack, and heavy `dwc_otg` FIQ load), but did not isolate the exact lost-byte
+cause. This E16 run shows Wi-Fi disabled, performance governor, healthy power,
+low CPU load, and lighter monitoring still do not eliminate the corruption.
+
+The replacement target is **two USB Bluetooth adapters with onboard Bluetooth
+disabled**, one permanently assigned to Pixel HFP/eSCO and one to speaker A2DP
+by permanent controller identity after capability testing. This bypasses PL011
+entirely while preserving the wireless product flow. E15 proves only orientation
+A—onboard HFP plus one USB A2DP controller—for seven minutes at n=1; it did not
+test USB HFP, two USB controllers, or its planned orientation B. The pivot must
+therefore begin with adapter capability/firmware checks and then cold-boot
+identity, simultaneous call+A2DP, 10-run/60-minute soak, recovery, acoustic, and
+power-cut gates. Pi 3's shared USB 2.0 root and power remain risks; powered-hub
+placement and then a newer Pi are escalation options, not presumed fixes.
+
+USB or wired phone audio would bypass Bluetooth call/SCO entirely and is the
+strongest architectural fallback, but changes phone routing, cabling, charging,
+and ground-loop requirements. PCM/I2S would bypass SCO audio on HCI but needs
+hardware wiring the current appliance does not have and still leaves HCI
+control on UART; it is not the chosen path. A newer Pi may remove the Pi 3
+latency constraint, but is also unproven until it passes the same acceptance
+campaign.
+
 ## Decision-complete implementation contract
 
 ### Product boundary and controller identity
