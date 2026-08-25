@@ -379,6 +379,26 @@ def snapshot(
     watchdog_errors: list[str] = []
     watchdog = read_json_file(watchdog_path, "watchdog state", watchdog_errors)
     if watchdog_errors:
+        # The watchdog is intentionally a root service and may keep its runtime
+        # directory private.  Read this fixed status path through sudo rather
+        # than weakening the service's state-file permissions.
+        sudo_errors: list[str] = []
+        raw_watchdog = run_text(
+            command_runner,
+            ["sudo", "-n", "cat", str(watchdog_path)],
+            "watchdog state",
+            sudo_errors,
+        )
+        if not sudo_errors:
+            parsed_watchdog = parse_json_text(
+                raw_watchdog, "watchdog state", sudo_errors
+            )
+            if not sudo_errors:
+                watchdog = parsed_watchdog
+                watchdog_errors = []
+        if sudo_errors:
+            watchdog_errors.extend(sudo_errors)
+    if watchdog_errors:
         watchdog = {"recoveries": 0, "missing": True, "errors": watchdog_errors}
 
     report: dict[str, Any] = {

@@ -47,6 +47,13 @@ CLEAN_RECORDER = "bridge.e12.clean"
 
 
 def load_supervisor():
+    # Loading by file path does not add the module's directory to sys.path.  The
+    # supervisor imports sibling controller helpers lazily from load_settings(),
+    # so make the standalone measurement entry point behave like the installed
+    # service before executing it.
+    supervisor_dir = str(SUPERVISOR_PATH.parent)
+    if supervisor_dir not in sys.path:
+        sys.path.insert(0, supervisor_dir)
     spec = importlib.util.spec_from_file_location("e12_supervisor", SUPERVISOR_PATH)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load supervisor from {SUPERVISOR_PATH}")
@@ -78,6 +85,12 @@ def parse_pwtop(path: Path, interest: list[str]) -> dict:
         for line in block.splitlines():
             cols = line.split()
             if len(cols) < 10:
+                continue
+            # The first batch frame commonly reports newly discovered nodes as
+            # ``C`` with zeroed counters before their real cumulative ``R`` row.
+            # Treating that discovery row as the baseline makes old startup
+            # errors look like errors acquired during this capture.
+            if cols[0] != "R":
                 continue
             name = cols[-1]
             if not any(key in name for key in interest):

@@ -74,6 +74,8 @@ class FakeRunner:
             return remote.Result(0, "clean journal\n", "")
         if words[:3] == ("sudo", "-n", "journalctl"):
             return remote.Result(0, "clean user journal\n", "")
+        if words[:3] == ("sudo", "-n", "cat"):
+            return remote.Result(0, json.dumps({"recoveries": 0}), "")
         if words == ("lsusb",):
             return remote.Result(
                 0,
@@ -105,6 +107,25 @@ class FakeRunner:
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_snapshot_reads_private_watchdog_state_via_sudo_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            status = root / "status.json"
+            watchdog = root / "private-watchdog.json"
+            status.write_text(json.dumps(good_snapshot()["status"]), encoding="utf-8")
+            runner = FakeRunner()
+
+            document = remote.snapshot(
+                runner,
+                full=False,
+                status_path=status,
+                watchdog_path=watchdog,
+            )
+
+        self.assertEqual(document["collection_errors"], [])
+        self.assertEqual(document["watchdog"]["recoveries"], 0)
+        self.assertIn(("sudo", "-n", "cat", str(watchdog)), runner.commands)
+
     def test_snapshot_collects_every_required_evidence_family(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
