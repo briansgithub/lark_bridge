@@ -10,3 +10,4 @@ The archived plan is a line-ending-normalized copy of `H:\Downloads\bt600_plan.m
 4. Deliberate fault-injection verdicts may allow expected target-only teardown and re-enumeration events inside precisely timestamped injection windows. Any off-target event, target event outside the window, or unexplained disruption remains a failure.
 5. Take the source SD card offline/read-only before imaging or hashing it, to protect the sole physical rollback from host automount writes.
 6. The diagnose/fix/retest ceiling is five cycles per failure throughout this plan implementation. This supersedes the original two-cycle ceiling in `bt600_plan.md`.
+7. Phase 4 may use a configurable abbreviated soak of 5–10 minutes (300–600 seconds) for predeployment harness validation. The harness must remain capable of the full 3,600-second campaign, and Phase 7 must run that full hour before Phase 8. An abbreviated pass must be recorded as not satisfying the endurance qualification gate.
