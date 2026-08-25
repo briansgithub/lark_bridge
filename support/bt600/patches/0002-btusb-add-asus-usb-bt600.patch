@@ -1,0 +1,26 @@
+From 6f0624b4427e38c3bb63a951c536cf8adaee1238 Mon Sep 17 00:00:00 2001
+From: Christoph Zwerschke <cito@online.de>
+Date: Sun, 5 Jul 2026 11:28:57 +0200
+Subject: [PATCH 2/2] Bluetooth: btusb: add ASUS USB-BT600
+
+Port only the upstream 0b05:1d70 entry and its Realtek/wideband flags onto
+Raspberry Pi source c8c7494100e99ee05b11aaa4f0588a223a63d1af.
+---
+ drivers/bluetooth/btusb.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
+--- a/drivers/bluetooth/btusb.c
++++ b/drivers/bluetooth/btusb.c
+@@ -799,6 +799,8 @@ static const struct usb_device_id quirks_table[] = {
+ 	{ USB_DEVICE(0x2b89, 0x8761), .driver_info = BTUSB_REALTEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
+ 	{ USB_DEVICE(0x2b89, 0x6275), .driver_info = BTUSB_REALTEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
++	{ USB_DEVICE(0x0b05, 0x1d70), .driver_info = BTUSB_REALTEK |
++						     BTUSB_WIDEBAND_SPEECH },
+ 
+ 	/* Additional Realtek 8821AE Bluetooth devices */
+ 	{ USB_DEVICE(0x0b05, 0x17dc), .driver_info = BTUSB_REALTEK },
+-- 
+2.47.2

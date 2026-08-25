@@ -35,5 +35,8 @@ CMakeLists.txt  text eol=lf
 *.png           binary
 *.svg           text eol=lf
 
+# Embedded unified diffs necessarily preserve upstream context whitespace.
+support/bt600/patches/*.patch text eol=lf whitespace=-blank-at-eol,-space-before-tab
+
 # Generated but committed (see ADR-0008); keep diffs readable, mark in review.
 pico/i2s/*.pio.h linguist-generated=true

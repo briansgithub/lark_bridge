@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "package": {
+    "name": "larkbridge-bt600-support",
+    "version": "1.0.0-1",
+    "architecture": "arm64",
+    "kernel_dependency": "linux-image-6.18.34+rpt-rpi-v8 (= 1:6.18.34-1+rpt1)"
+  },
+  "build": {
+    "container_image": "debian@sha256:c94f5ddd41327aa2d4a7cfba7889056c02936182fd76a513fec6160c97181fc0",
+    "debian_snapshot": "20260803T000000Z",
+    "source_date_epoch": 1781013328,
+    "gcc_package_version": "14.2.0-19",
+    "gcc_version_text": "aarch64-linux-gnu-gcc-14 (Debian 14.2.0-19) 14.2.0",
+    "binutils_package_version": "2.44-3",
+    "binutils_version": "2.44"
+  },
+  "kernel": {
+    "release": "6.18.34+rpt-rpi-v8",
+    "source_package": "linux_6.18.34-1+rpt1",
+    "binary_package_version": "1:6.18.34-1+rpt1",
+    "source_commit": "c8c7494100e99ee05b11aaa4f0588a223a63d1af",
+    "config_sha256": "fc6c89fdcc7f60d15ea8063a5bfaf1fe02f5994f25fc0b7c35e3f143556f1e65",
+    "module_symvers_sha256": "25bf08eeca2c0c10fd5eccc42cfe9231e6bbf8a62e259e886e6b48d971436420",
+    "source_metadata": [
+      {
+        "name": "linux_6.18.34-1+rpt1.dsc",
+        "url": "https://archive.raspberrypi.com/debian/pool/main/l/linux/linux_6.18.34-1+rpt1.dsc",
+        "sha256": "35d7c13c50dedef33a88b5e90fd2198ac480ef3ffca6dfe5f8516a2e6de747fb",
+        "size": 20229
+      },
+      {
+        "name": "linux_6.18.34-1+rpt1.debian.tar.xz",
+        "url": "https://archive.raspberrypi.com/debian/pool/main/l/linux/linux_6.18.34-1+rpt1.debian.tar.xz",
+        "sha256": "39a4e826d7e0f3e79ddd042f37c1ac7b09f1116e71250171aedee0d8268ec4e8",
+        "size": 2469644
+      }
+    ],
+    "orig_tarball": {
+      "name": "linux_6.18.34.orig.tar.xz",
+      "url": "https://archive.raspberrypi.com/debian/pool/main/l/linux/linux_6.18.34.orig.tar.xz",
+      "sha256": "640c4732fb42842166db97e032c1fe7e5ff72c85a8982c75b40f74be3555d760",
+      "size": 154486284,
+      "usage": "provenance-only; exact patched driver sources are fetched from source_commit"
+    },
+    "source_files": [
+      {
+        "path": "drivers/bluetooth/btrtl.c",
+        "url": "https://raw.githubusercontent.com/raspberrypi/linux/c8c7494100e99ee05b11aaa4f0588a223a63d1af/drivers/bluetooth/btrtl.c",
+        "sha256": "c7f9d68ec6c8ef2ada01e5e880ad062024c4e4f34608f3bd426102bfe246b55f",
+        "size": 40050
+      },
+      {
+        "path": "drivers/bluetooth/btrtl.h",
+        "url": "https://raw.githubusercontent.com/raspberrypi/linux/c8c7494100e99ee05b11aaa4f0588a223a63d1af/drivers/bluetooth/btrtl.h",
+        "sha256": "452d4467259f1da92f0f71bb566499f1fa0e1c89ec4f5bf7412ba8c5489daaa1",
+        "size": 4064
+      },
+      {
+        "path": "drivers/bluetooth/btusb.c",
+        "url": "https://raw.githubusercontent.com/raspberrypi/linux/c8c7494100e99ee05b11aaa4f0588a223a63d1af/drivers/bluetooth/btusb.c",
+        "sha256": "47dbcfe9dd37b7bf67149ac6feb9c002fc784fc0bcfe2d06b1f2c740093b56a8",
+        "size": 132416
+      },
+      {
+        "path": "drivers/bluetooth/btintel.h",
+        "url": "https://raw.githubusercontent.com/raspberrypi/linux/c8c7494100e99ee05b11aaa4f0588a223a63d1af/drivers/bluetooth/btintel.h",
+        "sha256": "bef8c2e0c150aae6349a159a95a72aab3d995615bb2d1cae49bedad35ff4b5e1",
+        "size": 10118
+      },
+      {
+        "path": "drivers/bluetooth/btbcm.h",
+        "url": "https://raw.githubusercontent.com/raspberrypi/linux/c8c7494100e99ee05b11aaa4f0588a223a63d1af/drivers/bluetooth/btbcm.h",
+        "sha256": "43ab94feac41161ff6adca55002b5494117da72b968a41c972144d92b51d574e",
+        "size": 2603
+      },
+      {
+        "path": "drivers/bluetooth/btmtk.h",
+        "url": "https://raw.githubusercontent.com/raspberrypi/linux/c8c7494100e99ee05b11aaa4f0588a223a63d1af/drivers/bluetooth/btmtk.h",
+        "sha256": "4b5d3781d0d8e47e3282c53564e83892793bb4a18c5ca318e821220316bcd9f3",
+        "size": 6477
+      }
+    ],
+    "build_packages": [
+      {
+        "name": "linux-headers-6.18.34+rpt-common-rpi_6.18.34-1+rpt1_all.deb",
+        "url": "https://archive.raspberrypi.com/debian/pool/main/l/linux/linux-headers-6.18.34+rpt-common-rpi_6.18.34-1+rpt1_all.deb",
+        "sha256": "7cf03fcbf6c0ed4e511e4566e6879c1e550a7dc8acb88645dd1d3e4a5b258096",
+        "size": 9263260
+      },
+      {
+        "name": "linux-headers-6.18.34+rpt-rpi-v8_6.18.34-1+rpt1_arm64.deb",
+        "url": "https://archive.raspberrypi.com/debian/pool/main/l/linux/linux-headers-6.18.34+rpt-rpi-v8_6.18.34-1+rpt1_arm64.deb",
+        "sha256": "103b388883d2b88b9d8ec5678430ee79dcc73a6cd574af42ec41f80dead0db70",
+        "size": 436332
+      },
+      {
+        "name": "linux-kbuild-6.18.34+rpt_6.18.34-1+rpt1_arm64.deb",
+        "url": "https://archive.raspberrypi.com/debian/pool/main/l/linux/linux-kbuild-6.18.34+rpt_6.18.34-1+rpt1_arm64.deb",
+        "sha256": "ac6fa7ccb424b04dbcfa97a8fdf21e138c443f9958616cf47106eb0f9145f4a7",
+        "size": 1396336
+      }
+    ],
+    "stock_image_package": {
+      "name": "linux-image-6.18.34+rpt-rpi-v8_6.18.34-1+rpt1_arm64.deb",
+      "url": "https://archive.raspberrypi.com/debian/pool/main/l/linux/linux-image-6.18.34+rpt-rpi-v8_6.18.34-1+rpt1_arm64.deb",
+      "sha256": "687315225328ff1a4cd2be43f0582c0b6c7c20c9b8900142c5d6b20393f21b1f",
+      "size": 31980088
+    }
+  },
+  "backports": [
+    {
+      "component": "btrtl",
+      "commit": "ab8cafa8695184e66d0fc3940ac8248a3e83398b",
+      "upstream": "https://git.kernel.org/pub/scm/linux/kernel/git/bluetooth/bluetooth-next.git/commit/?id=ab8cafa8695184e66d0fc3940ac8248a3e83398b",
+      "patch": "patches/0001-btrtl-add-rtl8761cuv-support.patch"
+    },
+    {
+      "component": "btusb",
+      "commit": "6f0624b4427e38c3bb63a951c536cf8adaee1238",
+      "upstream": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/netdev/net-next/+/6f0624b4427e38c3bb63a951c536cf8adaee1238",
+      "patch": "patches/0002-btusb-add-asus-usb-bt600.patch"
+    }
+  ],
+  "firmware": {
+    "commit": "35e542439e8aaca81fa1527fe3887afbb68a6779",
+    "files": [
+      {
+        "name": "rtl8761cu_fw.bin",
+        "install_path": "usr/lib/firmware/rtl_bt/rtl8761cu_fw.bin",
+        "url": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware/+/35e542439e8aaca81fa1527fe3887afbb68a6779/rtl_bt/rtl8761cu_fw.bin?format=TEXT",
+        "encoding": "base64",
+        "sha256": "525bfa5ab9a3ed74b788f9ac494467c522a436c1bc5290ebcb05c7f920533c09",
+        "size": 10296,
+        "required_for_initialization": true
+      },
+      {
+        "name": "rtl8761cu_config.bin",
+        "install_path": "usr/lib/firmware/rtl_bt/rtl8761cu_config.bin",
+        "url": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware/+/35e542439e8aaca81fa1527fe3887afbb68a6779/rtl_bt/rtl8761cu_config.bin?format=TEXT",
+        "encoding": "base64",
+        "sha256": "3142c2732470e4edcdb68edf58cc505b581e38d56b3ec09c64eddcb1d5099507",
+        "size": 11,
+        "required_for_initialization": false
+      }
+    ],
+    "documentation": [
+      {
+        "name": "WHENCE",
+        "url": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware/+/35e542439e8aaca81fa1527fe3887afbb68a6779/WHENCE?format=TEXT",
+        "encoding": "base64",
+        "sha256": "1d96f4bb94aad97fa37d7562e4fe5b197fcea5353053db9ffce7aa8fe758d083",
+        "size": 355466
+      },
+      {
+        "name": "LICENCE.rtlwifi_firmware.txt",
+        "url": "https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware/+/35e542439e8aaca81fa1527fe3887afbb68a6779/LICENCE.rtlwifi_firmware.txt?format=TEXT",
+        "encoding": "base64",
+        "sha256": "a61351665b4f264f6c631364f85b907d8f8f41f8b369533ef4021765f9f3b62e",
+        "size": 2115
+      }
+    ]
+  }
+}
