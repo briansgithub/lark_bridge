@@ -367,7 +367,7 @@ def targeted_recovery(
         device = recovery_device(roles, role)
         if device is not None:
             _before_mutation(cancelled)
-            btadapters.disconnect(device, adapter)
+            btadapters.disconnect(device, adapter, cancelled=cancelled)
             _settle(1, cancelled)
             if check():
                 return RecoveryResult(True, "device-disconnect", device)
@@ -461,6 +461,7 @@ def service_reconnect(
     state: RecoveryState,
     *,
     now: float | None = None,
+    cancelled: Callable[[], bool] | None = None,
 ) -> bool:
     """Reconnect only the device assigned to this process's controller role."""
     observed = time.monotonic() if now is None else now
@@ -469,8 +470,13 @@ def service_reconnect(
         state.reconnect_attempts = 0
         return False
     try:
-        tree = btadapters.managed_objects()
+        _before_mutation(cancelled)
+        tree = btadapters.managed_objects(cancelled=cancelled)
         adapter = resolve_role(roles, role, objects=tree)
+    except (RecoveryCancelled, btadapters.BluetoothOperationCancelled) as exc:
+        state.last_action = "cancelled"
+        state.last_error = str(exc)
+        return False
     except controller_roles.ControllerRoleError as exc:
         state.identity_error = f"{exc.code}: {exc.detail}"
         return False
@@ -491,24 +497,39 @@ def service_reconnect(
             state.last_action = "output-radio-busy"
             return False
         try:
+            _before_mutation(cancelled)
             adapter = resolve_role(roles, role)
+        except RecoveryCancelled as exc:
+            state.last_action = "cancelled"
+            state.last_error = str(exc)
+            return False
         except controller_roles.ControllerRoleError as exc:
             state.identity_error = f"{exc.code}: {exc.detail}"
             return False
-        state.reconnect_attempts += 1
-        state.reconnect_next = observed + RECONNECT_RETRY
-        powered, detail = btadapters.power_on(adapter)
-        if not powered:
-            state.last_error = detail
-            return False
-        if role == "call":
-            ok, detail = btadapters.connect(address, adapter)
-        else:
-            pin = btadapters.pin_to_adapter(address, adapter)
-            if not pin.ok:
-                state.last_error = "; ".join(pin.failures)
+        try:
+            _before_mutation(cancelled)
+            state.reconnect_attempts += 1
+            state.reconnect_next = observed + RECONNECT_RETRY
+            powered, detail = btadapters.power_on(adapter, cancelled=cancelled)
+            if not powered:
+                state.last_error = detail
                 return False
-            ok, detail = btadapters.connect_profile(address, adapter)
+            _before_mutation(cancelled)
+            if role == "call":
+                ok, detail = btadapters.connect(address, adapter, cancelled=cancelled)
+            else:
+                pin = btadapters.pin_to_adapter(address, adapter, cancelled=cancelled)
+                if not pin.ok:
+                    state.last_error = "; ".join(pin.failures)
+                    return False
+                _before_mutation(cancelled)
+                ok, detail = btadapters.connect_profile(
+                    address, adapter, cancelled=cancelled
+                )
+        except (RecoveryCancelled, btadapters.BluetoothOperationCancelled) as exc:
+            state.last_action = "cancelled"
+            state.last_error = str(exc)
+            return False
         state.last_action = "device-reconnect"
         state.last_error = None if ok else detail
         if ok:
@@ -574,7 +595,9 @@ def main(argv: list[str] | None = None) -> int:
                 state.failures = 0
                 if state.last_attempt and time.monotonic() - state.last_attempt > BACKOFF_MAX:
                     state.backoff = BACKOFF_START
-                service_reconnect(roles, args.role, state)
+                service_reconnect(
+                    roles, args.role, state, cancelled=lambda: stopping
+                )
             elif result is ProbeStatus.FAILED:
                 record_failure_and_recover(
                     roles,

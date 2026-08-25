@@ -825,7 +825,7 @@ def _handle_pair_select(
             validated = True
 
             phase("pinning_trust")
-            pin = btadapters.pin_to_adapter(address, adapter)
+            pin = btadapters.pin_to_adapter(address, adapter, cancelled=owner_gone)
             if not pin.ok:
                 raise TransactionFailure(
                     "connection_failed", "pinning_trust", "; ".join(pin.failures)

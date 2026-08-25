@@ -223,7 +223,7 @@ class TargetedRecoveryTests(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.action, "usb-interface-rebind")
-        disconnect.assert_called_once_with(PHONE_ADDRESS, CALL)
+        disconnect.assert_called_once_with(PHONE_ADDRESS, CALL, cancelled=None)
         self.assertIn(["hciconfig", CALL.hci, "down"], commands)
         self.assertIn(["hciconfig", CALL.hci, "up"], commands)
         self.assertIn(["rfkill", "block", str(CALL.rfkill_index)], commands)
@@ -249,7 +249,7 @@ class TargetedRecoveryTests(unittest.TestCase):
             )
         self.assertTrue(result.ok)
         self.assertEqual(result.action, "device-disconnect")
-        disconnect.assert_called_once_with(SPEAKER_ADDRESS, OUTPUT)
+        disconnect.assert_called_once_with(SPEAKER_ADDRESS, OUTPUT, cancelled=None)
 
     def test_shutdown_is_checked_immediately_before_every_recovery_mutation(self) -> None:
         checks = 0
@@ -369,8 +369,8 @@ class ReconnectTests(unittest.TestCase):
             self.assertTrue(bt_watchdog.service_reconnect(roles(), "output", state, now=100.0))
         self.assertTrue(all(call.args[1] == "output" for call in resolve.call_args_list))
         lock.assert_called_once_with(bt_watchdog.OUTPUT_RADIO_LOCK, blocking=False)
-        pin.assert_called_once_with(SPEAKER_ADDRESS, OUTPUT)
-        connect.assert_called_once_with(SPEAKER_ADDRESS, OUTPUT)
+        pin.assert_called_once_with(SPEAKER_ADDRESS, OUTPUT, cancelled=None)
+        connect.assert_called_once_with(SPEAKER_ADDRESS, OUTPUT, cancelled=None)
 
     def test_call_reconnect_uses_bt600_without_the_speaker_transaction(self) -> None:
         state = bt_watchdog.RecoveryState("call")
@@ -388,7 +388,31 @@ class ReconnectTests(unittest.TestCase):
             self.assertTrue(bt_watchdog.service_reconnect(roles(), "call", state, now=100.0))
         output_lock.assert_not_called()
         pin.assert_not_called()
-        connect.assert_called_once_with(PHONE_ADDRESS, CALL)
+        connect.assert_called_once_with(PHONE_ADDRESS, CALL, cancelled=None)
+
+    def test_shutdown_between_power_and_connect_stops_reconnect(self) -> None:
+        state = bt_watchdog.RecoveryState("call")
+        stopping = False
+
+        def power_on(_adapter, **_kwargs):
+            nonlocal stopping
+            stopping = True
+            return True, "on"
+
+        with (
+            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=CALL),
+            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
+            mock.patch.object(bt_watchdog.btadapters, "power_on", side_effect=power_on),
+            mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
+        ):
+            self.assertFalse(
+                bt_watchdog.service_reconnect(
+                    roles(), "call", state, now=100.0, cancelled=lambda: stopping
+                )
+            )
+        connect.assert_not_called()
+        self.assertEqual(state.last_action, "cancelled")
 
     def test_busy_output_radio_spends_no_attempt(self) -> None:
         state = bt_watchdog.RecoveryState("output", reconnect_attempts=2)

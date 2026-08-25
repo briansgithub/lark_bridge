@@ -374,6 +374,8 @@ def _run_cancellable(
     heartbeat: Callable[[], None] | None = None,
 ) -> tuple[int, str, str]:
     """Run a short D-Bus helper with liveness callbacks and guaranteed group reap."""
+    if cancelled is not None and cancelled():
+        raise BluetoothOperationCancelled("operation owner disconnected")
     try:
         process = subprocess.Popen(
             command,
@@ -803,7 +805,13 @@ def is_paired(device_mac: str, objects: dict[str, dict] | None = None) -> bool:
 
 
 def _act(
-    verb: str, device_mac: str, adapter: Adapter | None, timeout: float
+    verb: str,
+    device_mac: str,
+    adapter: Adapter | None,
+    timeout: float,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+    heartbeat: Callable[[], None] | None = None,
 ) -> tuple[bool, str]:
     path: str | None
     if adapter is not None:
@@ -812,10 +820,13 @@ def _act(
         path = device_path(device_mac)
         if path is None:
             return False, f"no bond for {device_mac} on any adapter"
-    code, _, err = _run(
-        ["busctl", "--system", "call", BLUEZ, path, "org.bluez.Device1", verb],
-        timeout=timeout,
-    )
+    command = ["busctl", "--system", "call", BLUEZ, path, "org.bluez.Device1", verb]
+    if cancelled is not None or heartbeat is not None:
+        code, _, err = _run_cancellable(
+            command, timeout=timeout, cancelled=cancelled, heartbeat=heartbeat
+        )
+    else:
+        code, _, err = _run(command, timeout=timeout)
     if code == 0:
         return True, path
     return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
@@ -826,14 +837,19 @@ def _act(
 A2DP_SINK_UUID = "0000110b-0000-1000-8000-00805f9b34fb"
 
 
-def connect(device_mac: str, adapter: Adapter | None = None) -> tuple[bool, str]:
+def connect(
+    device_mac: str,
+    adapter: Adapter | None = None,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
     """Connect a bond on an EXPLICIT adapter. Returns (ok, detail).
 
     This is the call `bluetoothctl connect` cannot make safely with two controllers.
 
     Prefer connect_profile() for speakers: this brings up everything the remote offers.
     """
-    return _act("Connect", device_mac, adapter, CONNECT_TIMEOUT)
+    return _act("Connect", device_mac, adapter, CONNECT_TIMEOUT, cancelled=cancelled)
 
 
 def connect_profile(
@@ -1053,8 +1069,13 @@ def pair_device(
             agent.stop("agent off", "quit")
 
 
-def disconnect(device_mac: str, adapter: Adapter | None = None) -> tuple[bool, str]:
-    return _act("Disconnect", device_mac, adapter, QUERY_TIMEOUT)
+def disconnect(
+    device_mac: str,
+    adapter: Adapter | None = None,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
+    return _act("Disconnect", device_mac, adapter, QUERY_TIMEOUT, cancelled=cancelled)
 
 
 def set_alias(device_mac: str, alias: str, adapter: Adapter | None = None) -> tuple[bool, str]:
@@ -1087,7 +1108,13 @@ def set_alias(device_mac: str, alias: str, adapter: Adapter | None = None) -> tu
     return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
 
 
-def set_trusted(device_mac: str, trusted: bool, adapter: Adapter | None = None) -> tuple[bool, str]:
+def set_trusted(
+    device_mac: str,
+    trusted: bool,
+    adapter: Adapter | None = None,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
     """Set Trusted on one bond. Reads first, so an unchanged value costs no write.
 
     BlueZ persists Trusted into the bond's info file on LARKDATA, and E14 set an idle-write
@@ -1105,18 +1132,27 @@ def set_trusted(device_mac: str, trusted: bool, adapter: Adapter | None = None) 
     )
     if code == 0 and out.strip().split()[-1:] == ["true" if trusted else "false"]:
         return True, f"{path}: already {trusted}"
-    code, _, err = _run(
-        [
-            "busctl", "--system", "set-property", BLUEZ, path,
-            "org.bluez.Device1", "Trusted", "b", "true" if trusted else "false",
-        ]
-    )
+    command = [
+        "busctl", "--system", "set-property", BLUEZ, path,
+        "org.bluez.Device1", "Trusted", "b", "true" if trusted else "false",
+    ]
+    if cancelled is not None:
+        code, _, err = _run_cancellable(
+            command, timeout=QUERY_TIMEOUT, cancelled=cancelled
+        )
+    else:
+        code, _, err = _run(command)
     if code == 0:
         return True, path
     return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
 
 
-def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
+def pin_to_adapter(
+    device_mac: str,
+    adapter: Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> TrustPinResult:
     """Trust a device on ONE adapter and untrust it everywhere else.
 
     Both halves are necessary and each was learned from a failure on the unit:
@@ -1132,7 +1168,7 @@ def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
 
     Idempotent, so it is safe to call whenever a speaker is selected.
     """
-    tree = managed_objects()
+    tree = managed_objects(cancelled=cancelled)
     suffix = "/dev_" + device_mac.strip().upper().replace(":", "_")
     wanted = path_for(adapter, device_mac)
     matches = [
@@ -1149,7 +1185,7 @@ def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
     changed: list[str] = []
     wanted_interfaces = next(interfaces for path, interfaces in matches if path == wanted)
     if not bool(_device_property(wanted_interfaces, "Trusted")):
-        ok, detail = set_trusted(device_mac, True, adapter)
+        ok, detail = set_trusted(device_mac, True, adapter, cancelled=cancelled)
         if not ok:
             # Keep any trusted duplicate intact until the intended adapter is trustworthy.
             # Otherwise one failed D-Bus write can leave the speaker trusted nowhere.
@@ -1162,7 +1198,7 @@ def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
             continue
         hci = path.split("/")[3]
         other = Adapter(hci=hci, address="", bus="unknown", rfkill_index=None)
-        ok, detail = set_trusted(device_mac, False, other)
+        ok, detail = set_trusted(device_mac, False, other, cancelled=cancelled)
         if ok:
             changed.append(f"{hci}:trusted=False")
         else:

@@ -23,7 +23,12 @@ class TrustPinTests(unittest.TestCase):
         tree = {path("hci0"): device(True), path("hci1"): device(False)}
         calls: list[tuple[str, bool]] = []
 
-        def set_trusted(_mac: str, trusted: bool, adapter: btadapters.Adapter | None = None):
+        def set_trusted(
+            _mac: str,
+            trusted: bool,
+            adapter: btadapters.Adapter | None = None,
+            **_kwargs,
+        ):
             assert adapter is not None
             calls.append((adapter.hci, trusted))
             return True, adapter.path
@@ -220,6 +225,16 @@ class DiscoveryTests(unittest.TestCase):
 
 
 class ExplicitDeviceOperationTests(unittest.TestCase):
+    def test_precancelled_command_is_never_spawned(self) -> None:
+        with (
+            mock.patch.object(btadapters.subprocess, "Popen") as spawn,
+            self.assertRaises(btadapters.BluetoothOperationCancelled),
+        ):
+            btadapters._run_cancellable(
+                ["busctl", "mutating-command"], timeout=1, cancelled=lambda: True
+            )
+        spawn.assert_not_called()
+
     def test_a2dp_connect_profile_uses_only_explicit_device_path(self) -> None:
         with mock.patch.object(btadapters, "_run", return_value=(0, "", "")) as run:
             ok, detail = btadapters.connect_profile(SPEAKER, TARGET)

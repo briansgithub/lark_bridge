@@ -460,7 +460,7 @@ class PairSelectTests(unittest.TestCase):
                 mock.patch.object(
                     output_remote.btadapters,
                     "pin_to_adapter",
-                    side_effect=lambda *_args: (
+                    side_effect=lambda *_args, **_kwargs: (
                         events.append("trust") or btadapters.TrustPinResult(True)
                     ),
                 )
