@@ -170,7 +170,11 @@ def provision_release(
         system_root / "etc" / "bluetooth" / "main.conf.d" / "10-bridge.conf",
         0o644,
     )
-    for script in ("boot-transaction.sh", "boot-trial.sh"):
+    for script in (
+        "boot-transaction.sh",
+        "boot-trial.sh",
+        "onboard_bluetooth_config.py",
+    ):
         copy_managed(
             release_root / "pi" / "scripts" / script,
             system_root / "usr" / "local" / "lib" / "rpi-lark-bridge" / script,

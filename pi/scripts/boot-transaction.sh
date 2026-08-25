@@ -17,6 +17,7 @@ safe_target() {
         /home/admin/.config/pipewire/pipewire.conf.d/20-bridge-endpoints.conf|\
         /home/admin/.config/pipewire/pipewire.conf.d/20-bridge-endpoints.notes.txt|\
         /home/admin/.config/wireplumber/wireplumber.conf.d/65-bridge-hfp-no-autolink.conf|\
+        /boot/firmware/config.txt|\
         /etc/cloud/cloud-init.disabled|\
         /etc/NetworkManager/system-connections/*.nmconnection)
             return 0
@@ -65,7 +66,8 @@ restore_transaction() {
                 bridge-btwatchdog.service|\
                 bridge-btwatchdog@call.service|\
                 bridge-btwatchdog@output.service|\
-                bridge-boot-trial-rollback.timer) ;;
+                bridge-boot-trial-rollback.timer|\
+                hciuart.service) ;;
                 *) die "unsafe unit in transaction: $unit" ;;
             esac
             if [ "$enabled" = "enabled" ]; then

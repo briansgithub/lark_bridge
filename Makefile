@@ -43,9 +43,9 @@ lint-sh: ## shellcheck all shell scripts
 
 .PHONY: lint-py
 lint-py: venv ## ruff + black --check + mypy
-	$(VENV)/bin/ruff check "$(PY_DIR)" "$(REPO_ROOT)/tools" "$(REPO_ROOT)/tests"
-	$(VENV)/bin/black --check "$(PY_DIR)" "$(REPO_ROOT)/tools" "$(REPO_ROOT)/tests"
-	$(VENV)/bin/mypy "$(PY_DIR)/bridge_supervisor.py" "$(PY_DIR)/bt_watchdog.py"
+	$(VENV)/bin/ruff check "$(PY_DIR)" "$(REPO_ROOT)/tools" "$(REPO_ROOT)/tests" "$(REPO_ROOT)/rig/bt500_aux"
+	$(VENV)/bin/black --check "$(PY_DIR)" "$(REPO_ROOT)/tools" "$(REPO_ROOT)/tests" "$(REPO_ROOT)/rig/bt500_aux"
+	$(VENV)/bin/mypy "$(PY_DIR)/bridge_supervisor.py" "$(PY_DIR)/bt_watchdog.py" "$(REPO_ROOT)/rig/bt500_aux/harness.py" "$(REPO_ROOT)/rig/bt500_aux/remote.py"
 
 .PHONY: lint-c
 lint-c: ## clang-format check + the ADR-0008 "no Arduino API in shared sources" rule
@@ -73,6 +73,8 @@ test-py: venv ## pytest for bridged/bridgectl against recorded fixtures
 	$(VENV)/bin/pytest "$(PY_DIR)/tests" -q
 	$(VENV)/bin/pytest "$(REPO_ROOT)/tools" -q
 	$(VENV)/bin/pytest "$(REPO_ROOT)/pi/scripts/test_install_release.py" -q
+	$(VENV)/bin/pytest "$(REPO_ROOT)/pi/scripts/test_onboard_bluetooth_config.py" -q
+	$(VENV)/bin/pytest "$(REPO_ROOT)/rig/bt500_aux/tests" -q
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/rig/boot/tests" -p 'test_*.py'
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/pi/powerloss/tests" -p 'test_*.py'
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/rig/powerloss/tests" -p 'test_*.py'
