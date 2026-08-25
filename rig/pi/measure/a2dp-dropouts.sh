@@ -34,7 +34,6 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 A2DP_MAC="${A2DP_MAC:-50:D7:1B:74:34:D6}"
-PHONE_MAC="${PHONE_MAC:-5C:33:7B:CB:BF:C5}"
 DURATION="${DURATION:-600}"
 SEG="${SEG:-30}"
 LABEL="${LABEL:-run}"
@@ -44,22 +43,17 @@ TONE="${TONE:-1000}"
 CAPTURE_GAIN="${CAPTURE_GAIN:-30}"
 OUTDIR="${OUTDIR:-/tmp/rig/a2dp-dropouts/$LABEL}"
 
-adapter_for() {
-  python3 -c "
-import sys
-sys.path.insert(0, '$REPO/pi/bridged')
-import btadapters
-adapter = btadapters.adapter_for_device('$1')
-print(adapter.hci if adapter else '')
-" 2>/dev/null
+controller_hci() {
+  python3 "$REPO/pi/bridged/controller_roles.py" \
+    --policy final-usb resolve "$1" --field hci 2>/dev/null
 }
 
-# Auto-resolution is the default; the overrides exist because the coexistence experiment
-# deliberately moves links between controllers, and a run must never be blocked by a
-# resolution hiccup when the operator already knows the answer.
-A2DP_HCI="${A2DP_HCI:-$(adapter_for "$A2DP_MAC")}"
-CALL_HCI="${CALL_HCI:-$(adapter_for "$PHONE_MAC")}"
-[ -n "$A2DP_HCI" ] || { printf '{"error":"no bond for A2DP device %s"}\n' "$A2DP_MAC"; exit 78; }
+# Active E17 evidence must follow the permanent role declaration, never bond location,
+# enumeration order, physical port, default adapter, or an operator hci override.
+A2DP_HCI="$(controller_hci output)"
+CALL_HCI="$(controller_hci call)"
+[ -n "$A2DP_HCI" ] || { echo '{"error":"strict output controller role is not final-ready"}'; exit 78; }
+[ -n "$CALL_HCI" ] || { echo '{"error":"strict call controller role is not final-ready"}'; exit 78; }
 
 rig_resolve
 B="${DONGLE_B_CARD:-}"

@@ -4,7 +4,7 @@ Documentation=file:///home/admin/rpi-lark-bridge/docs/power-loss-hardening.md
 DefaultDependencies=no
 Wants=local-fs.target
 After=local-fs.target
-Before=systemd-journal-flush.service bluetooth.service bridge-btfw.service bridge-btwatchdog.service user@1000.service
+Before=systemd-journal-flush.service bluetooth.service bridge-btfw.service bridge-btwatchdog.service bridge-btwatchdog@call.service bridge-btwatchdog@output.service user@1000.service
 
 [Service]
 Type=oneshot

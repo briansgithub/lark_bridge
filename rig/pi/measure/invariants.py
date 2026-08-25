@@ -116,7 +116,7 @@ def configured_quantum() -> int:
     return 0
 
 
-def bluetooth_state() -> dict:
+def bluetooth_state(status: dict) -> dict:
     """Controller, ACL link, and SCO voice link -- three separate things.
 
     Recorded per sample because a fault that takes Bluetooth down with it looks identical,
@@ -131,17 +131,21 @@ def bluetooth_state() -> dict:
     Note pactl does NOT list HFP nodes, so counting bluez entries there always returns 0
     even mid-call. pw-link sees them.
     """
+    call = (status.get("controllers") or {}).get("call") or {}
+    hci = str(call.get("hci") or "") if call.get("ready") else ""
     controller = "unknown"
-    for line in run(["hciconfig", "hci0"]).splitlines():
+    for line in run(["hciconfig", hci]).splitlines() if hci else ():
         if "UP RUNNING" in line:
             controller = "up"
             break
         if "DOWN" in line:
             controller = "down"
             break
-    connections = run(["hcitool", "con"])
+    connections = run(["hcitool", "-i", hci, "con"]) if hci else ""
     return {
+        "configured_address": call.get("configured_address"),
         "controller": controller,
+        "hci": hci or None,
         "acl": "ACL" in connections,
         "sco": "SCO" in connections,  # matches both SCO and eSCO
         "bluez_ports": sum(1 for line in run(["pw-link", "-l"]).splitlines() if "bluez" in line),
@@ -244,7 +248,7 @@ def check(status: dict, status_error: str | None) -> tuple[list[dict], dict]:
         "configured_quantum": configured,
         "quantum_below_configured": quantum_low,
         "link_count": len(links),
-        "bluetooth": bluetooth_state(),
+        "bluetooth": bluetooth_state(status),
         "resources": resource_counts(status),
     }
     return violations, observations

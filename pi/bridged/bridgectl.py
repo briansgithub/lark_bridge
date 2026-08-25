@@ -146,11 +146,23 @@ def do_list(args: argparse.Namespace) -> int:
 def do_status(args: argparse.Namespace) -> int:
     status = read_status()
     block = status.get("output") or {}
+    controllers = status.get("controllers") or {}
     if args.json:
-        print(json.dumps(block, indent=2))
+        payload = dict(block)
+        payload["controllers"] = controllers
+        print(json.dumps(payload, indent=2))
         return 0
     chosen = block.get("chosen") or {}
     print(f"{chosen.get('label') or '<none>'}  [{chosen.get('id') or '-'}]  {block.get('reason', '')}")
+    for role in ("call", "output"):
+        observed = controllers.get(role) or {}
+        print(
+            f"{role} controller: {observed.get('configured_address') or '<unconfigured>'} "
+            f"-> {observed.get('hci') or '<unresolved>'} "
+            f"({'ready' if observed.get('ready') else observed.get('error') or 'not ready'})"
+        )
+    if controllers.get("transitional_uart_call"):
+        print("controller readiness policy: transitional UART call role")
     return 0
 
 
@@ -160,17 +172,11 @@ def _call_is_up(status: dict[str, Any]) -> bool:
 
 def _call_adapter(status: dict[str, Any]) -> str | None:
     """Which controller carries the call, so a page can be judged against it."""
-    if btadapters is None:
+    call = (status.get("controllers") or {}).get("call") or {}
+    if not call.get("ready"):
         return None
-    sink = (status.get("endpoints") or {}).get("hfp_sink")
-    if not sink:
-        return None
-    # bluez_output.5C_33_7B_CB_BF_C5.1 -> 5C:33:7B:CB:BF:C5
-    parts = str(sink).split(".")
-    if len(parts) < 2:
-        return None
-    adapter = btadapters.adapter_for_device(parts[1].replace("_", ":"))
-    return adapter.hci if adapter else None
+    hci = call.get("hci")
+    return str(hci) if hci else None
 
 
 CHIME_HZ = (784.0, 1047.0)  # G5 then C6: a rising two-note figure, obviously deliberate
@@ -554,8 +560,9 @@ def do_set(args: argparse.Namespace) -> int:
         print(f"startup: {detail}", file=sys.stderr)
 
     needs_connect = target["kind"] == "a2dp" and not target["present"]
+    call_adapter = _call_adapter(status)
     shares_call_radio = bool(
-        target.get("adapter") and target["adapter"] == _call_adapter(status)
+        call_adapter is None or target.get("adapter") == call_adapter
     )
     if needs_connect and args.connect:
         if _call_is_up(status) and shares_call_radio and not args.force:

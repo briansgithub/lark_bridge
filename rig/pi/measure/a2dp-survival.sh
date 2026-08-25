@@ -22,31 +22,21 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 A2DP_MAC="${A2DP_MAC:-98:47:44:CD:73:DE}"
-PHONE_MAC="${PHONE_MAC:-5C:33:7B:CB:BF:C5}"
 MAX_S="${MAX_S:-180}"
 LABEL="${LABEL:-baseline}"
 
-# Which controller carries which link. Until 2026-08-23 both were hci0 and the literal was
-# harmless; with two radios the whole point of the experiment is that they DIFFER, so a
-# hardcoded hci0 would poll the speaker's transport on the wrong adapter and read SCO
-# counters off a controller carrying no call.
-adapter_for() {
-  python3 -c "
-import sys
-sys.path.insert(0, '$REPO/pi/bridged')
-import btadapters
-adapter = btadapters.adapter_for_device('$1')
-print(adapter.hci if adapter else '')
-" 2>/dev/null
+# This is active E17 instrumentation. It resolves the declared permanent roles through the
+# shared final-readiness policy; bond location, hci numbering, port and operator overrides
+# are never allowed to choose a controller.
+controller_hci() {
+  python3 "$REPO/pi/bridged/controller_roles.py" \
+    --policy final-usb resolve "$1" --field hci 2>/dev/null
 }
 
-# Auto-resolution is the default; the overrides exist because the coexistence experiment
-# deliberately moves links between controllers, and a run must never be blocked by a
-# resolution hiccup when the operator already knows the answer.
-A2DP_HCI="${A2DP_HCI:-$(adapter_for "$A2DP_MAC")}"
-CALL_HCI="${CALL_HCI:-$(adapter_for "$PHONE_MAC")}"
-[ -n "$A2DP_HCI" ] || { printf '{"error":"no bond for A2DP device %s"}\n' "$A2DP_MAC"; exit 78; }
-[ -n "$CALL_HCI" ] || { printf '{"error":"no bond for phone %s"}\n' "$PHONE_MAC"; exit 78; }
+A2DP_HCI="$(controller_hci output)"
+CALL_HCI="$(controller_hci call)"
+[ -n "$A2DP_HCI" ] || { echo '{"error":"strict output controller role is not final-ready"}'; exit 78; }
+[ -n "$CALL_HCI" ] || { echo '{"error":"strict call controller role is not final-ready"}'; exit 78; }
 
 dev_path="/org/bluez/$A2DP_HCI/dev_${A2DP_MAC//:/_}"
 

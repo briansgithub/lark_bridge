@@ -217,10 +217,12 @@ snapshot() {
   git -C "$REPO_ROOT" rev-parse HEAD > "$dir/git-head.txt"
   pi 'uname -a; cat /etc/os-release; pipewire --version; wireplumber --version; bluetoothctl --version; dpkg-query -W pipewire libpipewire-0.3-modules libspa-0.2-modules wireplumber 2>/dev/null' \
     > "$dir/versions.txt" 2>&1 || fail=1
-  pi 'sha256sum ~/rpi-lark-bridge/pi/bridged/bridge_supervisor.py ~/rpi-lark-bridge/pi/bridged/bt_watchdog.py' \
+  pi 'sha256sum ~/rpi-lark-bridge/pi/bridged/bridge_supervisor.py ~/rpi-lark-bridge/pi/bridged/bt_watchdog.py ~/rpi-lark-bridge/pi/bridged/controller_roles.py' \
     > "$dir/deployed-hashes.txt" 2>&1 || fail=1
-  pi 'systemctl is-active bluetooth bridge-btfw bridge-btwatchdog bridge-tuning; systemctl --user is-active pipewire wireplumber bridge-supervisor' \
+  pi 'systemctl is-active bluetooth bridge-btfw bridge-btwatchdog@call bridge-btwatchdog@output bridge-tuning; systemctl --user is-active pipewire wireplumber bridge-supervisor' \
     > "$dir/services.txt" 2>&1 || fail=1
+  pi 'cd ~/rpi-lark-bridge && python3 pi/bridged/controller_roles.py --policy transitional status' \
+    > "$dir/controllers.json" 2>&1 || fail=1
   pi 'pw-dump' > "$dir/pw-dump.json" 2>&1 || fail=1
   pi 'pw-link -l' > "$dir/pw-links.txt" 2>&1 || fail=1
   pi 'timeout 6 pw-top -b -n 3 2>&1 || true' > "$dir/pw-top.txt" 2>&1
@@ -229,7 +231,7 @@ snapshot() {
   pi "cat $status_path 2>/dev/null || true" > "$dir/bridge-status.json"
   pi 'journalctl --user -u bridge-supervisor --since=-10min --no-pager 2>&1 || true' \
     > "$dir/bridge-journal.txt"
-  pi 'journalctl -u bluetooth -u bridge-btfw -u bridge-btwatchdog --since=-10min --no-pager 2>&1 || true' \
+  pi 'journalctl -u bluetooth -u bridge-btfw -u bridge-btwatchdog@call -u bridge-btwatchdog@output -u bridge-btwatchdog --since=-10min --no-pager 2>&1 || true' \
     > "$dir/system-journal.txt"
 
   if adb_bin >/dev/null 2>&1 && phone get-state >/dev/null 2>&1; then

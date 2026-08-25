@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import io
+import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 import btadapters
 import controller_roles
@@ -227,6 +231,120 @@ class SysfsTests(unittest.TestCase):
         self.assertEqual(identity["driver"], "btusb")
         self.assertEqual(identity["product"], "ASUS USB-BT600")
         self.assertEqual(identity["manufacturer"], "ASUSTek")
+
+
+class CommandLineTests(unittest.TestCase):
+    def write_config(self, directory: str, value: dict | None = None) -> Path:
+        source = value or document()
+        phone = source["devices"]["phone"]
+        output = source["devices"]["output"]
+        bluetooth = source["bluetooth"]
+        path = Path(directory) / "bridge.toml"
+        path.write_text(
+            "\n".join(
+                (
+                    "[devices.phone]",
+                    f'address = "{phone["address"]}"',
+                    f'adapter = "{phone["adapter"]}"',
+                    f'adapter_product = "{phone["adapter_product"]}"',
+                    f'adapter_bus = "{phone["adapter_bus"]}"',
+                    *(
+                        (
+                            f'adapter_usb_vendor_id = "{phone["adapter_usb_vendor_id"]}"',
+                            f'adapter_usb_product_id = "{phone["adapter_usb_product_id"]}"',
+                        )
+                        if phone["adapter_bus"] == "USB"
+                        else ()
+                    ),
+                    "",
+                    "[devices.output]",
+                    f'adapter = "{output["adapter"]}"',
+                    f'adapter_product = "{output["adapter_product"]}"',
+                    f'adapter_bus = "{output["adapter_bus"]}"',
+                    f'adapter_usb_vendor_id = "{output["adapter_usb_vendor_id"]}"',
+                    f'adapter_usb_product_id = "{output["adapter_usb_product_id"]}"',
+                    "",
+                    "[bluetooth]",
+                    "allow_transitional_uart_call = "
+                    + str(bluetooth["allow_transitional_uart_call"]).lower(),
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    def test_status_and_resolve_share_the_strict_final_inventory(self) -> None:
+        inventory = [
+            adapter("hci9", OUTPUT_ADDRESS, "1bf6", usb_parent="1-1.4"),
+            adapter("hci2", CALL_ADDRESS, "1d70", usb_parent="1-1.2"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.write_config(directory)
+            output = io.StringIO()
+            with (
+                mock.patch.object(controller_roles, "live_inventory", return_value=inventory),
+                redirect_stdout(output),
+            ):
+                result = controller_roles.main(
+                    ["--config", str(config), "--policy", "final-usb", "status"]
+                )
+            status = json.loads(output.getvalue())
+            self.assertEqual(result, 0)
+            self.assertTrue(status["ready"])
+            self.assertEqual(status["call"]["hci"], "hci2")
+
+            output = io.StringIO()
+            with (
+                mock.patch.object(controller_roles, "live_inventory", return_value=inventory),
+                redirect_stdout(output),
+            ):
+                result = controller_roles.main(
+                    [
+                        "--config",
+                        str(config),
+                        "--policy",
+                        "final-usb",
+                        "resolve",
+                        "output",
+                        "--field",
+                        "hci",
+                    ]
+                )
+            self.assertEqual(result, 0)
+            self.assertEqual(output.getvalue().strip(), "hci9")
+
+    def test_final_cli_rejects_a_valid_uart_transition(self) -> None:
+        transitional = document()
+        phone = transitional["devices"]["phone"]
+        phone.update(
+            {
+                "adapter": "B8:27:EB:43:8D:51",
+                "adapter_product": "Raspberry Pi 3B onboard BCM43438",
+                "adapter_bus": "UART",
+            }
+        )
+        del phone["adapter_usb_vendor_id"]
+        del phone["adapter_usb_product_id"]
+        transitional["bluetooth"]["allow_transitional_uart_call"] = True
+        inventory = [
+            btadapters.Adapter("hci0", phone["adapter"], "UART", 0),
+            adapter("hci1", OUTPUT_ADDRESS, "1bf6", usb_parent="1-1.2"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            config = self.write_config(directory, transitional)
+            output = io.StringIO()
+            with (
+                mock.patch.object(controller_roles, "live_inventory", return_value=inventory),
+                redirect_stdout(output),
+            ):
+                result = controller_roles.main(
+                    ["--config", str(config), "--policy", "final-usb", "status"]
+                )
+        self.assertEqual(result, 1)
+        status = json.loads(output.getvalue())
+        self.assertFalse(status["ready"])
+        self.assertIn("controller_policy_mismatch", status["call"]["error"])
 
 
 if __name__ == "__main__":

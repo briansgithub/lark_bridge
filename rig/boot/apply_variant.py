@@ -19,6 +19,8 @@ SYNC_FILES = (
     "scripts/bootstrap/70-verify.sh",
     "pi/systemd/system/bridge-tuning.service",
     "pi/systemd/system/bridge-btfw.service",
+    "pi/systemd/system/bridge-btwatchdog@.service",
+    "pi/systemd/system/bridge-btwatchdog.service",
     "pi/systemd/system/bridge-boot-trial-rollback.service",
     "pi/systemd/system/bridge-boot-trial-rollback.timer",
     "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf",
@@ -27,6 +29,9 @@ SYNC_FILES = (
     "pi/scripts/boot-transaction.sh",
     "pi/scripts/boot-trial.sh",
     "pi/scripts/netplan-startup-fastpath",
+    "pi/rpi/swap.conf.d/90-larkbridge-pure-zram.conf",
+    "pi/bridged/controller_roles.py",
+    "pi/bridged/btadapters.py",
     "pi/pipewire/pipewire.conf.d/20-bridge-endpoints.notes.txt",
 )
 VARIANTS = {

@@ -4,14 +4,16 @@ set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/common.sh"
 
 unit_header "U20" "Bluetooth controller + advertised roles" \
-  "hci0 is up and PipeWire has registered the profiles this project needs" \
+  "the permanent USB-BT600 call role is up and advertises the required profiles" \
   "prove any device can connect, or that SCO audio actually flows (that is E01/S1)"
 
 require_pi
 DIR="$(artifact_dir U20-bt)"
 
-pi 'hciconfig -a; echo "--- features ---"; hciconfig hci0 features' > "$DIR/hci.txt" 2>&1
-pi 'bluetoothctl show' > "$DIR/adapter.txt" 2>&1
+CALL_HCI="$(pi 'cd ~/rpi-lark-bridge && python3 pi/bridged/controller_roles.py --policy final-usb resolve call --field hci')"
+CALL_ADDRESS="$(pi 'cd ~/rpi-lark-bridge && python3 pi/bridged/controller_roles.py --policy final-usb resolve call --field address')"
+pi "hciconfig '$CALL_HCI'; echo '--- features ---'; hciconfig '$CALL_HCI' features" > "$DIR/hci.txt" 2>&1
+pi "busctl --system get-property org.bluez '/org/bluez/$CALL_HCI' org.bluez.Adapter1 UUIDs" > "$DIR/adapter.txt" 2>&1
 
 STATE="$(grep -oE 'UP RUNNING|DOWN' "$DIR/hci.txt" | head -1)"
 BD="$(grep -oE 'BD Address: [0-9A-F:]+' "$DIR/hci.txt" | head -1 | awk '{print $3}')"
@@ -21,7 +23,8 @@ printf '  adapter   : %s  %s\n' "$BD" "$STATE" >&2
 printf '  SCO MTU   : %s\n' "$SCOMTU" >&2
 
 fail=0
-[ "$STATE" = "UP RUNNING" ] || { err "hci0 is $STATE"; fail=1; }
+[ "$STATE" = "UP RUNNING" ] || { err "$CALL_HCI is $STATE"; fail=1; }
+[ "$BD" = "$CALL_ADDRESS" ] || { err "$CALL_HCI address $BD is not configured call role $CALL_ADDRESS"; fail=1; }
 
 # Capability check. These decide the ceiling on call quality long before any phone is
 # involved, so they are recorded here rather than rediscovered during E01.

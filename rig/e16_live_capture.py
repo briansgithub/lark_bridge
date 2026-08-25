@@ -14,7 +14,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -122,20 +121,22 @@ set -u
 date --iso-8601=ns
 id
 findmnt -no SOURCE,FSTYPE,OPTIONS /media/root-ro || true
-systemctl is-active bluetooth.service bridge-btwatchdog.service bridge-storage-guard.service || true
+systemctl is-active bluetooth.service bridge-btwatchdog@call.service bridge-btwatchdog@output.service bridge-storage-guard.service || true
 systemctl --user is-active bridge-output-remote.service bridge-supervisor.service pipewire.service wireplumber.service || true
 printf '%s\n' '--- bridge-status ---'
 cat /run/user/1000/bridge-status.json
+printf '%s\n' '--- strict-controller-roles ---'
+cd /home/admin/rpi-lark-bridge
+python3 pi/bridged/controller_roles.py --policy transitional status || true
+OUTPUT_HCI="$(python3 pi/bridged/controller_roles.py --policy transitional resolve output --field hci)"
 printf '%s\n' '--- storage-health ---'
 cat /run/larkbridge/storage-health.json
 printf '%s\n' '--- active-config-sha256 ---'
 sha256sum /home/admin/rpi-lark-bridge/config/bridge.toml
 printf '%s\n' '--- durable-configs ---'
 sudo -n find /var/lib/larkbridge-persist/config -mindepth 2 -maxdepth 2 -name bridge.toml -exec sha256sum {} +
-printf '%s\n' '--- a40-hci0 ---'
-busctl --system introspect org.bluez /org/bluez/hci0/dev_98_47_44_CD_73_DE org.bluez.Device1 || true
-printf '%s\n' '--- a40-hci1 ---'
-busctl --system introspect org.bluez /org/bluez/hci1/dev_98_47_44_CD_73_DE org.bluez.Device1 || true
+printf '%s\n' "--- a40-output-role-$OUTPUT_HCI ---"
+busctl --system introspect org.bluez "/org/bluez/$OUTPUT_HCI/dev_98_47_44_CD_73_DE" org.bluez.Device1 || true
 printf '%s\n' '--- bluez-tree ---'
 busctl --system tree org.bluez
 printf '%s\n' '--- pipewire-status ---'
@@ -172,13 +173,14 @@ XDG_RUNTIME_DIR=/run/user/1000 pw-dump || true
     timeout_seconds = args.seconds + 10
     state_loop = r"""
 set -u
+cd /home/admin/rpi-lark-bridge
+OUTPUT_HCI="$(python3 pi/bridged/controller_roles.py --policy transitional resolve output --field hci)" || exit 78
+OUTPUT_DEVICE="/org/bluez/$OUTPUT_HCI/dev_98_47_44_CD_73_DE"
 while :; do
   date --iso-8601=ns
-  jq -c '{state,call:.call.hfp_nodes_present,output:{desired:.output.desired_id,chosen:.output.chosen.id,reason:.output.reason,candidates:[.output.candidates[]|{id,present,connected,adapter,adapter_address,setup_state}]}}' /run/user/1000/bridge-status.json
-  for path in /org/bluez/hci0/dev_98_47_44_CD_73_DE /org/bluez/hci1/dev_98_47_44_CD_73_DE; do
-    printf '%s ' "$path"
-    busctl --system get-property org.bluez "$path" org.bluez.Device1 Paired 2>/dev/null || printf 'absent\n'
-  done
+  jq -c '{state,controllers,call:.call.hfp_nodes_present,output:{desired:.output.desired_id,chosen:.output.chosen.id,reason:.output.reason,candidates:[.output.candidates[]|{id,present,connected,adapter,adapter_address,setup_state}]}}' /run/user/1000/bridge-status.json
+  printf '%s ' "$OUTPUT_DEVICE"
+  busctl --system get-property org.bluez "$OUTPUT_DEVICE" org.bluez.Device1 Paired 2>/dev/null || printf 'absent\n'
   sleep 1
 done
 """.strip()
@@ -202,7 +204,8 @@ done
                 ssh,
                 args.host,
                 f"sudo -n timeout {timeout_seconds}s journalctl -f -n 0 -o short-precise "
-                "-u bluetooth.service -u bridge-btwatchdog.service -u bridge-storage-guard.service",
+                "-u bluetooth.service -u bridge-btwatchdog@call.service "
+                "-u bridge-btwatchdog@output.service -u bridge-storage-guard.service",
             ],
         ),
         (

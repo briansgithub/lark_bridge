@@ -18,8 +18,10 @@ fi
 if [ "$fail" -eq 0 ]; then
   pi 'uname -a; cat /etc/os-release; pipewire --version; wireplumber --version; bluetoothctl --version' \
     > "$DIR/versions.txt" 2>&1 || fail=1
-  pi 'systemctl is-active bluetooth bridge-btfw bridge-btwatchdog bridge-tuning; systemctl --user is-active pipewire wireplumber bridge-supervisor' \
+  pi 'systemctl is-active bluetooth bridge-btfw bridge-btwatchdog@call bridge-btwatchdog@output bridge-tuning; systemctl --user is-active pipewire wireplumber bridge-supervisor' \
     > "$DIR/services.txt" 2>&1 || fail=1
+  pi 'cd ~/rpi-lark-bridge && python3 pi/bridged/controller_roles.py --policy final-usb status' \
+    > "$DIR/controllers.json" 2>&1 || fail=1
   pi "cd ~/rpi-lark-bridge && LARK_USB_ID='$(inv lark_usb_id 3547:0407)' LARK_USB_SERIAL='$(inv lark_usb_serial '')' bash rig/pi/measure/devices.sh" \
     > "$DIR/devices.txt" 2>&1 || fail=1
   pi 'vcgencmd get_throttled; vcgencmd measure_temp; vcgencmd measure_clock arm' \

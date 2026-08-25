@@ -3,9 +3,13 @@
 #
 # Device Tree configures BCM43438 SCO-over-HCI. This script only verifies the
 # live property and controller readback; it never modifies controller state.
+# This service is temporary onboard-rollback infrastructure. It must not infer the
+# onboard device from hci numbering after the two USB controllers are introduced.
 set -euo pipefail
 
-HCI="${BRIDGE_HCI:-hci0}"
+REPO="${BRIDGE_REPO:-/home/admin/rpi-lark-bridge}"
+HCI="${BRIDGE_HCI:-}"
+ONBOARD_ADDRESS="${BRIDGE_ONBOARD_ADDRESS:-B8:27:EB:43:8D:51}"
 DT_PROP="/sys/firmware/devicetree/base/soc/serial@7e201000/bluetooth/brcm,bt-pcm-int-params"
 WANT_DT_HEX="0102000101"
 WANT_PARAMS="01 02 00 01 01"
@@ -34,7 +38,28 @@ read_params() {
         '
 }
 
+resolve_onboard_hci() {
+    PYTHONPATH="$REPO/pi/bridged" ONBOARD_ADDRESS="$ONBOARD_ADDRESS" python3 - <<'PY'
+import os
+
+import btadapters
+
+matches = [
+    adapter
+    for adapter in btadapters.adapters()
+    if adapter.address == os.environ["ONBOARD_ADDRESS"] and adapter.bus == "UART"
+]
+if len(matches) == 1:
+    print(matches[0].hci)
+PY
+}
+
 for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
+    [ -n "$HCI" ] || HCI="$(resolve_onboard_hci 2>/dev/null || true)"
+    if [ -z "$HCI" ]; then
+        sleep "$RETRY_DELAY"
+        continue
+    fi
     params="$(read_params || true)"
     if [ -n "$params" ]; then
         log "SCO PCM params: $params"

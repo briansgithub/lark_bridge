@@ -24,6 +24,18 @@ safety = load("safety_evidence", ROOT / "scripts/powerloss/safety-evidence.py")
 
 
 class OfflineBootConfiguration(unittest.TestCase):
+    def test_offline_builder_enables_both_role_watchdogs_only(self) -> None:
+        source = (ROOT / "scripts/powerloss/prepare-offline-root.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('for role in call output; do', source)
+        self.assertIn('bridge-btwatchdog@$role.service', source)
+        self.assertIn(
+            'multi-user.target.wants/bridge-btwatchdog.service"', source
+        )
+        self.assertIn('pi/bridged/controller_roles.py', source)
+        self.assertIn('pi/bridged/btadapters.py', source)
+
     def test_configures_read_only_mounts_and_initramfs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

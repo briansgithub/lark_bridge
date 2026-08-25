@@ -8,13 +8,20 @@ BlueZ's default adapter) are observations only and never select a role.
 
 from __future__ import annotations
 
+import argparse
+import json
+import os
 import re
+import sys
 import tomllib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Protocol
+
+REPO = Path(os.environ.get("BRIDGE_REPO", "/home/admin/rpi-lark-bridge"))
+DEFAULT_CONFIG = Path(os.environ.get("BRIDGE_CONFIG", REPO / "config" / "bridge.toml"))
 
 MAC_RE = re.compile(r"^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$")
 USB_ID_RE = re.compile(r"^[0-9a-f]{4}$")
@@ -59,17 +66,38 @@ class ControllerConfigError(ValueError):
 
 
 class AdapterView(Protocol):
-    hci: str
-    address: str
-    bus: str
-    rfkill_index: int | None
-    usb_vendor_id: str | None
-    usb_product_id: str | None
-    usb_parent: str | None
-    usb_interface: str | None
-    driver: str | None
-    product: str | None
-    manufacturer: str | None
+    @property
+    def hci(self) -> str: ...
+
+    @property
+    def address(self) -> str: ...
+
+    @property
+    def bus(self) -> str: ...
+
+    @property
+    def rfkill_index(self) -> int | None: ...
+
+    @property
+    def usb_vendor_id(self) -> str | None: ...
+
+    @property
+    def usb_product_id(self) -> str | None: ...
+
+    @property
+    def usb_parent(self) -> str | None: ...
+
+    @property
+    def usb_interface(self) -> str | None: ...
+
+    @property
+    def driver(self) -> str | None: ...
+
+    @property
+    def product(self) -> str | None: ...
+
+    @property
+    def manufacturer(self) -> str | None: ...
 
     @property
     def path(self) -> str: ...
@@ -324,3 +352,84 @@ def controllers_status(
         "call": call,
         "output": output,
     }
+
+
+def live_inventory() -> Sequence[AdapterView]:
+    """Read the live kernel/BlueZ inventory without making it a selection input."""
+    import btadapters
+
+    return btadapters.adapters()
+
+
+def live_controllers_status(
+    path: Path = DEFAULT_CONFIG,
+    *,
+    policy: ReadinessPolicy,
+) -> dict[str, Any]:
+    """Resolve both configured roles against one live inventory snapshot."""
+    return controllers_status(load_controller_roles(path), live_inventory(), policy=policy)
+
+
+def _role_spec(roles: ControllerRoles, role: str) -> ControllerSpec:
+    return roles.call if role == "call" else roles.output
+
+
+def _resolved_field(adapter: AdapterView, field: str) -> object:
+    if field == "bluez-path":
+        return adapter.path
+    if field == "usb-id":
+        return _observed_usb_id(adapter) or ""
+    return getattr(adapter, field.replace("-", "_"))
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument(
+        "--policy",
+        choices=[policy.value for policy in ReadinessPolicy],
+        default=ReadinessPolicy.TRANSITIONAL.value,
+        help="readiness context; official/final callers must pass final-usb",
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("status", help="print both role diagnostics as JSON")
+    resolver = commands.add_parser("resolve", help="print one exact resolved field")
+    resolver.add_argument("role", choices=("call", "output"))
+    resolver.add_argument(
+        "--field",
+        choices=(
+            "address",
+            "bluez-path",
+            "bus",
+            "driver",
+            "hci",
+            "rfkill-index",
+            "usb-id",
+            "usb-interface",
+            "usb-parent",
+        ),
+        default="hci",
+    )
+    args = parser.parse_args(argv)
+    policy = ReadinessPolicy(args.policy)
+    try:
+        roles = load_controller_roles(args.config)
+        inventory = live_inventory()
+        if args.command == "status":
+            status = controllers_status(roles, inventory, policy=policy)
+            print(json.dumps(status, sort_keys=True))
+            return 0 if status["ready"] else 1
+        adapter = resolve_controller(_role_spec(roles, args.role), inventory, policy=policy)
+        value = _resolved_field(adapter, args.field)
+        print("" if value is None else value)
+        return 0
+    except (OSError, ControllerConfigError) as exc:
+        print(f"controller_config_error: {exc}", file=sys.stderr)
+        return 2
+    except ControllerRoleError as exc:
+        print(f"{exc.code}: {exc.detail}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

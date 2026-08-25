@@ -10,7 +10,7 @@ Description=rpi-lark-bridge latency tuning for the HCI UART
 # BRIDGE_TUNING_EARLY_V1
 # Apply the existing performance governor before Bluetooth/HCI startup.
 After=systemd-modules-load.service
-Before=bluetooth.service bridge-btfw.service bridge-btwatchdog.service
+Before=bluetooth.service bridge-btfw.service bridge-btwatchdog.service bridge-btwatchdog@call.service bridge-btwatchdog@output.service
 
 [Service]
 Type=oneshot

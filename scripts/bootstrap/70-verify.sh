@@ -14,6 +14,7 @@ done
 [ "$BOOT_ONLY" -eq 1 ] || { printf 'ERROR: --boot-only is required\n' >&2; exit 2; }
 
 STATE_ROOT="${BRIDGE_BOOT_STATE_ROOT:-/var/lib/rpi-lark-bridge/boot-transactions}"
+SOURCE_ROOT="${BRIDGE_SOURCE_ROOT:-/home/admin/rpi-lark-bridge}"
 transaction="${BRIDGE_BOOT_TRANSACTION:-}"
 if [ -z "$transaction" ] && [ -L "$STATE_ROOT/current" ]; then
     transaction="$STATE_ROOT/$(readlink "$STATE_ROOT/current")"
@@ -88,16 +89,45 @@ show_lacks() {
 show_has bridge-tuning.service After systemd-modules-load.service
 show_has bridge-tuning.service Before bluetooth.service
 show_has bridge-tuning.service Before bridge-btfw.service
-show_has bridge-tuning.service Before bridge-btwatchdog.service
+show_has bridge-tuning.service Before bridge-btwatchdog@call.service
+show_has bridge-tuning.service Before bridge-btwatchdog@output.service
 show_lacks bridge-tuning.service After multi-user.target
 show_has bridge-btfw.service After bluetooth.service
 show_has bridge-btfw.service Requires bluetooth.service
 show_has bridge-btfw.service PartOf bluetooth.service
 show_lacks bridge-btfw.service Before bridge.target
 
-for unit in bridge-tuning.service bridge-btfw.service; do
+for unit in \
+    bridge-tuning.service \
+    bridge-btfw.service \
+    bridge-btwatchdog@call.service \
+    bridge-btwatchdog@output.service; do
     if systemctl is-active --quiet "$unit"; then ok "$unit active"; else bad "$unit inactive"; fi
+    if systemctl is-enabled --quiet "$unit"; then ok "$unit enabled"; else bad "$unit disabled"; fi
 done
+if systemctl is-active --quiet bridge-btwatchdog.service; then
+    bad "transitional singleton watchdog remains active"
+else
+    ok "transitional singleton watchdog inactive"
+fi
+if systemctl is-enabled --quiet bridge-btwatchdog.service; then
+    bad "transitional singleton watchdog remains enabled"
+else
+    ok "transitional singleton watchdog disabled"
+fi
+
+# Installation is allowed while the call role still uses the explicit UART rollback
+# configuration. The policy and transitional flag are printed so this can never be
+# mistaken for the stronger final/power-loss gate.
+controller_report="$({
+    python3 "$SOURCE_ROOT/pi/bridged/controller_roles.py" \
+        --policy transitional status
+} 2>&1)" && {
+    ok "controller roles ready under explicitly transitional install policy"
+    printf '[boot-verify] controller roles: %s\n' "$controller_report"
+} || {
+    bad "controller roles failed transitional install policy: $controller_report"
+}
 
 barrier=/etc/systemd/system/user@1000.service.d/10-login-barrier.conf
 if [ -L "$barrier" ] && [ "$(readlink "$barrier")" = /dev/null ]; then
@@ -122,6 +152,8 @@ fi
 systemd-analyze verify \
     /etc/systemd/system/bridge-tuning.service \
     /etc/systemd/system/bridge-btfw.service \
+    /etc/systemd/system/bridge-btwatchdog@.service \
+    /etc/systemd/system/bridge-btwatchdog.service \
     /etc/systemd/system/bridge-boot-trial-rollback.service \
     /etc/systemd/system/bridge-boot-trial-rollback.timer || bad "systemd unit verification"
 

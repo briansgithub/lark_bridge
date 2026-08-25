@@ -7,10 +7,20 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
-from lark_state import (
+SOURCE_BRIDGED = Path(__file__).resolve().parents[1] / "bridged"
+APPLIANCE_BRIDGED = Path("/home/admin/rpi-lark-bridge/pi/bridged")
+for bridged_path in (SOURCE_BRIDGED, APPLIANCE_BRIDGED):
+    if bridged_path.is_dir() and str(bridged_path) not in sys.path:
+        sys.path.insert(0, str(bridged_path))
+
+import btadapters  # noqa: E402
+import controller_roles  # noqa: E402
+
+from lark_state import (  # noqa: E402
     StateError,
     select_config,
     sha256_file,
@@ -25,7 +35,8 @@ SYSTEM_UNITS = (
     "bridge-storage-guard.service",
     "bridge-tuning.service",
     "bridge-btfw.service",
-    "bridge-btwatchdog.service",
+    "bridge-btwatchdog@call.service",
+    "bridge-btwatchdog@output.service",
     "bridge-pairing-seal.timer",
 )
 USER_UNITS = (
@@ -39,6 +50,7 @@ CRITICAL_LOG = re.compile(
     r"under-?voltage|watchdog.*(?:lockup|BUG)|journal.*corrupt",
     re.IGNORECASE,
 )
+ACTIVE_CONFIG = Path("/home/admin/rpi-lark-bridge/config/bridge.toml")
 
 
 def run(arguments: list[str], timeout: int = 30) -> dict[str, Any]:
@@ -98,6 +110,55 @@ def pairing_identity(path: Path) -> dict[str, str]:
     return identity
 
 
+def final_controller_status(
+    config_path: Path = ACTIVE_CONFIG,
+    inventory: list[btadapters.Adapter] | None = None,
+) -> dict[str, Any]:
+    """Official readiness: both permanent roles must resolve as USB controllers."""
+    roles = controller_roles.load_controller_roles(config_path)
+    observed = btadapters.adapters() if inventory is None else inventory
+    return controller_roles.controllers_status(
+        roles,
+        observed,
+        policy=controller_roles.ReadinessPolicy.FINAL_USB,
+    )
+
+
+def controller_failures(status: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    if status.get("policy") != controller_roles.ReadinessPolicy.FINAL_USB.value:
+        failures.append("controller readiness did not use the final-usb policy")
+    if status.get("transitional_uart_call"):
+        failures.append("controller readiness still declares a transitional UART call role")
+    for role in ("call", "output"):
+        observed = status.get(role) or {}
+        if not observed.get("ready"):
+            failures.append(
+                f"{role} controller is not final-ready: "
+                f"{observed.get('error') or 'unresolved'}"
+            )
+    return failures
+
+
+def published_controller_failures(
+    published: object, final_status: dict[str, Any]
+) -> list[str]:
+    if not isinstance(published, dict):
+        return ["bridge status has no controller diagnostics"]
+    failures: list[str] = []
+    if published.get("transitional_uart_call"):
+        failures.append("bridge status reports a transitional UART call role")
+    if not published.get("ready"):
+        failures.append("bridge status reports controller roles not ready")
+    for role in ("call", "output"):
+        actual = published.get(role) or {}
+        expected = final_status.get(role) or {}
+        for field in ("configured_address", "observed_address", "observed_usb_id", "hci"):
+            if actual.get(field) != expected.get(field):
+                failures.append(f"bridge {role} controller {field} is stale or mismatched")
+    return failures
+
+
 def main() -> int:
     failures: list[str] = []
     details: dict[str, Any] = {}
@@ -146,10 +207,14 @@ def main() -> int:
     if failed_units["stdout"]:
         failures.append("systemd reports failed units")
 
-    bluetooth = run(["bluetoothctl", "show"])
-    details["bluetooth"] = bluetooth
-    if "Powered: yes" not in bluetooth["stdout"]:
-        failures.append("Bluetooth adapter is not powered")
+    try:
+        controllers = final_controller_status()
+        details["controllers"] = controllers
+        failures.extend(controller_failures(controllers))
+    except (OSError, ValueError) as error:
+        controllers = {}
+        details["controllers"] = {"error": str(error), "policy": "final-usb"}
+        failures.append(f"controller role configuration is invalid: {error}")
 
     bridge = read_json(Path("/run/user/1000/bridge-status.json"))
     details["bridge"] = bridge
@@ -172,9 +237,12 @@ def main() -> int:
             "owner_pid"
         ):
             failures.append("stale AEC owner exists while the call is down")
+        failures.extend(
+            published_controller_failures(bridge.get("controllers"), controllers)
+        )
 
     state_root = Path("/var/lib/larkbridge-persist")
-    active = Path("/home/admin/rpi-lark-bridge/config/bridge.toml")
+    active = ACTIVE_CONFIG
     try:
         config, slot, config_failures = select_config(state_root)
         details["config"] = {

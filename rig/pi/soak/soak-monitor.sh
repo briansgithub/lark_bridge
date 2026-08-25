@@ -26,6 +26,8 @@
 
 set -uo pipefail
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$HERE/../../.." && pwd)"
 MINUTES=30
 LABEL="soak"
 OUTDIR=""
@@ -44,34 +46,39 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$OUTDIR" ] || { echo "--out required" >&2; exit 2; }
+CALL_HCI="$(python3 "$REPO/pi/bridged/controller_roles.py" \
+  --policy final-usb resolve call --field hci 2>/dev/null)"
+[ -n "$CALL_HCI" ] || { echo "strict call controller role is not final-ready" >&2; exit 78; }
 mkdir -p "$OUTDIR"
 JSONL="$OUTDIR/samples.jsonl"
 META="$OUTDIR/meta.json"
 
-sco_counters() { hciconfig hci0 2>/dev/null | grep -oE 'sco:[0-9]+' | tr -dc '0-9\n'; }
+sco_counters() { hciconfig "$CALL_HCI" 2>/dev/null | grep -oE 'sco:[0-9]+' | tr -dc '0-9\n'; }
 reassembly_count() { dmesg 2>/dev/null | grep -c 'Frame reassembly failed' || echo 0; }
 
 controller_alive() {
   local b a
-  b="$(hciconfig hci0 2>/dev/null | grep -oE 'RX bytes:[0-9]+' | tr -dc 0-9)"
-  hciconfig hci0 2>/dev/null | grep -q 'UP RUNNING' || { echo false; return; }
-  timeout 3 hcitool -i hci0 cmd 0x03 0x0014 >/dev/null 2>&1 || { echo false; return; }
+  b="$(hciconfig "$CALL_HCI" 2>/dev/null | grep -oE 'RX bytes:[0-9]+' | tr -dc 0-9)"
+  hciconfig "$CALL_HCI" 2>/dev/null | grep -q 'UP RUNNING' || { echo false; return; }
+  timeout 3 hcitool -i "$CALL_HCI" cmd 0x03 0x0014 >/dev/null 2>&1 || { echo false; return; }
   sleep 1
-  a="$(hciconfig hci0 2>/dev/null | grep -oE 'RX bytes:[0-9]+' | tr -dc 0-9)"
+  a="$(hciconfig "$CALL_HCI" 2>/dev/null | grep -oE 'RX bytes:[0-9]+' | tr -dc 0-9)"
   [ "${a:-0}" -gt "${b:-0}" ] && echo true || echo false
 }
 
 connected_state() {
   [ -n "$MAC" ] || { echo unknown; return; }
-  bluetoothctl info "$MAC" 2>/dev/null | awk -F': ' '/Connected:/{print $2; exit}' | tr -d '\r'
+  busctl --system get-property org.bluez \
+    "/org/bluez/$CALL_HCI/dev_${MAC//:/_}" org.bluez.Device1 Connected 2>/dev/null \
+    | awk '{print $2}'
 }
 
 START="$(date -u +%s)"
 END=$(( START + MINUTES * 60 ))
 
 {
-  printf '{"label":"%s","started_utc":"%s","minutes":%s,"interval_s":%s,"mac":"%s"}\n' \
-    "$LABEL" "$(date -u -d "@$START" +%Y-%m-%dT%H:%M:%SZ)" "$MINUTES" "$INTERVAL" "$MAC"
+  printf '{"label":"%s","started_utc":"%s","minutes":%s,"interval_s":%s,"mac":"%s","call_hci":"%s"}\n' \
+    "$LABEL" "$(date -u -d "@$START" +%Y-%m-%dT%H:%M:%SZ)" "$MINUTES" "$INTERVAL" "$MAC" "$CALL_HCI"
 } > "$META"
 
 mapfile -t C < <(sco_counters)

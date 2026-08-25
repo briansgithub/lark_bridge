@@ -10,7 +10,7 @@
 # bridge-supervisor reported both legs verified. The ONLY signal that discriminated was
 # issuing a command and seeing whether it came back.
 #
-# So each sample runs `hciconfig hci0 version` (Read Local Version) and records whether it
+# So each sample runs Read Local Version on the strict permanent call role and records whether it
 # answered. The command costs one HCI round trip per minute against SCO's 133/s, i.e. it is
 # not a meaningful addition to UART load.
 #
@@ -18,19 +18,24 @@
 # corroborating signature and needs no decode.
 set -u
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$HERE/../../.." && pwd)"
 OUT="${1:?usage: sco-sampler.sh <logfile>}"
 INTERVAL="${2:-60}"
+CALL_HCI="$(python3 "$REPO/pi/bridged/controller_roles.py" \
+  --policy final-usb resolve call --field hci 2>/dev/null)"
+[ -n "$CALL_HCI" ] || { echo "strict call controller role is not final-ready" >&2; exit 78; }
 
 while :; do
   TS="$(date '+%Y-%m-%d %H:%M:%S')"
 
-  ESCO="$(timeout 10 hcitool con 2>/dev/null | grep -c eSCO || true)"
+  ESCO="$(timeout 10 hcitool -i "$CALL_HCI" con 2>/dev/null | grep -c eSCO || true)"
   [ -n "$ESCO" ] || ESCO='?'
 
-  if timeout 15 hciconfig hci0 version >/dev/null 2>&1; then ALIVE=yes; else ALIVE=NO; fi
+  if timeout 15 hciconfig "$CALL_HCI" version >/dev/null 2>&1; then ALIVE=yes; else ALIVE=NO; fi
 
   # RX/TX byte counters straight off the adapter line.
-  COUNTS="$(hciconfig hci0 2>/dev/null | tr -s ' ' | grep -E 'RX bytes|TX bytes' \
+  COUNTS="$(hciconfig "$CALL_HCI" 2>/dev/null | tr -s ' ' | grep -E 'RX bytes|TX bytes' \
             | tr '\n' ' ' | sed 's/  */ /g')"
 
   # journalctl -k, not `dmesg | grep -c`: the kernel ring buffer wraps and UNDERCOUNTS.

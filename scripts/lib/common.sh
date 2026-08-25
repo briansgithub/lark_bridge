@@ -179,7 +179,9 @@ install_file() {
   ok "installed: $dst"
 }
 
-# ---------------------------------------------------------------- bluetooth helpers
+# ---------------------------------------------------------------- historical E01/E07 onboard helpers
+# These are retained only for the explicitly manual onboard rollback scripts. Active E17
+# instrumentation resolves permanent roles through pi/bridged/controller_roles.py.
 
 bt_adapter() { printf '%s\n' "${BRIDGE_HCI:-hci0}"; }
 

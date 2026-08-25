@@ -40,7 +40,7 @@ warn() { printf '[boot-install] WARNING: %s\n' "$*" >&2; }
 die() { printf '[boot-install] ERROR: %s\n' "$*" >&2; exit 1; }
 require_cmd() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
 
-for command in awk cmp cp findmnt grep install loginctl nmcli od sha256sum systemctl systemd-analyze; do
+for command in awk cmp cp findmnt grep install loginctl nmcli od python3 sha256sum systemctl systemd-analyze; do
     require_cmd "$command"
 done
 
@@ -53,6 +53,8 @@ model="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)"
 managed_sources=(
     "pi/systemd/system/bridge-tuning.service"
     "pi/systemd/system/bridge-btfw.service"
+    "pi/systemd/system/bridge-btwatchdog@.service"
+    "pi/systemd/system/bridge-btwatchdog.service"
     "pi/systemd/system/bridge-boot-trial-rollback.service"
     "pi/systemd/system/bridge-boot-trial-rollback.timer"
     "pi/rpi/swap.conf.d/90-larkbridge-pure-zram.conf"
@@ -108,10 +110,12 @@ record_path() {
 }
 
 record_unit() {
-    local unit="$1" state
+    local unit="$1" state active
     state="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
     [ "$state" = "enabled" ] || state=disabled
-    printf '%s\t%s\n' "$unit" "$state" >> "$transaction/units.tsv"
+    active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+    [ "$active" = "active" ] || active=inactive
+    printf '%s\t%s\t%s\n' "$unit" "$state" "$active" >> "$transaction/units.tsv"
 }
 
 install_managed() {
@@ -139,12 +143,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for unit in bridge-tuning.service bridge-btfw.service bridge-boot-trial-rollback.timer; do
+for unit in \
+    bridge-tuning.service \
+    bridge-btfw.service \
+    bridge-btwatchdog.service \
+    bridge-btwatchdog@call.service \
+    bridge-btwatchdog@output.service \
+    bridge-boot-trial-rollback.timer; do
     record_unit "$unit"
 done
 
 install_managed "pi/systemd/system/bridge-tuning.service" "/etc/systemd/system/bridge-tuning.service" 0644
 install_managed "pi/systemd/system/bridge-btfw.service" "/etc/systemd/system/bridge-btfw.service" 0644
+install_managed "pi/systemd/system/bridge-btwatchdog@.service" "/etc/systemd/system/bridge-btwatchdog@.service" 0644
+install_managed "pi/systemd/system/bridge-btwatchdog.service" "/etc/systemd/system/bridge-btwatchdog.service" 0644
 install_managed "pi/systemd/system/bridge-boot-trial-rollback.service" "/etc/systemd/system/bridge-boot-trial-rollback.service" 0644
 install_managed "pi/systemd/system/bridge-boot-trial-rollback.timer" "/etc/systemd/system/bridge-boot-trial-rollback.timer" 0644
 install_managed "pi/rpi/swap.conf.d/90-larkbridge-pure-zram.conf" "/etc/rpi/swap.conf.d/90-larkbridge-pure-zram.conf" 0644
@@ -294,11 +306,19 @@ persist_network_and_disable_cloud_init
 systemd-analyze verify \
     "$SOURCE_ROOT/pi/systemd/system/bridge-tuning.service" \
     "$SOURCE_ROOT/pi/systemd/system/bridge-btfw.service" \
+    "$SOURCE_ROOT/pi/systemd/system/bridge-btwatchdog@.service" \
+    "$SOURCE_ROOT/pi/systemd/system/bridge-btwatchdog.service" \
     "$SOURCE_ROOT/pi/systemd/system/bridge-boot-trial-rollback.service" \
     "$SOURCE_ROOT/pi/systemd/system/bridge-boot-trial-rollback.timer"
 systemctl daemon-reload
-systemctl enable bridge-tuning.service bridge-btfw.service >/dev/null
+systemctl disable --now bridge-btwatchdog.service >/dev/null 2>&1 || true
+systemctl enable \
+    bridge-tuning.service \
+    bridge-btfw.service \
+    bridge-btwatchdog@call.service \
+    bridge-btwatchdog@output.service >/dev/null
 systemctl restart bridge-tuning.service bridge-btfw.service
+systemctl restart bridge-btwatchdog@call.service bridge-btwatchdog@output.service
 
 BRIDGE_SOURCE_ROOT="$SOURCE_ROOT" BRIDGE_BOOT_TRANSACTION="$transaction" \
     bash "$SOURCE_ROOT/scripts/bootstrap/70-verify.sh" --boot-only

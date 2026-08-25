@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import io
+import json
 import subprocess
 import tempfile
 import tomllib
 import unittest
 from argparse import Namespace
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -85,6 +88,33 @@ class StatusParsingTests(unittest.TestCase):
         self.assertTrue(bridgectl._call_is_up({"call": {"hfp_nodes_present": True}}))
         self.assertFalse(bridgectl._call_is_up({"call": {"hfp_nodes_present": False}}))
         self.assertFalse(bridgectl._call_is_up({}))
+
+    def test_call_controller_comes_only_from_published_strict_role_status(self) -> None:
+        status = {
+            "controllers": {"call": {"ready": True, "hci": "hci7"}},
+            "endpoints": {"hfp_sink": "bluez_output.5C_33_7B_CB_BF_C5.1"},
+        }
+        with mock.patch.object(bridgectl.btadapters, "adapter_for_device") as inference:
+            self.assertEqual(bridgectl._call_adapter(status), "hci7")
+            self.assertIsNone(
+                bridgectl._call_adapter({"controllers": {"call": {"ready": False}}})
+            )
+        inference.assert_not_called()
+
+    def test_json_status_adds_controllers_without_nesting_existing_output_fields(self) -> None:
+        status = {
+            "output": {"chosen": {"id": BOOMBOX["id"]}, "reason": "selected"},
+            "controllers": {"ready": True, "call": {"hci": "hci2"}},
+        }
+        output = io.StringIO()
+        with (
+            mock.patch.object(bridgectl, "read_status", return_value=status),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(bridgectl.do_status(Namespace(json=True)), 0)
+        payload = json.loads(output.getvalue())
+        self.assertEqual(payload["chosen"]["id"], BOOMBOX["id"])
+        self.assertTrue(payload["controllers"]["ready"])
 
 
 class SelectionSafetyTests(unittest.TestCase):

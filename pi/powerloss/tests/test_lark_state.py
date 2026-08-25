@@ -9,7 +9,7 @@ from unittest import mock
 MODULE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MODULE))
 
-import lark_state
+import lark_state  # noqa: E402
 
 CONFIG_A = b'[bridge]\nname = "one"\n'
 CONFIG_B = b'[bridge]\nname = "two"\n'
@@ -78,6 +78,33 @@ class PairingTransactions(unittest.TestCase):
             info = restored / "adapter/device/info"
             self.assertIn("B" * 32, info.read_text(encoding="utf-8"))
             self.assertFalse((restored / ".larkbridge-manifest.json").exists())
+
+    def test_snapshot_and_restore_preserve_bonds_for_both_permanent_controllers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "state"
+            live = base / "live"
+            restored = base / "restored"
+            # Production BlueZ directory names are MAC addresses. Windows rejects ':' in
+            # fixture paths, so stable role labels exercise the same multi-root copy logic.
+            identities = {
+                "call-controller": ("pixel", "A" * 32),
+                "output-controller": ("speaker", "B" * 32),
+            }
+            for adapter, (device, key) in identities.items():
+                info = live / adapter / device / "info"
+                info.parent.mkdir(parents=True)
+                info.write_text(f"[LinkKey]\nKey={key}\n", encoding="utf-8")
+
+            lark_state.seal_pairing(root, live)
+            snapshot, _slot, failures = lark_state.select_pairing_snapshot(root)
+            lark_state.restore_pairing(snapshot, restored)
+
+            self.assertEqual(failures, [])
+            for adapter, (device, key) in identities.items():
+                with self.subTest(adapter=adapter):
+                    info = restored / adapter / device / "info"
+                    self.assertIn(key, info.read_text(encoding="utf-8"))
 
     def test_manifest_detects_snapshot_tampering(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

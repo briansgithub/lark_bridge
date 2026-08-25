@@ -119,7 +119,15 @@ install -m 0755 "$SOURCE_ROOT/pi/powerloss/lark_state.py" "$ROOT_MOUNT/usr/local
 install -m 0755 "$SOURCE_ROOT/pi/powerloss/storage_guard.py" "$ROOT_MOUNT/usr/local/lib/rpi-lark-bridge/powerloss/storage_guard.py"
 install -m 0755 "$SOURCE_ROOT/pi/powerloss/cut_activity.py" "$ROOT_MOUNT/usr/local/lib/rpi-lark-bridge/powerloss/cut_activity.py"
 install -m 0755 "$SOURCE_ROOT/pi/powerloss/powerloss_verify.py" "$ROOT_MOUNT/usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py"
+install -m 0755 "$SOURCE_ROOT/pi/bridged/controller_roles.py" \
+    "$ROOT_MOUNT/home/admin/rpi-lark-bridge/pi/bridged/controller_roles.py"
+install -m 0755 "$SOURCE_ROOT/pi/bridged/btadapters.py" \
+    "$ROOT_MOUNT/home/admin/rpi-lark-bridge/pi/bridged/btadapters.py"
 install -m 0644 "$SOURCE_ROOT/pi/systemd/system/bridge-storage-guard.service" "$ROOT_MOUNT/etc/systemd/system/bridge-storage-guard.service"
+install -m 0644 "$SOURCE_ROOT/pi/systemd/system/bridge-btwatchdog@.service" \
+    "$ROOT_MOUNT/etc/systemd/system/bridge-btwatchdog@.service"
+install -m 0644 "$SOURCE_ROOT/pi/systemd/system/bridge-btwatchdog.service" \
+    "$ROOT_MOUNT/etc/systemd/system/bridge-btwatchdog.service"
 install -m 0644 "$SOURCE_ROOT/pi/systemd/system/bridge-pairing-seal.service" "$ROOT_MOUNT/etc/systemd/system/bridge-pairing-seal.service"
 install -m 0644 "$SOURCE_ROOT/pi/systemd/system/bridge-pairing-seal.timer" "$ROOT_MOUNT/etc/systemd/system/bridge-pairing-seal.timer"
 install -d -o 1000 -g 1000 -m 0755 \
@@ -169,6 +177,11 @@ ln -s /var/lib/larkbridge-persist/random-seed "$ROOT_MOUNT/var/lib/systemd/rando
 install -d -m 0755 "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants"
 ln -sfn ../bridge-storage-guard.service \
     "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants/bridge-storage-guard.service"
+rm -f -- "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants/bridge-btwatchdog.service"
+for role in call output; do
+    ln -sfn ../bridge-btwatchdog@.service \
+        "$ROOT_MOUNT/etc/systemd/system/multi-user.target.wants/bridge-btwatchdog@$role.service"
+done
 install -d -m 0755 "$ROOT_MOUNT/etc/systemd/system/timers.target.wants"
 ln -sfn ../bridge-pairing-seal.timer \
     "$ROOT_MOUNT/etc/systemd/system/timers.target.wants/bridge-pairing-seal.timer"
@@ -194,6 +207,7 @@ mount -t proc proc "$ROOT_MOUNT/proc"
 mount -t sysfs sysfs "$ROOT_MOUNT/sys"
 chroot "$ROOT_MOUNT" /usr/bin/systemd-analyze verify \
     bridge-storage-guard.service bridge-pairing-seal.service bridge-pairing-seal.timer \
+    bridge-btwatchdog@.service bridge-btwatchdog.service \
     bluetooth.service user@1000.service systemd-journal-flush.service \
     systemd-random-seed.service
 chroot "$ROOT_MOUNT" /usr/sbin/update-initramfs -u -k all

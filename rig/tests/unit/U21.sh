@@ -11,15 +11,19 @@ require_pi
 DIR="$(artifact_dir U21-a2dp)"
 MAC="$(inv bt_receiver_mac '')"
 [ -n "$MAC" ] || die "bt_receiver_mac not set in rig/inventory.toml"
+OUTPUT_HCI="$(pi 'cd ~/rpi-lark-bridge && python3 pi/bridged/controller_roles.py --policy final-usb resolve output --field hci')"
+DEV_PATH="/org/bluez/$OUTPUT_HCI/dev_${MAC//:/_}"
 
-pi "bluetoothctl info $MAC" > "$DIR/device.txt" 2>&1 || true
+pi "busctl --system introspect org.bluez '$DEV_PATH' org.bluez.Device1" \
+  > "$DIR/device.txt" 2>&1 \
+  || need_hardware "A2DP receiver $MAC on strict output role $OUTPUT_HCI" \
+       "Power it on and put it in pairing mode."
 
-grep -q "Device $MAC" "$DIR/device.txt" 2>/dev/null || grep -qi "Name:" "$DIR/device.txt" \
-  || need_hardware "A2DP receiver $MAC" "Power it on and put it in pairing mode."
-
-NAME="$(awk -F': ' '/Name:/{print $2; exit}' "$DIR/device.txt" | tr -d '\r')"
+NAME="$(pi "busctl --system get-property org.bluez '$DEV_PATH' org.bluez.Device1 Name" \
+  | sed -E 's/^s \"(.*)\"$/\1/')"
 for k in Paired Trusted Connected; do
-  v="$(awk -F': ' -v K="$k:" '$0 ~ K {print $2; exit}' "$DIR/device.txt" | tr -d '\r')"
+  v="$(pi "busctl --system get-property org.bluez '$DEV_PATH' org.bluez.Device1 '$k'" \
+    | awk '{print ($2 == "true" ? "yes" : "no")}' | tr -d '\r')"
   printf '  %-10s: %s\n' "$k" "$v" >&2
   eval "V_$k=\$v"
 done
@@ -41,7 +45,7 @@ else
 fi
 
 # Transport UUID confirms which side we are. 0000110a means WE are the A2DP source.
-TUUID="$(pi "busctl --system get-property org.bluez /org/bluez/hci0/dev_${MAC//:/_}/sep1/fd0 org.bluez.MediaTransport1 UUID 2>/dev/null" || true)"
+TUUID="$(pi "for path in \$(busctl --system tree org.bluez 2>/dev/null | grep -oE '$DEV_PATH(/sep[0-9]+)?/fd[0-9]+' | sort -u); do busctl --system get-property org.bluez \"\$path\" org.bluez.MediaTransport1 UUID 2>/dev/null; break; done" || true)"
 printf '  transport : %s\n' "$TUUID" >&2
 case "$TUUID" in
   *110a*) ok "transport UUID 0000110a — we are the A2DP SOURCE, correct" ;;

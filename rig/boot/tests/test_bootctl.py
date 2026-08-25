@@ -19,6 +19,19 @@ SPEC.loader.exec_module(bootctl)
 
 
 class BootCtlTests(unittest.TestCase):
+    def test_official_probe_requires_both_strict_usb_controller_roles(self):
+        self.assertIn("bridge-btwatchdog@call.service", bootctl.SYSTEM_UNITS)
+        self.assertIn("bridge-btwatchdog@output.service", bootctl.SYSTEM_UNITS)
+        self.assertNotIn("bridge-btwatchdog.service", bootctl.SYSTEM_UNITS)
+        self.assertIn("ReadinessPolicy.FINAL_USB", bootctl.REMOTE_PROBE)
+        self.assertIn("controller_roles.controllers_status", bootctl.REMOTE_PROBE)
+        self.assertIn('"transitional_uart_call"', bootctl.REMOTE_PROBE)
+        self.assertNotIn('run(["bluetoothctl", "show"])', bootctl.REMOTE_PROBE)
+        probe = bootctl.REMOTE_PROBE.replace(
+            "__SYSTEM_UNITS__", repr(bootctl.SYSTEM_UNITS)
+        ).replace("__USER_UNITS__", repr(bootctl.USER_UNITS))
+        compile(probe, "<remote-boot-probe>", "exec")
+
     def test_percentile_interpolates(self):
         self.assertEqual(bootctl.percentile([1, 2, 3], 0.5), 2)
         self.assertEqual(bootctl.percentile([0, 10], 0.95), 9.5)

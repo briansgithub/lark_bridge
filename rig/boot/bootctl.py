@@ -28,7 +28,8 @@ DEFAULT_ARTIFACTS = REPO / "artifacts"
 SYSTEM_UNITS = (
     "bluetooth.service",
     "bridge-btfw.service",
-    "bridge-btwatchdog.service",
+    "bridge-btwatchdog@call.service",
+    "bridge-btwatchdog@output.service",
     "bridge-tuning.service",
 )
 USER_UNITS = ("pipewire.service", "wireplumber.service", "bridge-supervisor.service")
@@ -45,7 +46,10 @@ HEALTH_PATTERNS = {
 }
 
 REMOTE_PROBE = r"""
-import json, os, pathlib, subprocess
+import json, os, pathlib, subprocess, sys
+
+sys.path.insert(0, "/home/admin/rpi-lark-bridge/pi/bridged")
+import btadapters, controller_roles
 
 def run(args, timeout=8):
     env = os.environ.copy()
@@ -66,16 +70,33 @@ try:
 except (OSError, json.JSONDecodeError) as exc:
     bridge = {"error": str(exc)}
 
-bt_list = run(["bluetoothctl", "list"])
-bt_show = run(["bluetoothctl", "show"])
+try:
+    roles = controller_roles.load_controller_roles(
+        pathlib.Path("/home/admin/rpi-lark-bridge/config/bridge.toml")
+    )
+    controllers = controller_roles.controllers_status(
+        roles,
+        btadapters.adapters(),
+        policy=controller_roles.ReadinessPolicy.FINAL_USB,
+    )
+except (OSError, ValueError) as exc:
+    controllers = {"error": str(exc), "policy": "final-usb", "ready": False}
 failed_units = run(["systemctl", "--failed", "--no-legend", "--plain"])
 system = unit_states("system", __SYSTEM_UNITS__)
 user = unit_states("user", __USER_UNITS__)
 failures = []
 failures += [f"{name}={state or 'unknown'}" for name, state in system.items() if state != "active"]
 failures += [f"user:{name}={state or 'unknown'}" for name, state in user.items() if state != "active"]
-if not bt_list["stdout"] or "Powered: yes" not in bt_show["stdout"]:
-    failures.append("Bluetooth adapter is not registered and powered")
+if controllers.get("policy") != "final-usb":
+    failures.append("controller readiness did not use final-usb policy")
+if controllers.get("transitional_uart_call"):
+    failures.append("controller readiness still declares a transitional UART call role")
+if controllers.get("error"):
+    failures.append(f"controller configuration is invalid: {controllers['error']}")
+for role in ("call", "output"):
+    observed = controllers.get(role) or {}
+    if not observed.get("ready"):
+        failures.append(f"{role} controller is not final-ready: {observed.get('error') or 'unresolved'}")
 if failed_units["stdout"]:
     failures.append("failed systemd units are present")
 if bridge.get("error"):
@@ -86,6 +107,15 @@ elif not (bridge.get("endpoints") or {}).get("lark"):
     failures.append("Lark endpoint is absent")
 elif not (bridge.get("endpoints") or {}).get("wired_output"):
     failures.append("configured output is absent")
+published = bridge.get("controllers") or {}
+if not published.get("ready") or published.get("transitional_uart_call"):
+    failures.append("bridge controller diagnostics are absent, transitional, or not ready")
+for role in ("call", "output"):
+    actual = published.get(role) or {}
+    expected = controllers.get(role) or {}
+    for field in ("configured_address", "observed_address", "observed_usb_id", "hci"):
+        if actual.get(field) != expected.get(field):
+            failures.append(f"bridge {role} controller {field} is stale or mismatched")
 if (bridge.get("graph") or {}).get("missing_links"):
     failures.append("bridge graph has missing links")
 if (bridge.get("graph") or {}).get("unexpected_links"):
@@ -102,7 +132,7 @@ print(json.dumps({
     "uptime_s": float(pathlib.Path("/proc/uptime").read_text().split()[0]),
     "system_units": system,
     "user_units": user,
-    "bluetooth": {"list": bt_list, "show": bt_show},
+    "controllers": controllers,
     "failed_units": failed_units,
     "bridge": bridge,
     "power": power,
@@ -133,6 +163,10 @@ def digest(path):
 files = [
     "/etc/systemd/system/bridge-tuning.service",
     "/etc/systemd/system/bridge-btfw.service",
+    "/etc/systemd/system/bridge-btwatchdog@.service",
+    "/home/admin/rpi-lark-bridge/pi/bridged/controller_roles.py",
+    "/home/admin/rpi-lark-bridge/pi/bridged/btadapters.py",
+    "/home/admin/rpi-lark-bridge/config/bridge.toml",
     "/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh",
     "/usr/local/lib/rpi-lark-bridge/boot-path/netplan",
     "/etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf",
