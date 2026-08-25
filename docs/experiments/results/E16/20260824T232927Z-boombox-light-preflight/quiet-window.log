@@ -1,0 +1,47 @@
+SNAPSHOT
+2026-08-24T19:29:39,041727574-04:00
+{"state":"ACTIVE","generation":11,"call":{"hfp_nodes_present":true},"aec":{"enabled":true,"method":"webrtc","rate":48000,"channels":1,"node_latency_frames":1920,"play_delay_frames":null,"verified":true,"module_backend":"native-pw-cli","owner_pid":103241},"output":{"desired":"a2dp:C9:5C:FD:6E:28:46","chosen":"a2dp:C9:5C:FD:6E:28:46","node":"bluez_output.C9_5C_FD_6E_28_46.1","present":true,"connected":true,"adapter":"hci1"}}
+CONNECTIONS
+5C:33:7B:CB:BF:C5 type BR/EDR
+C9:5C:FD:6E:28:46 type BR/EDR
+KERNEL_QUIET_WINDOW
+Aug 24 19:26:58.413936 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:26:58.414166 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:26:58.414268 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:26:58.414338 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:26:58.414407 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:26:58.414470 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:26:58.414572 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:28:35.309907 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:28:51.373929 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:28:53.389940 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:29:08.685959 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:29:24.749970 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:29:35.953929 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:35.954149 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:35.954220 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.273924 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.274134 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.425920 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.426163 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.426311 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.725932 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.726130 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+WATCHDOG_QUIET_WINDOW
+Aug 24 19:24:01.033839 larkbridge python3[49410]: INFO phone reconnected on its own
+Aug 24 19:28:34.287405 larkbridge python3[49410]: WARNING controller did not answer (1/2)
+Aug 24 19:28:50.371223 larkbridge python3[49410]: WARNING controller did not answer (2/2)
+Aug 24 19:28:50.450223 larkbridge python3[49410]: WARNING running bt-reset.sh against hci0 (B8:27:EB:43:8D:51)
+Aug 24 19:28:51.578093 larkbridge python3[49410]: INFO   [bt-reset] checking controller
+Aug 24 19:28:51.579410 larkbridge python3[49410]: INFO   [bt-reset] controller is responding — nothing to do
+Aug 24 19:28:51.579410 larkbridge python3[49410]: WARNING bt-reset.sh did NOT report recovery
+Aug 24 19:29:07.662936 larkbridge python3[49410]: WARNING controller did not answer (1/2)
+Aug 24 19:29:23.747005 larkbridge python3[49410]: WARNING controller did not answer (2/2)
+Aug 24 19:29:23.748306 larkbridge python3[49410]: WARNING wedged, but only 32s since last recovery (backoff 240s) — waiting
+UNITS
+active
+active
+active
+active
+active
+active

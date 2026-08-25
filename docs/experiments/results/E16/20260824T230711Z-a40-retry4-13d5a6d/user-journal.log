@@ -1,0 +1,14 @@
+Aug 24 19:07:54.640314 larkbridge python3[92822]: 2026-08-24 19:07:54,639 INFO phone output control disconnected: [Errno 104] Connection reset by peer
+Aug 24 19:08:00.578582 larkbridge python3[92822]: 2026-08-24 19:08:00,578 INFO phone output control connected on RFCOMM channel 13
+Aug 24 19:09:26.930979 larkbridge sudo[94112]:    admin : PWD=/home/admin ; USER=root ; COMMAND=/usr/bin/busctl --system --json=short monitor org.bluez
+Aug 24 19:09:26.935467 larkbridge sudo[94112]: pam_unix(sudo:session): session opened for user root(uid=0) by admin(uid=1000)
+Aug 24 19:09:41.028745 larkbridge sudo[94112]: pam_unix(sudo:session): session closed for user root
+Aug 24 19:09:44.187914 larkbridge sudo[94247]:    admin : PWD=/home/admin ; USER=root ; COMMAND=/usr/bin/bluetoothctl --agent NoInputNoOutput
+Aug 24 19:09:44.189405 larkbridge sudo[94247]: pam_unix(sudo:session): session opened for user root(uid=0) by admin(uid=1000)
+Aug 24 19:09:46.139573 larkbridge sudo[94247]: pam_unix(sudo:session): session closed for user root
+Aug 24 19:09:47.395557 larkbridge sudo[94290]:    admin : PWD=/home/admin ; USER=root ; COMMAND=/usr/bin/python3 /usr/local/lib/rpi-lark-bridge/powerloss/lark_state.py pairing-seal --source /var/lib/bluetooth
+Aug 24 19:09:47.397209 larkbridge sudo[94290]: pam_unix(sudo:session): session opened for user root(uid=0) by admin(uid=1000)
+Aug 24 19:09:48.801152 larkbridge sudo[94290]: pam_unix(sudo:session): session closed for user root
+Aug 24 19:09:48.849202 larkbridge sudo[94298]:    admin : PWD=/home/admin ; USER=root ; COMMAND=/usr/bin/python3 /usr/local/lib/rpi-lark-bridge/powerloss/lark_state.py config-write --source /run/user/1000/.bridge-startup-output-6lp81rdc.toml
+Aug 24 19:09:48.850797 larkbridge sudo[94298]: pam_unix(sudo:session): session opened for user root(uid=0) by admin(uid=1000)
+Aug 24 19:09:49.406417 larkbridge sudo[94298]: pam_unix(sudo:session): session closed for user root

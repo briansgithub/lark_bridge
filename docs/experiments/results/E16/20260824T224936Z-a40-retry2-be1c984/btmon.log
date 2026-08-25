@@ -1,0 +1,1438 @@
+Bluetooth monitor ver 5.82
+btmon[87827]: = Note: Linux version 6.18.34+rpt-..   2026-08-24 18:49:38.263924
+btmon[87827]: = Note: Bluetooth subsystem versio..   2026-08-24 18:49:38.263935
+= New Index: A0:AD:9F:7.. (Primary,USB,hci1)  [hci1] 2026-08-24 18:49:38.263940
+= Open Index: A0:AD:9F:73:6C:24               [hci1] 2026-08-24 18:49:38.263943
+= Index Info: A0:AD:9F:73:6C:24               [hci1] 2026-08-24 18:49:38.263945
+= New Index: B8:27:EB:.. (Primary,UART,hci0)  [hci0] 2026-08-24 18:49:38.263948
+= Open Index: B8:27:EB:43:8D:51               [hci0] 2026-08-24 18:49:38.263949
+= Index Info: B8:27.. (Broadcom Corporation)  [hci0] 2026-08-24 18:49:38.263950
+bluetoothctl[57097]: @ MGMT Open: bluet..   {0x0002} 2026-08-24 18:49:38.263956
+bluetoothd[49821]: @ MGMT Open: bluetoo..   {0x0001} 2026-08-24 18:49:38.263979
+hciconfig[87913]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:49:41.006488
+hciconfig[87913]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:49:41.006554
+hciconfig[87913]: < HCI Command: Read...   #1 [hci0] 2026-08-24 18:49:41.006651
+> HCI Event: Command Com.. (0x0e) plen 12  #2 [hci0] 2026-08-24 18:49:41.007234
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[87913]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:49:41.007486
+hciconfig[87913]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:49:41.007539
+hciconfig[88025]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:49:56.117160
+hciconfig[88025]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:49:56.117228
+hciconfig[88025]: < HCI Command: Read...   #3 [hci0] 2026-08-24 18:49:56.117294
+> HCI Event: Command Com.. (0x0e) plen 12  #4 [hci0] 2026-08-24 18:49:56.117956
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[88025]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:49:56.118233
+hciconfig[88025]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:49:56.118321
+> ACL Data RX: Handle.. flags 0x02 dlen 8  #5 [hci0] 2026-08-24 18:49:58.839958
+      Channel: 66 len 4 [PSM 0 mode Basic (0x00)] {chan 65535}
+        59 53 01 38                                      YS.8            
+< ACL Data TX: Handle.. flags 0x00 dlen 8  #6 [hci0] 2026-08-24 18:49:58.840078
+      Channel: 74 len 4 [PSM 0 mode Basic (0x00)] {chan 65535}
+        59 73 01 12                                      Ys..            
+> HCI Event: Number of Co.. (0x13) plen 5  #7 [hci0] 2026-08-24 18:49:59.057781
+        Num handles: 1
+        Handle: 12
+        Count: 1
+< HCI Command: Cr.. (0x01|0x0005) plen 13  #1 [hci1] 2026-08-24 18:50:03.845982
+        Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Packet type: 0xcc18
+          DM1 may be used
+          DH1 may be used
+          DM3 may be used
+          DH3 may be used
+          DM5 may be used
+          DH5 may be used
+        Page scan repetition mode: R2 (0x02)
+        Page scan mode: Mandatory (0x00)
+        Clock offset: 0x0000
+        Role switch: Allow peripheral (0x01)
+> HCI Event: Command Status (0x0f) plen 4  #2 [hci1] 2026-08-24 18:50:03.850501
+      Create Connection (0x01|0x0005) ncmd 2
+        Status: Success (0x00)
+> HCI Event: Mode Change (0x14) plen 6     #8 [hci0] 2026-08-24 18:50:05.852309
+        Status: Success (0x00)
+        Handle: 12
+        Mode: Sniff (0x02)
+        Interval: 480.000 msec (0x0300)
+> HCI Event: Role Change (0x12) plen 8     #3 [hci1] 2026-08-24 18:50:06.813520
+        Status: Success (0x00)
+        Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Role: Peripheral (0x01)
+> HCI Event: Connect Com.. (0x03) plen 11  #4 [hci1] 2026-08-24 18:50:06.816506
+        Status: Success (0x00)
+        Handle: 3
+        Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Link type: ACL (0x01)
+        Encryption: Disabled (0x00)
+< HCI Command: Rea.. (0x01|0x001b) plen 2  #5 [hci1] 2026-08-24 18:50:06.816871
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+btmon[87827]: @ RAW Open: btmon             {0x0003} 2026-08-24 18:50:06.817406
+btmon[87827]: @ RAW Close: btmon            {0x0003} 2026-08-24 18:50:06.817426
+> HCI Event: Command Status (0x0f) plen 4  #6 [hci1] 2026-08-24 18:50:06.821481
+      Read Remote Supported Features (0x01|0x001b) ncmd 2
+        Status: Success (0x00)
+> HCI Event: Read Remote.. (0x0b) plen 11  #7 [hci1] 2026-08-24 18:50:06.823486
+        Status: Success (0x00)
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Features: 0xff 0xfe 0x8f 0xfe 0xd8 0x3f 0x5b 0x87
+          3 slot packets
+          5 slot packets
+          Encryption
+          Slot offset
+          Timing accuracy
+          Role switch
+          Hold mode
+          Sniff mode
+          Power control requests
+          Channel quality driven data rate (CQDDR)
+          SCO link
+          HV2 packets
+          HV3 packets
+          u-law log synchronous data
+          A-law log synchronous data
+          CVSD synchronous data
+          Paging parameter negotiation
+          Power control
+          Transparent synchronous data
+          Broadcast Encryption
+          Enhanced Data Rate ACL 2 Mbps mode
+          Enhanced Data Rate ACL 3 Mbps mode
+          Enhanced inquiry scan
+          Interlaced inquiry scan
+          Interlaced page scan
+          RSSI with inquiry results
+          Extended SCO link (EV3 packets)
+          AFH capable peripheral
+          AFH classification peripheral
+          LE Supported (Controller)
+          3-slot Enhanced Data Rate ACL packets
+          5-slot Enhanced Data Rate ACL packets
+          Sniff subrating
+          Pause encryption
+          AFH capable central
+          AFH classification central
+          Enhanced Data Rate eSCO 2 Mbps mode
+          Extended Inquiry Response
+          Simultaneous LE and BR/EDR (Controller)
+          Secure Simple Pairing
+          Encapsulated PDU
+          Non-flushable Packet Boundary Flag
+          Link Supervision Timeout Changed Event
+          Inquiry TX Power Level
+          Enhanced Power Control
+          Extended features
+< HCI Command: Rea.. (0x01|0x001c) plen 3  #8 [hci1] 2026-08-24 18:50:06.823539
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Page: 1
+> HCI Event: Command Status (0x0f) plen 4  #9 [hci1] 2026-08-24 18:50:06.826516
+      Read Remote Extended Features (0x01|0x001c) ncmd 2
+        Status: Success (0x00)
+> HCI Event: Read Remot.. (0x23) plen 13  #10 [hci1] 2026-08-24 18:50:06.828503
+        Status: Success (0x00)
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Page: 1/2
+        Features: 0x0b 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+          Secure Simple Pairing (Host Support)
+          LE Supported (Host)
+          Secure Connections (Host Support)
+< HCI Command: R.. (0x01|0x0019) plen 10  #11 [hci1] 2026-08-24 18:50:06.828646
+        Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Page scan repetition mode: R2 (0x02)
+        Page scan mode: Mandatory (0x00)
+        Clock offset: 0x0000
+< ACL Data TX: Hand.. flags 0x00 dlen 10  #12 [hci1] 2026-08-24 18:50:06.828676
+      L2CAP: Information Request (0x0a) ident 1 len 2
+        Type: Extended features supported (0x0002)
+> HCI Event: Command Sta.. (0x0f) plen 4  #13 [hci1] 2026-08-24 18:50:06.831487
+      Remote Name Request (0x01|0x0019) ncmd 2
+        Status: Success (0x00)
+> HCI Event: Number of C.. (0x13) plen 5  #14 [hci1] 2026-08-24 18:50:06.836501
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #12: len 10 (11 Kb/s)
+        Latency: 7 msec (7-7 msec ~7 msec)
+> HCI Event: Max Slots C.. (0x1b) plen 3  #15 [hci1] 2026-08-24 18:50:06.838481
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Max slots: 5
+> HCI Event: Max Slots C.. (0x1b) plen 3  #16 [hci1] 2026-08-24 18:50:06.843480
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Max slots: 5
+> HCI Event: Remote Na.. (0x07) plen 255  #17 [hci1] 2026-08-24 18:50:06.849477
+        Status: Success (0x00)
+        Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Name: Pixel 7a
+@ MGMT Event: De.. (0x000b) plen 23  {0x0001} [hci1] 2026-08-24 18:50:06.849560
+        BR/EDR Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Flags: 0x00000008
+          Connection Locally Initiated
+        Data length: 10
+        Name (complete): Pixel 7a
+> ACL Data RX: Hand.. flags 0x02 dlen 10  #18 [hci1] 2026-08-24 18:50:06.853986
+      L2CAP: Information Request (0x0a) ident 2 len 2
+        Type: Extended features supported (0x0002)
+< ACL Data TX: Hand.. flags 0x00 dlen 16  #19 [hci1] 2026-08-24 18:50:06.854115
+      L2CAP: Information Response (0x0b) ident 2 len 8
+        Type: Extended features supported (0x0002)
+        Result: Success (0x0000)
+        Features: 0x000002b8
+          Enhanced Retransmission Mode
+          Streaming Mode
+          FCS Option
+          Fixed Channels
+          Unicast Connectionless Data Reception
+> HCI Event: Number of C.. (0x13) plen 5  #20 [hci1] 2026-08-24 18:50:06.857480
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #19: len 16 (42 Kb/s)
+        Latency: 3 msec (3-7 msec ~5 msec)
+> ACL Data RX: Hand.. flags 0x02 dlen 16  #21 [hci1] 2026-08-24 18:50:06.861916
+      L2CAP: Information Response (0x0b) ident 1 len 8
+        Type: Extended features supported (0x0002)
+        Result: Success (0x0000)
+        Features: 0x000000b8
+          Enhanced Retransmission Mode
+          Streaming Mode
+          FCS Option
+          Fixed Channels
+< ACL Data TX: Hand.. flags 0x00 dlen 10  #22 [hci1] 2026-08-24 18:50:06.861984
+      L2CAP: Information Request (0x0a) ident 2 len 2
+        Type: Fixed channels supported (0x0003)
+> HCI Event: Number of C.. (0x13) plen 5  #23 [hci1] 2026-08-24 18:50:06.866472
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #22: len 10 (20 Kb/s)
+        Latency: 4 msec (3-7 msec ~5 msec)
+> HCI Event: Link Superv.. (0x38) plen 4  #24 [hci1] 2026-08-24 18:50:06.869466
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Timeout: 5000.000 msec (0x1f40)
+> ACL Data RX: Hand.. flags 0x02 dlen 10  #25 [hci1] 2026-08-24 18:50:06.873893
+      L2CAP: Information Request (0x0a) ident 3 len 2
+        Type: Fixed channels supported (0x0003)
+> ACL Data RX: Hand.. flags 0x02 dlen 20  #26 [hci1] 2026-08-24 18:50:06.873901
+      L2CAP: Information Response (0x0b) ident 2 len 12
+        Type: Fixed channels supported (0x0003)
+        Result: Success (0x0000)
+        Channels: 0x0000000000000082
+          L2CAP Signaling (BR/EDR)
+          Security Manager (BR/EDR)
+< ACL Data TX: Hand.. flags 0x00 dlen 20  #27 [hci1] 2026-08-24 18:50:06.873966
+      L2CAP: Information Response (0x0b) ident 3 len 12
+        Type: Fixed channels supported (0x0003)
+        Result: Success (0x0000)
+        Channels: 0x0000000000000086
+          L2CAP Signaling (BR/EDR)
+          Connectionless reception
+          Security Manager (BR/EDR)
+< ACL Data TX: Hand.. flags 0x00 dlen 12  #28 [hci1] 2026-08-24 18:50:06.873980
+      L2CAP: Connection Request (0x02) ident 3 len 4
+        PSM: 1 (0x0001)
+        Source CID: 64
+> HCI Event: Number of C.. (0x13) plen 5  #29 [hci1] 2026-08-24 18:50:06.877470
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #27: len 20 (53 Kb/s)
+        Latency: 3 msec (3-7 msec ~4 msec)
+> HCI Event: Number of C.. (0x13) plen 5  #30 [hci1] 2026-08-24 18:50:06.879473
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #28: len 12 (19 Kb/s)
+        Latency: 5 msec (3-7 msec ~4 msec)
+> ACL Data RX: Hand.. flags 0x02 dlen 16  #31 [hci1] 2026-08-24 18:50:06.897878
+      L2CAP: Connection Response (0x03) ident 3 len 8
+        Destination CID: 101
+        Source CID: 64
+        Result: Connection successful (0x0000)
+        Status: No further information available (0x0000)
+> ACL Data RX: Hand.. flags 0x02 dlen 16  #32 [hci1] 2026-08-24 18:50:06.897888
+      L2CAP: Configure Request (0x04) ident 4 len 8
+        Destination CID: 64
+        Flags: 0x0000
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 1024
+< ACL Data TX: Hand.. flags 0x00 dlen 23  #33 [hci1] 2026-08-24 18:50:06.897961
+      L2CAP: Configure Request (0x04) ident 4 len 15
+        Destination CID: 101
+        Flags: 0x0000
+        Option: Retransmission and Flow Control (0x04) [mandatory]
+          Mode: Basic (0x00)
+          TX window size: 0
+          Max transmit: 0
+          Retransmission timeout: 0
+          Monitor timeout: 0
+          Maximum PDU size: 0
+< ACL Data TX: Hand.. flags 0x00 dlen 18  #34 [hci1] 2026-08-24 18:50:06.897979
+      L2CAP: Configure Response (0x05) ident 4 len 10
+        Source CID: 101
+        Flags: 0x0000
+        Result: Success (0x0000)
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 1024
+> HCI Event: Number of C.. (0x13) plen 5  #35 [hci1] 2026-08-24 18:50:06.903477
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #33: len 23 (36 Kb/s)
+        Latency: 5 msec (3-7 msec ~5 msec)
+> HCI Event: Number of C.. (0x13) plen 5  #36 [hci1] 2026-08-24 18:50:06.905473
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #34: len 18 (20 Kb/s)
+        Latency: 7 msec (3-7 msec ~6 msec)
+> ACL Data RX: Hand.. flags 0x02 dlen 14  #37 [hci1] 2026-08-24 18:50:06.913910
+      L2CAP: Configure Response (0x05) ident 4 len 6
+        Source CID: 64
+        Flags: 0x0000
+        Result: Success (0x0000)
+sdptool[88079]: < ACL Data TX: Handle 3   #38 [hci1] 2026-08-24 18:50:06.914181
+      Channel: 101 len 20 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Request (0x06) tid 0 len 15
+        Search pattern: [len 5]
+          Sequence (6) with 3 bytes [8 extra bits] len 5
+            UUID (3) with 2 bytes [0 extra bits] len 3
+              Public Browse Root (0x1002)
+        Max record count: 65535
+        Attribute list: [len 7]
+          Sequence (6) with 5 bytes [8 extra bits] len 7
+            Unsigned Integer (1) with 4 bytes [0 extra bits] len 5
+              0x0000ffff
+        Continuation state: 0
+> HCI Event: Number of C.. (0x13) plen 5  #39 [hci1] 2026-08-24 18:50:06.917482
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #38: len 24 (64 Kb/s)
+        Latency: 3 msec (3-7 msec ~4 msec)
+        Channel: 101 [PSM 1 mode Basic (0x00)] {chan 0}
+        Channel Latency: 3 msec (3-3 msec ~3 msec)
+> ACL Data RX: Han.. flags 0x02 dlen 676  #40 [hci1] 2026-08-24 18:50:06.941892
+      Channel: 64 len 672 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Response (0x07) tid 0 len 667
+        Attribute bytes: 662
+        Continuation state: 2
+        02 96                                            ..              
+sdptool[88079]: < ACL Data TX: Handle 3   #41 [hci1] 2026-08-24 18:50:06.942055
+      Channel: 101 len 22 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Request (0x06) tid 1 len 17
+        Search pattern: [len 5]
+          Sequence (6) with 3 bytes [8 extra bits] len 5
+            UUID (3) with 2 bytes [0 extra bits] len 3
+              Public Browse Root (0x1002)
+        Max record count: 65535
+        Attribute list: [len 7]
+          Sequence (6) with 5 bytes [8 extra bits] len 7
+            Unsigned Integer (1) with 4 bytes [0 extra bits] len 5
+              0x0000ffff
+        Continuation state: 2
+        02 96                                            ..              
+> HCI Event: Number of C.. (0x13) plen 5  #42 [hci1] 2026-08-24 18:50:06.960473
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #41: len 26 (11 Kb/s)
+        Latency: 18 msec (3-18 msec ~11 msec)
+        Channel: 101 [PSM 1 mode Basic (0x00)] {chan 0}
+        Channel Latency: 18 msec (3-18 msec ~10 msec)
+> ACL Data RX: Han.. flags 0x02 dlen 676  #43 [hci1] 2026-08-24 18:50:06.981886
+      Channel: 64 len 672 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Response (0x07) tid 1 len 667
+        Attribute bytes: 662
+        Continuation state: 2
+        05 2c                                            .,              
+sdptool[88079]: < ACL Data TX: Handle 3   #44 [hci1] 2026-08-24 18:50:06.982035
+      Channel: 101 len 22 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Request (0x06) tid 2 len 17
+        Search pattern: [len 5]
+          Sequence (6) with 3 bytes [8 extra bits] len 5
+            UUID (3) with 2 bytes [0 extra bits] len 3
+              Public Browse Root (0x1002)
+        Max record count: 65535
+        Attribute list: [len 7]
+          Sequence (6) with 5 bytes [8 extra bits] len 7
+            Unsigned Integer (1) with 4 bytes [0 extra bits] len 5
+              0x0000ffff
+        Continuation state: 2
+        05 2c                                            .,              
+> HCI Event: Number of C.. (0x13) plen 5  #45 [hci1] 2026-08-24 18:50:07.000479
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #44: len 26 (11 Kb/s)
+        Latency: 18 msec (3-18 msec ~15 msec)
+        Channel: 101 [PSM 1 mode Basic (0x00)] {chan 0}
+        Channel Latency: 18 msec (3-18 msec ~14 msec)
+> ACL Data RX: Han.. flags 0x02 dlen 309  #46 [hci1] 2026-08-24 18:50:07.017880
+      Channel: 64 len 305 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Response (0x07) tid 2 len 300
+        Attribute bytes: 297
+        Continuation state: 0
+        Combined attribute bytes: 1621
+          Attribute list: [len 48] {position 0}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010000
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Generic Attribute Profile (0x1801)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0001
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0009
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+          Attribute list: [len 48] {position 1}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010001
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Generic Access Profile (0x1800)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0014
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001a
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+          Attribute list: [len 91] {position 2}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010003
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Audio Source (0x110a)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0019
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  AVDTP (0x0019)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0103
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Advanced Audio Distribution (0x110d)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0103
+            Attribute: Unknown (0x0100) [len 2]
+              Advanced Audio Source [len 22]
+            Attribute: Unknown (0x0311) [len 2]
+              0x0001
+          Attribute list: [len 117] {position 3}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010004
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                A/V Remote Control Target (0x110c)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0017
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  AVCTP (0x0017)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0104
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  A/V Remote Control (0x110e)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0105
+            Attribute: Additional Protocol Descriptor List (0x000d) [len 2]
+              Sequence (6) with 16 bytes [8 extra bits] len 18
+                Sequence (6) with 6 bytes [8 extra bits] len 8
+                  UUID (3) with 2 bytes [0 extra bits] len 3
+                    L2CAP (0x0100)
+                  Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                    0x001b
+                Sequence (6) with 6 bytes [8 extra bits] len 8
+                  UUID (3) with 2 bytes [0 extra bits] len 3
+                    AVCTP (0x0017)
+                  Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                    0x0104
+            Attribute: Unknown (0x0100) [len 2]
+              AV Remote Control Target [len 25]
+            Attribute: Unknown (0x0311) [len 2]
+              0x00c1
+          Attribute list: [len 87] {position 4}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010005
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                A/V Remote Control (0x110e)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0017
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  AVCTP (0x0017)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0102
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  A/V Remote Control (0x110e)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0103
+            Attribute: Unknown (0x0100) [len 2]
+              AV Remote Control [len 18]
+            Attribute: Unknown (0x0311) [len 2]
+              0x0002
+          Attribute list: [len 78] {position 5}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010006
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Headset AG (0x1112)
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Generic Audio (0x1203)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x02
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Headset (0x1108)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0102
+            Attribute: Unknown (0x0100) [len 2]
+              Headset Gateway [len 16]
+          Attribute list: [len 91] {position 6}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010007
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Handsfree Audio Gateway (0x111f)
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Generic Audio (0x1203)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x03
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Handsfree (0x111e)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0106
+            Attribute: Unknown (0x0100) [len 2]
+              Handsfree Gateway [len 18]
+            Attribute: Unknown (0x0301) [len 2]
+              0x01
+            Attribute: Unknown (0x0311) [len 2]
+              0x012f
+          Attribute list: [len 48] {position 7}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010008
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Telephony and Media Audio (0x1855)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0082
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0084
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+          Attribute list: [len 143] {position 8}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010009
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                NAP (0x1116)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x000f
+              Sequence (6) with 14 bytes [8 extra bits] len 16
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  BNEP (0x000f)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0100
+                Sequence (6) with 6 bytes [8 extra bits] len 8
+                  Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                    0x0800
+                  Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                    0x0806
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Language Base Attribute ID List (0x0006) [len 2]
+              Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                0x656e
+              Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                0x006a
+              Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                0x0100
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  NAP (0x1116)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0100
+            Attribute: Unknown (0x0100) [len 2]
+              Android Network Access Point [len 29]
+            Attribute: Unknown (0x0101) [len 2]
+              NAP [len 4]
+            Attribute: Unknown (0x030a) [len 2]
+              0x0001
+            Attribute: Unknown (0x030b) [len 2]
+              0x0005
+            Attribute: Unknown (0x030c) [len 2]
+              0x001312d0
+          Attribute list: [len 122] {position 9}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000a
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                PANU (0x1115)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x000f
+              Sequence (6) with 14 bytes [8 extra bits] len 16
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  BNEP (0x000f)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0100
+                Sequence (6) with 6 bytes [8 extra bits] len 8
+                  Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                    0x0800
+                  Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                    0x0806
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Language Base Attribute ID List (0x0006) [len 2]
+              Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                0x656e
+              Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                0x006a
+              Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                0x0100
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  PANU (0x1115)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0100
+            Attribute: Unknown (0x0100) [len 2]
+              Android Network User [len 21]
+            Attribute: Unknown (0x0101) [len 2]
+              PANU [len 5]
+            Attribute: Unknown (0x030a) [len 2]
+              0x0001
+          Attribute list: [len 96] {position 10}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000b
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Message Access Server (0x1132)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x04
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX (0x0008)
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Message Access Profile (0x1134)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0104
+            Attribute: Unknown (0x0100) [len 2]
+              SMS/MMS [len 8]
+            Attribute: Unknown (0x0200) [len 2]
+              0x1001
+            Attribute: Unknown (0x0315) [len 2]
+              0x00
+            Attribute: Unknown (0x0316) [len 2]
+              0x0e
+            Attribute: Unknown (0x0317) [len 2]
+              0x000603ff
+          Attribute list: [len 112] {position 11}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000c
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Phonebook Access Server (0x112f)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x05
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX (0x0008)
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Phonebook Access (0x1130)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0102
+            Attribute: Unknown (0x0100) [len 2]
+              OBEX Phonebook Access Server [len 29]
+            Attribute: Unknown (0x0200) [len 2]
+              0x1003
+            Attribute: Unknown (0x0314) [len 2]
+              0x09
+            Attribute: Unknown (0x0317) [len 2]
+              0x0000021f
+          Attribute list: [len 73] {position 12}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000d
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                SIM Access (0x112d)
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Generic Telephony (0x1204)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x07
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  SIM Access (0x112d)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0102
+            Attribute: Unknown (0x0100) [len 2]
+              SIM Access [len 11]
+          Attribute list: [len 102] {position 13}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000e
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                OBEX Object Push (0x1105)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x06
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX (0x0008)
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX Object Push (0x1105)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0102
+            Attribute: Unknown (0x0100) [len 2]
+              OBEX Object Push [len 17]
+            Attribute: Unknown (0x0200) [len 2]
+              0x1005
+            Attribute: Unknown (0x0303) [len 2]
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x01
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x02
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x03
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x04
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0xff
+          Attribute list: [len 62] {position 14}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000f
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 16 bytes [0 extra bits] len 17
+                16bcfd00-253f-c348-e831-0db3e334d580
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0086
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0091
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+          Attribute list: [len 48] {position 15}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010010
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Unknown (0xfcf1)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0092
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0095
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+          Attribute list: [len 62] {position 16}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010011
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 16 bytes [0 extra bits] len 17
+                abbafc00-e56a-484c-b832-8b17cf6cbfe8
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0096
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x009f
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+          Attribute list: [len 48] {position 17}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010012
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Google (0xfef3)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x00a0
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x00a5
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+          Attribute list: [len 85] {position 18}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010013
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 16 bytes [0 extra bits] len 17
+                6e0e6e72-3f13-4f7e-9d3f-87b6f5a43c11
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x0c
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Unknown (0x0100) [len 2]
+              LarkBridge Output Control [len 25]
+< ACL Data TX: Hand.. flags 0x00 dlen 12  #47 [hci1] 2026-08-24 18:50:07.018653
+      L2CAP: Connection Request (0x02) ident 5 len 4
+        PSM: 1 (0x0001)
+        Source CID: 65
+> HCI Event: Number of C.. (0x13) plen 5  #48 [hci1] 2026-08-24 18:50:07.037479
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #47: len 12 (5 Kb/s)
+        Latency: 18 msec (3-18 msec ~16 msec)
+> ACL Data RX: Hand.. flags 0x02 dlen 16  #49 [hci1] 2026-08-24 18:50:07.049898
+      L2CAP: Connection Response (0x03) ident 5 len 8
+        Destination CID: 96
+        Source CID: 65
+        Result: Connection successful (0x0000)
+        Status: No further information available (0x0000)
+> ACL Data RX: Hand.. flags 0x02 dlen 16  #50 [hci1] 2026-08-24 18:50:07.049903
+      L2CAP: Configure Request (0x04) ident 5 len 8
+        Destination CID: 65
+        Flags: 0x0000
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 1024
+< ACL Data TX: Hand.. flags 0x00 dlen 23  #51 [hci1] 2026-08-24 18:50:07.049975
+      L2CAP: Configure Request (0x04) ident 6 len 15
+        Destination CID: 96
+        Flags: 0x0000
+        Option: Retransmission and Flow Control (0x04) [mandatory]
+          Mode: Basic (0x00)
+          TX window size: 0
+          Max transmit: 0
+          Retransmission timeout: 0
+          Monitor timeout: 0
+          Maximum PDU size: 0
+< ACL Data TX: Hand.. flags 0x00 dlen 18  #52 [hci1] 2026-08-24 18:50:07.049990
+      L2CAP: Configure Response (0x05) ident 5 len 10
+        Source CID: 96
+        Flags: 0x0000
+        Result: Success (0x0000)
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 1024
+> HCI Event: Number of C.. (0x13) plen 5  #53 [hci1] 2026-08-24 18:50:07.067473
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #51: len 23 (10 Kb/s)
+        Latency: 17 msec (3-18 msec ~17 msec)
+> HCI Event: Number of C.. (0x13) plen 5  #54 [hci1] 2026-08-24 18:50:07.069473
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #52: len 18 (7 Kb/s)
+        Latency: 19 msec (3-19 msec ~18 msec)
+> ACL Data RX: Hand.. flags 0x02 dlen 14  #55 [hci1] 2026-08-24 18:50:07.081891
+      L2CAP: Configure Response (0x05) ident 6 len 6
+        Source CID: 65
+        Flags: 0x0000
+        Result: Success (0x0000)
+< ACL Data TX: Hand.. flags 0x00 dlen 12  #56 [hci1] 2026-08-24 18:50:07.082125
+      L2CAP: Disconnection Request (0x06) ident 7 len 4
+        Destination CID: 96
+        Source CID: 65
+< ACL Data TX: Hand.. flags 0x00 dlen 12  #57 [hci1] 2026-08-24 18:50:07.082275
+      L2CAP: Connection Request (0x02) ident 8 len 4
+        PSM: 1 (0x0001)
+        Source CID: 66
+> HCI Event: Number of C.. (0x13) plen 5  #58 [hci1] 2026-08-24 18:50:07.085473
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #56: len 12 (32 Kb/s)
+        Latency: 3 msec (3-19 msec ~10 msec)
+> HCI Event: Number of C.. (0x13) plen 5  #59 [hci1] 2026-08-24 18:50:07.087473
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #57: len 12 (19 Kb/s)
+        Latency: 5 msec (3-19 msec ~8 msec)
+> ACL Data RX: Hand.. flags 0x02 dlen 12  #60 [hci1] 2026-08-24 18:50:07.097880
+      L2CAP: Disconnection Response (0x07) ident 7 len 4
+        Destination CID: 96
+        Source CID: 65
+> ACL Data RX: Hand.. flags 0x02 dlen 16  #61 [hci1] 2026-08-24 18:50:07.097886
+      L2CAP: Connection Response (0x03) ident 8 len 8
+        Destination CID: 114
+        Source CID: 66
+        Result: Connection successful (0x0000)
+        Status: No further information available (0x0000)
+> ACL Data RX: Hand.. flags 0x02 dlen 16  #62 [hci1] 2026-08-24 18:50:07.097886
+      L2CAP: Configure Request (0x04) ident 6 len 8
+        Destination CID: 66
+        Flags: 0x0000
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 1024
+< ACL Data TX: Hand.. flags 0x00 dlen 23  #63 [hci1] 2026-08-24 18:50:07.097998
+      L2CAP: Configure Request (0x04) ident 9 len 15
+        Destination CID: 114
+        Flags: 0x0000
+        Option: Retransmission and Flow Control (0x04) [mandatory]
+          Mode: Basic (0x00)
+          TX window size: 0
+          Max transmit: 0
+          Retransmission timeout: 0
+          Monitor timeout: 0
+          Maximum PDU size: 0
+< ACL Data TX: Hand.. flags 0x00 dlen 18  #64 [hci1] 2026-08-24 18:50:07.098013
+      L2CAP: Configure Response (0x05) ident 6 len 10
+        Source CID: 114
+        Flags: 0x0000
+        Result: Success (0x0000)
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 1024
+> HCI Event: Number of C.. (0x13) plen 5  #65 [hci1] 2026-08-24 18:50:07.102471
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #63: len 23 (46 Kb/s)
+        Latency: 4 msec (3-19 msec ~6 msec)
+> HCI Event: Number of C.. (0x13) plen 5  #66 [hci1] 2026-08-24 18:50:07.104472
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #64: len 18 (24 Kb/s)
+        Latency: 6 msec (3-19 msec ~6 msec)
+> ACL Data RX: Hand.. flags 0x02 dlen 14  #67 [hci1] 2026-08-24 18:50:07.113878
+      L2CAP: Configure Response (0x05) ident 9 len 6
+        Source CID: 66
+        Flags: 0x0000
+        Result: Success (0x0000)
+< ACL Data TX: Hand.. flags 0x00 dlen 12  #68 [hci1] 2026-08-24 18:50:07.114039
+      L2CAP: Disconnection Request (0x06) ident 10 len 4
+        Destination CID: 114
+        Source CID: 66
+< ACL Data TX: Hand.. flags 0x00 dlen 12  #69 [hci1] 2026-08-24 18:50:07.114242
+      L2CAP: Connection Request (0x02) ident 11 len 4
+        PSM: 1 (0x0001)
+        Source CID: 65
+> HCI Event: Number of C.. (0x13) plen 5  #70 [hci1] 2026-08-24 18:50:07.126485
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #68: len 12 (8 Kb/s)
+        Latency: 12 msec (3-19 msec ~9 msec)
+> HCI Event: Number of C.. (0x13) plen 5  #71 [hci1] 2026-08-24 18:50:07.128473
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #69: len 12 (6 Kb/s)
+        Latency: 14 msec (3-19 msec ~11 msec)
+> ACL Data RX: Hand.. flags 0x02 dlen 12  #72 [hci1] 2026-08-24 18:50:07.137895
+      L2CAP: Disconnection Response (0x07) ident 10 len 4
+        Destination CID: 114
+        Source CID: 66
+> ACL Data RX: Hand.. flags 0x02 dlen 16  #73 [hci1] 2026-08-24 18:50:07.137904
+      L2CAP: Connection Response (0x03) ident 11 len 8
+        Destination CID: 127
+        Source CID: 65
+        Result: Connection successful (0x0000)
+        Status: No further information available (0x0000)
+> ACL Data RX: Hand.. flags 0x02 dlen 16  #74 [hci1] 2026-08-24 18:50:07.137904
+      L2CAP: Configure Request (0x04) ident 7 len 8
+        Destination CID: 65
+        Flags: 0x0000
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 1024
+< ACL Data TX: Hand.. flags 0x00 dlen 23  #75 [hci1] 2026-08-24 18:50:07.137993
+      L2CAP: Configure Request (0x04) ident 12 len 15
+        Destination CID: 127
+        Flags: 0x0000
+        Option: Retransmission and Flow Control (0x04) [mandatory]
+          Mode: Basic (0x00)
+          TX window size: 0
+          Max transmit: 0
+          Retransmission timeout: 0
+          Monitor timeout: 0
+          Maximum PDU size: 0
+< ACL Data TX: Hand.. flags 0x00 dlen 18  #76 [hci1] 2026-08-24 18:50:07.138008
+      L2CAP: Configure Response (0x05) ident 7 len 10
+        Source CID: 127
+        Flags: 0x0000
+        Result: Success (0x0000)
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 1024
+> HCI Event: Number of C.. (0x13) plen 5  #77 [hci1] 2026-08-24 18:50:07.142470
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #75: len 23 (46 Kb/s)
+        Latency: 4 msec (3-19 msec ~8 msec)
+> HCI Event: Number of C.. (0x13) plen 5  #78 [hci1] 2026-08-24 18:50:07.144472
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #76: len 18 (24 Kb/s)
+        Latency: 6 msec (3-19 msec ~7 msec)
+> ACL Data RX: Hand.. flags 0x02 dlen 14  #79 [hci1] 2026-08-24 18:50:07.153894
+      L2CAP: Configure Response (0x05) ident 12 len 6
+        Source CID: 65
+        Flags: 0x0000
+        Result: Success (0x0000)
+< ACL Data TX: Hand.. flags 0x00 dlen 12  #80 [hci1] 2026-08-24 18:50:07.154073
+      L2CAP: Disconnection Request (0x06) ident 13 len 4
+        Destination CID: 127
+        Source CID: 65
+< ACL Data TX: Hand.. flags 0x00 dlen 12  #81 [hci1] 2026-08-24 18:50:07.154284
+      L2CAP: Disconnection Request (0x06) ident 14 len 4
+        Destination CID: 101
+        Source CID: 64
+< ACL Data TX: Handl.. flags 0x00 dlen 18  #9 [hci0] 2026-08-24 18:50:07.155851
+      Channel: 74 len 14 [PSM 0 mode Basic (0x00)] {chan 65535}
+        03 ef 15 83 11 18 f0 07 00 f8 03 00 07 70        .............p  
+< HCI Command: Ex.. (0x02|0x0004) plen 2  #10 [hci0] 2026-08-24 18:50:07.155900
+        Handle: 12
+> HCI Event: Command Sta.. (0x0f) plen 4  #11 [hci0] 2026-08-24 18:50:07.156693
+      Exit Sniff Mode (0x02|0x0004) ncmd 1
+        Status: Success (0x00)
+> HCI Event: Number of C.. (0x13) plen 5  #82 [hci1] 2026-08-24 18:50:07.165474
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #80: len 12 (8 Kb/s)
+        Latency: 11 msec (3-19 msec ~9 msec)
+> HCI Event: Number of C.. (0x13) plen 5  #83 [hci1] 2026-08-24 18:50:07.167475
+        Num handles: 1
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Count: 1
+        #81: len 12 (7 Kb/s)
+        Latency: 13 msec (3-19 msec ~11 msec)
+> ACL Data RX: Hand.. flags 0x02 dlen 12  #84 [hci1] 2026-08-24 18:50:07.181888
+      L2CAP: Disconnection Response (0x07) ident 13 len 4
+        Destination CID: 127
+        Source CID: 65
+> ACL Data RX: Hand.. flags 0x02 dlen 12  #85 [hci1] 2026-08-24 18:50:07.181898
+      L2CAP: Disconnection Response (0x07) ident 14 len 4
+        Destination CID: 101
+        Source CID: 64
+> HCI Event: Mode Change (0x14) plen 6    #12 [hci0] 2026-08-24 18:50:07.586163
+        Status: Success (0x00)
+        Handle: 12
+        Mode: Active (0x00)
+        Interval: 0.000 msec (0x0000)
+> ACL Data RX: Hand.. flags 0x02 dlen 18  #13 [hci0] 2026-08-24 18:50:07.597486
+      Channel: 66 len 14 [PSM 0 mode Basic (0x00)] {chan 65535}
+        01 ef 15 81 11 18 e0 07 00 de 03 00 07 aa        ..............  
+< ACL Data TX: Handl.. flags 0x00 dlen 8  #14 [hci0] 2026-08-24 18:50:07.597572
+      Channel: 74 len 4 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 3f 01 a2                                      c?..            
+> HCI Event: Number of C.. (0x13) plen 5  #15 [hci0] 2026-08-24 18:50:07.608656
+        Num handles: 1
+        Handle: 12
+        Count: 2
+> ACL Data RX: Handl.. flags 0x02 dlen 8  #16 [hci0] 2026-08-24 18:50:07.614882
+      Channel: 66 len 4 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 73 01 69                                      cs.i            
+< ACL Data TX: Hand.. flags 0x00 dlen 12  #17 [hci0] 2026-08-24 18:50:07.614970
+      Channel: 74 len 8 [PSM 0 mode Basic (0x00)] {chan 65535}
+        03 ef 09 e3 05 63 8d 70                          .....c.p        
+> ACL Data RX: Hand.. flags 0x02 dlen 12  #18 [hci0] 2026-08-24 18:50:07.623674
+      Channel: 66 len 8 [PSM 0 mode Basic (0x00)] {chan 65535}
+        01 ef 09 e1 05 63 8d aa                          .....c..        
+> ACL Data RX: Hand.. flags 0x02 dlen 12  #19 [hci0] 2026-08-24 18:50:07.627425
+      Channel: 66 len 8 [PSM 0 mode Basic (0x00)] {chan 65535}
+        01 ef 09 e3 05 63 8d aa                          .....c..        
+< ACL Data TX: Hand.. flags 0x00 dlen 12  #20 [hci0] 2026-08-24 18:50:07.627525
+      Channel: 74 len 8 [PSM 0 mode Basic (0x00)] {chan 65535}
+        03 ef 09 e1 05 63 8d 70                          .....c.p        
+< ACL Data TX: Handl.. flags 0x00 dlen 9  #21 [hci0] 2026-08-24 18:50:07.627542
+      Channel: 74 len 5 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ff 01 21 12                                   c..!.           
+> HCI Event: Number of C.. (0x13) plen 5  #22 [hci0] 2026-08-24 18:50:07.632374
+        Num handles: 1
+        Handle: 12
+        Count: 2
+> ACL Data RX: Hand.. flags 0x02 dlen 31  #23 [hci0] 2026-08-24 18:50:07.643882
+      Channel: 66 len 27 [PSM 0 mode Basic (0x00)] {chan 65535}
+        61 ff 2d 03 7b 22 69 64 22 3a 31 35 2c 22 6f 70  a.-.{"id":15,"op
+        22 3a 22 6c 69 73 74 22 7d 0a c8                 ":"list"}..     
+< ACL Data TX: Han.. flags 0x00 dlen 804  #24 [hci0] 2026-08-24 18:50:07.645966
+      Channel: 74 len 800 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef 36 06 7b 22 69 64 22 3a 31 35 2c 22 6f 6b  c.6.{"id":15,"ok
+        22 3a 74 72 75 65 2c 22 6f 75 74 70 75 74 73 22  ":true,"outputs"
+        3a 5b 7b 22 69 64 22 3a 22 77 69 72 65 64 3a 61  :[{"id":"wired:a
+        6c 73 61 5f 6f 75 74 70 75 74 2e 70 6c 61 74 66  lsa_output.platf
+        6f 72 6d 2d 33 66 30 30 62 38 34 30 2e 6d 61 69  orm-3f00b840.mai
+        6c 62 6f 78 2e 73 74 65 72 65 6f 2d 66 61 6c 6c  lbox.stereo-fall
+        62 61 63 6b 22 2c 22 6c 61 62 65 6c 22 3a 22 42  back","label":"B
+        75 69 6c 74 2d 69 6e 20 41 75 64 69 6f 20 53 74  uilt-in Audio St
+        65 72 65 6f 22 2c 22 6b 69 6e 64 22 3a 22 77 69  ereo","kind":"wi
+        72 65 64 22 2c 22 61 76 61 69 6c 61 62 6c 65 22  red","available"
+        3a 74 72 75 65 2c 22 63 6f 6e 6e 65 63 74 65 64  :true,"connected
+        22 3a 74 72 75 65 2c 22 73 65 74 75 70 5f 73 74  ":true,"setup_st
+        61 74 65 22 3a 22 72 65 61 64 79 22 7d 2c 7b 22  ate":"ready"},{"
+        69 64 22 3a 22 61 32 64 70 3a 43 39 3a 35 43 3a  id":"a2dp:C9:5C:
+        46 44 3a 36 45 3a 32 38 3a 34 36 22 2c 22 6c 61  FD:6E:28:46","la
+        62 65 6c 22 3a 22 42 6f 6f 6d 62 6f 78 22 2c 22  bel":"Boombox","
+        6b 69 6e 64 22 3a 22 61 32 64 70 22 2c 22 61 76  kind":"a2dp","av
+        61 69 6c 61 62 6c 65 22 3a 66 61 6c 73 65 2c 22  ailable":false,"
+        63 6f 6e 6e 65 63 74 65 64 22 3a 66 61 6c 73 65  connected":false
+        2c 22 73 65 74 75 70 5f 73 74 61 74 65 22 3a 22  ,"setup_state":"
+        72 65 61 64 79 22 7d 2c 7b 22 69 64 22 3a 22 61  ready"},{"id":"a
+        32 64 70 3a 35 30 3a 44 37 3a 31 42 3a 37 34 3a  2dp:50:D7:1B:74:
+        33 34 3a 44 36 22 2c 22 6c 61 62 65 6c 22 3a 22  34:D6","label":"
+        69 57 6f 72 6c 64 22 2c 22 6b 69 6e 64 22 3a 22  iWorld","kind":"
+        61 32 64 70 22 2c 22 61 76 61 69 6c 61 62 6c 65  a2dp","available
+        22 3a 66 61 6c 73 65 2c 22 63 6f 6e 6e 65 63 74  ":false,"connect
+        65 64 22 3a 66 61 6c 73 65 2c 22 73 65 74 75 70  ed":false,"setup
+        5f 73 74 61 74 65 22 3a 22 72 65 61 64 79 22 7d  _state":"ready"}
+        2c 7b 22 69 64 22 3a 22 61 32 64 70 3a 39 38 3a  ,{"id":"a2dp:98:
+        34 37 3a 34 34 3a 43 44 3a 37 33 3a 44 45 22 2c  47:44:CD:73:DE",
+        22 6c 61 62 65 6c 22 3a 22 53 6f 75 6e 64 63 6f  "label":"Soundco
+        72 65 20 53 70 61 63 65 20 41 34 30 22 2c 22 6b  re Space A40","k
+        69 6e 64 22 3a 22 61 32 64 70 22 2c 22 61 76 61  ind":"a2dp","ava
+        69 6c 61 62 6c 65 22 3a 66 61 6c 73 65 2c 22 63  ilable":false,"c
+        6f 6e 6e 65 63 74 65 64 22 3a 66 61 6c 73 65 2c  onnected":false,
+        22 73 65 74 75 70 5f 73 74 61 74 65 22 3a 22 6e  "setup_state":"n
+        65 65 64 73 5f 73 65 74 75 70 22 7d 5d 2c 22 64  eeds_setup"}],"d
+        65 73 69 72 65 64 5f 69 64 22 3a 22 77 69 72 65  esired_id":"wire
+        64 3a 61 6c 73 61 5f 6f 75 74 70 75 74 2e 70 6c  d:alsa_output.pl
+        61 74 66 6f 72 6d 2d 33 66 30 30 62 38 34 30 2e  atform-3f00b840.
+        6d 61 69 6c 62 6f 78 2e 73 74 65 72 65 6f 2d 66  mailbox.stereo-f
+        61 6c 6c 62 61 63 6b 22 2c 22 63 68 6f 73 65 6e  allback","chosen
+        5f 69 64 22 3a 22 77 69 72 65 64 3a 61 6c 73 61  _id":"wired:alsa
+        5f 6f 75 74 70 75 74 2e 70 6c 61 74 66 6f 72 6d  _output.platform
+        2d 33 66 30 30 62 38 34 30 2e 6d 61 69 6c 62 6f  -3f00b840.mailbo
+        78 2e 73 74 65 72 65 6f 2d 66 61 6c 6c 62 61 63  x.stereo-fallbac
+        6b 22 2c 22 72 65 61 73 6f 6e 22 3a 22 64 65 73  k","reason":"des
+        69 72 65 64 20 6f 75 74 70 75 74 20 69 73 20 61  ired output is a
+        76 61 69 6c 61 62 6c 65 22 2c 22 63 61 6c 6c 5f  vailable","call_
+        61 63 74 69 76 65 22 3a 66 61 6c 73 65 7d 0a 0e  active":false}..
+> HCI Event: Number of C.. (0x13) plen 5  #25 [hci0] 2026-08-24 18:50:07.673660
+        Num handles: 1
+        Handle: 12
+        Count: 2
+< HCI Command: Di.. (0x01|0x0006) plen 3  #86 [hci1] 2026-08-24 18:50:09.193940
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Reason: Remote User Terminated Connection (0x13)
+> HCI Event: Command Sta.. (0x0f) plen 4  #87 [hci1] 2026-08-24 18:50:09.196464
+      Disconnect (0x01|0x0006) ncmd 2
+        Status: Success (0x00)
+> HCI Event: Vendor (0xff) plen 9         #88 [hci1] 2026-08-24 18:50:09.273473
+        58 c5 bf cb 7b 33 5c 07 1a                       X...{3\..       
+> HCI Event: Disconnect... (0x05) plen 4  #89 [hci1] 2026-08-24 18:50:09.275461
+        Status: Success (0x00)
+        Handle: 3 Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Reason: Connection Terminated By Local Host (0x16)
+@ MGMT Event: Dev.. (0x000c) plen 8  {0x0001} [hci1] 2026-08-24 18:50:09.275502
+        BR/EDR Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Reason: Connection terminated by local host (0x02)
+hciconfig[88140]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:50:11.241224
+hciconfig[88140]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:50:11.241320
+hciconfig[88140]: < HCI Command: Read..   #26 [hci0] 2026-08-24 18:50:11.241393
+> HCI Event: Command Co.. (0x0e) plen 12  #27 [hci0] 2026-08-24 18:50:11.242008
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[88140]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:50:11.242285
+hciconfig[88140]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:50:11.242350
+> HCI Event: Mode Change (0x14) plen 6    #28 [hci0] 2026-08-24 18:50:14.667223
+        Status: Success (0x00)
+        Handle: 12
+        Mode: Sniff (0x02)
+        Interval: 480.000 msec (0x0300)
+hciconfig[88246]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:50:26.352344
+hciconfig[88246]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:50:26.352417
+hciconfig[88246]: < HCI Command: Read..   #29 [hci0] 2026-08-24 18:50:26.352496
+> HCI Event: Command Co.. (0x0e) plen 12  #30 [hci0] 2026-08-24 18:50:26.353031
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[88246]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:50:26.353332
+hciconfig[88246]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:50:26.353394
+hciconfig[88357]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:50:41.467372
+hciconfig[88357]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:50:41.467451
+hciconfig[88357]: < HCI Command: Read..   #31 [hci0] 2026-08-24 18:50:41.467522
+> HCI Event: Command Co.. (0x0e) plen 12  #32 [hci0] 2026-08-24 18:50:41.468022
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[88357]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:50:41.468326
+hciconfig[88357]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:50:41.468373
+hciconfig[88470]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:50:56.576881
+hciconfig[88470]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:50:56.576952
+hciconfig[88470]: < HCI Command: Read..   #33 [hci0] 2026-08-24 18:50:56.577022
+> HCI Event: Command Co.. (0x0e) plen 12  #34 [hci0] 2026-08-24 18:50:56.577609
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[88470]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:50:56.577966
+hciconfig[88470]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:50:56.578039
+hciconfig[88582]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:51:11.686554
+hciconfig[88582]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:51:11.686621
+hciconfig[88582]: < HCI Command: Read..   #35 [hci0] 2026-08-24 18:51:11.686697
+> HCI Event: Command Co.. (0x0e) plen 12  #36 [hci0] 2026-08-24 18:51:11.687202
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[88582]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:51:11.687483
+hciconfig[88582]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:51:11.687525
+hciconfig[88693]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:51:26.796373
+hciconfig[88693]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:51:26.796444
+hciconfig[88693]: < HCI Command: Read..   #37 [hci0] 2026-08-24 18:51:26.796512
+> HCI Event: Command Co.. (0x0e) plen 12  #38 [hci0] 2026-08-24 18:51:26.797050
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[88693]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:51:26.797324
+hciconfig[88693]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:51:26.797380
+hciconfig[88810]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:51:41.905855
+hciconfig[88810]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:51:41.906036
+hciconfig[88810]: < HCI Command: Read..   #39 [hci0] 2026-08-24 18:51:41.906104
+> HCI Event: Command Co.. (0x0e) plen 12  #40 [hci0] 2026-08-24 18:51:41.906593
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[88810]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:51:41.906881
+hciconfig[88810]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:51:41.906930
+hciconfig[88921]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:51:57.016115
+hciconfig[88921]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:51:57.016182
+hciconfig[88921]: < HCI Command: Read..   #41 [hci0] 2026-08-24 18:51:57.016251
+> HCI Event: Command Co.. (0x0e) plen 12  #42 [hci0] 2026-08-24 18:51:57.016751
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[88921]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:51:57.017060
+hciconfig[88921]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:51:57.017118
+hciconfig[89037]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:52:12.132698
+hciconfig[89037]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:52:12.132774
+hciconfig[89037]: < HCI Command: Read..   #43 [hci0] 2026-08-24 18:52:12.132856
+> HCI Event: Command Co.. (0x0e) plen 12  #44 [hci0] 2026-08-24 18:52:12.133414
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[89037]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:52:12.133833
+hciconfig[89037]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:52:12.133961
+hciconfig[89150]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:52:27.254362
+hciconfig[89150]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:52:27.254428
+hciconfig[89150]: < HCI Command: Read..   #45 [hci0] 2026-08-24 18:52:27.254512
+> HCI Event: Command Co.. (0x0e) plen 12  #46 [hci0] 2026-08-24 18:52:27.255089
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[89150]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:52:27.255389
+hciconfig[89150]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:52:27.255442

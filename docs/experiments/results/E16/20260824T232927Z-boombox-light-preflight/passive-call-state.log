@@ -1,0 +1,33 @@
+TIME
+2026-08-24T19:32:06,881315831-04:00
+COUNTER1
+	UP RUNNING PSCAN ISCAN 
+	RX bytes:2661087 acl:78 sco:38726 events:991 errors:0
+	TX bytes:4374246 acl:65 sco:67764 commands:249 errors:0
+COUNTER2
+	UP RUNNING PSCAN ISCAN 
+	RX bytes:2661087 acl:78 sco:38726 events:991 errors:0
+	TX bytes:4416934 acl:65 sco:68431 commands:249 errors:0
+WIFI
+eth0
+lo
+20: hci1: Bluetooth
+	Soft blocked: no
+	Hard blocked: no
+21: hci0: Bluetooth
+	Soft blocked: no
+	Hard blocked: no
+THROTTLE_EVENTS
+LAST_WATCHDOG
+Aug 24 19:30:44.223257 larkbridge python3[49410]: WARNING controller did not answer (7/2)
+Aug 24 19:30:44.224654 larkbridge python3[49410]: WARNING wedged, but only 113s since last recovery (backoff 240s) — waiting
+Aug 24 19:31:00.308686 larkbridge python3[49410]: WARNING controller did not answer (8/2)
+Aug 24 19:31:00.310004 larkbridge python3[49410]: WARNING wedged, but only 129s since last recovery (backoff 240s) — waiting
+Aug 24 19:31:16.395132 larkbridge python3[49410]: WARNING controller did not answer (9/2)
+Aug 24 19:31:16.396585 larkbridge python3[49410]: WARNING wedged, but only 145s since last recovery (backoff 240s) — waiting
+Aug 24 19:31:32.479373 larkbridge python3[49410]: WARNING controller did not answer (10/2)
+Aug 24 19:31:32.479373 larkbridge python3[49410]: WARNING wedged, but only 161s since last recovery (backoff 240s) — waiting
+Aug 24 19:31:48.564442 larkbridge python3[49410]: WARNING controller did not answer (11/2)
+Aug 24 19:31:48.565822 larkbridge python3[49410]: WARNING wedged, but only 177s since last recovery (backoff 240s) — waiting
+Aug 24 19:32:04.650293 larkbridge python3[49410]: WARNING controller did not answer (12/2)
+Aug 24 19:32:04.651578 larkbridge python3[49410]: WARNING wedged, but only 193s since last recovery (backoff 240s) — waiting

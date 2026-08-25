@@ -1,0 +1,2400 @@
+2026-08-24T19:19:36.086389197-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:36.715423214-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:37.392597205-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:38.043111976-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:38.679796343-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:39.293560137-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:39.943095986-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:40.585101601-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:41.249676268-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:41.898029133-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:42.565748087-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:43.249314249-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:43.891001749-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:44.497571452-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:45.131808268-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:45.774948528-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:46.410463665-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:47.075581219-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:47.719440472-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:48.361733726-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:49.047440310-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:49.697029788-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:50.309248863-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:50.947768029-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:51.627084842-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:52.285246911-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:52.917686161-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:53.550314742-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:54.201985031-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:54.857393560-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:55.529676967-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:56.174019781-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:56.806682989-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:57.456439175-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:58.064302375-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:58.643248501-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:59.267143928-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:19:59.886448901-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:00.517515511-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:01.116184456-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:01.726586434-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:02.361789722-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:03.025387257-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:03.666800424-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:04.261059173-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:04.931697886-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:05.595079397-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:06.214248057-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:06.828537486-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:07.452997488-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:08.097556774-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:08.726876680-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:09.374394909-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:09.979782686-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:10.622442843-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:11.269799451-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:11.962440565-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:12.607662855-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:13.292219700-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:13.959335830-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:14.585222996-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:15.222450902-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:15.850655614-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:16.480814631-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:17.114331111-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:17.767660620-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:18.408076270-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:19.015873308-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:19.686132016-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:20.330992571-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:20.969704404-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:21.622730446-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:22.271094257-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:22.894616270-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:23.532500222-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:24.153582661-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:24.803457946-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:25.467634745-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:26.101283020-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:26.760105164-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:27.375826152-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:28.036025900-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:28.686182598-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:29.342105287-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:30.022046856-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:30.708155418-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:31.327992170-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:31.976726138-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:32.639689965-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:33.300519189-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:33.972816756-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:34.613921289-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:35.222492945-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:35.824168360-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:36.458763412-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:37.052475042-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:37.693245265-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:38.332038275-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:38.980064724-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:39.590820421-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:40.216858873-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:40.847443509-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:41.522268053-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:42.175343697-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:42.808820178-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:43.430673694-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:44.060963082-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:44.698490386-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:45.350073557-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:46.011217274-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:46.688420115-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:47.322285756-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:47.977497223-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:48.613897899-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:49.257207144-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:49.932128897-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:50.546448885-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:51.153072786-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:51.795164868-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:52.476956535-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:53.123374708-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:53.802931023-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:54.400319044-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:55.008452752-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:55.635993524-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:56.259223831-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:56.940801630-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:57.566151077-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:58.210533117-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:58.846288000-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:20:59.468743567-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:00.117441931-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:00.798833330-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:01.472497555-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:02.122778846-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:02.720673297-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:03.355684080-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:04.021066038-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:04.653830605-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:05.339191771-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:06.038352253-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:06.644883259-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:07.284200765-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:07.929789266-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:08.553105835-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:09.182271485-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:09.763541668-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:10.339791953-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:10.974986045-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:11.558021649-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:12.159649294-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:12.774113243-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:13.393522545-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:13.981077314-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:14.556045210-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:15.145221724-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:15.766955814-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:16.442439172-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:17.068862187-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:17.702536097-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:18.330902023-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:18.966143275-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:19.587677170-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:20.239904872-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:20.906899542-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:21.547654873-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:22.160020230-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:22.813272427-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:23.406031176-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:24.024876513-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:24.643424691-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:25.314031014-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:25.939991545-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:26.655825855-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:27.280517425-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:27.962465382-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:28.581434865-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:29.249604503-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:29.902100352-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:30.559517670-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:31.158153779-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:31.815863252-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:32.473596488-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:33.097192273-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:33.749964897-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:34.407799411-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:35.032389621-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:35.698188816-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:36.368359226-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:36.991038344-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:37.589524998-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:38.249205581-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:38.885522720-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:39.511048599-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:40.120554907-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:40.805587581-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:41.448990820-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:42.103126848-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:42.746690731-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:43.371183163-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:43.997306536-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:44.611226051-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:45.235119240-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:45.893951516-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:46.533592548-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:47.206478372-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:47.839530985-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:48.504187031-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:49.126673279-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:49.775099833-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:50.393937887-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:51.053576396-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:51.708557516-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:52.363719789-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:53.038994447-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:53.687342836-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:54.300355573-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:54.922749168-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:55.582414167-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:56.270930647-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:56.919724552-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:57.568193709-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:58.202657129-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:58.834787622-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:21:59.481321436-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:00.135131658-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:00.777955633-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:01.434014430-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:02.095087388-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:02.780866604-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:03.444914700-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:04.059627916-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:04.737651313-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:05.393241931-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:06.004970121-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:06.637777901-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:07.277356393-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:07.948030303-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:08.624729929-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:09.289649363-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:09.923589142-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:10.563772003-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:11.208414622-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:11.841222850-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:12.464541983-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:13.102765413-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:13.770924348-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:14.395957918-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:15.061809562-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:15.669092603-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:16.297480380-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:16.938283237-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:17.591618117-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:18.275261224-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:18.898556146-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:19.567890334-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:20.243782018-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:20.903512568-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:21.546952957-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:22.224773067-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:22.838870479-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:23.491924557-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:24.117978471-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:24.753572507-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:25.385331866-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:26.048121783-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:26.707159259-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:27.358485960-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:28.015622720-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:28.647346027-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:29.238340087-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:29.863458984-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:30.497983601-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:31.122445150-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:31.782942993-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:32.438168213-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:33.076221396-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:33.699022828-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:34.366483074-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:34.984180788-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:35.629092491-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:36.274202110-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:36.948162641-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:37.606225670-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:38.279386681-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:38.959848189-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:39.605461145-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:40.232639327-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:40.844451502-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:41.477840988-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:42.105675990-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:42.726291835-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:43.355807135-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:43.974761521-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:44.642002285-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:45.289037075-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:45.905615119-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:46.540275398-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:47.183745288-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:47.810363371-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:48.430462980-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:49.044846322-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:49.681166025-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:50.350579355-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:51.017650848-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:51.686074025-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:52.360433970-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:53.002565806-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:22:53.611121105-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:22:54.589287283-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:22:55.189726533-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:22:55.793605928-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:22:56.417531832-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:22:57.030900444-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:22:57.642693169-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:22:58.224930270-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:22:58.839705946-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:22:59.454468886-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:00.091382298-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:00.712745091-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:01.345613947-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:01.968178685-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:02.608336644-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:03.265822322-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:03.896813777-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:04.507178931-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:05.215490698-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:05.862894182-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:06.515465675-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:07.141720965-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:07.761635597-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:08.453312599-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:09.061944517-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:09.696441262-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:10.322141173-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:10.935996194-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:11.579162495-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:12.257345072-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:12.928049418-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:13.577711406-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:14.227526510-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:14.851217266-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:15.486757224-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:16.104728822-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:16.724833152-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:17.388598289-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:18.008556541-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:18.611203921-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:19.237887881-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:19.883944685-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:20.525780501-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:21.156200016-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:21.780233708-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:22.388370468-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:23.058640365-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:23.724058904-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:24.356735988-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:24.970078233-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:25.630459255-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:26.247824530-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:26.861698880-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:27.493148139-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:28.151770169-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:28.782772408-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:29.425127388-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:30.066409697-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:30.717951933-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:31.370373605-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:31.960145741-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:32.593467885-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:33.257939280-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:33.917958242-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:34.560540721-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:35.204372630-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:35.831367300-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:36.458975780-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:37.087426953-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:37.690453035-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:38.317241528-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_INACTIVE
+2026-08-24T19:23:38.966415479-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: null
+  Active communication device: AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:39.650548658-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:40.559725742-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:41.176071445-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:41.841554681-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:42.485615025-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:43.164847284-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:43.847322871-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:44.514117956-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:45.158882116-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:45.807311885-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:46.473820024-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:47.095220089-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:47.716043779-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:48.338544349-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:48.950454302-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:49.581342120-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:50.238916868-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:50.917510049-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:51.568380532-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL
+2026-08-24T19:23:52.187948404-0400
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+  Applied Preferred communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  Active communication device: AudioDeviceAttributes: role:output type:bt_sco_hs addr:B8:27:EB:43:8D:51 name:larkbridge-v2 profiles:[] descriptors:[]
+  mScoAudioState: SCO_STATE_ACTIVE_INTERNAL

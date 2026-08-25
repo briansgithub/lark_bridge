@@ -1,0 +1,8 @@
+--------- beginning of main
+08-24 19:07:55.399  9349  9519 I BridgeOutputController: LarkBridge output control disconnected: Broken pipe
+08-24 19:07:57.413  9349  9519 I BridgeOutputController: RFCOMM output control listening
+08-24 19:08:01.370  9349  9519 I BridgeOutputController: paired LarkBridge connected from B8:27:EB:43:8D:51
+08-24 19:08:01.408  9349  9519 I BridgeOutputController: output request list completed
+08-24 19:09:41.873  9349  9519 I BridgeOutputController: output request scan completed
+08-24 19:09:50.428  9349  9519 I BridgeOutputController: output request pair_select completed
+08-24 19:09:50.468  9349  9519 I BridgeOutputController: output request list completed

@@ -1,0 +1,270 @@
+TIME
+2026-08-24T19:31:06,930266500-04:00
+UPTIME
+ 19:31:06 up  7:11,  1 user,  load average: 0.60, 0.73, 0.63
+0.60 0.73 0.63 2/163 104688
+HEALTH
+throttled=0x0
+temp=38.1'C
+frequency(48)=1200000000
+               total        used        free      shared  buff/cache   available
+Mem:          926828      373292      440192      137800      311704      553536
+Swap:              0           0           0
+TOP
+top - 19:31:07 up  7:11,  1 user,  load average: 0.60, 0.73, 0.63
+Tasks: 139 total,   1 running, 138 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  7.5 us,  3.8 sy,  0.0 ni, 86.8 id,  1.9 wa,  0.0 hi,  0.0 si,  0.0 st 
+MiB Mem :    905.1 total,    429.4 free,    364.6 used,    304.8 buff/cache     
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.    540.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+ 103241 admin     20   0  171284  13940   9260 S  16.7   1.5   1:03.76 pw-cli
+  95133 root       0 -20       0      0      0 I   8.3   0.0   0:03.49 kworker+
+ 103215 admin     20   0  555408  22596  14728 S   8.3   2.4   0:39.17 wireplu+
+ 104693 admin     20   0   10180   4804   2812 R   8.3   0.5   0:00.04 top
+      1 root      20   0   24992  14384  10436 S   0.0   1.6   0:42.70 systemd
+      2 root      20   0       0      0      0 S   0.0   0.0   0:00.05 kthreadd
+      3 root      20   0       0      0      0 S   0.0   0.0   0:00.00 pool_wo+
+      4 root       0 -20       0      0      0 I   0.0   0.0   0:00.00 kworker+
+      5 root       0 -20       0      0      0 I   0.0   0.0   0:00.00 kworker+
+      6 root       0 -20       0      0      0 I   0.0   0.0   0:00.00 kworker+
+      7 root       0 -20       0      0      0 I   0.0   0.0   0:00.00 kworker+
+      8 root       0 -20       0      0      0 I   0.0   0.0   0:00.00 kworker+
+     11 root       0 -20       0      0      0 I   0.0   0.0   0:00.06 kworker+
+     13 root       0 -20       0      0      0 I   0.0   0.0   0:00.00 kworker+
+     14 root      20   0       0      0      0 S   0.0   0.0   0:00.83 ksoftir+
+     15 root      20   0       0      0      0 I   0.0   0.0   0:16.91 rcu_pre+
+     16 root      20   0       0      0      0 S   0.0   0.0   0:00.00 rcu_exp+
+     17 root      20   0       0      0      0 S   0.0   0.0   0:00.04 rcu_exp+
+PROCESSES
+    PID    PPID  NI PRI PSR %CPU %MEM NLWP STAT ELAPSED COMMAND         COMMAND
+ 104695  104685   0  19   2  200  0.3    1 R          0 ps              ps -eo pid,ppid,ni,pri,psr,pcpu,pmem,nlwp,stat,etimes,comm,args --sort=-pcpu
+ 103241   75516   0  19   1 14.2  1.5    3 SLl      448 pw-cli          pw-cli
+ 104670     748   0  19   2 14.0  1.1    1 Ss         0 sshd-session    sshd-session: admin [priv]
+ 103215     558   0  19   3  8.6  2.4    6 SLsl     450 wireplumber     /usr/bin/wireplumber
+ 104685  104684   0  19   0  5.7  0.3    1 Ss         0 bash            bash -c set -u echo TIME date --iso-8601=ns echo UPTIME uptime cat /proc/loadavg echo HEALTH vcgencmd get_throttled || true vcgencmd measure_temp || true vcgencmd measure_clock arm || true free -k echo TOP top -bn1 | head -25 echo PROCESSES ps -eo pid,ppid,ni,pri,psr,pcpu,pmem,nlwp,stat,etimes,comm,args --sort=-pcpu | head -35 echo IRQ1 grep -Ei 'dwc|uart|usb|xhci|timer|arch' /proc/interrupts || true sleep 5 echo IRQ2 grep -Ei 'dwc|uart|usb|xhci|timer|arch' /proc/interrupts || true echo USB_TOPOLOGY lsusb -t lsusb echo USB_POWER for d in /sys/bus/usb/devices/1-1.3 /sys/bus/usb/devices/1-1.5; do printf '%s ' "$d"; [ -d "$d" ] || { echo absent; continue; }; tr '\n' ' ' < "$d/idVendor"; tr '\n' ' ' < "$d/idProduct"; tr '\n' ' ' < "$d/product" 2>/dev/null || true; printf 'control='; cat "$d/power/control"; printf 'runtime='; cat "$d/power/runtime_status"; printf 'autosuspend_ms='; cat "$d/power/autosuspend_delay_ms"; done echo RF rfkill list if command -v iw >/dev/null 2>&1; then iw dev; fi echo CPUFREQ for f in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor /sys/devices/system/cpu/cpufreq/policy*/scaling_cur_freq; do printf '%s=' "$f"; cat "$f"; done echo CALL_AUDIO jq -c '{state,generation,call,aec,graph,output}' /run/user/1000/bridge-status.json XDG_RUNTIME_DIR=/run/user/1000 wpctl status --name echo CONNECTIONS sudo -n btmgmt --index 0 con sudo -n btmgmt --index 1 con hciconfig hci0 hciconfig hci1 echo RECENT_SYSTEM sudo -n journalctl --since '2026-08-24 19:27:30' -o short-precise -u bridge-btwatchdog.service -u bluetooth.service --no-pager echo RECENT_USER sudo -n journalctl --since '2026-08-24 19:27:30' -o short-precise _SYSTEMD_USER_UNIT=bridge-supervisor.service _SYSTEMD_USER_UNIT=bridge-output-remote.service _SYSTEMD_USER_UNIT=wireplumber.service _SYSTEMD_USER_UNIT=pipewire.service --no-pager echo RECENT_KERNEL sudo -n journalctl -k --since '2026-08-24 19:27:30' -o short-precise --no-pager
+  75516     558   0  19   1  4.5  2.4    1 Ss      5275 python3         /usr/bin/python3 /home/admin/rpi-lark-bridge/pi/bridged/bridge_supervisor.py
+    491       1   0  19   3  1.1  0.5    1 Ss     25891 dbus-daemon     /usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+    597     558   0  19   1  0.8  2.6    3 Ssl    25887 pipewire        /usr/bin/pipewire
+ 103253   75516   0  19   0  0.6  0.8    3 SLl      445 pw-loopback     pw-loopback --name bridge.callout --capture bluez_input.5C_33_7B_CB_BF_C5.0 --playback bridge.aec.sink --channels 1
+ 104220       2 -20  39   0  0.5  0.0    1 I<       141 kworker/u17:0-h [kworker/u17:0-hci1]
+ 103254   75516   0  19   0  0.5  0.8    3 SLl      445 pw-loopback     pw-loopback --name bridge.mic --capture bridge.aec.source --playback bluez_output.5C_33_7B_CB_BF_C5.1 --channels 1
+    615       1   0  19   3  0.3  0.9    4 Ssl    25887 polkitd         /usr/lib/polkit-1/polkitd --no-debug --log-level=notice
+  95133       2 -20  39   0  0.3  0.0    1 I<      1141 kworker/u17:2-h [kworker/u17:2-hci0]
+  90447       2 -20  39   1  0.2  0.0    1 I<      2043 kworker/u17:1-h [kworker/u17:1-hci0]
+    596     558   0  19   1  0.2  0.4    1 Ss     25887 dbus-daemon     /usr/bin/dbus-daemon --session --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+ 102989       1   0  19   2  0.2  0.7    1 Ss       469 bluetoothd      /usr/libexec/bluetooth/bluetoothd
+  98895       2   0  19   3  0.1  0.0    1 I        622 kworker/3:1-eve [kworker/3:1-events]
+    607       1   1  18   2  0.1  0.3    3 SNsl   25887 rtkit-daemon    /usr/libexec/rtkit-daemon
+      1       0   0  19   0  0.1  1.5    1 Ss     25903 systemd         /sbin/init
+    287       1   0  19   1  0.1  1.0    1 Ss     25895 systemd-journal /usr/lib/systemd/systemd-journald
+  95834       2   0  19   2  0.1  0.0    1 I        912 kworker/2:1-eve [kworker/2:1-events]
+    488       1   0  19   0  0.1  0.3    1 Ss     25891 avahi-daemon    avahi-daemon: running [larkbridge.local]
+  95610       2   0  19   1  0.1  0.0    1 I        991 kworker/1:0-mm_ [kworker/1:0-mm_percpu_wq]
+  89220       2   0  19   0  0.1  0.0    1 I       2309 kworker/u16:2-l [kworker/u16:2-leds]
+  85776       2   0  19   3  0.1  0.0    1 I       2840 kworker/u16:1-k [kworker/u16:1-kvfree_rcu_reclaim]
+  49410       1   0  19   2  0.1  1.6    1 Ss     13464 python3         /usr/bin/python3 /home/admin/rpi-lark-bridge/pi/bridged/bt_watchdog.py
+  96002       2   0  19   0  0.1  0.0    1 I        862 kworker/0:1-eve [kworker/0:1-events]
+ 103955       2   0  19   0  0.0  0.0    1 I        237 kworker/0:2-eve [kworker/0:2-events]
+ 103963       2   0  19   1  0.0  0.0    1 I        235 kworker/1:1-eve [kworker/1:1-events]
+  92822     558   0  19   0  0.0  2.8    1 Ss      1474 python3         /usr/bin/python3 /home/admin/rpi-lark-bridge/pi/bridged/output_remote.py
+    558       1   0  19   3  0.0  1.4    1 Ss     25889 systemd         /usr/lib/systemd/systemd --user
+     15       2   0  19   0  0.0  0.0    1 I      25903 rcu_preempt     [rcu_preempt]
+    495       1   0  19   2  0.0  0.9    1 Ss     25891 systemd-logind  /usr/lib/systemd/systemd-logind
+    604     558   0  19   1  0.0  0.3    1 Ss     25887 mpris-proxy     /usr/bin/mpris-proxy
+IRQ1
+ 51:   83810712   83675101   83787867   83737485 ARMCTRL-level  41 Edge      dwc_otg_sim-fiq
+ 74:   28793447   28928034   28814403   28869685 ARMCTRL-level  64 Edge      dwc_otg, dwc_otg_pcd, dwc_otg_hcd:usb1
+ 99:    1890839    1891399    1892313    1887612 ARMCTRL-level  89 Edge      uart-pl011
+180:    2298837    2319489    2290531    2300788 bcm2836-timer   1 Edge      arch_timer
+181:          0          0          0          0 bcm2836-timer   3 Edge      kvm guest vtimer
+184:          0          0          1          0 smsc95xx   0 Edge    -phy       usb-001:003:01
+IPI4:         0          0          0          0       Timer broadcast interrupts
+IRQ2
+ 51:   83830059   83694582   83807292   83756925 ARMCTRL-level  41 Edge      dwc_otg_sim-fiq
+ 74:   28800532   28934992   28821433   28876669 ARMCTRL-level  64 Edge      dwc_otg, dwc_otg_pcd, dwc_otg_hcd:usb1
+ 99:    1891869    1892425    1893321    1888650 ARMCTRL-level  89 Edge      uart-pl011
+180:    2299801    2320648    2291344    2302463 bcm2836-timer   1 Edge      arch_timer
+181:          0          0          0          0 bcm2836-timer   3 Edge      kvm guest vtimer
+184:          0          0          1          0 smsc95xx   0 Edge    -phy       usb-001:003:01
+IPI4:         0          0          0          0       Timer broadcast interrupts
+USB_TOPOLOGY
+/:  Bus 001.Port 001: Dev 001, Class=root_hub, Driver=dwc_otg/1p, 480M
+    |__ Port 001: Dev 002, If 0, Class=Hub, Driver=hub/5p, 480M
+        |__ Port 001: Dev 003, If 0, Class=Vendor Specific Class, Driver=smsc95xx, 480M
+        |__ Port 003: Dev 004, If 0, Class=Human Interface Device, Driver=usbhid, 12M
+        |__ Port 003: Dev 004, If 1, Class=Audio, Driver=snd-usb-audio, 12M
+        |__ Port 003: Dev 004, If 2, Class=Audio, Driver=snd-usb-audio, 12M
+        |__ Port 003: Dev 004, If 3, Class=Vendor Specific Class, Driver=[none], 12M
+        |__ Port 005: Dev 022, If 0, Class=Wireless, Driver=btusb, 12M
+        |__ Port 005: Dev 022, If 1, Class=Wireless, Driver=btusb, 12M
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 001 Device 002: ID 0424:9514 Microchip Technology, Inc. (formerly SMSC) SMC9514 Hub
+Bus 001 Device 003: ID 0424:ec00 Microchip Technology, Inc. (formerly SMSC) SMSC9512/9514 Fast Ethernet Adapter
+Bus 001 Device 004: ID 3547:0407 Shenzhen Hollyland Technology Co.,Ltd Wireless Microphone
+Bus 001 Device 022: ID 0b05:1bf6 ASUSTek Computer, Inc. Bluetooth Controller
+USB_POWER
+/sys/bus/usb/devices/1-1.3 3547 0407 Wireless Microphone control=on
+runtime=active
+autosuspend_ms=2000
+/sys/bus/usb/devices/1-1.5 0b05 1bf6 Bluetooth Controller control=on
+runtime=active
+autosuspend_ms=2000
+RF
+CPUFREQ
+/sys/devices/system/cpu/cpufreq/policy0/scaling_governor=performance
+/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq=1200000
+CALL_AUDIO
+{"state":"ACTIVE","generation":11,"call":{"hfp_nodes_present":true},"aec":{"enabled":true,"method":"webrtc","rate":48000,"channels":1,"node_latency_frames":1920,"play_delay_frames":null,"verified":true,"module_backend":"native-pw-cli","owner_pid":103241},"graph":{"expected_links":[["bridge.aec.source","input.bridge.mic"],["output.bridge.mic","bluez_output.5C_33_7B_CB_BF_C5.1"],["bluez_input.5C_33_7B_CB_BF_C5.0","input.bridge.callout"],["output.bridge.callout","bridge.aec.sink"],["alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo","echo-cancel-capture"],["echo-cancel-playback","bluez_output.C9_5C_FD_6E_28_46.1"]],"missing_links":[],"unexpected_links":[]},"output":{"candidates":[{"id":"wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback","kind":"wired","label":"Built-in Audio Stereo","node":"alsa_output.platform-3f00b840.mailbox.stereo-fallback","present":true,"connected":true,"adapter":null,"adapter_address":null,"address":null,"setup_state":"ready"},{"id":"a2dp:C9:5C:FD:6E:28:46","kind":"a2dp","label":"Boombox","node":"bluez_output.C9_5C_FD_6E_28_46.1","present":true,"connected":true,"adapter":"hci1","adapter_address":"A0:AD:9F:73:6C:24","address":"C9:5C:FD:6E:28:46","setup_state":"ready"},{"id":"a2dp:50:D7:1B:74:34:D6","kind":"a2dp","label":"iWorld","node":null,"present":false,"connected":false,"adapter":"hci1","adapter_address":"A0:AD:9F:73:6C:24","address":"50:D7:1B:74:34:D6","setup_state":"ready"},{"id":"a2dp:98:47:44:CD:73:DE","kind":"a2dp","label":"Soundcore Space A40","node":null,"present":false,"connected":false,"adapter":"hci1","adapter_address":"A0:AD:9F:73:6C:24","address":"98:47:44:CD:73:DE","setup_state":"ready"}],"chosen":{"id":"a2dp:C9:5C:FD:6E:28:46","kind":"a2dp","label":"Boombox","node":"bluez_output.C9_5C_FD_6E_28_46.1","present":true,"connected":true,"adapter":"hci1","adapter_address":"A0:AD:9F:73:6C:24","address":"C9:5C:FD:6E:28:46","setup_state":"ready"},"reason":"desired output is available","desired_id":"a2dp:C9:5C:FD:6E:28:46","desired_available":true}}
+PipeWire 'pipewire-0' [1.4.2, admin@larkbridge, cookie:4055611032]
+ └─ Clients:
+        34. pipewire                            [1.4.2, admin@larkbridge, pid:601]
+        61. WirePlumber                         [1.4.2, admin@larkbridge, pid:103215]
+        63. WirePlumber [export]                [1.4.2, admin@larkbridge, pid:103215]
+        71. pw-cli                              [1.4.2, admin@larkbridge, pid:103241]
+        91. wpctl                               [1.4.2, admin@larkbridge, pid:104729]
+       102. pw-loopback                         [1.4.2, admin@larkbridge, pid:103254]
+       109. pw-loopback                         [1.4.2, admin@larkbridge, pid:103253]
+       140. pw-cli                              [1.4.2, admin@larkbridge, pid:103241]
+
+Audio
+ ├─ Devices:
+ │      59. alsa_card.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01 [alsa]
+ │      60. alsa_card.platform-3f902000.hdmi    [alsa]
+ │      68. bluez_card.5C_33_7B_CB_BF_C5        [bluez5]
+ │      96. alsa_card.platform-3f00b840.mailbox [alsa]
+ │     117. bluez_card.C9_5C_FD_6E_28_46        [bluez5]
+ │  
+ ├─ Sinks:
+ │      35. alsa_output.platform-3f00b840.mailbox.stereo-fallback [vol: 0.85]
+ │  *  120. bluez_output.C9_5C_FD_6E_28_46.1    [vol: 1.00]
+ │  
+ ├─ Sources:
+ │  *   79. alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo [vol: 1.00]
+ │  
+ ├─ Filters:
+ │    - echo-cancel-103241-22                                       
+ │      40. echo-cancel-capture                                          [Stream/Input/Audio]
+ │      73. bridge.aec.source                                            [Audio/Source]
+ │     106. bridge.aec.sink                                              [Audio/Sink]
+ │     124. echo-cancel-playback                                         [Stream/Output/Audio]
+ │    - loopback-103253-20                                          
+ │      64. output.bridge.callout                                        [Stream/Output/Audio]
+ │     144. input.bridge.callout                                         [Stream/Input/Audio]
+ │    - loopback-103254-20                                          
+ │      93. input.bridge.mic                                             [Stream/Input/Audio]
+ │     119. output.bridge.mic                                            [Stream/Output/Audio]
+ │  
+ └─ Streams:
+        55. bluez_input.5C_33_7B_CB_BF_C5.0                             
+             33. output_FL       > bridge.callout:input_FL	[active]
+             78. output_FR       > bridge.callout:input_FR	[active]
+        72. bluez_output.5C_33_7B_CB_BF_C5.1                            
+             41. monitor_FR     
+             48. monitor_FL     
+             56. input_FR        < bridge.mic:output_FR	[active]
+             75. input_FL        < bridge.mic:output_FL	[active]
+
+Video
+ ├─ Devices:
+ │      36. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      37. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      38. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      39. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      42. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      43. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      47. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      50. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      51. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      53. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      77. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      80. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │     114. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │  
+ ├─ Sinks:
+ │  
+ ├─ Sources:
+ │     112. v4l2_input.platform-3f00b840.mailbox
+ │     113. v4l2_input.platform-3f00b840.mailbox
+ │  *  131. v4l2_input.platform-3f00b840.mailbox
+ │     135. v4l2_input.platform-3f00b840.mailbox
+ │  
+ ├─ Filters:
+ │  
+ └─ Streams:
+
+Settings
+ └─ Default Configured Devices:
+CONNECTIONS
+5C:33:7B:CB:BF:C5 type BR/EDR
+C9:5C:FD:6E:28:46 type BR/EDR
+hci0:	Type: Primary  Bus: UART
+	BD Address: B8:27:EB:43:8D:51  ACL MTU: 1021:8  SCO MTU: 64:1
+	UP RUNNING PSCAN ISCAN 
+	RX bytes:2661023 acl:78 sco:38726 events:991 errors:0
+	TX bytes:3911574 acl:65 sco:60535 commands:245 errors:0
+
+hci1:	Type: Primary  Bus: USB
+	BD Address: A0:AD:9F:73:6C:24  ACL MTU: 1021:6  SCO MTU: 255:12
+	UP RUNNING PSCAN 
+	RX bytes:235296 acl:183 sco:0 events:31763 errors:0
+	TX bytes:19253077 acl:31421 sco:0 commands:265 errors:0
+
+RECENT_SYSTEM
+Aug 24 19:28:34.287405 larkbridge python3[49410]: WARNING controller did not answer (1/2)
+Aug 24 19:28:50.371223 larkbridge python3[49410]: WARNING controller did not answer (2/2)
+Aug 24 19:28:50.450223 larkbridge python3[49410]: WARNING running bt-reset.sh against hci0 (B8:27:EB:43:8D:51)
+Aug 24 19:28:51.578093 larkbridge python3[49410]: INFO   [bt-reset] checking controller
+Aug 24 19:28:51.579410 larkbridge python3[49410]: INFO   [bt-reset] controller is responding — nothing to do
+Aug 24 19:28:51.579410 larkbridge python3[49410]: WARNING bt-reset.sh did NOT report recovery
+Aug 24 19:29:07.662936 larkbridge python3[49410]: WARNING controller did not answer (1/2)
+Aug 24 19:29:23.747005 larkbridge python3[49410]: WARNING controller did not answer (2/2)
+Aug 24 19:29:23.748306 larkbridge python3[49410]: WARNING wedged, but only 32s since last recovery (backoff 240s) — waiting
+Aug 24 19:29:39.839592 larkbridge python3[49410]: WARNING controller did not answer (3/2)
+Aug 24 19:29:39.840787 larkbridge python3[49410]: WARNING wedged, but only 48s since last recovery (backoff 240s) — waiting
+Aug 24 19:29:55.943401 larkbridge python3[49410]: WARNING controller did not answer (4/2)
+Aug 24 19:29:55.944769 larkbridge python3[49410]: WARNING wedged, but only 64s since last recovery (backoff 240s) — waiting
+Aug 24 19:30:12.036280 larkbridge python3[49410]: WARNING controller did not answer (5/2)
+Aug 24 19:30:12.037714 larkbridge python3[49410]: WARNING wedged, but only 80s since last recovery (backoff 240s) — waiting
+Aug 24 19:30:28.139249 larkbridge python3[49410]: WARNING controller did not answer (6/2)
+Aug 24 19:30:28.140467 larkbridge python3[49410]: WARNING wedged, but only 97s since last recovery (backoff 240s) — waiting
+Aug 24 19:30:44.223257 larkbridge python3[49410]: WARNING controller did not answer (7/2)
+Aug 24 19:30:44.224654 larkbridge python3[49410]: WARNING wedged, but only 113s since last recovery (backoff 240s) — waiting
+Aug 24 19:31:00.308686 larkbridge python3[49410]: WARNING controller did not answer (8/2)
+Aug 24 19:31:00.310004 larkbridge python3[49410]: WARNING wedged, but only 129s since last recovery (backoff 240s) — waiting
+RECENT_USER
+Aug 24 19:27:59.422816 larkbridge wireplumber[103215]: spa.bluez5.source.sco: decode failed: -3
+RECENT_KERNEL
+Aug 24 19:28:35.309907 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:28:51.373929 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:28:53.389940 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:29:08.685959 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:29:24.749970 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:29:35.953929 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:35.954149 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:35.954220 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.273924 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.274134 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.425920 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.426163 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.426311 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.725932 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:37.726130 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:29:40.845912 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:29:50.388834 larkbridge kernel: Transfer to device 4 endpoint 0x7 frame 446 failed - FIQ reported NYET. Data may have been lost.
+Aug 24 19:29:56.973913 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:30:08.597949 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:08.598218 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:08.598290 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:08.598358 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:08.897899 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:08.898141 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:08.898218 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:13.069961 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:30:29.165898 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:30:36.485937 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:36.486181 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:37.461912 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:37.462133 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:30:45.229904 larkbridge kernel: Bluetooth: hci0: command tx timeout
+Aug 24 19:31:01.325914 larkbridge kernel: Bluetooth: hci0: command tx timeout

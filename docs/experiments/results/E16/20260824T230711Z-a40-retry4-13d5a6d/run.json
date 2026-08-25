@@ -1,0 +1,217 @@
+{
+  "schema": 1,
+  "label": "a40-retry4-13d5a6d",
+  "host": "larkbridge",
+  "planned_seconds": 240,
+  "started_utc": "2026-08-24T23:07:11.510848+00:00",
+  "directory": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-mode1\\docs\\experiments\\results\\E16\\20260824T230711Z-a40-retry4-13d5a6d",
+  "snapshots": [
+    {
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "set -u\ndate --iso-8601=ns\nid\nfindmnt -no SOURCE,FSTYPE,OPTIONS /media/root-ro || true\nsystemctl is-active bluetooth.service bridge-btwatchdog.service bridge-storage-guard.service || true\nsystemctl --user is-active bridge-output-remote.service bridge-supervisor.service pipewire.service wireplumber.service || true\nprintf '%s\\n' '--- bridge-status ---'\ncat /run/user/1000/bridge-status.json\nprintf '%s\\n' '--- storage-health ---'\ncat /run/larkbridge/storage-health.json\nprintf '%s\\n' '--- active-config-sha256 ---'\nsha256sum /home/admin/rpi-lark-bridge/config/bridge.toml\nprintf '%s\\n' '--- durable-configs ---'\nsudo -n find /var/lib/larkbridge-persist/config -mindepth 2 -maxdepth 2 -name bridge.toml -exec sha256sum {} +\nprintf '%s\\n' '--- a40-hci0 ---'\nbusctl --system introspect org.bluez /org/bluez/hci0/dev_98_47_44_CD_73_DE org.bluez.Device1 || true\nprintf '%s\\n' '--- a40-hci1 ---'\nbusctl --system introspect org.bluez /org/bluez/hci1/dev_98_47_44_CD_73_DE org.bluez.Device1 || true\nprintf '%s\\n' '--- bluez-tree ---'\nbusctl --system tree org.bluez\nprintf '%s\\n' '--- pipewire-status ---'\nXDG_RUNTIME_DIR=/run/user/1000 wpctl status --name || true\nprintf '%s\\n' '--- pipewire-graph ---'\nXDG_RUNTIME_DIR=/run/user/1000 pw-dump || true"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "C:\\Users\\user1\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe",
+        "shell",
+        "sh",
+        "-c",
+        "date '+%Y-%m-%dT%H:%M:%S.%N%z'; dumpsys activity activities | grep -m1 mResumedActivity; dumpsys audio; dumpsys bluetooth_manager"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "set -u\ndate --iso-8601=ns\nid\nfindmnt -no SOURCE,FSTYPE,OPTIONS /media/root-ro || true\nsystemctl is-active bluetooth.service bridge-btwatchdog.service bridge-storage-guard.service || true\nsystemctl --user is-active bridge-output-remote.service bridge-supervisor.service pipewire.service wireplumber.service || true\nprintf '%s\\n' '--- bridge-status ---'\ncat /run/user/1000/bridge-status.json\nprintf '%s\\n' '--- storage-health ---'\ncat /run/larkbridge/storage-health.json\nprintf '%s\\n' '--- active-config-sha256 ---'\nsha256sum /home/admin/rpi-lark-bridge/config/bridge.toml\nprintf '%s\\n' '--- durable-configs ---'\nsudo -n find /var/lib/larkbridge-persist/config -mindepth 2 -maxdepth 2 -name bridge.toml -exec sha256sum {} +\nprintf '%s\\n' '--- a40-hci0 ---'\nbusctl --system introspect org.bluez /org/bluez/hci0/dev_98_47_44_CD_73_DE org.bluez.Device1 || true\nprintf '%s\\n' '--- a40-hci1 ---'\nbusctl --system introspect org.bluez /org/bluez/hci1/dev_98_47_44_CD_73_DE org.bluez.Device1 || true\nprintf '%s\\n' '--- bluez-tree ---'\nbusctl --system tree org.bluez\nprintf '%s\\n' '--- pipewire-status ---'\nXDG_RUNTIME_DIR=/run/user/1000 wpctl status --name || true\nprintf '%s\\n' '--- pipewire-graph ---'\nXDG_RUNTIME_DIR=/run/user/1000 pw-dump || true"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "C:\\Users\\user1\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe",
+        "shell",
+        "sh",
+        "-c",
+        "date '+%Y-%m-%dT%H:%M:%S.%N%z'; dumpsys activity activities | grep -m1 mResumedActivity; dumpsys audio; dumpsys bluetooth_manager"
+      ],
+      "returncode": 0
+    }
+  ],
+  "captures": [
+    {
+      "name": "bluez-monitor",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 250s busctl --system --json=short monitor org.bluez"
+      ],
+      "pid": 36516
+    },
+    {
+      "name": "btmon",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 250s stdbuf -oL -eL btmon -T -c never"
+      ],
+      "pid": 19888
+    },
+    {
+      "name": "system-journal",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 250s journalctl -f -n 0 -o short-precise -u bluetooth.service -u bridge-btwatchdog.service -u bridge-storage-guard.service"
+      ],
+      "pid": 37892
+    },
+    {
+      "name": "user-journal",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 250s journalctl -f -n 0 -o short-precise _SYSTEMD_USER_UNIT=bridge-output-remote.service"
+      ],
+      "pid": 26960
+    },
+    {
+      "name": "state",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "printf %s c2V0IC11CndoaWxlIDo7IGRvCiAgZGF0ZSAtLWlzby04NjAxPW5zCiAganEgLWMgJ3tzdGF0ZSxjYWxsOi5jYWxsLmhmcF9ub2Rlc19wcmVzZW50LG91dHB1dDp7ZGVzaXJlZDoub3V0cHV0LmRlc2lyZWRfaWQsY2hvc2VuOi5vdXRwdXQuY2hvc2VuLmlkLHJlYXNvbjoub3V0cHV0LnJlYXNvbixjYW5kaWRhdGVzOlsub3V0cHV0LmNhbmRpZGF0ZXNbXXx7aWQscHJlc2VudCxjb25uZWN0ZWQsYWRhcHRlcixhZGFwdGVyX2FkZHJlc3Msc2V0dXBfc3RhdGV9XX19JyAvcnVuL3VzZXIvMTAwMC9icmlkZ2Utc3RhdHVzLmpzb24KICBmb3IgcGF0aCBpbiAvb3JnL2JsdWV6L2hjaTAvZGV2Xzk4XzQ3XzQ0X0NEXzczX0RFIC9vcmcvYmx1ZXovaGNpMS9kZXZfOThfNDdfNDRfQ0RfNzNfREU7IGRvCiAgICBwcmludGYgJyVzICcgIiRwYXRoIgogICAgYnVzY3RsIC0tc3lzdGVtIGdldC1wcm9wZXJ0eSBvcmcuYmx1ZXogIiRwYXRoIiBvcmcuYmx1ZXouRGV2aWNlMSBQYWlyZWQgMj4vZGV2L251bGwgfHwgcHJpbnRmICdhYnNlbnRcbicKICBkb25lCiAgc2xlZXAgMQpkb25l | base64 -d | timeout 250s sh"
+      ],
+      "pid": 34468
+    },
+    {
+      "name": "pipewire-monitor",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "XDG_RUNTIME_DIR=/run/user/1000 timeout 250s stdbuf -oL -eL pw-mon"
+      ],
+      "pid": 24924
+    },
+    {
+      "name": "android-logcat",
+      "command": [
+        "C:\\Users\\user1\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe",
+        "logcat",
+        "-T",
+        "1",
+        "-v",
+        "threadtime",
+        "BridgeOutputController:V",
+        "AudioRoutingService:V",
+        "*:S"
+      ],
+      "pid": 15204
+    }
+  ],
+  "returncodes": {
+    "bluez-monitor": 1,
+    "btmon": 1,
+    "system-journal": 1,
+    "user-journal": 1,
+    "state": 1,
+    "pipewire-monitor": 1,
+    "android-logcat": 1
+  },
+  "completed_utc": "2026-08-24T23:11:14.193834+00:00",
+  "files": {
+    "android-after.log": {
+      "bytes": 495545,
+      "sha256": "288ed3315f19657dda18024ffb910aa2fb9c34fd706c48c45571c929719534de"
+    },
+    "android-after.log.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "android-before.log": {
+      "bytes": 495078,
+      "sha256": "4d97eaf0193533c3d1fb97bd005e2e0d9d743217029e134402541a7fd9ecb927"
+    },
+    "android-before.log.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "android-logcat.log": {
+      "bytes": 697,
+      "sha256": "a06e2a445d1a137c6f451c8f8c3f9faf7ff1b12cfd197170fd467bce94a80be8"
+    },
+    "android-logcat.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bluez-monitor.log": {
+      "bytes": 2490108,
+      "sha256": "9f30a268b91f5269100746588ca4e66fe249ff6c5a443c1fa05beb17f614ccf7"
+    },
+    "bluez-monitor.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "btmon.log": {
+      "bytes": 289876,
+      "sha256": "2f121dcac717fed47d4c47de065b273466e866dc5f83b21391a7abd6cca1ff6e"
+    },
+    "btmon.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "pi-after.log": {
+      "bytes": 247804,
+      "sha256": "1ae0a720ece20b72189848a9349fcbe19212c66a1a017ed5fea626d1315d399f"
+    },
+    "pi-after.log.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "pi-before.log": {
+      "bytes": 203888,
+      "sha256": "0c4099fac7797f5af0f5203afa442d3e0b1fe5780770858e2c7212ff6828f10a"
+    },
+    "pi-before.log.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "pipewire-monitor.log": {
+      "bytes": 727877,
+      "sha256": "2b891803333c6cc33c3d4ffdca0f03b96ea28f06284a47bc7f5b36ae39abe538"
+    },
+    "pipewire-monitor.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "state.log": {
+      "bytes": 208876,
+      "sha256": "023de1f9ce31c62a19a97035fb40c8361f9632fe96710e747ffe630e27bb588f"
+    },
+    "state.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "system-journal.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "system-journal.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "user-journal.log": {
+      "bytes": 1931,
+      "sha256": "226a173f2c025ef2c7324dcc7d5722084cc654f9a8482a048c1e842de6381de7"
+    },
+    "user-journal.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

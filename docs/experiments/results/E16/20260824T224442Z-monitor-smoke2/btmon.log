@@ -1,0 +1,11 @@
+Bluetooth monitor ver 5.82
+btmon[86123]: = Note: Linux version 6.18.34+rpt-..   2026-08-24 18:44:44.038739
+btmon[86123]: = Note: Bluetooth subsystem versio..   2026-08-24 18:44:44.038752
+= New Index: A0:AD:9F:7.. (Primary,USB,hci1)  [hci1] 2026-08-24 18:44:44.038784
+= Open Index: A0:AD:9F:73:6C:24               [hci1] 2026-08-24 18:44:44.038787
+= Index Info: A0:AD:9F:73:6C:24               [hci1] 2026-08-24 18:44:44.038789
+= New Index: B8:27:EB:.. (Primary,UART,hci0)  [hci0] 2026-08-24 18:44:44.038792
+= Open Index: B8:27:EB:43:8D:51               [hci0] 2026-08-24 18:44:44.038793
+= Index Info: B8:27.. (Broadcom Corporation)  [hci0] 2026-08-24 18:44:44.038794
+bluetoothctl[57097]: @ MGMT Open: bluet..   {0x0002} 2026-08-24 18:44:44.038800
+bluetoothd[49821]: @ MGMT Open: bluetoo..   {0x0001} 2026-08-24 18:44:44.038805

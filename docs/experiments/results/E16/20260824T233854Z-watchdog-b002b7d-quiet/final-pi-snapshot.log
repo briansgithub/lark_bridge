@@ -1,0 +1,308 @@
+2026-08-24T19:44:58,519855702-04:00
+--- mount ---
+/ overlayroot overlay rw,relatime,lowerdir=/media/root-ro,upperdir=/media/root-rw/overlay,workdir=/media/root-rw/overlay-workdir/_,uuid=on
+/media/root-ro /dev/mmcblk0p2 ext4 ro,relatime
+--- storage ---
+{"config_slot":"a","config_source":"slot-a","mount":"/dev/mmcblk0p3 mounted ext4,rw","pairing_action":"live-valid","pairing_slot":null,"persistent":true,"reasons":[],"schema":1,"seed_action":"existing","state":"READY"}
+--- services ---
+MainPID=106206
+ExecMainStartTimestamp=Mon 2026-08-24 19:37:26 EDT
+Id=bridge-btwatchdog.service
+ActiveState=active
+SubState=running
+
+MainPID=105247
+ExecMainStartTimestamp=Mon 2026-08-24 19:33:41 EDT
+Id=bluetooth.service
+ActiveState=active
+SubState=running
+--- watchdog-journal-since-deploy ---
+Aug 24 19:37:20.683819 larkbridge python3[49410]: INFO signal 15 — shutting down
+Aug 24 19:37:20.683204 larkbridge systemd[1]: Stopping bridge-btwatchdog.service - rpi-lark-bridge Bluetooth controller watchdog...
+Aug 24 19:37:26.399861 larkbridge python3[49410]: INFO stopped
+Aug 24 19:37:26.505307 larkbridge systemd[1]: bridge-btwatchdog.service: Deactivated successfully.
+Aug 24 19:37:26.506455 larkbridge systemd[1]: Stopped bridge-btwatchdog.service - rpi-lark-bridge Bluetooth controller watchdog.
+Aug 24 19:37:26.506738 larkbridge systemd[1]: bridge-btwatchdog.service: Consumed 1min 36.762s CPU time.
+Aug 24 19:37:26.516212 larkbridge systemd[1]: Started bridge-btwatchdog.service - rpi-lark-bridge Bluetooth controller watchdog.
+Aug 24 19:37:27.084988 larkbridge python3[106206]: INFO watching hci0 (B8:27:EB:43:8D:51): probe every 15s, act after 2 consecutive failures
+Aug 24 19:37:27.127977 larkbridge python3[106206]: INFO other controller present: hci1 A0:AD:9F:73:6C:24 on USB
+Aug 24 19:37:27.251757 larkbridge python3[106206]: INFO phone present
+--- kernel-bluetooth-since-deploy ---
+Aug 24 19:38:13.397938 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:38:13.398178 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:38:13.398282 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:38:13.398349 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:38:13.398423 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:38:13.398490 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:38:13.398557 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:42:10.233964 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:42:10.234236 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:42:10.234338 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:42:10.234405 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:42:10.234482 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:42:10.234556 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:42:10.234621 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:42:10.234727 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:44:03.705929 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:44:03.706165 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:44:03.706249 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:44:03.706314 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:44:03.706389 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:44:03.706453 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:44:03.706529 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+Aug 24 19:44:03.706597 larkbridge kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+--- bridge-status ---
+{
+  "timestamp": 1787615097.0052173,
+  "state": "ACTIVE",
+  "generation": 15,
+  "call": {
+    "hfp_nodes_present": true
+  },
+  "endpoints": {
+    "lark": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+    "hfp_source": "bluez_input.5C_33_7B_CB_BF_C5.0",
+    "hfp_sink": "bluez_output.5C_33_7B_CB_BF_C5.1",
+    "wired_output": "bluez_output.C9_5C_FD_6E_28_46.1"
+  },
+  "aec": {
+    "enabled": true,
+    "method": "webrtc",
+    "rate": 48000,
+    "channels": 1,
+    "node_latency_frames": 1920,
+    "play_delay_frames": null,
+    "verified": true,
+    "module_backend": "native-pw-cli",
+    "owner_pid": 105496
+  },
+  "graph": {
+    "expected_links": [
+      [
+        "bridge.aec.source",
+        "input.bridge.mic"
+      ],
+      [
+        "output.bridge.mic",
+        "bluez_output.5C_33_7B_CB_BF_C5.1"
+      ],
+      [
+        "bluez_input.5C_33_7B_CB_BF_C5.0",
+        "input.bridge.callout"
+      ],
+      [
+        "output.bridge.callout",
+        "bridge.aec.sink"
+      ],
+      [
+        "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+        "echo-cancel-capture"
+      ],
+      [
+        "echo-cancel-playback",
+        "bluez_output.C9_5C_FD_6E_28_46.1"
+      ]
+    ],
+    "missing_links": [],
+    "unexpected_links": []
+  },
+  "attempts": 0,
+  "last_failure": null,
+  "config_path": "/home/admin/rpi-lark-bridge/config/bridge.toml",
+  "system": {
+    "temperature_c": 37.01,
+    "mem_available_kib": 557016,
+    "throttled": "throttled=0x0",
+    "arm_clock": "frequency(48)=1200000000"
+  },
+  "output": {
+    "candidates": [
+      {
+        "id": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+        "kind": "wired",
+        "label": "Built-in Audio Stereo",
+        "node": "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+        "present": true,
+        "connected": true,
+        "adapter": null,
+        "adapter_address": null,
+        "address": null,
+        "setup_state": "ready"
+      },
+      {
+        "id": "a2dp:C9:5C:FD:6E:28:46",
+        "kind": "a2dp",
+        "label": "Boombox",
+        "node": "bluez_output.C9_5C_FD_6E_28_46.1",
+        "present": true,
+        "connected": true,
+        "adapter": "hci1",
+        "adapter_address": "A0:AD:9F:73:6C:24",
+        "address": "C9:5C:FD:6E:28:46",
+        "setup_state": "ready"
+      },
+      {
+        "id": "a2dp:50:D7:1B:74:34:D6",
+        "kind": "a2dp",
+        "label": "iWorld",
+        "node": null,
+        "present": false,
+        "connected": false,
+        "adapter": "hci1",
+        "adapter_address": "A0:AD:9F:73:6C:24",
+        "address": "50:D7:1B:74:34:D6",
+        "setup_state": "ready"
+      },
+      {
+        "id": "a2dp:98:47:44:CD:73:DE",
+        "kind": "a2dp",
+        "label": "Soundcore Space A40",
+        "node": null,
+        "present": false,
+        "connected": false,
+        "adapter": "hci1",
+        "adapter_address": "A0:AD:9F:73:6C:24",
+        "address": "98:47:44:CD:73:DE",
+        "setup_state": "ready"
+      }
+    ],
+    "chosen": {
+      "id": "a2dp:C9:5C:FD:6E:28:46",
+      "kind": "a2dp",
+      "label": "Boombox",
+      "node": "bluez_output.C9_5C_FD_6E_28_46.1",
+      "present": true,
+      "connected": true,
+      "adapter": "hci1",
+      "adapter_address": "A0:AD:9F:73:6C:24",
+      "address": "C9:5C:FD:6E:28:46",
+      "setup_state": "ready"
+    },
+    "reason": "desired output is available",
+    "desired_id": "a2dp:C9:5C:FD:6E:28:46",
+    "desired_available": true
+  },
+  "mode": "bluetooth-wired"
+}
+--- phone-hci0 ---
+.Address           property  s         "5C:33:7B:CB:BF:C5"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   emits-change
+.Bonded            property  b         true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  emits-change
+.Connected         property  b         true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  emits-change
+.Name              property  s         "Pixel 7a"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            emits-change
+.Paired            property  b         true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  emits-change
+.Trusted           property  b         true                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  emits-change writable
+.UUIDs             property  as        21 "00000000-0000-0000-0000-000000000000" "00001105-0000-1000-8000-00805f9b34fb" "0000110a-0000-1000-8000-00805f9b34fb" "0000110c-0000-1000-8000-00805f9b34fb" "0000110e-0000-1000-8000-00805f9b34fb" "00001112-0000-1000-8000-00805f9b34fb" "00001115-0000-1000-8000-00805f9b34fb" "00001116-0000-1000-8000-00805f9b34fb" "0000111f-0000-1000-8000-00805f9b34fb" "0000112d-0000-1000-8000-00805f9b34fb" "0000112f-0000-1000-8000-00805f9b34fb" "00001132-0000-1000-8000-00805f9b34fb" "00001200-0000-1000-8000-00805f9b34fb" "00001800-0000-1000-8000-00805f9b34fb" "00001801-0000-1000-8000-00805f9b34fb" "00001855-0000-1000-8000-00805f9b34fb" "0000fcf1-0000-1000-8000-00805f9b34fb" "0000fef3-0000-1000-8000-00805f9b34fb" "16bcfd00-253f-c348-e831-0db3e334d580" "6e0e6e72-3f13-4f7e-9d3f-87b6f5a43c11" "abbafc00-e56a-484c-b832-8b17cf6cbfe8" emits-change
+--- boombox-hci1 ---
+.Address           property  s         "C9:5C:FD:6E:28:46"                                                                                                                                                                                                                         emits-change
+.Bonded            property  b         true                                                                                                                                                                                                                                        emits-change
+.Connected         property  b         true                                                                                                                                                                                                                                        emits-change
+.Name              property  s         "MP43247"                                                                                                                                                                                                                                   emits-change
+.Paired            property  b         true                                                                                                                                                                                                                                        emits-change
+.Trusted           property  b         true                                                                                                                                                                                                                                        emits-change writable
+.UUIDs             property  as        6 "0000110b-0000-1000-8000-00805f9b34fb" "0000110c-0000-1000-8000-00805f9b34fb" "0000110d-0000-1000-8000-00805f9b34fb" "0000110e-0000-1000-8000-00805f9b34fb" "0000111e-0000-1000-8000-00805f9b34fb" "00001200-0000-1000-8000-00805f9b34fb" emits-change
+--- pipewire ---
+PipeWire 'pipewire-0' [1.4.2, admin@larkbridge, cookie:4055611032]
+ └─ Clients:
+        34. pipewire                            [1.4.2, admin@larkbridge, pid:601]
+        65. pw-cli                              [1.4.2, admin@larkbridge, pid:105496]
+        92. pw-cli                              [1.4.2, admin@larkbridge, pid:105496]
+       119. pw-loopback                         [1.4.2, admin@larkbridge, pid:105510]
+       120. WirePlumber                         [1.4.2, admin@larkbridge, pid:105464]
+       121. pw-loopback                         [1.4.2, admin@larkbridge, pid:105511]
+       123. wpctl                               [1.4.2, admin@larkbridge, pid:107728]
+       131. WirePlumber [export]                [1.4.2, admin@larkbridge, pid:105464]
+
+Audio
+ ├─ Devices:
+ │      35. alsa_card.platform-3f902000.hdmi    [alsa]
+ │      49. bluez_card.5C_33_7B_CB_BF_C5        [bluez5]
+ │      52. alsa_card.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01 [alsa]
+ │      78. bluez_card.C9_5C_FD_6E_28_46        [bluez5]
+ │     136. alsa_card.platform-3f00b840.mailbox [alsa]
+ │  
+ ├─ Sinks:
+ │      39. alsa_output.platform-3f00b840.mailbox.stereo-fallback [vol: 0.85]
+ │  *   61. bluez_output.C9_5C_FD_6E_28_46.1    [vol: 1.00]
+ │  
+ ├─ Sources:
+ │  *   53. alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo [vol: 1.00]
+ │  
+ ├─ Filters:
+ │    - echo-cancel-105496-22                                       
+ │      66. echo-cancel-playback                                         [Stream/Output/Audio]
+ │      73. bridge.aec.sink                                              [Audio/Sink]
+ │     126. echo-cancel-capture                                          [Stream/Input/Audio]
+ │     128. bridge.aec.source                                            [Audio/Source]
+ │    - loopback-105510-20                                          
+ │     109. input.bridge.callout                                         [Stream/Input/Audio]
+ │     133. output.bridge.callout                                        [Stream/Output/Audio]
+ │    - loopback-105511-20                                          
+ │     137. input.bridge.mic                                             [Stream/Input/Audio]
+ │     144. output.bridge.mic                                            [Stream/Output/Audio]
+ │  
+ └─ Streams:
+        46. bluez_input.5C_33_7B_CB_BF_C5.0                             
+             59. output_FL       > bridge.callout:input_FL	[active]
+             60. output_FR       > bridge.callout:input_FR	[active]
+        54. bluez_output.5C_33_7B_CB_BF_C5.1                            
+            105. monitor_FL     
+            118. input_FR        < bridge.mic:output_FR	[active]
+            151. input_FL        < bridge.mic:output_FL	[active]
+            153. monitor_FR     
+
+Video
+ ├─ Devices:
+ │      36. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      37. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      38. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      43. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      50. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      63. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      77. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      80. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │      83. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │     110. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │     112. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │     114. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │     135. v4l2_device.platform-3f00b840.mailbox [v4l2]
+ │  
+ ├─ Sinks:
+ │  
+ ├─ Sources:
+ │  *   99. v4l2_input.platform-3f00b840.mailbox
+ │     103. v4l2_input.platform-3f00b840.mailbox
+ │     124. v4l2_input.platform-3f00b840.mailbox
+ │     150. v4l2_input.platform-3f00b840.mailbox
+ │  
+ ├─ Filters:
+ │  
+ └─ Streams:
+
+Settings
+ └─ Default Configured Devices:
+--- hci0-stats-a ---
+hci0:	Type: Primary  Bus: UART
+	BD Address: B8:27:EB:43:8D:51  ACL MTU: 1021:8  SCO MTU: 64:1
+	UP RUNNING PSCAN ISCAN 
+	RX bytes:5597887 acl:76 sco:87346 events:306 errors:0
+	TX bytes:5638858 acl:65 sco:87523 commands:258 errors:0
+
+--- hci0-stats-b ---
+hci0:	Type: Primary  Bus: UART
+	BD Address: B8:27:EB:43:8D:51  ACL MTU: 1021:8  SCO MTU: 64:1
+	UP RUNNING PSCAN ISCAN 
+	RX bytes:5640519 acl:76 sco:88011 events:307 errors:0
+	TX bytes:5681614 acl:65 sco:88191 commands:259 errors:0
+
+--- deployed-hashes ---
+e3480abda32c6db796a3ade0c119b30467d1ed17e8b0ca72effe62eae927a8f8  /home/admin/rpi-lark-bridge/pi/bridged/bt_watchdog.py
+e3480abda32c6db796a3ade0c119b30467d1ed17e8b0ca72effe62eae927a8f8  /media/root-ro/home/admin/rpi-lark-bridge/pi/bridged/bt_watchdog.py
+--- recovery-bundle ---
+--- configs ---
+bash: line 29: cd: /var/lib/larkbridge-persist/recovery/deploy-20260824T233719Z-b002b7d: Permission denied
+8d8bb69020a246879ad94fac3736f54367e5b31e838b8a6751c57e867a5a06f4  /home/admin/rpi-lark-bridge/config/bridge.toml
+8d8bb69020a246879ad94fac3736f54367e5b31e838b8a6751c57e867a5a06f4  /var/lib/larkbridge-persist/config/slot-a/bridge.toml
+7a0ea39c6144d352e889d4f541adf9afcbcffa5e78f3036b4e9ddda22c7bbde2  /var/lib/larkbridge-persist/config/slot-b/bridge.toml
+17:[devices.output]
+19:id = "a2dp:C9:5C:FD:6E:28:46"
+grep: /var/lib/larkbridge-persist/config/*/bridge.toml: No such file or directory

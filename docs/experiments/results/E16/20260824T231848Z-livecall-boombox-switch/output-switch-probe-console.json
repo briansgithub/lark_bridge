@@ -1,0 +1,32 @@
+{
+  "verdict": "FAIL",
+  "switch_from": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+  "switch_to": "a2dp:C9:5C:FD:6E:28:46",
+  "switched_at": 43.97,
+  "duration_s": 199.99,
+  "interval_s": 0.05,
+  "samples": 2133,
+  "uplink_healthy_before_switch": true,
+  "uplink_gap": {
+    "seconds": 8.41,
+    "started_at": 112.598
+  },
+  "downlink_gap": {
+    "seconds": 5.81,
+    "started_at": 109.849
+  },
+  "selection_apply_seconds": 0.0,
+  "final_chosen": "bluez_output.C9_5C_FD_6E_28_46.1",
+  "final_state": "SWITCHING",
+  "chosen_changed_during_run": true,
+  "switch_took_effect": true,
+  "thresholds": {
+    "max_uplink_gap_s": 1.0,
+    "max_downlink_gap_s": 1.0,
+    "max_apply_s": 1.0
+  },
+  "failures": [
+    "uplink gap 8.41s exceeds 1.00s",
+    "downlink gap 5.81s exceeds 1.00s"
+  ]
+}

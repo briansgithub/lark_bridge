@@ -1,0 +1,2419 @@
+Bluetooth monitor ver 5.82
+btmon[89999]: = Note: Linux version 6.18.34+rpt-..   2026-08-24 18:56:14.082463
+btmon[89999]: = Note: Bluetooth subsystem versio..   2026-08-24 18:56:14.082476
+= New Index: A0:AD:9F:7.. (Primary,USB,hci1)  [hci1] 2026-08-24 18:56:14.082482
+= Open Index: A0:AD:9F:73:6C:24               [hci1] 2026-08-24 18:56:14.082484
+= Index Info: A0:AD:9F:73:6C:24               [hci1] 2026-08-24 18:56:14.082486
+= New Index: B8:27:EB:.. (Primary,UART,hci0)  [hci0] 2026-08-24 18:56:14.082489
+= Open Index: B8:27:EB:43:8D:51               [hci0] 2026-08-24 18:56:14.082490
+= Index Info: B8:27.. (Broadcom Corporation)  [hci0] 2026-08-24 18:56:14.082492
+bluetoothctl[57097]: @ MGMT Open: bluet..   {0x0002} 2026-08-24 18:56:14.082496
+bluetoothd[49821]: @ MGMT Open: bluetoo..   {0x0001} 2026-08-24 18:56:14.082499
+hciconfig[90173]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:56:29.148321
+hciconfig[90173]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:56:29.148386
+hciconfig[90173]: < HCI Command: Read...   #1 [hci0] 2026-08-24 18:56:29.148459
+> HCI Event: Command Com.. (0x0e) plen 12  #2 [hci0] 2026-08-24 18:56:29.148959
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[90173]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:56:29.149296
+hciconfig[90173]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:56:29.149359
+hciconfig[90285]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:56:44.257983
+hciconfig[90285]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:56:44.258048
+hciconfig[90285]: < HCI Command: Read...   #3 [hci0] 2026-08-24 18:56:44.258115
+> HCI Event: Command Com.. (0x0e) plen 12  #4 [hci0] 2026-08-24 18:56:44.258647
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[90285]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:56:44.258981
+hciconfig[90285]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:56:44.259034
+hciconfig[90398]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:56:59.368409
+hciconfig[90398]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:56:59.368488
+hciconfig[90398]: < HCI Command: Read...   #5 [hci0] 2026-08-24 18:56:59.368586
+> HCI Event: Command Com.. (0x0e) plen 12  #6 [hci0] 2026-08-24 18:56:59.369143
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[90398]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:56:59.369550
+hciconfig[90398]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:56:59.369657
+> ACL Data RX: Handl.. flags 0x02 dlen 31  #7 [hci0] 2026-08-24 18:57:03.739814
+      Channel: 66 len 27 [PSM 0 mode Basic (0x00)] {chan 65535}
+        61 ff 2d 01 7b 22 69 64 22 3a 31 36 2c 22 6f 70  a.-.{"id":16,"op
+        22 3a 22 73 63 61 6e 22 7d 0a c8                 ":"scan"}..     
+> HCI Event: Mode Change (0x14) plen 6     #8 [hci0] 2026-08-24 18:57:03.742193
+        Status: Success (0x00)
+        Handle: 12
+        Mode: Active (0x00)
+        Interval: 0.000 msec (0x0000)
+< ACL Data TX: Hand.. flags 0x00 dlen 104  #9 [hci0] 2026-08-24 18:57:03.747340
+      Channel: 74 len 100 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c1 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 30 2c 22 64  elapsed_ms":0,"d
+        75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31 32 30 30  uration_ms":1200
+        30 7d 0a 0e                                      0}..            
+bluetoothctl[90443]: @ MGMT Open: bluet..   {0x0003} 2026-08-24 18:57:03.872434
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci0] 2026-08-24 18:57:03.930454
+        Bondable: Enabled (0x01)
+@ MGMT Event: Com.. (0x0001) plen 7  {0x0001} [hci0] 2026-08-24 18:57:03.931262
+      Set Bondable (0x0009) plen 4
+        Status: Success (0x00)
+        Current settings: 0x00000adb
+          Powered
+          Connectable
+          Discoverable
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+@ MGMT Event: New.. (0x0006) plen 4  {0x0003} [hci0] 2026-08-24 18:57:03.931284
+        Current settings: 0x00000adb
+          Powered
+          Connectable
+          Discoverable
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+@ MGMT Event: New.. (0x0006) plen 4  {0x0002} [hci0] 2026-08-24 18:57:03.931284
+        Current settings: 0x00000adb
+          Powered
+          Connectable
+          Discoverable
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci0] 2026-08-24 18:57:03.931703
+        Capability: KeyboardDisplay (0x04)
+@ MGMT Event: Com.. (0x0001) plen 3  {0x0001} [hci0] 2026-08-24 18:57:03.931714
+      Set IO Capability (0x0018) plen 0
+        Status: Success (0x00)
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci1] 2026-08-24 18:57:03.931875
+        Bondable: Enabled (0x01)
+@ MGMT Event: Com.. (0x0001) plen 7  {0x0001} [hci1] 2026-08-24 18:57:03.931883
+      Set Bondable (0x0009) plen 4
+        Status: Success (0x00)
+        Current settings: 0x007c0ad1
+          Powered
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+          CIS Central
+          CIS Peripheral
+          ISO Broadcaster
+          Sync Receiver
+          LL Privacy
+@ MGMT Event: New.. (0x0006) plen 4  {0x0003} [hci1] 2026-08-24 18:57:03.931888
+        Current settings: 0x007c0ad1
+          Powered
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+          CIS Central
+          CIS Peripheral
+          ISO Broadcaster
+          Sync Receiver
+          LL Privacy
+@ MGMT Event: New.. (0x0006) plen 4  {0x0002} [hci1] 2026-08-24 18:57:03.931888
+        Current settings: 0x007c0ad1
+          Powered
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+          CIS Central
+          CIS Peripheral
+          ISO Broadcaster
+          Sync Receiver
+          LL Privacy
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci1] 2026-08-24 18:57:03.932087
+        Capability: KeyboardDisplay (0x04)
+@ MGMT Event: Com.. (0x0001) plen 3  {0x0001} [hci1] 2026-08-24 18:57:03.932105
+      Set IO Capability (0x0018) plen 0
+        Status: Success (0x00)
+> HCI Event: Number of C.. (0x13) plen 5  #10 [hci0] 2026-08-24 18:57:03.932343
+        Num handles: 1
+        Handle: 12
+        Count: 1
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci1] 2026-08-24 18:57:03.943746
+        Address type: 0x01
+          BR/EDR
+        RSSI: invalid (0x7f)
+        UUIDs: 0
+< HCI Command: Inq.. (0x01|0x0001) plen 5  #1 [hci1] 2026-08-24 18:57:03.944219
+        Access code: 0x9e8b33 (General Inquiry)
+        Length: 10.24s (0x08)
+        Num responses: 0
+> HCI Event: Command Status (0x0f) plen 4  #2 [hci1] 2026-08-24 18:57:03.948257
+      Inquiry (0x01|0x0001) ncmd 2
+        Status: Success (0x00)
+@ MGMT Event: Com.. (0x0001) plen 4  {0x0001} [hci1] 2026-08-24 18:57:03.948343
+      Start Service Discovery (0x003a) plen 1
+        Status: Success (0x00)
+        Address type: 0x01
+          BR/EDR
+@ MGMT Event: Dis.. (0x0013) plen 2  {0x0001} [hci1] 2026-08-24 18:57:03.948358
+        Address type: 0x01
+          BR/EDR
+        Discovery: Enabled (0x01)
+< ACL Data TX: Han.. flags 0x00 dlen 104  #11 [hci0] 2026-08-24 18:57:03.950838
+      Channel: 74 len 100 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c1 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 30 2c 22 64  elapsed_ms":0,"d
+        75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31 32 30 30  uration_ms":1200
+        30 7d 0a 0e                                      0}..            
+> HCI Event: Number of C.. (0x13) plen 5  #12 [hci0] 2026-08-24 18:57:04.182340
+        Num handles: 1
+        Handle: 12
+        Count: 1
+< ACL Data TX: Han.. flags 0x00 dlen 107  #13 [hci0] 2026-08-24 18:57:05.015361
+      Channel: 74 len 103 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c7 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 31 30 36 34  elapsed_ms":1064
+        2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31  ,"duration_ms":1
+        32 30 30 30 7d 0a 0e                             2000}..         
+> HCI Event: Extended I.. (0x2f) plen 255  #3 [hci1] 2026-08-24 18:57:05.020253
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x6ce5
+        RSSI: -32 dBm (0xe0)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:05.020307
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -32 dBm (0xe0)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Extended I.. (0x2f) plen 255  #4 [hci1] 2026-08-24 18:57:05.100272
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x6d26
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:05.100354
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Extended I.. (0x2f) plen 255  #5 [hci1] 2026-08-24 18:57:05.191263
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x6d6e
+        RSSI: -32 dBm (0xe0)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:05.191345
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -32 dBm (0xe0)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Number of C.. (0x13) plen 5  #14 [hci0] 2026-08-24 18:57:05.307335
+        Num handles: 1
+        Handle: 12
+        Count: 1
+> HCI Event: Extended I.. (0x2f) plen 255  #6 [hci1] 2026-08-24 18:57:05.712264
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x6f10
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:05.712332
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+< ACL Data TX: Han.. flags 0x00 dlen 107  #15 [hci0] 2026-08-24 18:57:06.038215
+      Channel: 74 len 103 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c7 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 32 30 38 37  elapsed_ms":2087
+        2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31  ,"duration_ms":1
+        32 30 30 30 7d 0a 0e                             2000}..         
+> HCI Event: Extended I.. (0x2f) plen 255  #7 [hci1] 2026-08-24 18:57:06.173258
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7081
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:06.173331
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Number of C.. (0x13) plen 5  #16 [hci0] 2026-08-24 18:57:06.182277
+        Num handles: 1
+        Handle: 12
+        Count: 1
+> HCI Event: Extended I.. (0x2f) plen 255  #8 [hci1] 2026-08-24 18:57:06.629259
+        Num responses: 1
+        Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+        Clock offset: 0x7c7e
+        RSSI: -22 dBm (0xea)
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+@ MGMT Event: De.. (0x0012) plen 85  {0x0001} [hci1] 2026-08-24 18:57:06.629331
+        BR/EDR Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        RSSI: -22 dBm (0xea)
+        Flags: 0x00000000
+        Data length: 71
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+> HCI Event: Extended I.. (0x2f) plen 255  #9 [hci1] 2026-08-24 18:57:06.693261
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7221
+        RSSI: -33 dBm (0xdf)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:06.693340
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -33 dBm (0xdf)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+< ACL Data TX: Han.. flags 0x00 dlen 107  #17 [hci0] 2026-08-24 18:57:06.996996
+      Channel: 74 len 103 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c7 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 33 30 34 36  elapsed_ms":3046
+        2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31  ,"duration_ms":1
+        32 30 30 30 7d 0a 0e                             2000}..         
+> HCI Event: Extended... (0x2f) plen 255  #10 [hci1] 2026-08-24 18:57:07.174242
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x73a3
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:07.174310
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Number of C.. (0x13) plen 5  #18 [hci0] 2026-08-24 18:57:07.182306
+        Num handles: 1
+        Handle: 12
+        Count: 1
+> HCI Event: Extended... (0x2f) plen 255  #11 [hci1] 2026-08-24 18:57:07.341254
+        Num responses: 1
+        Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+        Clock offset: 0x7eb8
+        RSSI: -22 dBm (0xea)
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+@ MGMT Event: De.. (0x0012) plen 85  {0x0001} [hci1] 2026-08-24 18:57:07.341327
+        BR/EDR Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        RSSI: -22 dBm (0xea)
+        Flags: 0x00000000
+        Data length: 71
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+> HCI Event: Extended... (0x2f) plen 255  #12 [hci1] 2026-08-24 18:57:07.711255
+        Num responses: 1
+        Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+        Clock offset: 0x7fe0
+        RSSI: -23 dBm (0xe9)
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+@ MGMT Event: De.. (0x0012) plen 85  {0x0001} [hci1] 2026-08-24 18:57:07.711336
+        BR/EDR Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        RSSI: -23 dBm (0xe9)
+        Flags: 0x00000000
+        Data length: 71
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+> HCI Event: Extended... (0x2f) plen 255  #13 [hci1] 2026-08-24 18:57:07.755247
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7574
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:07.755309
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+< ACL Data TX: Han.. flags 0x00 dlen 107  #19 [hci0] 2026-08-24 18:57:07.961531
+      Channel: 74 len 103 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c7 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 34 30 31 30  elapsed_ms":4010
+        2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31  ,"duration_ms":1
+        32 30 30 30 7d 0a 0e                             2000}..         
+> ACL Data RX: Handl.. flags 0x02 dlen 9  #20 [hci0] 2026-08-24 18:57:07.985884
+      Channel: 66 len 5 [PSM 0 mode Basic (0x00)] {chan 65535}
+        61 ff 01 06 c8                                   a....           
+> HCI Event: Number of C.. (0x13) plen 5  #21 [hci0] 2026-08-24 18:57:08.182209
+        Num handles: 1
+        Handle: 12
+        Count: 1
+> HCI Event: Inquiry Re.. (0x22) plen 15  #14 [hci1] 2026-08-24 18:57:08.332245
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P2 (0x02)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7745
+        RSSI: -32 dBm (0xe0)
+@ MGMT Event: De.. (0x0012) plen 19  {0x0001} [hci1] 2026-08-24 18:57:08.332313
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -32 dBm (0xe0)
+        Flags: 0x00000002
+          Legacy Pairing
+        Data length: 5
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Extended... (0x2f) plen 255  #15 [hci1] 2026-08-24 18:57:08.407242
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x777e
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:08.407317
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000002
+          Legacy Pairing
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Extended... (0x2f) plen 255  #16 [hci1] 2026-08-24 18:57:08.447253
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x779e
+        RSSI: -32 dBm (0xe0)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:08.447335
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -32 dBm (0xe0)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+< ACL Data TX: Han.. flags 0x00 dlen 107  #22 [hci0] 2026-08-24 18:57:08.953900
+      Channel: 74 len 103 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c7 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 35 30 30 33  elapsed_ms":5003
+        2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31  ,"duration_ms":1
+        32 30 30 30 7d 0a 0e                             2000}..         
+> HCI Event: Extended... (0x2f) plen 255  #17 [hci1] 2026-08-24 18:57:09.018240
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7967
+        RSSI: -32 dBm (0xe0)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:09.018315
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -32 dBm (0xe0)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Number of C.. (0x13) plen 5  #23 [hci0] 2026-08-24 18:57:09.183272
+        Num handles: 1
+        Handle: 12
+        Count: 1
+> HCI Event: Extended... (0x2f) plen 255  #18 [hci1] 2026-08-24 18:57:09.549247
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7b11
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:09.549323
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Extended... (0x2f) plen 255  #19 [hci1] 2026-08-24 18:57:09.900238
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7c2a
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:09.900324
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+< ACL Data TX: Han.. flags 0x00 dlen 107  #24 [hci0] 2026-08-24 18:57:10.006088
+      Channel: 74 len 103 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c7 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 36 30 35 35  elapsed_ms":6055
+        2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31  ,"duration_ms":1
+        32 30 30 30 7d 0a 0e                             2000}..         
+> HCI Event: Number of C.. (0x13) plen 5  #25 [hci0] 2026-08-24 18:57:10.182276
+        Num handles: 1
+        Handle: 12
+        Count: 1
+> HCI Event: Extended... (0x2f) plen 255  #20 [hci1] 2026-08-24 18:57:10.384243
+        Num responses: 1
+        Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+        Clock offset: 0x083c
+        RSSI: -22 dBm (0xea)
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+@ MGMT Event: De.. (0x0012) plen 85  {0x0001} [hci1] 2026-08-24 18:57:10.384317
+        BR/EDR Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        RSSI: -22 dBm (0xea)
+        Flags: 0x00000000
+        Data length: 71
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+> HCI Event: Extended... (0x2f) plen 255  #21 [hci1] 2026-08-24 18:57:10.521238
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7e1a
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:10.521310
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Extended... (0x2f) plen 255  #22 [hci1] 2026-08-24 18:57:10.582226
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7e4c
+        RSSI: -33 dBm (0xdf)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:10.582306
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -33 dBm (0xdf)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Extended... (0x2f) plen 255  #23 [hci1] 2026-08-24 18:57:10.734239
+        Num responses: 1
+        Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+        Clock offset: 0x0956
+        RSSI: -24 dBm (0xe8)
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+@ MGMT Event: De.. (0x0012) plen 85  {0x0001} [hci1] 2026-08-24 18:57:10.734322
+        BR/EDR Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        RSSI: -24 dBm (0xe8)
+        Flags: 0x00000000
+        Data length: 71
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+> HCI Event: Mode Change (0x14) plen 6    #26 [hci0] 2026-08-24 18:57:10.765744
+        Status: Success (0x00)
+        Handle: 12
+        Mode: Sniff (0x02)
+        Interval: 480.000 msec (0x0300)
+> HCI Event: Extended... (0x2f) plen 255  #24 [hci1] 2026-08-24 18:57:10.942231
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7f6c
+        RSSI: -32 dBm (0xe0)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:10.942305
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -32 dBm (0xe0)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Extended... (0x2f) plen 255  #25 [hci1] 2026-08-24 18:57:11.003230
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x7f9d
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:11.003305
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+< ACL Data TX: Han.. flags 0x00 dlen 107  #27 [hci0] 2026-08-24 18:57:11.008968
+      Channel: 74 len 103 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c7 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 37 30 35 38  elapsed_ms":7058
+        2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31  ,"duration_ms":1
+        32 30 30 30 7d 0a 0e                             2000}..         
+< HCI Command: Ex.. (0x02|0x0004) plen 2  #28 [hci0] 2026-08-24 18:57:11.009026
+        Handle: 12
+> HCI Event: Command Sta.. (0x0f) plen 4  #29 [hci0] 2026-08-24 18:57:11.010802
+      Exit Sniff Mode (0x02|0x0004) ncmd 1
+        Status: Success (0x00)
+> HCI Event: Mode Change (0x14) plen 6    #30 [hci0] 2026-08-24 18:57:11.415275
+        Status: Success (0x00)
+        Handle: 12
+        Mode: Active (0x00)
+        Interval: 0.000 msec (0x0000)
+> HCI Event: Extended... (0x2f) plen 255  #26 [hci1] 2026-08-24 18:57:11.444262
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x00ff
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:11.444342
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+> HCI Event: Number of C.. (0x13) plen 5  #31 [hci0] 2026-08-24 18:57:11.682249
+        Num handles: 1
+        Handle: 12
+        Count: 1
+< ACL Data TX: Han.. flags 0x00 dlen 107  #32 [hci0] 2026-08-24 18:57:12.026769
+      Channel: 74 len 103 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c7 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 38 30 37 35  elapsed_ms":8075
+        2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31  ,"duration_ms":1
+        32 30 30 30 7d 0a 0e                             2000}..         
+> HCI Event: Number of C.. (0x13) plen 5  #33 [hci0] 2026-08-24 18:57:12.182217
+        Num handles: 1
+        Handle: 12
+        Count: 1
+< ACL Data TX: Han.. flags 0x00 dlen 107  #34 [hci0] 2026-08-24 18:57:13.008215
+      Channel: 74 len 103 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c7 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 39 30 35 37  elapsed_ms":9057
+        2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a 31  ,"duration_ms":1
+        32 30 30 30 7d 0a 0e                             2000}..         
+> HCI Event: Number of C.. (0x13) plen 5  #35 [hci0] 2026-08-24 18:57:13.182648
+        Num handles: 1
+        Handle: 12
+        Count: 1
+< ACL Data TX: Han.. flags 0x00 dlen 108  #36 [hci0] 2026-08-24 18:57:14.019175
+      Channel: 74 len 104 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c9 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 31 30 30 36  elapsed_ms":1006
+        38 2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a  8,"duration_ms":
+        31 32 30 30 30 7d 0a 0e                          12000}..        
+> ACL Data RX: Handl.. flags 0x02 dlen 9  #37 [hci0] 2026-08-24 18:57:14.108316
+      Channel: 66 len 5 [PSM 0 mode Basic (0x00)] {chan 65535}
+        61 ff 01 06 c8                                   a....           
+> HCI Event: Inquiry Com.. (0x01) plen 1  #27 [hci1] 2026-08-24 18:57:14.190209
+        Status: Success (0x00)
+@ MGMT Event: Dis.. (0x0013) plen 2  {0x0001} [hci1] 2026-08-24 18:57:14.190296
+        Address type: 0x01
+          BR/EDR
+        Discovery: Disabled (0x00)
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci1] 2026-08-24 18:57:14.190739
+        Address type: 0x01
+          BR/EDR
+        RSSI: invalid (0x7f)
+        UUIDs: 0
+< HCI Command: In.. (0x01|0x0001) plen 5  #28 [hci1] 2026-08-24 18:57:14.190797
+        Access code: 0x9e8b33 (General Inquiry)
+        Length: 10.24s (0x08)
+        Num responses: 0
+> HCI Event: Command Sta.. (0x0f) plen 4  #29 [hci1] 2026-08-24 18:57:14.193198
+      Inquiry (0x01|0x0001) ncmd 2
+        Status: Success (0x00)
+@ MGMT Event: Com.. (0x0001) plen 4  {0x0001} [hci1] 2026-08-24 18:57:14.193253
+      Start Service Discovery (0x003a) plen 1
+        Status: Success (0x00)
+        Address type: 0x01
+          BR/EDR
+@ MGMT Event: Dis.. (0x0013) plen 2  {0x0001} [hci1] 2026-08-24 18:57:14.193264
+        Address type: 0x01
+          BR/EDR
+        Discovery: Enabled (0x01)
+> HCI Event: Number of C.. (0x13) plen 5  #38 [hci0] 2026-08-24 18:57:14.307233
+        Num handles: 1
+        Handle: 12
+        Count: 1
+> HCI Event: Extended... (0x2f) plen 255  #30 [hci1] 2026-08-24 18:57:14.357211
+        Num responses: 1
+        Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+        Clock offset: 0x14a9
+        RSSI: -23 dBm (0xe9)
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+@ MGMT Event: De.. (0x0012) plen 85  {0x0001} [hci1] 2026-08-24 18:57:14.357296
+        BR/EDR Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        RSSI: -23 dBm (0xe9)
+        Flags: 0x00000000
+        Data length: 71
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+> HCI Event: Extended... (0x2f) plen 255  #31 [hci1] 2026-08-24 18:57:14.434240
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x0a57
+        RSSI: -34 dBm (0xde)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:14.434347
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -34 dBm (0xde)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+hciconfig[90524]: @ RAW Open: hciconfig     {0x0004} 2026-08-24 18:57:14.497103
+hciconfig[90524]: @ RAW Open: hc..   {0x0005} [hci0] 2026-08-24 18:57:14.497187
+hciconfig[90524]: < HCI Command: Read..   #39 [hci0] 2026-08-24 18:57:14.497283
+> HCI Event: Command Co.. (0x0e) plen 12  #40 [hci0] 2026-08-24 18:57:14.497958
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[90524]: @ RAW Close: h..   {0x0005} [hci0] 2026-08-24 18:57:14.498435
+hciconfig[90524]: @ RAW Close: hciconfig    {0x0004} 2026-08-24 18:57:14.498674
+> HCI Event: Extended... (0x2f) plen 255  #32 [hci1] 2026-08-24 18:57:14.757212
+        Num responses: 1
+        Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+        Clock offset: 0x15e9
+        RSSI: -22 dBm (0xea)
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+@ MGMT Event: De.. (0x0012) plen 85  {0x0001} [hci1] 2026-08-24 18:57:14.757290
+        BR/EDR Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        RSSI: -22 dBm (0xea)
+        Flags: 0x00000000
+        Data length: 71
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+< ACL Data TX: Han.. flags 0x00 dlen 108  #41 [hci0] 2026-08-24 18:57:14.964067
+      Channel: 74 len 104 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef c9 7b 22 69 64 22 3a 31 36 2c 22 65 76 65  c..{"id":16,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 73 63 61 6e 6e 69 6e 67 22 2c 22  se":"scanning","
+        65 6c 61 70 73 65 64 5f 6d 73 22 3a 31 31 30 31  elapsed_ms":1101
+        33 2c 22 64 75 72 61 74 69 6f 6e 5f 6d 73 22 3a  3,"duration_ms":
+        31 32 30 30 30 7d 0a 0e                          12000}..        
+> HCI Event: Extended... (0x2f) plen 255  #33 [hci1] 2026-08-24 18:57:14.988205
+        Num responses: 1
+        Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+        Clock offset: 0x16a3
+        RSSI: -22 dBm (0xea)
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+@ MGMT Event: De.. (0x0012) plen 85  {0x0001} [hci1] 2026-08-24 18:57:14.988272
+        BR/EDR Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        RSSI: -22 dBm (0xea)
+        Flags: 0x00000000
+        Data length: 71
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+> HCI Event: Number of C.. (0x13) plen 5  #42 [hci0] 2026-08-24 18:57:15.182230
+        Num handles: 1
+        Handle: 12
+        Count: 1
+> HCI Event: Extended... (0x2f) plen 255  #34 [hci1] 2026-08-24 18:57:15.530205
+        Num responses: 1
+        Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+        Clock offset: 0x1854
+        RSSI: -23 dBm (0xe9)
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+@ MGMT Event: De.. (0x0012) plen 85  {0x0001} [hci1] 2026-08-24 18:57:15.530268
+        BR/EDR Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        RSSI: -23 dBm (0xe9)
+        Flags: 0x00000000
+        Data length: 71
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+> HCI Event: Extended... (0x2f) plen 255  #35 [hci1] 2026-08-24 18:57:15.630225
+        Num responses: 1
+        Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+        Clock offset: 0x18a4
+        RSSI: -22 dBm (0xea)
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+@ MGMT Event: De.. (0x0012) plen 85  {0x0001} [hci1] 2026-08-24 18:57:15.630335
+        BR/EDR Address: B8:27:EB:43:8D:51 (Raspberry Pi Foundation)
+        RSSI: -22 dBm (0xea)
+        Flags: 0x00000000
+        Data length: 71
+        Name (complete): larkbridge-v2
+        TX power: 0 dBm
+        Device ID: USB Implementer's Forum assigned (0x0002)
+          Vendor: Linux Foundation (0x1d6b)
+          Product: 0x0246
+          Version: 5.5.2 (0x0552)
+        16-bit Service UUIDs (complete): 9 entries
+          Generic Access Profile (0x1800)
+          Generic Attribute Profile (0x1801)
+          Device Information (0x180a)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Target (0x110c)
+          SIM Access (0x112d)
+          Headset (0x1108)
+          Handsfree (0x111e)
+          Audio Source (0x110a)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        Class: 0x680408
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Hands-free Device
+          Capturing (Scanner, Microphone)
+          Audio (Speaker, Microphone, Headset)
+          Telephony (Cordless telephony, Modem, Headset)
+> HCI Event: Extended... (0x2f) plen 255  #36 [hci1] 2026-08-24 18:57:15.795216
+        Num responses: 1
+        Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        Page scan repetition mode: R1 (0x01)
+        Page period mode: P0 (0x00)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+        Clock offset: 0x0e98
+        RSSI: -32 dBm (0xe0)
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+@ MGMT Event: De.. (0x0012) plen 64  {0x0001} [hci1] 2026-08-24 18:57:15.795300
+        BR/EDR Address: 98:47:44:CD:73:DE (Shenzhen Boomtech Industrial Corporation)
+        RSSI: -32 dBm (0xe0)
+        Flags: 0x00000000
+        Data length: 50
+        Name (complete): Soundcore Space A40
+        16-bit Service UUIDs (complete): 11 entries
+          Service Discovery Server Service Class (0x1000)
+          Serial Port (0x1101)
+          Audio Sink (0x110b)
+          A/V Remote Control Target (0x110c)
+          A/V Remote Control (0x110e)
+          A/V Remote Control Controller (0x110f)
+          Handsfree (0x111e)
+          Phonebook Access Client (0x112e)
+          Message Notification Server (0x1133)
+          PnP Information (0x1200)
+          Generic Audio (0x1203)
+        Class: 0x248404
+          Major class: Audio/Video (headset, speaker, stereo, video, vcr)
+          Minor class: Wearable Headset Device
+          invalid service class
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci1] 2026-08-24 18:57:15.952656
+        Address type: 0x01
+          BR/EDR
+bluetoothctl[90443]: @ MGMT Close: blue..   {0x0003} 2026-08-24 18:57:15.953615
+< HCI Command: In.. (0x01|0x0002) plen 0  #37 [hci1] 2026-08-24 18:57:15.954024
+> HCI Event: Command Com.. (0x0e) plen 4  #38 [hci1] 2026-08-24 18:57:15.959211
+      Inquiry Cancel (0x01|0x0002) ncmd 2
+        Status: Success (0x00)
+@ MGMT Event: Dis.. (0x0013) plen 2  {0x0001} [hci1] 2026-08-24 18:57:15.959285
+        Address type: 0x01
+          BR/EDR
+        Discovery: Disabled (0x00)
+@ MGMT Event: Com.. (0x0001) plen 4  {0x0001} [hci1] 2026-08-24 18:57:15.959355
+      Stop Discovery (0x0024) plen 1
+        Status: Success (0x00)
+        Address type: 0x01
+          BR/EDR
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci0] 2026-08-24 18:57:15.988523
+        Bondable: Disabled (0x00)
+@ MGMT Event: Com.. (0x0001) plen 7  {0x0001} [hci0] 2026-08-24 18:57:15.988575
+      Set Bondable (0x0009) plen 4
+        Status: Success (0x00)
+        Current settings: 0x00000acb
+          Powered
+          Connectable
+          Discoverable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+@ MGMT Event: New.. (0x0006) plen 4  {0x0002} [hci0] 2026-08-24 18:57:15.988582
+        Current settings: 0x00000acb
+          Powered
+          Connectable
+          Discoverable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci1] 2026-08-24 18:57:15.988859
+        Bondable: Disabled (0x00)
+@ MGMT Event: Com.. (0x0001) plen 7  {0x0001} [hci1] 2026-08-24 18:57:15.988870
+      Set Bondable (0x0009) plen 4
+        Status: Success (0x00)
+        Current settings: 0x007c0ac1
+          Powered
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+          CIS Central
+          CIS Peripheral
+          ISO Broadcaster
+          Sync Receiver
+          LL Privacy
+@ MGMT Event: New.. (0x0006) plen 4  {0x0002} [hci1] 2026-08-24 18:57:15.988875
+        Current settings: 0x007c0ac1
+          Powered
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+          CIS Central
+          CIS Peripheral
+          ISO Broadcaster
+          Sync Receiver
+          LL Privacy
+< ACL Data TX: Han.. flags 0x00 dlen 999  #43 [hci0] 2026-08-24 18:57:18.070155
+      Channel: 74 len 995 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef bc 07 7b 22 69 64 22 3a 31 36 2c 22 64 6f  c...{"id":16,"do
+        6e 65 22 3a 74 72 75 65 2c 22 6f 6b 22 3a 74 72  ne":true,"ok":tr
+        75 65 2c 22 73 63 61 6e 5f 69 64 22 3a 22 65 65  ue,"scan_id":"ee
+        34 31 65 44 75 79 73 62 64 78 65 52 36 73 50 55  41eDuysbdxeR6sPU
+        70 65 77 70 6b 46 55 7a 6f 79 47 78 5f 58 22 2c  pewpkFUzoyGx_X",
+        22 73 74 61 72 74 65 64 5f 61 74 5f 6d 73 22 3a  "started_at_ms":
+        31 37 38 37 36 31 32 32 32 36 30 36 37 2c 22 63  1787612226067,"c
+        6f 6d 70 6c 65 74 65 64 5f 61 74 5f 6d 73 22 3a  ompleted_at_ms":
+        31 37 38 37 36 31 32 32 33 38 30 36 37 2c 22 76  1787612238067,"v
+        61 6c 69 64 5f 75 6e 74 69 6c 5f 6d 73 22 3a 31  alid_until_ms":1
+        37 38 37 36 31 32 32 39 38 30 36 37 2c 22 64 75  787612298067,"du
+        72 61 74 69 6f 6e 5f 6d 73 22 3a 31 32 30 30 30  ration_ms":12000
+        2c 22 72 65 73 75 6c 74 73 22 3a 5b 7b 22 6f 75  ,"results":[{"ou
+        74 70 75 74 5f 69 64 22 3a 22 61 32 64 70 3a 42  tput_id":"a2dp:B
+        38 3a 32 37 3a 45 42 3a 34 33 3a 38 44 3a 35 31  8:27:EB:43:8D:51
+        22 2c 22 6c 61 62 65 6c 22 3a 22 6c 61 72 6b 62  ","label":"larkb
+        72 69 64 67 65 2d 76 32 22 2c 22 72 73 73 69 5f  ridge-v2","rssi_
+        64 62 6d 22 3a 2d 32 32 2c 22 61 75 64 69 6f 5f  dbm":-22,"audio_
+        63 6f 6e 66 69 64 65 6e 63 65 22 3a 22 6c 69 6b  confidence":"lik
+        65 6c 79 22 2c 22 73 65 74 75 70 5f 73 74 61 74  ely","setup_stat
+        65 22 3a 22 6e 65 65 64 73 5f 73 65 74 75 70 22  e":"needs_setup"
+        2c 22 64 75 70 6c 69 63 61 74 65 5f 6e 61 6d 65  ,"duplicate_name
+        5f 64 69 73 63 72 69 6d 69 6e 61 74 6f 72 22 3a  _discriminator":
+        6e 75 6c 6c 7d 2c 7b 22 6f 75 74 70 75 74 5f 69  null},{"output_i
+        64 22 3a 22 61 32 64 70 3a 39 38 3a 34 37 3a 34  d":"a2dp:98:47:4
+        34 3a 43 44 3a 37 33 3a 44 45 22 2c 22 6c 61 62  4:CD:73:DE","lab
+        65 6c 22 3a 22 53 6f 75 6e 64 63 6f 72 65 20 53  el":"Soundcore S
+        70 61 63 65 20 41 34 30 22 2c 22 72 73 73 69 5f  pace A40","rssi_
+        64 62 6d 22 3a 2d 33 32 2c 22 61 75 64 69 6f 5f  dbm":-32,"audio_
+        63 6f 6e 66 69 64 65 6e 63 65 22 3a 22 63 6f 6e  confidence":"con
+        66 69 72 6d 65 64 22 2c 22 73 65 74 75 70 5f 73  firmed","setup_s
+        74 61 74 65 22 3a 22 6e 65 65 64 73 5f 73 65 74  tate":"needs_set
+        75 70 22 2c 22 64 75 70 6c 69 63 61 74 65 5f 6e  up","duplicate_n
+        61 6d 65 5f 64 69 73 63 72 69 6d 69 6e 61 74 6f  ame_discriminato
+        72 22 3a 6e 75 6c 6c 7d 2c 7b 22 6f 75 74 70 75  r":null},{"outpu
+        74 5f 69 64 22 3a 22 61 32 64 70 3a 35 30 3a 44  t_id":"a2dp:50:D
+        37 3a 31 42 3a 37 34 3a 33 34 3a 44 36 22 2c 22  7:1B:74:34:D6","
+        6c 61 62 65 6c 22 3a 22 69 57 6f 72 6c 64 22 2c  label":"iWorld",
+        22 72 73 73 69 5f 64 62 6d 22 3a 6e 75 6c 6c 2c  "rssi_dbm":null,
+        22 61 75 64 69 6f 5f 63 6f 6e 66 69 64 65 6e 63  "audio_confidenc
+        65 22 3a 22 63 6f 6e 66 69 72 6d 65 64 22 2c 22  e":"confirmed","
+        73 65 74 75 70 5f 73 74 61 74 65 22 3a 22 72 65  setup_state":"re
+        61 64 79 22 2c 22 64 75 70 6c 69 63 61 74 65 5f  ady","duplicate_
+        6e 61 6d 65 5f 64 69 73 63 72 69 6d 69 6e 61 74  name_discriminat
+        6f 72 22 3a 6e 75 6c 6c 7d 5d 2c 22 6f 75 74 70  or":null}],"outp
+        75 74 73 22 3a 5b 7b 22 69 64 22 3a 22 77 69 72  uts":[{"id":"wir
+        65 64 3a 61 6c 73 61 5f 6f 75 74 70 75 74 2e 70  ed:alsa_output.p
+        6c 61 74 66 6f 72 6d 2d 33 66 30 30 62 38 34 30  latform-3f00b840
+        2e 6d 61 69 6c 62 6f 78 2e 73 74 65 72 65 6f 2d  .mailbox.stereo-
+        66 61 6c 6c 62 61 63 6b 22 2c 22 6c 61 62 65 6c  fallback","label
+        22 3a 22 42 75 69 6c 74 2d 69 6e 20 41 75 64 69  ":"Built-in Audi
+        6f 20 53 74 65 72 65 6f 22 2c 22 6b 69 6e 64 22  o Stereo","kind"
+        3a 22 77 69 72 65 64 22 2c 22 61 76 61 69 6c 61  :"wired","availa
+        62 6c 65 22 3a 74 72 75 65 2c 22 63 6f 6e 6e 65  ble":true,"conne
+        63 74 65 64 22 3a 74 72 75 65 2c 22 73 65 74 75  cted":true,"setu
+        70 5f 73 74 61 74 65 22 3a 22 72 65 61 64 79 22  p_state":"ready"
+        7d 2c 7b 22 69 64 22 3a 22 61 32 64 70 3a 43 39  },{"id":"a2dp:C9
+        3a 35 43 3a 46 44 3a 36 45 3a 32 38 3a 34 36 22  :5C:FD:6E:28:46"
+        2c 22 6c 61 62 65 6c 22 3a 22 42 6f 6f 6d 62 6f  ,"label":"Boombo
+        78 22 2c 22 6b 69 6e 64 22 3a 22 61 32 64 70 22  x","kind":"a2dp"
+        2c 22 61 76 61 69 6c 61 62 6c 65 22 3a 66 61 6c  ,"available":fal
+        73 65 2c 22 63 6f 6e 6e 65 63 74 65 64 22 3a 66  se,"connected":f
+        61 6c 0e                                         al.             
+< ACL Data TX: Han.. flags 0x00 dlen 506  #44 [hci0] 2026-08-24 18:57:18.070211
+      Channel: 74 len 502 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef e2 03 73 65 2c 22 73 65 74 75 70 5f 73 74  c...se,"setup_st
+        61 74 65 22 3a 22 72 65 61 64 79 22 7d 2c 7b 22  ate":"ready"},{"
+        69 64 22 3a 22 61 32 64 70 3a 35 30 3a 44 37 3a  id":"a2dp:50:D7:
+        31 42 3a 37 34 3a 33 34 3a 44 36 22 2c 22 6c 61  1B:74:34:D6","la
+        62 65 6c 22 3a 22 69 57 6f 72 6c 64 22 2c 22 6b  bel":"iWorld","k
+        69 6e 64 22 3a 22 61 32 64 70 22 2c 22 61 76 61  ind":"a2dp","ava
+        69 6c 61 62 6c 65 22 3a 66 61 6c 73 65 2c 22 63  ilable":false,"c
+        6f 6e 6e 65 63 74 65 64 22 3a 66 61 6c 73 65 2c  onnected":false,
+        22 73 65 74 75 70 5f 73 74 61 74 65 22 3a 22 72  "setup_state":"r
+        65 61 64 79 22 7d 2c 7b 22 69 64 22 3a 22 61 32  eady"},{"id":"a2
+        64 70 3a 39 38 3a 34 37 3a 34 34 3a 43 44 3a 37  dp:98:47:44:CD:7
+        33 3a 44 45 22 2c 22 6c 61 62 65 6c 22 3a 22 53  3:DE","label":"S
+        6f 75 6e 64 63 6f 72 65 20 53 70 61 63 65 20 41  oundcore Space A
+        34 30 22 2c 22 6b 69 6e 64 22 3a 22 61 32 64 70  40","kind":"a2dp
+        22 2c 22 61 76 61 69 6c 61 62 6c 65 22 3a 66 61  ","available":fa
+        6c 73 65 2c 22 63 6f 6e 6e 65 63 74 65 64 22 3a  lse,"connected":
+        66 61 6c 73 65 2c 22 73 65 74 75 70 5f 73 74 61  false,"setup_sta
+        74 65 22 3a 22 6e 65 65 64 73 5f 73 65 74 75 70  te":"needs_setup
+        22 7d 5d 2c 22 64 65 73 69 72 65 64 5f 69 64 22  "}],"desired_id"
+        3a 22 77 69 72 65 64 3a 61 6c 73 61 5f 6f 75 74  :"wired:alsa_out
+        70 75 74 2e 70 6c 61 74 66 6f 72 6d 2d 33 66 30  put.platform-3f0
+        30 62 38 34 30 2e 6d 61 69 6c 62 6f 78 2e 73 74  0b840.mailbox.st
+        65 72 65 6f 2d 66 61 6c 6c 62 61 63 6b 22 2c 22  ereo-fallback","
+        63 68 6f 73 65 6e 5f 69 64 22 3a 22 77 69 72 65  chosen_id":"wire
+        64 3a 61 6c 73 61 5f 6f 75 74 70 75 74 2e 70 6c  d:alsa_output.pl
+        61 74 66 6f 72 6d 2d 33 66 30 30 62 38 34 30 2e  atform-3f00b840.
+        6d 61 69 6c 62 6f 78 2e 73 74 65 72 65 6f 2d 66  mailbox.stereo-f
+        61 6c 6c 62 61 63 6b 22 2c 22 72 65 61 73 6f 6e  allback","reason
+        22 3a 22 64 65 73 69 72 65 64 20 6f 75 74 70 75  ":"desired outpu
+        74 20 69 73 20 61 76 61 69 6c 61 62 6c 65 22 2c  t is available",
+        22 63 61 6c 6c 5f 61 63 74 69 76 65 22 3a 66 61  "call_active":fa
+        6c 73 65 7d 0a 0e                                lse}..          
+> HCI Event: Number of C.. (0x13) plen 5  #45 [hci0] 2026-08-24 18:57:18.100847
+        Num handles: 1
+        Handle: 12
+        Count: 2
+> HCI Event: Mode Change (0x14) plen 6    #46 [hci0] 2026-08-24 18:57:18.436917
+        Status: Success (0x00)
+        Handle: 12
+        Mode: Sniff (0x02)
+        Interval: 480.000 msec (0x0300)
+hciconfig[90641]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:57:29.630368
+hciconfig[90641]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:57:29.630437
+hciconfig[90641]: < HCI Command: Read..   #47 [hci0] 2026-08-24 18:57:29.630505
+> HCI Event: Command Co.. (0x0e) plen 12  #48 [hci0] 2026-08-24 18:57:29.630995
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[90641]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:57:29.631331
+hciconfig[90641]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:57:29.631392
+hciconfig[90752]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:57:44.744626
+hciconfig[90752]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:57:44.744697
+hciconfig[90752]: < HCI Command: Read..   #49 [hci0] 2026-08-24 18:57:44.744765
+> HCI Event: Command Co.. (0x0e) plen 12  #50 [hci0] 2026-08-24 18:57:44.745268
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[90752]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:57:44.745551
+hciconfig[90752]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:57:44.745596
+hciconfig[90863]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:57:59.857277
+hciconfig[90863]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:57:59.857349
+hciconfig[90863]: < HCI Command: Read..   #51 [hci0] 2026-08-24 18:57:59.857422
+> HCI Event: Command Co.. (0x0e) plen 12  #52 [hci0] 2026-08-24 18:57:59.857921
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[90863]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:57:59.858292
+hciconfig[90863]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:57:59.858342
+> ACL Data RX: Han.. flags 0x02 dlen 120  #53 [hci0] 2026-08-24 18:58:10.451039
+      Channel: 66 len 116 [PSM 0 mode Basic (0x00)] {chan 65535}
+        61 ff df 03 7b 22 69 64 22 3a 31 37 2c 22 6f 70  a...{"id":17,"op
+        22 3a 22 70 61 69 72 5f 73 65 6c 65 63 74 22 2c  ":"pair_select",
+        22 6f 75 74 70 75 74 5f 69 64 22 3a 22 61 32 64  "output_id":"a2d
+        70 3a 39 38 3a 34 37 3a 34 34 3a 43 44 3a 37 33  p:98:47:44:CD:73
+        3a 44 45 22 2c 22 73 63 61 6e 5f 69 64 22 3a 22  :DE","scan_id":"
+        65 65 34 31 65 44 75 79 73 62 64 78 65 52 36 73  ee41eDuysbdxeR6s
+        50 55 70 65 77 70 6b 46 55 7a 6f 79 47 78 5f 58  PUpewpkFUzoyGx_X
+        22 7d 0a c8                                      "}..            
+> HCI Event: Mode Change (0x14) plen 6    #54 [hci0] 2026-08-24 18:58:10.453092
+        Status: Success (0x00)
+        Handle: 12
+        Mode: Active (0x00)
+        Interval: 0.000 msec (0x0000)
+< ACL Data TX: Hand.. flags 0x00 dlen 71  #55 [hci0] 2026-08-24 18:58:10.453911
+      Channel: 74 len 67 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef 7f 7b 22 69 64 22 3a 31 37 2c 22 65 76 65  c..{"id":17,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 76 61 6c 69 64 61 74 69 6e 67 22  se":"validating"
+        7d 0a 0e                                         }..             
+< ACL Data TX: Hand.. flags 0x00 dlen 71  #56 [hci0] 2026-08-24 18:58:10.458744
+      Channel: 74 len 67 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef 7f 7b 22 69 64 22 3a 31 37 2c 22 65 76 65  c..{"id":17,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 76 61 6c 69 64 61 74 69 6e 67 22  se":"validating"
+        7d 0a 0e                                         }..             
+> HCI Event: Number of C.. (0x13) plen 5  #57 [hci0] 2026-08-24 18:58:10.483124
+        Num handles: 1
+        Handle: 12
+        Count: 2
+< ACL Data TX: Hand.. flags 0x00 dlen 68  #58 [hci0] 2026-08-24 18:58:10.564463
+      Channel: 74 len 64 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef 79 7b 22 69 64 22 3a 31 37 2c 22 65 76 65  c.y{"id":17,"eve
+        6e 74 22 3a 22 70 72 6f 67 72 65 73 73 22 2c 22  nt":"progress","
+        64 6f 6e 65 22 3a 66 61 6c 73 65 2c 22 70 68 61  done":false,"pha
+        73 65 22 3a 22 70 61 69 72 69 6e 67 22 7d 0a 0e  se":"pairing"}..
+bluetoothctl[90943]: @ MGMT Open: bluet..   {0x0003} 2026-08-24 18:58:10.630019
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci0] 2026-08-24 18:58:10.691364
+        Bondable: Enabled (0x01)
+@ MGMT Event: Com.. (0x0001) plen 7  {0x0001} [hci0] 2026-08-24 18:58:10.691441
+      Set Bondable (0x0009) plen 4
+        Status: Success (0x00)
+        Current settings: 0x00000adb
+          Powered
+          Connectable
+          Discoverable
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+@ MGMT Event: New.. (0x0006) plen 4  {0x0003} [hci0] 2026-08-24 18:58:10.691449
+        Current settings: 0x00000adb
+          Powered
+          Connectable
+          Discoverable
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+@ MGMT Event: New.. (0x0006) plen 4  {0x0002} [hci0] 2026-08-24 18:58:10.691449
+        Current settings: 0x00000adb
+          Powered
+          Connectable
+          Discoverable
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci0] 2026-08-24 18:58:10.693396
+        Capability: KeyboardDisplay (0x04)
+@ MGMT Event: Com.. (0x0001) plen 3  {0x0001} [hci0] 2026-08-24 18:58:10.693959
+      Set IO Capability (0x0018) plen 0
+        Status: Success (0x00)
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci1] 2026-08-24 18:58:10.694447
+        Bondable: Enabled (0x01)
+@ MGMT Event: Com.. (0x0001) plen 7  {0x0001} [hci1] 2026-08-24 18:58:10.694468
+      Set Bondable (0x0009) plen 4
+        Status: Success (0x00)
+        Current settings: 0x007c0ad1
+          Powered
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+          CIS Central
+          CIS Peripheral
+          ISO Broadcaster
+          Sync Receiver
+          LL Privacy
+@ MGMT Event: New.. (0x0006) plen 4  {0x0003} [hci1] 2026-08-24 18:58:10.694480
+        Current settings: 0x007c0ad1
+          Powered
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+          CIS Central
+          CIS Peripheral
+          ISO Broadcaster
+          Sync Receiver
+          LL Privacy
+@ MGMT Event: New.. (0x0006) plen 4  {0x0002} [hci1] 2026-08-24 18:58:10.694480
+        Current settings: 0x007c0ad1
+          Powered
+          Bondable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+          CIS Central
+          CIS Peripheral
+          ISO Broadcaster
+          Sync Receiver
+          LL Privacy
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci1] 2026-08-24 18:58:10.694794
+        Capability: KeyboardDisplay (0x04)
+@ MGMT Event: Com.. (0x0001) plen 3  {0x0001} [hci1] 2026-08-24 18:58:10.694811
+      Set IO Capability (0x0018) plen 0
+        Status: Success (0x00)
+bluetoothctl[90943]: @ MGMT Close: blue..   {0x0003} 2026-08-24 18:58:10.702080
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci0] 2026-08-24 18:58:10.705248
+        Bondable: Disabled (0x00)
+@ MGMT Event: Com.. (0x0001) plen 7  {0x0001} [hci0] 2026-08-24 18:58:10.705302
+      Set Bondable (0x0009) plen 4
+        Status: Success (0x00)
+        Current settings: 0x00000acb
+          Powered
+          Connectable
+          Discoverable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+@ MGMT Event: New.. (0x0006) plen 4  {0x0002} [hci0] 2026-08-24 18:58:10.705309
+        Current settings: 0x00000acb
+          Powered
+          Connectable
+          Discoverable
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+bluetoothd[49821]: @ MGMT Comman..   {0x0001} [hci1] 2026-08-24 18:58:10.706068
+        Bondable: Disabled (0x00)
+@ MGMT Event: Com.. (0x0001) plen 7  {0x0001} [hci1] 2026-08-24 18:58:10.706094
+      Set Bondable (0x0009) plen 4
+        Status: Success (0x00)
+        Current settings: 0x007c0ac1
+          Powered
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+          CIS Central
+          CIS Peripheral
+          ISO Broadcaster
+          Sync Receiver
+          LL Privacy
+@ MGMT Event: New.. (0x0006) plen 4  {0x0002} [hci1] 2026-08-24 18:58:10.706101
+        Current settings: 0x007c0ac1
+          Powered
+          Secure Simple Pairing
+          BR/EDR
+          Low Energy
+          Secure Connections
+          CIS Central
+          CIS Peripheral
+          ISO Broadcaster
+          Sync Receiver
+          LL Privacy
+< ACL Data TX: Han.. flags 0x00 dlen 317  #59 [hci0] 2026-08-24 18:58:10.794771
+      Channel: 74 len 313 [PSM 0 mode Basic (0x00)] {chan 65535}
+        63 ef 68 02 7b 22 69 64 22 3a 31 37 2c 22 64 6f  c.h.{"id":17,"do
+        6e 65 22 3a 74 72 75 65 2c 22 6f 6b 22 3a 66 61  ne":true,"ok":fa
+        6c 73 65 2c 22 65 72 72 6f 72 5f 63 6f 64 65 22  lse,"error_code"
+        3a 22 70 61 69 72 69 6e 67 5f 74 69 6d 65 6f 75  :"pairing_timeou
+        74 22 2c 22 65 72 72 6f 72 22 3a 22 50 61 69 72  t","error":"Pair
+        69 6e 67 20 64 69 64 20 6e 6f 74 20 66 69 6e 69  ing did not fini
+        73 68 2e 20 50 75 74 20 74 68 65 20 73 70 65 61  sh. Put the spea
+        6b 65 72 20 69 6e 20 70 61 69 72 69 6e 67 20 6d  ker in pairing m
+        6f 64 65 20 61 6e 64 20 74 72 79 20 61 67 61 69  ode and try agai
+        6e 2e 20 28 74 65 6d 70 6f 72 61 72 79 20 4e 6f  n. (temporary No
+        49 6e 70 75 74 4e 6f 4f 75 74 70 75 74 20 61 67  InputNoOutput ag
+        65 6e 74 20 64 69 64 20 6e 6f 74 20 72 65 67 69  ent did not regi
+        73 74 65 72 3b 20 6e 65 77 2d 62 6f 6e 64 20 72  ster; new-bond r
+        6f 6c 6c 62 61 63 6b 20 66 61 69 6c 65 64 3a 20  ollback failed: 
+        2f 6f 72 67 2f 62 6c 75 65 7a 2f 68 63 69 31 2f  /org/bluez/hci1/
+        64 65 76 5f 39 38 5f 34 37 5f 34 34 5f 43 44 5f  dev_98_47_44_CD_
+        37 33 5f 44 45 3a 20 43 61 6c 6c 20 66 61 69 6c  73_DE: Call fail
+        65 64 3a 20 44 6f 65 73 20 4e 6f 74 20 45 78 69  ed: Does Not Exi
+        73 74 29 22 2c 22 70 68 61 73 65 22 3a 22 70 61  st)","phase":"pa
+        69 72 69 6e 67 22 7d 0a 0e                       iring"}..       
+> HCI Event: Number of C.. (0x13) plen 5  #60 [hci0] 2026-08-24 18:58:10.806978
+        Num handles: 1
+        Handle: 12
+        Count: 1
+> HCI Event: Number of C.. (0x13) plen 5  #61 [hci0] 2026-08-24 18:58:11.057114
+        Num handles: 1
+        Handle: 12
+        Count: 1
+hciconfig[90977]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:58:14.967138
+hciconfig[90977]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:58:14.967208
+hciconfig[90977]: < HCI Command: Read..   #62 [hci0] 2026-08-24 18:58:14.967284
+> HCI Event: Command Co.. (0x0e) plen 12  #63 [hci0] 2026-08-24 18:58:14.967786
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[90977]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:58:14.968074
+hciconfig[90977]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:58:14.968125
+> HCI Event: Mode Change (0x14) plen 6    #64 [hci0] 2026-08-24 18:58:17.479168
+        Status: Success (0x00)
+        Handle: 12
+        Mode: Sniff (0x02)
+        Interval: 480.000 msec (0x0300)
+hciconfig[91088]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:58:30.078658
+hciconfig[91088]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:58:30.078724
+hciconfig[91088]: < HCI Command: Read..   #65 [hci0] 2026-08-24 18:58:30.078800
+> HCI Event: Command Co.. (0x0e) plen 12  #66 [hci0] 2026-08-24 18:58:30.079285
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[91088]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:58:30.079592
+hciconfig[91088]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:58:30.079665
+hciconfig[91200]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:58:45.188117
+hciconfig[91200]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:58:45.188204
+hciconfig[91200]: < HCI Command: Read..   #67 [hci0] 2026-08-24 18:58:45.188272
+> HCI Event: Command Co.. (0x0e) plen 12  #68 [hci0] 2026-08-24 18:58:45.188794
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[91200]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:58:45.189242
+hciconfig[91200]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:58:45.189311
+hciconfig[91313]: @ RAW Open: hciconfig     {0x0003} 2026-08-24 18:59:00.297618
+hciconfig[91313]: @ RAW Open: hc..   {0x0004} [hci0] 2026-08-24 18:59:00.297682
+hciconfig[91313]: < HCI Command: Read..   #69 [hci0] 2026-08-24 18:59:00.297751
+> HCI Event: Command Co.. (0x0e) plen 12  #70 [hci0] 2026-08-24 18:59:00.298249
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[91313]: @ RAW Close: h..   {0x0004} [hci0] 2026-08-24 18:59:00.298533
+hciconfig[91313]: @ RAW Close: hciconfig    {0x0003} 2026-08-24 18:59:00.298586

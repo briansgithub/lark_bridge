@@ -1,0 +1,6 @@
+Aug 24 18:57:03.900704 larkbridge sudo[90441]:    admin : PWD=/home/admin ; USER=root ; COMMAND=/usr/bin/busctl --system --json=short monitor org.bluez
+Aug 24 18:57:03.903995 larkbridge sudo[90441]: pam_unix(sudo:session): session opened for user root(uid=0) by admin(uid=1000)
+Aug 24 18:57:18.020190 larkbridge sudo[90441]: pam_unix(sudo:session): session closed for user root
+Aug 24 18:58:10.610292 larkbridge sudo[90938]:    admin : PWD=/home/admin ; USER=root ; COMMAND=/usr/bin/bluetoothctl
+Aug 24 18:58:10.612295 larkbridge sudo[90938]: pam_unix(sudo:session): session opened for user root(uid=0) by admin(uid=1000)
+Aug 24 18:58:10.750497 larkbridge sudo[90938]: pam_unix(sudo:session): session closed for user root

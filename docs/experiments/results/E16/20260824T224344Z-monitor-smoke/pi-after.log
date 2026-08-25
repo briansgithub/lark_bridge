@@ -1,0 +1,123 @@
+2026-08-24T18:43:51,123374852-04:00
+uid=1000(admin) gid=1000(admin) groups=1000(admin),4(adm),20(dialout),24(cdrom),27(sudo),29(audio),44(video),46(plugdev),60(games),100(users),102(netdev),103(bluetooth),986(gpio),988(i2c),989(spi),992(render),996(input),999(systemd-journal),1001(lpadmin)
+/dev/mmcblk0p2 ext4 ro,relatime
+active
+active
+active
+active
+active
+active
+active
+--- bridge-status ---
+{
+  "timestamp": 1787611430.1772287,
+  "state": "CALL_DOWN",
+  "generation": 1,
+  "call": {
+    "hfp_nodes_present": false
+  },
+  "endpoints": {
+    "lark": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+    "hfp_source": null,
+    "hfp_sink": null,
+    "wired_output": "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+  },
+  "aec": {
+    "enabled": true,
+    "method": "webrtc",
+    "rate": 48000,
+    "channels": 1,
+    "node_latency_frames": 1920,
+    "play_delay_frames": null,
+    "verified": false,
+    "module_backend": "native-pw-cli",
+    "owner_pid": null
+  },
+  "graph": {
+    "expected_links": [],
+    "missing_links": [],
+    "unexpected_links": []
+  },
+  "attempts": 0,
+  "last_failure": null,
+  "config_path": "/home/admin/rpi-lark-bridge/config/bridge.toml",
+  "system": {
+    "temperature_c": 48.31,
+    "mem_available_kib": 563564,
+    "throttled": "throttled=0x0",
+    "arm_clock": "frequency(48)=1200000000"
+  },
+  "output": {
+    "candidates": [
+      {
+        "id": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+        "kind": "wired",
+        "label": "Built-in Audio Stereo",
+        "node": "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+        "present": true,
+        "connected": true,
+        "adapter": null,
+        "adapter_address": null,
+        "address": null,
+        "setup_state": "ready"
+      },
+      {
+        "id": "a2dp:C9:5C:FD:6E:28:46",
+        "kind": "a2dp",
+        "label": "Boombox",
+        "node": null,
+        "present": false,
+        "connected": false,
+        "adapter": "hci1",
+        "adapter_address": "A0:AD:9F:73:6C:24",
+        "address": "C9:5C:FD:6E:28:46",
+        "setup_state": "ready"
+      },
+      {
+        "id": "a2dp:50:D7:1B:74:34:D6",
+        "kind": "a2dp",
+        "label": "iWorld",
+        "node": null,
+        "present": false,
+        "connected": false,
+        "adapter": "hci1",
+        "adapter_address": "A0:AD:9F:73:6C:24",
+        "address": "50:D7:1B:74:34:D6",
+        "setup_state": "ready"
+      },
+      {
+        "id": "a2dp:98:47:44:CD:73:DE",
+        "kind": "a2dp",
+        "label": "Soundcore Space A40",
+        "node": null,
+        "present": false,
+        "connected": false,
+        "adapter": "hci0",
+        "adapter_address": "B8:27:EB:43:8D:51",
+        "address": "98:47:44:CD:73:DE",
+        "setup_state": "needs_setup"
+      }
+    ],
+    "chosen": {
+      "id": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+      "kind": "wired",
+      "label": "Built-in Audio Stereo",
+      "node": "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+      "present": true,
+      "connected": true,
+      "adapter": null,
+      "adapter_address": null,
+      "address": null,
+      "setup_state": "ready"
+    },
+    "reason": "desired output is available",
+    "desired_id": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+    "desired_available": true
+  },
+  "mode": "bluetooth-wired"
+}
+--- storage-health ---
+{"config_slot":"a","config_source":"slot-a","mount":"/dev/mmcblk0p3 mounted ext4,rw","pairing_action":"live-valid","pairing_slot":null,"persistent":true,"reasons":[],"schema":1,"seed_action":"existing","state":"READY"}
+--- active-config-sha256 ---
+4ace27f7e31658cedfee7c306b4af0dfd108c2bdee51ceee868e4bd4415445ef  /home/admin/rpi-lark-bridge/config/bridge.toml
+--- durable-configs ---

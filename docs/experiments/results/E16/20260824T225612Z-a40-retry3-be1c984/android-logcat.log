@@ -1,0 +1,3 @@
+--------- beginning of main
+08-24 18:57:18.885  9349  9519 I BridgeOutputController: output request scan completed
+08-24 18:58:11.568  9349  9519 W BridgeOutputController: output request pair_select failed: Pairing did not finish. Put the speaker in pairing mode and try again. (temporary NoInputNoOutput agent did not register; new-bond rollback failed: /org/bluez/hci1/dev_98_47_44_CD_73_DE: Call failed: Does Not Exist)

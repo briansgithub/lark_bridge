@@ -1,0 +1,33 @@
+Aug 24 19:20:18.567265 larkbridge bluetoothd[49821]: profiles/audio/avctp.c:avctp_control_confirm() Control: Refusing unexpected connect
+Aug 24 19:20:19.533280 larkbridge bluetoothd[49821]: /org/bluez/hci1/dev_C9_5C_FD_6E_28_46/sep1/fd16: fd(42) ready
+Aug 24 19:20:21.227413 larkbridge python3[49410]: INFO chosen speaker no longer needs paging
+Aug 24 19:20:38.196672 larkbridge bluetoothd[49821]: Endpoint unregistered: sender=:1.34098 path=/MediaEndpoint/A2DPSource/sbc
+Aug 24 19:20:38.223852 larkbridge bluetoothd[49821]: Battery Provider Manager destroyed
+Aug 24 19:20:39.431691 larkbridge bluetoothd[49821]: Battery Provider Manager created
+Aug 24 19:20:39.645324 larkbridge bluetoothd[49821]: Endpoint registered: sender=:1.34098 path=/MediaEndpoint/A2DPSource/sbc
+Aug 24 19:20:51.558003 larkbridge python3[49410]: WARNING chosen speaker C9:5C:FD:6E:28:46 is absent — paging (attempt 1/5)
+Aug 24 19:20:56.864633 larkbridge bluetoothd[49821]: profiles/audio/avdtp.c:avdtp_connect_cb() connect to C9:5C:FD:6E:28:46: Host is down (112)
+Aug 24 19:20:56.875883 larkbridge python3[49410]: INFO speaker connect failed: /org/bluez/hci1/dev_C9_5C_FD_6E_28_46: Call failed: br-connection-page-timeout
+Aug 24 19:21:04.678237 larkbridge bluetoothd[49821]: /org/bluez/hci1/dev_C9_5C_FD_6E_28_46/fd17: fd(42) ready
+Aug 24 19:21:12.040134 larkbridge python3[49410]: INFO chosen speaker no longer needs paging
+Aug 24 19:21:26.048307 larkbridge bluetoothd[49821]: Endpoint unregistered: sender=:1.34098 path=/MediaEndpoint/A2DPSource/sbc
+Aug 24 19:21:26.072934 larkbridge bluetoothd[49821]: Battery Provider Manager destroyed
+Aug 24 19:21:27.286169 larkbridge bluetoothd[49821]: Battery Provider Manager created
+Aug 24 19:21:27.499390 larkbridge bluetoothd[49821]: Endpoint registered: sender=:1.34098 path=/MediaEndpoint/A2DPSource/sbc
+Aug 24 19:21:42.590946 larkbridge python3[49410]: WARNING chosen speaker C9:5C:FD:6E:28:46 is absent — paging (attempt 1/5)
+Aug 24 19:21:45.204974 larkbridge python3[49410]: INFO speaker connect succeeded: /org/bluez/hci1/dev_C9_5C_FD_6E_28_46
+Aug 24 19:21:45.286824 larkbridge bluetoothd[49821]: profiles/audio/avctp.c:avctp_control_confirm() Control: Refusing unexpected connect
+Aug 24 19:21:46.144610 larkbridge bluetoothd[49821]: /org/bluez/hci1/dev_C9_5C_FD_6E_28_46/sep1/fd18: fd(42) ready
+Aug 24 19:21:51.666846 larkbridge bluetoothd[49821]: Endpoint unregistered: sender=:1.34098 path=/MediaEndpoint/A2DPSource/sbc
+Aug 24 19:21:51.676205 larkbridge bluetoothd[49821]: Battery Provider Manager destroyed
+Aug 24 19:21:52.887308 larkbridge bluetoothd[49821]: Battery Provider Manager created
+Aug 24 19:21:53.121086 larkbridge bluetoothd[49821]: Endpoint registered: sender=:1.34098 path=/MediaEndpoint/A2DPSource/sbc
+Aug 24 19:22:15.115952 larkbridge bluetoothd[49821]: /org/bluez/hci1/dev_C9_5C_FD_6E_28_46/fd19: fd(42) ready
+Aug 24 19:22:16.812067 larkbridge python3[49410]: WARNING controller did not answer (1/2)
+Aug 24 19:22:28.534768 larkbridge bluetoothd[49821]: Endpoint unregistered: sender=:1.34098 path=/MediaEndpoint/A2DPSource/sbc
+Aug 24 19:22:28.536938 larkbridge bluetoothd[49821]: Battery Provider Manager destroyed
+Aug 24 19:22:29.766306 larkbridge bluetoothd[49821]: Battery Provider Manager created
+Aug 24 19:22:30.115969 larkbridge bluetoothd[49821]: Endpoint registered: sender=:1.34098 path=/MediaEndpoint/A2DPSource/sbc
+Aug 24 19:22:32.923017 larkbridge python3[49410]: WARNING controller did not answer (2/2)
+Aug 24 19:22:33.023472 larkbridge python3[49410]: WARNING running bt-reset.sh against hci0 (B8:27:EB:43:8D:51)
+Aug 24 19:22:51.837805 larkbridge bluetoothd[49821]: /org/bluez/hci1/dev_C9_5C_FD_6E_28_46/fd20: fd(42) ready

@@ -1,0 +1,2 @@
+Aug 24 18:49:58.841131 larkbridge python3[87683]: 2026-08-24 18:49:58,840 INFO phone output control disconnected: [Errno 104] Connection reset by peer
+Aug 24 18:50:07.615586 larkbridge python3[87683]: 2026-08-24 18:50:07,615 INFO phone output control connected on RFCOMM channel 12
