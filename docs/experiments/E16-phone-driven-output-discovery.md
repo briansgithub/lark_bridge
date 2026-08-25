@@ -336,12 +336,14 @@ screenshots were taken. The raw evidence is preserved locally under:
 - `20260824T233854Z-watchdog-b002b7d-quiet/` — post-fix light quiet gate and
   final Pi/Android/durable-state snapshots.
 
-These result directories and `rig/e16_live_capture.py` remain intentionally
-untracked. They are large local raw artifacts, one directory contains the
-explicitly authorized Pixel inspection, and the capture helper's full `btmon`
-plus PipeWire monitoring proved too intrusive for the later audio gate. They
-were preserved, not deleted or hidden, but are not part of this documentation
-checkpoint.
+These result directories and `rig/e16_live_capture.py` were intentionally left
+untracked at the first step-7 documentation checkpoint. After a credential scan,
+JSON parse check, helper syntax/help check, and review of the authorized Pixel
+inspection, they were admitted as the raw-evidence checkpoint
+`4dba442a95166a60630a7f68e0248f8cc4f488fa`. The capture helper's full `btmon`
+plus PipeWire monitoring proved too intrusive for the later audio gate and must
+not be reused unchanged. E17 records the replacement architecture and notes that
+the helper's `hci0`/`hci1` assumptions must become role/address based.
 
 ### A40 pairing and selection — pass after two narrow corrections
 
