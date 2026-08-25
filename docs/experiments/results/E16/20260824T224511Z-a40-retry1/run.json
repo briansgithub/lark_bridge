@@ -1,0 +1,99 @@
+{
+  "schema": 1,
+  "label": "a40-retry1",
+  "host": "larkbridge",
+  "planned_seconds": 240,
+  "started_utc": "2026-08-24T22:45:11.825912+00:00",
+  "directory": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-mode1\\docs\\experiments\\results\\E16\\20260824T224511Z-a40-retry1",
+  "snapshots": [
+    {
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "set -u\ndate --iso-8601=ns\nid\nfindmnt -no SOURCE,FSTYPE,OPTIONS /media/root-ro || true\nsystemctl is-active bluetooth.service bridge-btwatchdog.service bridge-storage-guard.service || true\nsystemctl --user is-active bridge-output-remote.service bridge-supervisor.service pipewire.service wireplumber.service || true\nprintf '%s\\n' '--- bridge-status ---'\ncat /run/user/1000/bridge-status.json\nprintf '%s\\n' '--- storage-health ---'\ncat /run/larkbridge/storage-health.json\nprintf '%s\\n' '--- active-config-sha256 ---'\nsha256sum /home/admin/rpi-lark-bridge/config/bridge.toml\nprintf '%s\\n' '--- durable-configs ---'\nsudo -n find /var/lib/larkbridge-persist/config -mindepth 2 -maxdepth 2 -name bridge.toml -exec sha256sum {} +\nprintf '%s\\n' '--- a40-hci0 ---'\nbusctl --system introspect org.bluez /org/bluez/hci0/dev_98_47_44_CD_73_DE org.bluez.Device1 || true\nprintf '%s\\n' '--- a40-hci1 ---'\nbusctl --system introspect org.bluez /org/bluez/hci1/dev_98_47_44_CD_73_DE org.bluez.Device1 || true\nprintf '%s\\n' '--- bluez-tree ---'\nbusctl --system tree org.bluez\nprintf '%s\\n' '--- pipewire-status ---'\nXDG_RUNTIME_DIR=/run/user/1000 wpctl status --name || true\nprintf '%s\\n' '--- pipewire-graph ---'\nXDG_RUNTIME_DIR=/run/user/1000 pw-dump || true"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "C:\\Users\\user1\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe",
+        "shell",
+        "sh",
+        "-c",
+        "date '+%Y-%m-%dT%H:%M:%S.%N%z'; dumpsys activity activities | grep -m1 mResumedActivity; dumpsys audio; dumpsys bluetooth_manager"
+      ],
+      "returncode": 0
+    }
+  ],
+  "captures": [
+    {
+      "name": "bluez-monitor",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 250s busctl --system --json=short monitor org.bluez"
+      ],
+      "pid": 39236
+    },
+    {
+      "name": "btmon",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 250s stdbuf -oL -eL btmon -T -c never"
+      ],
+      "pid": 27332
+    },
+    {
+      "name": "system-journal",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 250s journalctl -f -n 0 -o short-precise -u bluetooth.service -u bridge-btwatchdog.service -u bridge-storage-guard.service"
+      ],
+      "pid": 38764
+    },
+    {
+      "name": "user-journal",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 250s journalctl -f -n 0 -o short-precise _SYSTEMD_USER_UNIT=bridge-output-remote.service"
+      ],
+      "pid": 36288
+    },
+    {
+      "name": "state",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "printf %s c2V0IC11CndoaWxlIDo7IGRvCiAgZGF0ZSAtLWlzby04NjAxPW5zCiAganEgLWMgJ3tzdGF0ZSxjYWxsOi5jYWxsLmhmcF9ub2Rlc19wcmVzZW50LG91dHB1dDp7ZGVzaXJlZDoub3V0cHV0LmRlc2lyZWRfaWQsY2hvc2VuOi5vdXRwdXQuY2hvc2VuLmlkLHJlYXNvbjoub3V0cHV0LnJlYXNvbixjYW5kaWRhdGVzOlsub3V0cHV0LmNhbmRpZGF0ZXNbXXx7aWQscHJlc2VudCxjb25uZWN0ZWQsYWRhcHRlcixhZGFwdGVyX2FkZHJlc3Msc2V0dXBfc3RhdGV9XX19JyAvcnVuL3VzZXIvMTAwMC9icmlkZ2Utc3RhdHVzLmpzb24KICBmb3IgcGF0aCBpbiAvb3JnL2JsdWV6L2hjaTAvZGV2Xzk4XzQ3XzQ0X0NEXzczX0RFIC9vcmcvYmx1ZXovaGNpMS9kZXZfOThfNDdfNDRfQ0RfNzNfREU7IGRvCiAgICBwcmludGYgJyVzICcgIiRwYXRoIgogICAgYnVzY3RsIC0tc3lzdGVtIGdldC1wcm9wZXJ0eSBvcmcuYmx1ZXogIiRwYXRoIiBvcmcuYmx1ZXouRGV2aWNlMSBQYWlyZWQgMj4vZGV2L251bGwgfHwgcHJpbnRmICdhYnNlbnRcbicKICBkb25lCiAgc2xlZXAgMQpkb25l | base64 -d | timeout 250s sh"
+      ],
+      "pid": 19180
+    },
+    {
+      "name": "pipewire-monitor",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "XDG_RUNTIME_DIR=/run/user/1000 timeout 250s stdbuf -oL -eL pw-mon"
+      ],
+      "pid": 26048
+    },
+    {
+      "name": "android-logcat",
+      "command": [
+        "C:\\Users\\user1\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe",
+        "logcat",
+        "-T",
+        "1",
+        "-v",
+        "threadtime",
+        "BridgeOutputController:V",
+        "AudioRoutingService:V",
+        "*:S"
+      ],
+      "pid": 19540
+    }
+  ]
+}

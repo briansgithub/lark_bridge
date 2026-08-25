@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "label": "monitor-smoke",
+  "host": "larkbridge",
+  "planned_seconds": 5,
+  "started_utc": "2026-08-24T22:43:44.880870+00:00",
+  "directory": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-mode1\\docs\\experiments\\results\\E16\\20260824T224344Z-monitor-smoke",
+  "snapshots": [
+    {
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "set -eu\ndate --iso-8601=ns\nid\nfindmnt -no SOURCE,FSTYPE,OPTIONS /media/root-ro || true\nsystemctl is-active bluetooth.service bridge-btwatchdog.service bridge-storage-guard.service || true\nsystemctl --user is-active bridge-output-remote.service bridge-supervisor.service pipewire.service wireplumber.service || true\nprintf '%s\\n' '--- bridge-status ---'\ncat /run/user/1000/bridge-status.json\nprintf '%s\\n' '--- storage-health ---'\ncat /run/larkbridge/storage-health.json\nprintf '%s\\n' '--- active-config-sha256 ---'\nsha256sum /home/admin/rpi-lark-bridge/config/bridge.toml\nprintf '%s\\n' '--- durable-configs ---'\nsudo -n sha256sum /var/lib/larkbridge-persist/config/slot-*/bridge.toml\nprintf '%s\\n' '--- a40-hci0 ---'\nbusctl --system introspect org.bluez /org/bluez/hci0/dev_98_47_44_CD_73_DE org.bluez.Device1 || true\nprintf '%s\\n' '--- a40-hci1 ---'\nbusctl --system introspect org.bluez /org/bluez/hci1/dev_98_47_44_CD_73_DE org.bluez.Device1 || true\nprintf '%s\\n' '--- bluez-tree ---'\nbusctl --system tree org.bluez\nprintf '%s\\n' '--- pipewire-status ---'\nXDG_RUNTIME_DIR=/run/user/1000 wpctl status --name || true"
+      ],
+      "returncode": 1
+    },
+    {
+      "command": [
+        "C:\\Users\\user1\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe",
+        "shell",
+        "sh",
+        "-c",
+        "date '+%Y-%m-%dT%H:%M:%S.%N%z'; dumpsys activity activities | grep -m1 mResumedActivity; dumpsys audio; dumpsys bluetooth_manager"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "set -eu\ndate --iso-8601=ns\nid\nfindmnt -no SOURCE,FSTYPE,OPTIONS /media/root-ro || true\nsystemctl is-active bluetooth.service bridge-btwatchdog.service bridge-storage-guard.service || true\nsystemctl --user is-active bridge-output-remote.service bridge-supervisor.service pipewire.service wireplumber.service || true\nprintf '%s\\n' '--- bridge-status ---'\ncat /run/user/1000/bridge-status.json\nprintf '%s\\n' '--- storage-health ---'\ncat /run/larkbridge/storage-health.json\nprintf '%s\\n' '--- active-config-sha256 ---'\nsha256sum /home/admin/rpi-lark-bridge/config/bridge.toml\nprintf '%s\\n' '--- durable-configs ---'\nsudo -n sha256sum /var/lib/larkbridge-persist/config/slot-*/bridge.toml\nprintf '%s\\n' '--- a40-hci0 ---'\nbusctl --system introspect org.bluez /org/bluez/hci0/dev_98_47_44_CD_73_DE org.bluez.Device1 || true\nprintf '%s\\n' '--- a40-hci1 ---'\nbusctl --system introspect org.bluez /org/bluez/hci1/dev_98_47_44_CD_73_DE org.bluez.Device1 || true\nprintf '%s\\n' '--- bluez-tree ---'\nbusctl --system tree org.bluez\nprintf '%s\\n' '--- pipewire-status ---'\nXDG_RUNTIME_DIR=/run/user/1000 wpctl status --name || true"
+      ],
+      "returncode": 1
+    },
+    {
+      "command": [
+        "C:\\Users\\user1\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe",
+        "shell",
+        "sh",
+        "-c",
+        "date '+%Y-%m-%dT%H:%M:%S.%N%z'; dumpsys activity activities | grep -m1 mResumedActivity; dumpsys audio; dumpsys bluetooth_manager"
+      ],
+      "returncode": 0
+    }
+  ],
+  "captures": [
+    {
+      "name": "bluez-monitor",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 15s busctl --system --json=short monitor org.bluez"
+      ],
+      "pid": 37700
+    },
+    {
+      "name": "btmon",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 15s btmon"
+      ],
+      "pid": 19372
+    },
+    {
+      "name": "system-journal",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 15s journalctl -f -n 0 -o short-precise -u bluetooth.service -u bridge-btwatchdog.service -u bridge-storage-guard.service"
+      ],
+      "pid": 27868
+    },
+    {
+      "name": "user-journal",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "sudo -n timeout 15s journalctl -f -n 0 -o short-precise _SYSTEMD_USER_UNIT=bridge-output-remote.service"
+      ],
+      "pid": 29760
+    },
+    {
+      "name": "state",
+      "command": [
+        "C:\\WINDOWS\\System32\\OpenSSH\\ssh.EXE",
+        "larkbridge",
+        "timeout 15s sh -c \"set -u\\nwhile :; do\\n  date --iso-8601=ns\\n  jq -c '{state,call:.call.hfp_nodes_present,output:{desired:.output.desired_id,chosen:.output.chosen.id,reason:.output.reason,candidates:[.output.candidates[]|{id,present,connected,adapter,adapter_address,setup_state}]}}' /run/user/1000/bridge-status.json\\n  for path in /org/bluez/hci0/dev_98_47_44_CD_73_DE /org/bluez/hci1/dev_98_47_44_CD_73_DE; do\\n    printf '%s ' \\\"$path\\\"\\n    busctl --system get-property org.bluez \\\"$path\\\" org.bluez.Device1 Paired 2>/dev/null || printf 'absent\\\\n'\\n  done\\n  sleep 1\\ndone\""
+      ],
+      "pid": 10872
+    },
+    {
+      "name": "android-logcat",
+      "command": [
+        "C:\\Users\\user1\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe",
+        "logcat",
+        "-T",
+        "1",
+        "-v",
+        "threadtime",
+        "BridgeOutputController:V",
+        "AudioRoutingService:V",
+        "*:S"
+      ],
+      "pid": 29400
+    }
+  ],
+  "returncodes": {
+    "bluez-monitor": 1,
+    "btmon": 1,
+    "system-journal": 1,
+    "user-journal": 1,
+    "state": 2,
+    "android-logcat": 1
+  },
+  "completed_utc": "2026-08-24T22:43:51.892402+00:00",
+  "files": {
+    "android-after.log": {
+      "bytes": 493323,
+      "sha256": "581fbb3fd2756697f1b8a3f53afa14e6de71a2bc48db7975453311c00efb1472"
+    },
+    "android-after.log.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "android-before.log": {
+      "bytes": 493323,
+      "sha256": "c5be2671345c1851d0e75fc0d567fed276dcf5348c9804739a77afd5877400e6"
+    },
+    "android-before.log.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "android-logcat.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "android-logcat.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bluez-monitor.log": {
+      "bytes": 22382,
+      "sha256": "2254cb4bc6d80abe501fa7f364bd4842ee1c4b55cc4aeff3b51fece840d7da6b"
+    },
+    "bluez-monitor.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "btmon.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "btmon.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "pi-after.log": {
+      "bytes": 3835,
+      "sha256": "51b72a91377ad4dbd7928bfab314a5973ce161e2ae8f006bb935f55d5c1e1511"
+    },
+    "pi-after.log.stderr": {
+      "bytes": 94,
+      "sha256": "b8ed319d6e085ccd5f29f573b5ba94e5fbd7bec25bd247ba64184008032e01f2"
+    },
+    "pi-before.log": {
+      "bytes": 3835,
+      "sha256": "d574dde89f1c230a00b796e32df2f34b23a1204f7e85254a47b83b17f321f53c"
+    },
+    "pi-before.log.stderr": {
+      "bytes": 94,
+      "sha256": "b8ed319d6e085ccd5f29f573b5ba94e5fbd7bec25bd247ba64184008032e01f2"
+    },
+    "state.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "state.stderr.log": {
+      "bytes": 30,
+      "sha256": "168b92a5ecde53667787627d2a01325463795f0b648ce71eb93615a8323eb9d4"
+    },
+    "system-journal.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "system-journal.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "user-journal.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "user-journal.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}
