@@ -94,6 +94,13 @@ class Adapter:
     address: str
     bus: str  # "UART" (onboard BCM43438) or "USB" (dongle)
     rfkill_index: int | None
+    usb_vendor_id: str | None = None
+    usb_product_id: str | None = None
+    usb_parent: str | None = None
+    usb_interface: str | None = None
+    driver: str | None = None
+    product: str | None = None
+    manufacturer: str | None = None
 
     @property
     def path(self) -> str:
@@ -168,7 +175,7 @@ def parse_discovery_event(line: str, adapter_path: str) -> tuple[str, int | None
     # A remembered object's Connected/Trusted churn is not an inquiry observation. BlueZ
     # discovery either adds the object or changes discovery-fed identity/radio properties.
     if "InterfacesAdded" not in line and not re.search(
-        r'\b(?:RSSI|Class|Name|Alias|UUIDs|AddressType|TxPower)\b', line
+        r"\b(?:RSSI|Class|Name|Alias|UUIDs|AddressType|TxPower)\b", line
     ):
         return None
     address = match.group("mac").replace("_", ":").upper()
@@ -367,6 +374,8 @@ def _run_cancellable(
     heartbeat: Callable[[], None] | None = None,
 ) -> tuple[int, str, str]:
     """Run a short D-Bus helper with liveness callbacks and guaranteed group reap."""
+    if cancelled is not None and cancelled():
+        raise BluetoothOperationCancelled("operation owner disconnected")
     try:
         process = subprocess.Popen(
             command,
@@ -398,6 +407,103 @@ def _run_cancellable(
         raise
 
 
+def _read_sysfs(path: Path, name: str) -> str | None:
+    try:
+        value = (path / name).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return value or None
+
+
+def _uevent_driver(path: Path) -> str | None:
+    try:
+        lines = (path / "uevent").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        if line.startswith("DRIVER=") and line[7:]:
+            return line[7:]
+    return None
+
+
+def _bound_driver(path: Path) -> str | None:
+    try:
+        driver = (path / "driver").resolve(strict=True).name
+    except OSError:
+        driver = None
+    return driver or _uevent_driver(path)
+
+
+def _sysfs_identity(path: Path) -> dict[str, str | None]:
+    """Derive physical diagnostics from ancestors without trusting their topology.
+
+    USB parent/interface names are intentionally reported but never compared by the role
+    resolver.  They change when a dongle moves ports; VID:PID and the permanent address do not.
+    """
+    ancestors = [path, *path.parents]
+    usb_device: Path | None = None
+    usb_interface: Path | None = None
+    driver: str | None = None
+    for candidate in ancestors:
+        if usb_interface is None and (
+            _read_sysfs(candidate, "bInterfaceClass") is not None
+            or re.fullmatch(r"[^:]+:\d+\.\d+", candidate.name) is not None
+        ):
+            usb_interface = candidate
+            driver = _bound_driver(candidate)
+        if (
+            usb_device is None
+            and _read_sysfs(candidate, "idVendor") is not None
+            and _read_sysfs(candidate, "idProduct") is not None
+        ):
+            usb_device = candidate
+        if usb_device is not None and usb_interface is not None:
+            break
+
+    if usb_device is not None:
+        return {
+            "bus": "USB",
+            "usb_vendor_id": (_read_sysfs(usb_device, "idVendor") or "").lower() or None,
+            "usb_product_id": (_read_sysfs(usb_device, "idProduct") or "").lower() or None,
+            "usb_parent": usb_device.name,
+            "usb_interface": usb_interface.name if usb_interface is not None else None,
+            "driver": driver or _bound_driver(usb_device),
+            "product": _read_sysfs(usb_device, "product"),
+            "manufacturer": _read_sysfs(usb_device, "manufacturer"),
+        }
+
+    serial = next(
+        (
+            candidate
+            for candidate in ancestors
+            if "serial" in candidate.as_posix().lower() or "uart" in candidate.name.lower()
+        ),
+        None,
+    )
+    for candidate in ancestors:
+        driver = _bound_driver(candidate)
+        if driver is not None:
+            break
+    return {
+        "bus": "UART" if serial is not None else "unknown",
+        "usb_vendor_id": None,
+        "usb_product_id": None,
+        "usb_parent": None,
+        "usb_interface": None,
+        "driver": driver,
+        "product": None,
+        "manufacturer": None,
+    }
+
+
+def _controller_sysfs_identity(hci: str) -> dict[str, str | None]:
+    try:
+        path = (SYS_BLUETOOTH / hci).resolve(strict=True)
+    except OSError:
+        return _sysfs_identity(SYS_BLUETOOTH / hci)
+    return _sysfs_identity(path)
+
+
 def _bus_type(hci: str) -> str:
     """UART vs USB, from where the device hangs in sysfs.
 
@@ -405,15 +511,7 @@ def _bus_type(hci: str) -> str:
     by unbinding its serdev driver (bt-reset.sh rung 6), a dongle by unbinding btusb.
     Applying the wrong one is a no-op at best.
     """
-    try:
-        target = (SYS_BLUETOOTH / hci).resolve().as_posix()
-    except OSError:
-        return "unknown"
-    if "/usb" in target:
-        return "USB"
-    if "serial" in target:
-        return "UART"
-    return "unknown"
+    return str(_controller_sysfs_identity(hci)["bus"])
 
 
 def _rfkill_index(hci: str) -> int | None:
@@ -460,25 +558,29 @@ def adapters(objects: dict[str, dict] | None = None) -> list[Adapter]:
             continue
         interface = (tree.get(f"/org/bluez/{entry.name}") or {}).get("org.bluez.Adapter1") or {}
         address = str((interface.get("Address") or {}).get("data") or "").upper()
+        identity = _controller_sysfs_identity(entry.name)
         found.append(
             Adapter(
                 hci=entry.name,
                 address=address,
-                bus=_bus_type(entry.name),
+                bus=str(identity["bus"]),
                 rfkill_index=_rfkill_index(entry.name),
+                usb_vendor_id=identity["usb_vendor_id"],
+                usb_product_id=identity["usb_product_id"],
+                usb_parent=identity["usb_parent"],
+                usb_interface=identity["usb_interface"],
+                driver=identity["driver"],
+                product=identity["product"],
+                manufacturer=identity["manufacturer"],
             )
         )
     return sorted(found, key=lambda adapter: (adapter.address == "", adapter.address))
 
 
-def adapter_by_address(
-    address: str, objects: dict[str, dict] | None = None
-) -> Adapter | None:
+def adapter_by_address(address: str, objects: dict[str, dict] | None = None) -> Adapter | None:
     wanted = address.strip().upper()
-    for adapter in adapters(objects):
-        if adapter.address == wanted:
-            return adapter
-    return None
+    matches = [adapter for adapter in adapters(objects) if adapter.address == wanted]
+    return matches[0] if len(matches) == 1 else None
 
 
 def managed_objects(
@@ -492,8 +594,14 @@ def managed_objects(
     device as "cannot act", never as "device is gone, take recovery action".
     """
     command = [
-        "busctl", "--system", "--json=short", "call", BLUEZ, "/",
-        "org.freedesktop.DBus.ObjectManager", "GetManagedObjects",
+        "busctl",
+        "--system",
+        "--json=short",
+        "call",
+        BLUEZ,
+        "/",
+        "org.freedesktop.DBus.ObjectManager",
+        "GetManagedObjects",
     ]
     if cancelled is not None or heartbeat is not None:
         code, out, _ = _run_cancellable(
@@ -533,15 +641,11 @@ def device_property(
     return (device_properties(adapter, device_mac, objects).get(name) or {}).get("data")
 
 
-def paired_on(
-    adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
-) -> bool:
+def paired_on(adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None) -> bool:
     return bool(device_property(adapter, device_mac, "Paired", objects))
 
 
-def connected_on(
-    adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
-) -> bool:
+def connected_on(adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None) -> bool:
     return bool(device_property(adapter, device_mac, "Connected", objects))
 
 
@@ -577,7 +681,9 @@ def discover_bredr(
         # services do have a passwordless sudo grant, while an unprivileged monitor
         # exits immediately with AccessDenied and turns every otherwise-valid scan
         # into "discovery helper exited early".
-        monitor = _LineProcess(["sudo", "-n", "busctl", "--system", "--json=short", "monitor", BLUEZ])
+        monitor = _LineProcess(
+            ["sudo", "-n", "busctl", "--system", "--json=short", "monitor", BLUEZ]
+        )
         owner = _LineProcess(["bluetoothctl"])
         owner.send(f"select {adapter.address}")
         select_deadline = time.monotonic() + DISCOVERY_START_TIMEOUT
@@ -701,7 +807,13 @@ def is_paired(device_mac: str, objects: dict[str, dict] | None = None) -> bool:
 
 
 def _act(
-    verb: str, device_mac: str, adapter: Adapter | None, timeout: float
+    verb: str,
+    device_mac: str,
+    adapter: Adapter | None,
+    timeout: float,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+    heartbeat: Callable[[], None] | None = None,
 ) -> tuple[bool, str]:
     path: str | None
     if adapter is not None:
@@ -710,10 +822,13 @@ def _act(
         path = device_path(device_mac)
         if path is None:
             return False, f"no bond for {device_mac} on any adapter"
-    code, _, err = _run(
-        ["busctl", "--system", "call", BLUEZ, path, "org.bluez.Device1", verb],
-        timeout=timeout,
-    )
+    command = ["busctl", "--system", "call", BLUEZ, path, "org.bluez.Device1", verb]
+    if cancelled is not None or heartbeat is not None:
+        code, _, err = _run_cancellable(
+            command, timeout=timeout, cancelled=cancelled, heartbeat=heartbeat
+        )
+    else:
+        code, _, err = _run(command, timeout=timeout)
     if code == 0:
         return True, path
     return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
@@ -724,14 +839,19 @@ def _act(
 A2DP_SINK_UUID = "0000110b-0000-1000-8000-00805f9b34fb"
 
 
-def connect(device_mac: str, adapter: Adapter | None = None) -> tuple[bool, str]:
+def connect(
+    device_mac: str,
+    adapter: Adapter | None = None,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
     """Connect a bond on an EXPLICIT adapter. Returns (ok, detail).
 
     This is the call `bluetoothctl connect` cannot make safely with two controllers.
 
     Prefer connect_profile() for speakers: this brings up everything the remote offers.
     """
-    return _act("Connect", device_mac, adapter, CONNECT_TIMEOUT)
+    return _act("Connect", device_mac, adapter, CONNECT_TIMEOUT, cancelled=cancelled)
 
 
 def connect_profile(
@@ -762,8 +882,15 @@ def connect_profile(
             return False, f"no bond for {device_mac} on any adapter"
         path = resolved
     command = [
-        "busctl", "--system", "call", BLUEZ, path,
-        "org.bluez.Device1", "ConnectProfile", "s", uuid,
+        "busctl",
+        "--system",
+        "call",
+        BLUEZ,
+        path,
+        "org.bluez.Device1",
+        "ConnectProfile",
+        "s",
+        uuid,
     ]
     effective_timeout = timeout if timeout is not None else CONNECT_TIMEOUT
     if cancelled is not None or heartbeat is not None:
@@ -784,8 +911,13 @@ def cancel_pairing(device_mac: str, adapter: Adapter) -> None:
     """Best-effort cancellation on the one explicit object used by Pair."""
     _run(
         [
-            "busctl", "--system", "call", BLUEZ, path_for(adapter, device_mac),
-            "org.bluez.Device1", "CancelPairing",
+            "busctl",
+            "--system",
+            "call",
+            BLUEZ,
+            path_for(adapter, device_mac),
+            "org.bluez.Device1",
+            "CancelPairing",
         ],
         timeout=QUERY_TIMEOUT,
     )
@@ -796,8 +928,15 @@ def remove_device(device_mac: str, adapter: Adapter) -> tuple[bool, str]:
     path = path_for(adapter, device_mac)
     code, _, err = _run(
         [
-            "busctl", "--system", "call", BLUEZ, adapter.path,
-            "org.bluez.Adapter1", "RemoveDevice", "o", path,
+            "busctl",
+            "--system",
+            "call",
+            BLUEZ,
+            adapter.path,
+            "org.bluez.Adapter1",
+            "RemoveDevice",
+            "o",
+            path,
         ],
         timeout=QUERY_TIMEOUT,
     )
@@ -858,9 +997,7 @@ def pair_device(
         # This bluetoothctl build registers an agent at startup even without --agent.
         # Specify the capability there, wait for that one registration to finish, and
         # never issue the interactive `agent` toggle (which would unregister it).
-        agent = _LineProcess(
-            ["sudo", "-n", "bluetoothctl", "--agent", "NoInputNoOutput"]
-        )
+        agent = _LineProcess(["sudo", "-n", "bluetoothctl", "--agent", "NoInputNoOutput"])
         register_deadline = min(started + 3.0, started + timeout)
         registered = False
         while time.monotonic() < register_deadline:
@@ -951,8 +1088,13 @@ def pair_device(
             agent.stop("agent off", "quit")
 
 
-def disconnect(device_mac: str, adapter: Adapter | None = None) -> tuple[bool, str]:
-    return _act("Disconnect", device_mac, adapter, QUERY_TIMEOUT)
+def disconnect(
+    device_mac: str,
+    adapter: Adapter | None = None,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
+    return _act("Disconnect", device_mac, adapter, QUERY_TIMEOUT, cancelled=cancelled)
 
 
 def set_alias(device_mac: str, alias: str, adapter: Adapter | None = None) -> tuple[bool, str]:
@@ -976,8 +1118,15 @@ def set_alias(device_mac: str, alias: str, adapter: Adapter | None = None) -> tu
         path = resolved
     code, _, err = _run(
         [
-            "busctl", "--system", "set-property", BLUEZ, path,
-            "org.bluez.Device1", "Alias", "s", alias,
+            "busctl",
+            "--system",
+            "set-property",
+            BLUEZ,
+            path,
+            "org.bluez.Device1",
+            "Alias",
+            "s",
+            alias,
         ]
     )
     if code == 0:
@@ -985,7 +1134,13 @@ def set_alias(device_mac: str, alias: str, adapter: Adapter | None = None) -> tu
     return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
 
 
-def set_trusted(device_mac: str, trusted: bool, adapter: Adapter | None = None) -> tuple[bool, str]:
+def set_trusted(
+    device_mac: str,
+    trusted: bool,
+    adapter: Adapter | None = None,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
     """Set Trusted on one bond. Reads first, so an unchanged value costs no write.
 
     BlueZ persists Trusted into the bond's info file on LARKDATA, and E14 set an idle-write
@@ -1003,18 +1158,32 @@ def set_trusted(device_mac: str, trusted: bool, adapter: Adapter | None = None) 
     )
     if code == 0 and out.strip().split()[-1:] == ["true" if trusted else "false"]:
         return True, f"{path}: already {trusted}"
-    code, _, err = _run(
-        [
-            "busctl", "--system", "set-property", BLUEZ, path,
-            "org.bluez.Device1", "Trusted", "b", "true" if trusted else "false",
-        ]
-    )
+    command = [
+        "busctl",
+        "--system",
+        "set-property",
+        BLUEZ,
+        path,
+        "org.bluez.Device1",
+        "Trusted",
+        "b",
+        "true" if trusted else "false",
+    ]
+    if cancelled is not None:
+        code, _, err = _run_cancellable(command, timeout=QUERY_TIMEOUT, cancelled=cancelled)
+    else:
+        code, _, err = _run(command)
     if code == 0:
         return True, path
     return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
 
 
-def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
+def pin_to_adapter(
+    device_mac: str,
+    adapter: Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> TrustPinResult:
     """Trust a device on ONE adapter and untrust it everywhere else.
 
     Both halves are necessary and each was learned from a failure on the unit:
@@ -1030,7 +1199,7 @@ def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
 
     Idempotent, so it is safe to call whenever a speaker is selected.
     """
-    tree = managed_objects()
+    tree = managed_objects(cancelled=cancelled)
     suffix = "/dev_" + device_mac.strip().upper().replace(":", "_")
     wanted = path_for(adapter, device_mac)
     matches = [
@@ -1047,7 +1216,7 @@ def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
     changed: list[str] = []
     wanted_interfaces = next(interfaces for path, interfaces in matches if path == wanted)
     if not bool(_device_property(wanted_interfaces, "Trusted")):
-        ok, detail = set_trusted(device_mac, True, adapter)
+        ok, detail = set_trusted(device_mac, True, adapter, cancelled=cancelled)
         if not ok:
             # Keep any trusted duplicate intact until the intended adapter is trustworthy.
             # Otherwise one failed D-Bus write can leave the speaker trusted nowhere.
@@ -1060,7 +1229,7 @@ def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
             continue
         hci = path.split("/")[3]
         other = Adapter(hci=hci, address="", bus="unknown", rfkill_index=None)
-        ok, detail = set_trusted(device_mac, False, other)
+        ok, detail = set_trusted(device_mac, False, other, cancelled=cancelled)
         if ok:
             changed.append(f"{hci}:trusted=False")
         else:
@@ -1072,7 +1241,11 @@ def pin_to_adapter(device_mac: str, adapter: Adapter) -> TrustPinResult:
     )
 
 
-def unblock(adapter: Adapter) -> bool:
+def unblock(
+    adapter: Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> bool:
     """Clear a soft rfkill on ONE adapter. Root only.
 
     Never `rfkill unblock bluetooth`: that is class-wide, and its matching `rfkill block
@@ -1089,11 +1262,15 @@ def unblock(adapter: Adapter) -> bool:
     """
     if adapter.rfkill_index is None:
         return False
+    if cancelled is not None and cancelled():
+        raise BluetoothOperationCancelled("watchdog shutdown requested")
     if _run(["rfkill", "unblock", str(adapter.rfkill_index)])[0] == 0:
         return True
     # PATH on a non-login shell often lacks /usr/sbin, and writing the sysfs attribute
     # needs no binary at all.
     try:
+        if cancelled is not None and cancelled():
+            raise BluetoothOperationCancelled("watchdog shutdown requested")
         (SYS_RFKILL / f"rfkill{adapter.rfkill_index}" / "soft").write_text("0")
         return True
     except OSError:
@@ -1116,7 +1293,11 @@ def is_powered(adapter: Adapter, objects: dict[str, dict] | None = None) -> bool
     return bool((entry.get("Powered") or {}).get("data"))
 
 
-def power_on(adapter: Adapter) -> tuple[bool, str]:
+def power_on(
+    adapter: Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
     """Unblock and power one controller, addressed by its already-resolved identity.
 
     BlueZ restores adapter power across a daemon restart, but systemd-rfkill can restore a
@@ -1128,10 +1309,12 @@ def power_on(adapter: Adapter) -> tuple[bool, str]:
     stack has been observed to apply Powered=true and then return a failure while the adapter
     is registering; the resulting state, not that misleading reply, owns the outcome.
     """
-    if is_blocked(adapter) is True and not unblock(adapter):
+    if is_blocked(adapter) is True and not unblock(adapter, cancelled=cancelled):
         return False, f"could not clear rfkill{adapter.rfkill_index} for {adapter.address}"
     if is_powered(adapter):
         return True, f"{adapter.address}: already powered"
+    if cancelled is not None and cancelled():
+        raise BluetoothOperationCancelled("watchdog shutdown requested")
     code, _, err = _run(
         [
             "busctl",
@@ -1147,6 +1330,8 @@ def power_on(adapter: Adapter) -> tuple[bool, str]:
     )
     deadline = time.monotonic() + POWER_SETTLE_SECONDS
     while time.monotonic() < deadline:
+        if cancelled is not None and cancelled():
+            raise BluetoothOperationCancelled("watchdog shutdown requested")
         if is_powered(adapter):
             return True, adapter.path
         time.sleep(0.1)
@@ -1162,6 +1347,13 @@ def describe() -> dict:
                 "hci": adapter.hci,
                 "address": adapter.address,
                 "bus": adapter.bus,
+                "usb_vendor_id": adapter.usb_vendor_id,
+                "usb_product_id": adapter.usb_product_id,
+                "usb_parent": adapter.usb_parent,
+                "usb_interface": adapter.usb_interface,
+                "driver": adapter.driver,
+                "product": adapter.product,
+                "manufacturer": adapter.manufacturer,
                 "rfkill_index": adapter.rfkill_index,
                 "blocked": is_blocked(adapter),
                 "powered": is_powered(adapter, tree),

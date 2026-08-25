@@ -1,0 +1,20 @@
+[Unit]
+Description=rpi-lark-bridge Bluetooth %i-controller watchdog
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/admin/rpi-lark-bridge/pi/bridged/bt_watchdog.py --role %i
+Restart=always
+RestartSec=10
+RestartPreventExitStatus=2 3 4
+UMask=0077
+
+# Root is required only for exact-index rfkill and exact-interface sysfs recovery. The code
+# rejects ambiguous controller identity and never performs a class-wide or daemon reset.
+TimeoutStopSec=45
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
