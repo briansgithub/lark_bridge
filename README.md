@@ -23,12 +23,15 @@ is paired, bonded, and trusted specifically beneath that controller, and the two
 AEC-disabled HFP/SCO transport gate passed. With AEC restored, objective AEC measurements passed:
 two acceptance-eligible double-talk cycles reached 16.09 dB and 12.69 dB suppression, while two
 echo-only diagnostics reached 37.47 dB and 37.95 dB. The user then stopped and deferred the
-remainder of the original five-cycle gate
-after provisionally accepting AEC. A 3,600-second active-call pre-persistence soak was attempted,
-but correctly did not start after the Pixel became unavailable and the opening state was
-`CALL_DOWN`. Immutable installation, reboot, and the final soak remain unqualified, so this branch
-is not a promoted release. Bluetooth speaker
-output, BT600, and steering-wheel control forwarding are deliberately deferred. See
+remainder of the original five-cycle gate after provisionally accepting AEC. The exact
+`c63c823ab9d6dfa1837b05517f903d25c6b5c96a` release is now installed in the immutable lower root.
+Its corrective reboot passes the strict `CALL_DOWN` readiness baseline with AUX verified at `0.85`,
+only the exact USB-BT500 controller present, and every required service at zero restarts. The
+immutable lower root and boot filesystem are read-only, and the retained Netplan fast path produced
+an 18.132-second boot. Only two of five qualifying double-talk cycles are complete; a fresh
+Pixel-dependent call and the final 3,600-second active-call soak remain deferred, so this branch is
+not a fully qualified release. Bluetooth speaker output, BT600, and steering-wheel control
+forwarding are deliberately deferred. See
 [`docs/BRINGUP-REPORT.md`](docs/BRINGUP-REPORT.md) for what is proven and what broke;
 [`docs/experiments/E17-bt500-aux-fast.md`](docs/experiments/E17-bt500-aux-fast.md) for this branch;
 [`PLAN.md`](PLAN.md) for the architecture.
@@ -56,7 +59,7 @@ to power the Pico that back-feeds the phone, and it is not obvious.
 | Mode | Microphone path | Call audio out | Radio does | Status |
 |---|---|---|---|---|
 | **1** Bluetooth bridge | Lark → Pi → HFP → Pixel | A2DP car stereo | HFP + A2DP | **Deferred on this branch.** No Bluetooth-output claim |
-| **1W** Bluetooth + wired | Lark → Pi → HFP → Pixel | Pi 3.5 mm jack | USB-BT500 HFP only | **In qualification.** Transport passed; AEC provisionally accepted after 2/5 eligible cycles; five-cycle gate deferred |
+| **1W** Bluetooth + wired | Lark → Pi → HFP → Pixel | Pi 3.5 mm jack | USB-BT500 HFP only | **Persisted; final qualification pending.** Corrective reboot baseline passed; only 2/5 eligible live-call cycles complete |
 | **2** USB headset bridge | Lark → Pi → Pico → Pixel | Pixel → Pico → Pi → any sink | nothing | Independent track |
 | **3** Diagnostics | raw devices exposed | — | — | Always available |
 
@@ -133,7 +136,8 @@ python -m rig.bt500_aux collect --campaign artifacts/bt500-aux/campaign-...
 The current live record contains two such acceptance-eligible cycles, not five. Echo-only captures
 are retained as useful diagnostics but are not credited as double-talk acceptance cycles. The
 pre-persistence soak attempt is retained as not-started evidence rather than a pass or failure;
-release qualification still requires promotion, reboot validation, and a fresh full-duration
+the exact corrective release has since passed immutable installation and reboot readiness. Full
+qualification still requires a fresh post-reboot Pixel call and the complete 3,600-second
 active-call soak.
 
 ## Development
