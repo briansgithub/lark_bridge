@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "generated_at": "2026-08-25",
+  "s31": {
+    "target": "esp32s31",
+    "preview_target": true,
+    "esp_idf_tag": "v6.1-rc1",
+    "esp_idf_commit": "44f0c59f7c81a72a5868a52d5f6dfbbf88829704",
+    "components": {
+      "espressif/usb_host_uac": "1.5.0",
+      "espressif/esp-sr": "2.5.1",
+      "espressif/esp_audio_codec": "2.6.2",
+      "espressif/esp_audio_effects": "1.4.2"
+    }
+  },
+  "output": {
+    "target": "esp32",
+    "preview_target": false,
+    "esp_idf_tag": "v6.0.2",
+    "esp_idf_commit": "7101770dc6db2667b3c477cc31365dd1acd6db4e"
+  },
+  "upstream_reference_heads": {
+    "esp_idf_inspected": "e37a7ae137c0ea6ebca90c0dd67f4a528d73b727",
+    "esp_usb_inspected": "eb0f02163be96dfc753cf43d1207329e44f1ca60"
+  }
+}
