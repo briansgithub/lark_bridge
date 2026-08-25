@@ -1,6 +1,6 @@
 # E17 — Pi 3 USB-BT500 call controller with wired AUX output
 
-**Status:** provisional live validation; five-cycle gate deferred; active-call soak unavailable  
+**Status:** corrective release persisted and reboot-verified; Pixel-dependent final gates deferred<br>
 **Branch:** `codex/bt500-aux-fast` from `4dba442`  
 **Fixture:** Pi 3 Model B v1.2, Pixel 7a, Lark A1, ASUS USB-BT500, Pi AUX to Harmony
 
@@ -108,7 +108,7 @@ It provisionally accepts AEC but explicitly stops and defers the remaining inter
 original five-cycle gate is therefore incomplete: two acceptance-eligible cycles passed, while
 three required cycles were not completed.
 
-## Current unattended step
+## Pre-persistence soak result
 
 A 3,600-second active-call pre-persistence soak was launched, but the Pixel became unavailable
 after the final session recycle. The opening snapshot was correctly rejected in `CALL_DOWN`, so
@@ -117,19 +117,54 @@ not-started result are archived in
 [`20260825T205935Z-pre-persistence-soak`](results/E17/20260825T205935Z-pre-persistence-soak/).
 The required active-call endurance work waits for the Pixel to return.
 
-No exact archive has been installed into the immutable lower root, and no Netplan fast-path,
-persistent onboard-Bluetooth disablement, promotion reboot, or post-reboot call qualification has
-occurred.
+## Persistence and corrective reboot
+
+The first promoted reboot reached the intended single-controller `CALL_DOWN` state but failed the
+strict readiness baseline because wired AUX volume was not applied or observed while the call was
+down. The evidence in
+[`20260825T211935Z-bt500-aux-postboot-readiness`](results/E17/20260825T211935Z-bt500-aux-postboot-readiness/)
+records `desired=0.85`, `observed=null`, and `verified=false`. This exposed an idle-state supervisor
+defect rather than a Bluetooth transport failure.
+
+Commit `c63c823ab9d6dfa1837b05517f903d25c6b5c96a` corrects wired-volume application and read-back in
+`CALL_DOWN`. The exact persisted artifact is
+`LarkBridge-bt500-aux-c63c823ab9d6-20260825T212148Z.zip`, whose SHA-256 is
+`c085897770cdd54d1a9ff1b39c688cc6ef2dbbd9e41e9f79e87379505075c1d3`. Its 450-file
+`MANIFEST.sha256` was verified before promotion.
+
+The matching source archive is `LarkBridge-bt500-aux-source-c63c823ab9d6.zip` (SHA-256
+`33c152c49f5c979f62564615a94c6f024ba5bdcc0cf40d867bc888d691809f26`). The provisional evidence
+bundle is `LarkBridge-bt500-aux-evidence-c63c823ab9d6-20260825T213549Z.zip` (SHA-256
+`0ed568a8f126e2ea7e113d24ab984c95628ccc8fa1172d42e60ec0e83b8778b8`); its embedded evidence
+manifest verifies 196 payload files. It is provisional because the Pixel-dependent gates below
+remain open.
+
+The corrective reboot has boot ID `925eb01c-f17d-4cea-96ee-d505f20db7a3`. The passive readiness
+snapshot
+[`20260825T213025Z-bt500-aux-post-c63c-readiness`](results/E17/20260825T213025Z-bt500-aux-post-c63c-readiness/)
+passes and establishes:
+
+- `/media/root-ro` and `/boot/firmware` are mounted read-only; `/` is the expected writable runtime
+  overlay above that immutable lower root;
+- BlueZ exposes only `A0:AD:9F:73:6C:24`, resolved as the exact USB-BT500 `0b05:1bf6` at sysfs
+  `1-1.5`; the onboard controller is absent;
+- the supervisor passes strict `CALL_DOWN` readiness with the wired AUX target observed and
+  verified at `0.85`;
+- Bluetooth, the call-only watchdog, storage guard, tuning, supervisor, PipeWire, and WirePlumber
+  are active with successful main status and zero restarts;
+- total boot time is 18.132 seconds, so the Netplan fast path remains enabled.
+
+This is a persisted idle-readiness result. Because the Pixel is unavailable, it does not prove a
+fresh post-reboot HFP/SCO session, AEC graph, call teardown/rejoin, or active-call endurance.
 
 ## Remaining gates
 
-1. With the Pixel available, run the active-call endurance campaign; the pre-persistence attempt
-   accumulated no soak time.
-2. Either complete the remaining three interactive cycles or formally revise the original
-   five-cycle acceptance contract; the current user-directed deferral is not a five-cycle pass.
-3. Package and install the exact clean commit, commit the A/B configuration, promote the Netplan
-   fast path and onboard disablement transactionally, and reboot once.
-4. With the Pixel available, establish a fresh post-reboot Discord call and pass the complete final
-   3,600-second active-call soak, teardown, and clean rejoin.
+1. With the Pixel available, establish a fresh post-reboot Discord call and re-verify the exact
+   BT500 HFP/SCO transport, AEC graph, Lark uplink, and wired AUX downlink.
+2. Either complete the remaining three qualifying interactive cycles or formally revise the
+   original five-cycle acceptance contract; the current user-directed deferral is not a five-cycle
+   pass.
+3. Pass the complete final 3,600-second active-call soak, teardown, and clean rejoin.
 
-Until all four finish, E17 is **not** a release qualification and makes no durability claim.
+Until all three finish, E17 is **not** a full release qualification and makes no active-call
+durability claim for the persisted build.

@@ -27,8 +27,22 @@ entry under Unreleased, and each spike lands with a link to its experiment repor
 - Stopped and deferred the remaining interactive cycles at the user's direction after provisional
   AEC acceptance. The original five-cycle gate therefore remains incomplete.
 - Attempted a 3,600-second active-call pre-persistence soak, but it correctly refused to start
-  after the Pixel became unavailable and the opening state was `CALL_DOWN`. Immutable
-  installation, reboot qualification, and the final post-persistence soak remain open.
+  after the Pixel became unavailable and the opening state was `CALL_DOWN`.
+- Persisted exact commit `c63c823ab9d6dfa1837b05517f903d25c6b5c96a` from release archive
+  `LarkBridge-bt500-aux-c63c823ab9d6-20260825T212148Z.zip` (SHA-256
+  `c085897770cdd54d1a9ff1b39c688cc6ef2dbbd9e41e9f79e87379505075c1d3`) after verifying all
+  450 manifest entries.
+- The first promoted reboot exposed an idle-only AUX readiness defect: `CALL_DOWN` left the
+  required `0.85` volume unobserved and unverified. Commit `c63c823` corrected deterministic volume
+  application and read-back without requiring an active call.
+- Passed the corrective second-boot baseline under boot ID
+  `925eb01c-f17d-4cea-96ee-d505f20db7a3`: immutable lower root and boot filesystem read-only, only
+  the exact USB-BT500 controller present, strict `CALL_DOWN` readiness at AUX `0.85`, and all
+  required services active with zero restarts. Total boot time was 18.132 seconds, so the Netplan
+  fast path was retained.
+- A fresh Pixel-dependent post-reboot call and the final 3,600-second active-call soak remain
+  deferred. This is not a full release qualification, and only two qualifying double-talk cycles
+  are complete.
 
 ### Decisions
 - **ADR-0001** Three operating modes; Mode 1W (Bluetooth call + wired output) is the default until
