@@ -12,9 +12,10 @@ BOOT_ONLY=0
 BRIDGE_USER="${BRIDGE_USER:-admin}"
 NETWORKMANAGER_FASTPATH=keep
 CALL_CONTROLLER=usb-bt500
+ONBOARD_BLUETOOTH=keep
 
 usage() {
-    printf 'usage: sudo %s --boot-only [--dry-run] [--source-root PATH] [--transaction-label LABEL] [--networkmanager-fastpath keep|enable|skip|disable] [--call-controller usb-bt500|onboard]\n' "$0"
+    printf 'usage: sudo %s --boot-only [--dry-run] [--source-root PATH] [--transaction-label LABEL] [--networkmanager-fastpath keep|enable|skip|disable] [--call-controller usb-bt500|onboard] [--onboard-bluetooth keep|disable-qualified]\n' "$0"
 }
 
 while [ "$#" -gt 0 ]; do
@@ -25,6 +26,7 @@ while [ "$#" -gt 0 ]; do
         --transaction-label) shift; LABEL="${1:?--transaction-label requires a value}" ;;
         --networkmanager-fastpath) shift; NETWORKMANAGER_FASTPATH="${1:?--networkmanager-fastpath requires a value}" ;;
         --call-controller) shift; CALL_CONTROLLER="${1:?--call-controller requires a value}" ;;
+        --onboard-bluetooth) shift; ONBOARD_BLUETOOTH="${1:?--onboard-bluetooth requires a value}" ;;
         -h|--help) usage; exit 0 ;;
         *) usage >&2; exit 2 ;;
     esac
@@ -34,6 +36,11 @@ done
 [ "$BOOT_ONLY" -eq 1 ] || { usage >&2; exit 2; }
 case "$NETWORKMANAGER_FASTPATH" in keep|enable|skip|disable) ;; *) usage >&2; exit 2;; esac
 case "$CALL_CONTROLLER" in usb-bt500|onboard) ;; *) usage >&2; exit 2;; esac
+case "$ONBOARD_BLUETOOTH" in keep|disable-qualified) ;; *) usage >&2; exit 2;; esac
+[ "$ONBOARD_BLUETOOTH" != disable-qualified ] || [ "$CALL_CONTROLLER" = usb-bt500 ] || {
+    printf 'ERROR: --onboard-bluetooth disable-qualified requires --call-controller usb-bt500\n' >&2
+    exit 2
+}
 [ "$(id -u)" -eq 0 ] || { printf 'ERROR: must run as root\n' >&2; exit 1; }
 [ "$(uname -s)" = "Linux" ] || { printf 'ERROR: Linux is required\n' >&2; exit 1; }
 SOURCE_ROOT="$(cd "$SOURCE_ROOT" && pwd)"
@@ -64,6 +71,7 @@ managed_sources=(
     "pi/scripts/boot-transaction.sh"
     "pi/scripts/boot-trial.sh"
     "pi/scripts/netplan-startup-fastpath"
+    "pi/scripts/onboard_bluetooth_config.py"
     "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf"
     "pi/systemd/system/NetworkManager-10-larkbridge-netplan-skip.conf"
     "pi/pipewire/pipewire.conf.d/20-bridge-endpoints.notes.txt"
@@ -152,7 +160,8 @@ for unit in \
     bridge-btwatchdog.service \
     bridge-btwatchdog@call.service \
     bridge-btwatchdog@output.service \
-    bridge-boot-trial-rollback.timer; do
+    bridge-boot-trial-rollback.timer \
+    hciuart.service; do
     record_unit "$unit"
 done
 
@@ -165,6 +174,17 @@ install_managed "pi/systemd/system/bridge-boot-trial-rollback.timer" "/etc/syste
 install_managed "pi/scripts/set-sco-routing.sh" "/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh" 0755
 install_managed "pi/scripts/boot-transaction.sh" "/usr/local/lib/rpi-lark-bridge/boot-transaction.sh" 0755
 install_managed "pi/scripts/boot-trial.sh" "/usr/local/lib/rpi-lark-bridge/boot-trial.sh" 0755
+install_managed "pi/scripts/onboard_bluetooth_config.py" \
+    "/usr/local/lib/rpi-lark-bridge/onboard_bluetooth_config.py" 0755
+
+printf '%s\n' "$ONBOARD_BLUETOOTH" > "$transaction/onboard-bluetooth"
+if [ "$ONBOARD_BLUETOOTH" = disable-qualified ]; then
+    boot_config=/boot/firmware/config.txt
+    [ -f "$boot_config" ] || die "Raspberry Pi boot configuration is missing: $boot_config"
+    record_path "$boot_config"
+    python3 "$SOURCE_ROOT/pi/scripts/onboard_bluetooth_config.py" \
+        --path "$boot_config" --disable-qualified
+fi
 
 fastpath_script=/usr/local/lib/rpi-lark-bridge/boot-path/netplan
 fastpath_dropin=/etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf
@@ -322,6 +342,9 @@ systemctl disable --now bridge-btwatchdog.service bridge-btwatchdog@output.servi
 if [ "$CALL_CONTROLLER" = usb-bt500 ]; then
     systemctl disable --now bridge-btfw.service >/dev/null 2>&1 || true
     systemctl enable bridge-btwatchdog@call.service >/dev/null
+    if [ "$ONBOARD_BLUETOOTH" = disable-qualified ]; then
+        systemctl disable --now hciuart.service >/dev/null 2>&1 || true
+    fi
     systemctl restart bridge-tuning.service bridge-btwatchdog@call.service
 else
     systemctl disable --now bridge-btwatchdog@call.service >/dev/null 2>&1 || true

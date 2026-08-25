@@ -33,6 +33,7 @@ while IFS=$'\t' read -r expected source target; do
 done < "$transaction/deployed-hashes.tsv"
 
 call_controller="$(cat "$transaction/call-controller" 2>/dev/null || printf onboard)"
+onboard_bluetooth="$(cat "$transaction/onboard-bluetooth" 2>/dev/null || printf keep)"
 if [ "$call_controller" = onboard ]; then
     verifier=/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh
     grep -Fq BRIDGE_BTFW_VERIFY_ONLY_V2 "$verifier" || bad "Bluetooth verifier marker missing"
@@ -40,6 +41,25 @@ if [ "$call_controller" = onboard ]; then
         bad "legacy SCO controller write returned"
     else
         ok "Bluetooth verifier is read-only"
+    fi
+fi
+
+if [ "$onboard_bluetooth" = disable-qualified ]; then
+    if python3 /usr/local/lib/rpi-lark-bridge/onboard_bluetooth_config.py \
+        --path /boot/firmware/config.txt --check >/dev/null; then
+        ok "qualified onboard-Bluetooth disablement is present"
+    else
+        bad "qualified onboard-Bluetooth disablement is absent or ambiguous"
+    fi
+    if systemctl is-active --quiet hciuart.service; then
+        bad "hciuart.service remains active"
+    else
+        ok "hciuart.service inactive"
+    fi
+    if systemctl is-enabled --quiet hciuart.service; then
+        bad "hciuart.service remains enabled"
+    else
+        ok "hciuart.service disabled"
     fi
 fi
 
