@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import btadapters
@@ -22,7 +24,12 @@ class TrustPinTests(unittest.TestCase):
         tree = {path("hci0"): device(True), path("hci1"): device(False)}
         calls: list[tuple[str, bool]] = []
 
-        def set_trusted(_mac: str, trusted: bool, adapter: btadapters.Adapter | None = None):
+        def set_trusted(
+            _mac: str,
+            trusted: bool,
+            adapter: btadapters.Adapter | None = None,
+            **_kwargs,
+        ):
             assert adapter is not None
             calls.append((adapter.hci, trusted))
             return True, adapter.path
@@ -100,13 +107,11 @@ class PowerTests(unittest.TestCase):
             mock.patch.object(btadapters, "is_blocked", return_value=True),
             mock.patch.object(btadapters, "unblock", return_value=True) as unblock,
             mock.patch.object(btadapters, "is_powered", side_effect=[False, True]),
-            mock.patch.object(
-                btadapters, "_run", return_value=(1, "", "transition reply")
-            ) as run,
+            mock.patch.object(btadapters, "_run", return_value=(1, "", "transition reply")) as run,
         ):
             ok, _detail = btadapters.power_on(TARGET)
         self.assertTrue(ok, "verified Powered=true owns the outcome, not busctl's reply")
-        unblock.assert_called_once_with(TARGET)
+        unblock.assert_called_once_with(TARGET, cancelled=None)
         self.assertIn(TARGET.path, run.call_args.args[0])
 
     def test_unblock_failure_prevents_a_power_write(self) -> None:
@@ -131,14 +136,49 @@ class PowerTests(unittest.TestCase):
         self.assertIn("already powered", detail)
         run.assert_not_called()
 
+    def test_shutdown_is_checked_before_each_power_mutation(self) -> None:
+        checks = iter((False, True))
+        with (
+            mock.patch.object(btadapters, "is_blocked", return_value=True),
+            mock.patch.object(btadapters, "_run", return_value=(1, "", "failed")) as run,
+            mock.patch.object(Path, "write_text") as write_text,
+            self.assertRaises(btadapters.BluetoothOperationCancelled),
+        ):
+            btadapters.unblock(TARGET, cancelled=lambda: next(checks))
+        run.assert_called_once_with(["rfkill", "unblock", str(TARGET.rfkill_index)])
+        write_text.assert_not_called()
+
 
 class DiscoveryTests(unittest.TestCase):
+    def test_usb_identity_comes_from_stable_device_metadata_not_port_number(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            device = root / "1-1.4"
+            # A colon is illegal in a Windows temporary filename.  bInterfaceClass is the
+            # kernel signal used by the parser; the production sysfs name remains 1-1.4:1.0.
+            interface = device / "1-1.4-interface-1.0"
+            hci = interface / "bluetooth" / "hci7"
+            hci.mkdir(parents=True)
+            (device / "idVendor").write_text("0b05\n", encoding="utf-8")
+            (device / "idProduct").write_text("1bf6\n", encoding="utf-8")
+            (device / "product").write_text("ASUS USB-BT500\n", encoding="utf-8")
+            (interface / "bInterfaceClass").write_text("e0\n", encoding="utf-8")
+            (interface / "uevent").write_text("DRIVER=btusb\n", encoding="utf-8")
+
+            identity = btadapters._sysfs_identity(hci)
+
+        self.assertEqual(identity["bus"], "USB")
+        self.assertEqual(identity["usb_vendor_id"], "0b05")
+        self.assertEqual(identity["usb_product_id"], "1bf6")
+        self.assertEqual(identity["usb_parent"], "1-1.4")
+        self.assertEqual(identity["usb_interface"], "1-1.4-interface-1.0")
+        self.assertEqual(identity["driver"], "btusb")
+
     def test_monitor_parser_keeps_only_exact_adapter_window_and_strongest_rssi(self) -> None:
         accumulator = btadapters.DiscoveryAccumulator(TARGET.path, 10.0, 22.0)
         target = f'{TARGET.path}/dev_{SPEAKER.replace(":", "_")}'
         event = lambda path_value, rssi: (
-            f'{{"path":"{path_value}","member":"PropertiesChanged",'
-            f'"RSSI":{{"data":{rssi}}}}}'
+            f'{{"path":"{path_value}","member":"PropertiesChanged",' f'"RSSI":{{"data":{rssi}}}}}'
         )
 
         accumulator.add(10.0, event(target, -20))  # exactly at start is pre-window
@@ -207,6 +247,16 @@ class DiscoveryTests(unittest.TestCase):
 
 
 class ExplicitDeviceOperationTests(unittest.TestCase):
+    def test_precancelled_command_is_never_spawned(self) -> None:
+        with (
+            mock.patch.object(btadapters.subprocess, "Popen") as spawn,
+            self.assertRaises(btadapters.BluetoothOperationCancelled),
+        ):
+            btadapters._run_cancellable(
+                ["busctl", "mutating-command"], timeout=1, cancelled=lambda: True
+            )
+        spawn.assert_not_called()
+
     def test_a2dp_connect_profile_uses_only_explicit_device_path(self) -> None:
         with mock.patch.object(btadapters, "_run", return_value=(0, "", "")) as run:
             ok, detail = btadapters.connect_profile(SPEAKER, TARGET)
@@ -358,6 +408,7 @@ class ExplicitDeviceOperationTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertTrue(result.pin_requested)
         cancel.assert_called_once_with(SPEAKER, TARGET)
+
 
 if __name__ == "__main__":
     unittest.main()

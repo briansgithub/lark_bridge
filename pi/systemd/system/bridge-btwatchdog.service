@@ -1,30 +1,23 @@
 [Unit]
-# Unattended recovery for a wedged Bluetooth controller (E07).
-#
-# ENABLED as of 2026-08-17, after the validation listed at the bottom of pi/bridged/bt_watchdog.py
-# passed: no false fire across a bluetooth.service restart or an adapter down/up, and a real
-# detect-and-recover cycle confirmed by unbinding the driver. One item remains owed -- whether
-# call audio returns unaided after recovery -- which needs a live call to test.
-# System scope, not user scope: recovery unbinds/rebinds hci_uart_bcm and reloads controller
-# firmware, which needs root. The audio-path supervisor stays unprivileged and user-scoped.
-
-Description=rpi-lark-bridge Bluetooth controller watchdog
+# Compatibility name for the strict call-controller instance. New installs enable
+# bridge-btwatchdog@call.service; this unit never invokes the retired BCM/global reset ladder.
+Description=rpi-lark-bridge strict BT500 call-controller watchdog
 After=bluetooth.service
 Wants=bluetooth.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/admin/rpi-lark-bridge/pi/bridged/bt_watchdog.py
+ExecStart=/usr/bin/python3 /home/admin/rpi-lark-bridge/pi/bridged/bt_watchdog.py --role call
 Restart=always
 RestartSec=10
+RestartPreventExitStatus=2 3 4
+UMask=0077
 
-# Deliberately NOT sandboxed the way bridge-supervisor is: this exists to unbind and rebind a
-# kernel driver and reload firmware. Locking it out of /sys would defeat its only purpose.
-# It is kept small and single-purpose instead.
+# Deliberately not given ProtectKernelTunables: exact-index rfkill and exact-interface USB
+# unbind/rebind require narrow /sys writes. The watchdog rejects ambiguous controller identity.
 
-# A recovery must be allowed to finish; killing bt-reset.sh partway can leave the adapter up
-# with no endpoints registered, which reads as success and is not (E07, "Recovery, established").
-TimeoutStopSec=330
+# A targeted recovery rung is bounded and does not restart BlueZ or the audio session.
+TimeoutStopSec=45
 KillMode=mixed
 
 [Install]
