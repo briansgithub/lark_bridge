@@ -90,6 +90,53 @@ class ParsingTests(unittest.TestCase):
             ["controller reset"],
         )
 
+    def test_light_monitor_rejects_pi_usb_host_transfer_loss(self) -> None:
+        failures = (
+            (
+                "Aug 25 05:00:23.641311 larkbridge kernel: Transfer to device 7 "
+                "endpoint 0x3 frame 1204 failed - FIQ reported NYET. Data may have been lost."
+            ),
+            "Aug 25 05:00:23.641546 larkbridge kernel: FIQ reported NYET.",
+            (
+                "Aug 25 05:00:23.641700 larkbridge kernel: Transfer to device 4 "
+                "endpoint 0x7 frame 1204 failed. Data may have been lost."
+            ),
+        )
+        for index, line in enumerate(failures):
+            with self.subTest(line=line), tempfile.TemporaryDirectory() as temporary:
+                runner = FakeRunner(
+                    [
+                        harness.CommandResult(
+                            [], 0, f'E17_SAMPLE {{"state":"ACTIVE"}}\n{line}\n'
+                        )
+                    ]
+                )
+                instance = harness.E17Harness.create(
+                    Path(temporary) / f"run-{index}", runner, execute=True
+                )
+                with self.assertRaisesRegex(harness.RedGate, "red transport gate"):
+                    instance.light_monitor(5)
+                self.assertIn(harness.KERNEL_ERROR_ERE, runner.commands[0][2])
+
+    def test_light_monitor_ignores_similar_benign_kernel_lines(self) -> None:
+        benign = (
+            "kernel: Transfer to device cache completed\n"
+            "kernel: FIQ handled a NYET retry\n"
+            "kernel: device 7 endpoint 0x3 frame 1204 completed"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            runner = FakeRunner(
+                [
+                    harness.CommandResult(
+                        [], 0, f'E17_SAMPLE {{"state":"ACTIVE"}}\n{benign}\n'
+                    )
+                ]
+            )
+            instance = harness.E17Harness.create(
+                Path(temporary) / "run", runner, execute=True
+            )
+            instance.light_monitor(5)
+
     def test_objective_reads_nested_aec_metrics_and_all_thresholds(self) -> None:
         preflight = {
             "verdict": "ready",

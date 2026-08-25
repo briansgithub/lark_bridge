@@ -34,12 +34,13 @@ MAX_RECOVERY_SECONDS = 3.0
 FULL_SOAK_SECONDS = 3600
 ABBREVIATED_SOAK_MIN = 300
 ABBREVIATED_SOAK_MAX = 600
-TRANSPORT_RE = re.compile(
-    r"hci[^\n]*(?:command|cmd)[^\n]*timeout|command tx timeout|"
-    r"usb[^\n]*reset|urb[^\n]*(?:error|failed)|frame reassembly failed|"
-    r"controller[^\n]*reset",
-    re.IGNORECASE,
+KERNEL_ERROR_ERE = (
+    r"hci.*(command|cmd).*timeout|command tx timeout|usb.*reset|"
+    r"urb.*(error|failed)|frame reassembly failed|controller.*reset|"
+    r"fiq reported nyet|"
+    r"transfer to device [0-9]+ endpoint 0x[0-9a-f]+ frame [0-9]+ failed"
 )
+TRANSPORT_RE = re.compile(KERNEL_ERROR_ERE, re.IGNORECASE)
 MUTATION_RE = re.compile(r"\b(Pair|ConnectProfile|Connect|Trusted|Bonded)\b")
 PROTECTED_ANDROID_MARKERS = (
     "confirm your passkey",
@@ -511,10 +512,6 @@ class E17Harness:
         return self._start("speaker-keepalive", ["ssh", self.host, script])
 
     def light_monitor(self, seconds: int) -> None:
-        errors = (
-            "hci.*(command|cmd).*timeout|command tx timeout|urb.*(error|failed)|"
-            "usb.*reset|frame reassembly failed|controller.*reset"
-        )
         script = (
             f"deadline=$(($(date +%s) + {seconds})); "
             "while [ $(date +%s) -lt $deadline ]; do "
@@ -528,7 +525,7 @@ class E17Harness:
             "((.graph.unexpected_links // []) | length == 0)' >/dev/null || exit 93; "
             "kernel=$(journalctl -k --since '6 seconds ago' -o short-precise "
             "--no-pager); printf '%s\\n' \"$kernel\"; "
-            f"printf '%s' \"$kernel\" | grep -Eiq '{errors}' && exit 94; "
+            f"printf '%s' \"$kernel\" | grep -Eiq '{KERNEL_ERROR_ERE}' && exit 94; "
             "sleep 5; done"
         )
         result = self._ssh(
