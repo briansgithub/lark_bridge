@@ -464,6 +464,36 @@ class WiredVolumeTests(unittest.TestCase):
             },
         )
 
+    def test_call_down_applies_and_retains_verified_wired_volume(self) -> None:
+        settings = role_settings(volume=0.85)
+        graph = supervisor.CallGraph(settings)
+        nodes = {
+            settings.lark_node: {},
+            settings.wired_output: {},
+        }
+
+        with mock.patch.object(
+            supervisor,
+            "set_and_verify_sink_volume",
+            return_value=(True, 0.85, None),
+        ) as verify:
+            graph.tick(nodes, [], settings.lark_node)
+            graph.tick(nodes, [], settings.lark_node)
+
+        self.assertEqual(graph.state, supervisor.State.CALL_DOWN)
+        verify.assert_called_once_with(settings.wired_output, 0.85)
+        self.assertEqual(
+            graph.status(nodes, [], settings.lark_node)["wired_output_volume"],
+            {
+                "required": True,
+                "target": settings.wired_output,
+                "desired": 0.85,
+                "observed": 0.85,
+                "verified": True,
+                "error": None,
+            },
+        )
+
 
 class CallGraphLifecycleTests(unittest.TestCase):
     def test_aec_graph_is_atomic_and_tears_down_with_hfp(self) -> None:

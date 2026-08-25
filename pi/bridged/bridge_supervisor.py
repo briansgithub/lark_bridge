@@ -1056,7 +1056,24 @@ class CallGraph:
         self.update_signature(signature)
 
         if not call_up:
-            self.teardown("call down")
+            # ``update_signature`` already tears an active graph down on the
+            # call-up -> call-down transition.  Keep the physical AUX sink at
+            # its deterministic level while idle as well: a freshly booted,
+            # demo-ready unit must prove the wired output before the phone is
+            # available, not defer mixer ownership until HFP appears.
+            self.output_node = resolved
+            if resolved is None:
+                self.output_volume_target = None
+                self.output_volume_observed = None
+                self.output_volume_verified = False
+                self.output_volume_error = "wired output is unavailable"
+                self.last_failure = self.output_volume_error
+            elif self.ensure_output_volume(resolved):
+                self.last_failure = None
+            else:
+                self.last_failure = (
+                    self.output_volume_error or "wired output volume did not verify"
+                )
             self.state = State.CALL_DOWN
             return
         if lark is None or resolved is None:
