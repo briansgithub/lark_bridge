@@ -55,6 +55,7 @@ managed_sources=(
     "pi/systemd/system/bridge-btfw.service"
     "pi/systemd/system/bridge-boot-trial-rollback.service"
     "pi/systemd/system/bridge-boot-trial-rollback.timer"
+    "pi/rpi/swap.conf.d/90-larkbridge-pure-zram.conf"
     "pi/scripts/set-sco-routing.sh"
     "pi/scripts/boot-transaction.sh"
     "pi/scripts/boot-trial.sh"
@@ -146,6 +147,7 @@ install_managed "pi/systemd/system/bridge-tuning.service" "/etc/systemd/system/b
 install_managed "pi/systemd/system/bridge-btfw.service" "/etc/systemd/system/bridge-btfw.service" 0644
 install_managed "pi/systemd/system/bridge-boot-trial-rollback.service" "/etc/systemd/system/bridge-boot-trial-rollback.service" 0644
 install_managed "pi/systemd/system/bridge-boot-trial-rollback.timer" "/etc/systemd/system/bridge-boot-trial-rollback.timer" 0644
+install_managed "pi/rpi/swap.conf.d/90-larkbridge-pure-zram.conf" "/etc/rpi/swap.conf.d/90-larkbridge-pure-zram.conf" 0644
 install_managed "pi/scripts/set-sco-routing.sh" "/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh" 0755
 install_managed "pi/scripts/boot-transaction.sh" "/usr/local/lib/rpi-lark-bridge/boot-transaction.sh" 0755
 install_managed "pi/scripts/boot-trial.sh" "/usr/local/lib/rpi-lark-bridge/boot-trial.sh" 0755
