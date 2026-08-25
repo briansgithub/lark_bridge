@@ -20,6 +20,12 @@ modules, restart services, update an initramfs, pair devices, or reboot. Install
 therefore a separate, later deployment action and does not activate the new modules in a running
 kernel.
 
+Upstream keeps per-device flags in `quirks_table`, while only the generic `btusb_table` is emitted
+through `MODULE_DEVICE_TABLE`. Consequently `modinfo` correctly shows the generic Bluetooth USB
+class alias rather than a literal BT600 VID:PID alias. The package gate proves both halves: the
+compiled source contains exactly one `0b05:1d70` Realtek/wideband quirk, and an exact BT600 USB
+modalias resolves to the packaged `btusb` through depmod/modprobe.
+
 Run the complete reproducibility gate from a host with Docker:
 
 ```text

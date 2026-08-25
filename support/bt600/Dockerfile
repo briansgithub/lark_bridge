@@ -25,7 +25,7 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources \
         make \
         patch \
         pahole \
-        python3-minimal \
+        python3=3.13.5-1 \
         xz-utils \
         zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*

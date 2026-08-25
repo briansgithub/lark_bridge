@@ -28,6 +28,35 @@ class PackageContractTests(unittest.TestCase):
         self.assertEqual("14.2.0-19", self.manifest["build"]["gcc_package_version"])
         self.assertEqual("2.44", self.manifest["build"]["binutils_version"])
 
+    def test_changelog_stanza_includes_blank_line_separated_bullets(self) -> None:
+        changelog = (
+            "linux (1:6.18.34-1+rpt1) trixie; urgency=medium\n\n"
+            "  * Raspberry Pi OS release\n"
+            "  * Linux commit: c8c7494100e99ee05b11aaa4f0588a223a63d1af\n\n"
+            " -- Maintainer <root@localhost>  Tue, 09 Jun 2026 14:55:28 +0100\n\n"
+            "linux (1:6.18.33-1+rpt1) trixie; urgency=medium\n"
+        )
+        stanza = BUILD.first_debian_changelog_stanza(changelog)
+        self.assertIn("Linux commit: c8c7494", stanza)
+        self.assertNotIn("6.18.33", stanza)
+
+    def test_labelled_dpkg_control_fields_are_parsed(self) -> None:
+        output = (
+            "Package: larkbridge-bt600-support\n"
+            "Version: 1.0.0-1\n"
+            "Architecture: arm64\n"
+            "Depends: linux-image-6.18.34+rpt-rpi-v8 (= 1:6.18.34-1+rpt1)\n"
+        )
+        self.assertEqual(
+            {
+                "Package": "larkbridge-bt600-support",
+                "Version": "1.0.0-1",
+                "Architecture": "arm64",
+                "Depends": "linux-image-6.18.34+rpt-rpi-v8 (= 1:6.18.34-1+rpt1)",
+            },
+            BUILD.parse_control_field_lines(output),
+        )
+
     def test_exact_package_dependency(self) -> None:
         control = BUILD.package_control(self.manifest)
         self.assertIn(
@@ -35,6 +64,10 @@ class PackageContractTests(unittest.TestCase):
             control,
         )
         self.assertNotIn("initramfs", control.lower())
+        self.assertEqual("0b05:1d70", self.manifest["package"]["bt600_usb_id"])
+        self.assertTrue(
+            self.manifest["package"]["bt600_modalias_probe"].startswith("usb:v0B05p1D70")
+        )
 
     def test_maintainer_scripts_are_depmod_only(self) -> None:
         expected = "#!/bin/sh\nset -e\ndepmod -a 6.18.34+rpt-rpi-v8\n"
@@ -80,6 +113,7 @@ class PackageContractTests(unittest.TestCase):
             ],
             added_code,
         )
+        self.assertIn("@@ -800,6 +800,8 @@", patch)
 
     def test_btrtl_patch_has_complete_upstream_semantics(self) -> None:
         patch = (SUPPORT_ROOT / "patches/0001-btrtl-add-rtl8761cuv-support.patch").read_text(
@@ -102,6 +136,7 @@ class PackageContractTests(unittest.TestCase):
         self.assertIn("archive/debian/20260803T000000Z", dockerfile)
         self.assertIn("gcc-14=14.2.0-19", dockerfile)
         self.assertIn("binutils=2.44-3", dockerfile)
+        self.assertIn("python3=3.13.5-1", dockerfile)
 
 
 if __name__ == "__main__":

@@ -99,6 +99,21 @@ def require_text(haystack: str, needle: str, label: str) -> None:
         raise BuildError(f"{label} does not contain required text: {needle}")
 
 
+def first_debian_changelog_stanza(changelog: str) -> str:
+    next_stanza = changelog.find("\nlinux (", 1)
+    return changelog if next_stanza < 0 else changelog[:next_stanza]
+
+
+def parse_control_field_lines(output: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in output.splitlines():
+        name, separator, value = line.partition(": ")
+        if not separator or not name:
+            raise BuildError(f"unexpected dpkg-deb control output: {line}")
+        fields[name] = value
+    return fields
+
+
 def normalize_tree(root: Path, epoch: int) -> None:
     for path in sorted(root.rglob("*"), reverse=True):
         os.utime(path, (epoch, epoch), follow_symlinks=False)
@@ -171,7 +186,7 @@ def prepare_inputs(manifest: dict[str, object], work_root: Path) -> dict[str, Pa
         ["tar", "-xOf", str(metadata_paths[debian_entry["name"]]), "debian/changelog"],
         capture=True,
     )
-    first_stanza = changelog.split("\n\n", 1)[0]
+    first_stanza = first_debian_changelog_stanza(changelog)
     require_text(first_stanza, "linux (1:6.18.34-1+rpt1) trixie", "kernel changelog")
     require_text(first_stanza, f"Linux commit: {kernel['source_commit']}", "kernel changelog")
 
@@ -183,7 +198,7 @@ def prepare_inputs(manifest: dict[str, object], work_root: Path) -> dict[str, Pa
         if not patch_path.is_file():
             raise BuildError(f"missing backport patch: {patch_path}")
         run(
-            ["patch", "--batch", "--forward", "-p1", "-i", str(patch_path)],
+            ["patch", "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(patch_path)],
             cwd=source_root,
         )
 
@@ -405,16 +420,18 @@ def verify_package(
 ) -> None:
     package = manifest["package"]
     release = manifest["kernel"]["release"]
-    fields = run(
+    fields = parse_control_field_lines(
+        run(
         ["dpkg-deb", "-f", str(package_path), "Package", "Version", "Architecture", "Depends"],
         capture=True,
-    ).splitlines()
-    expected_fields = [
-        package["name"],
-        package["version"],
-        package["architecture"],
-        package["kernel_dependency"],
-    ]
+        )
+    )
+    expected_fields = {
+        "Package": package["name"],
+        "Version": package["version"],
+        "Architecture": package["architecture"],
+        "Depends": package["kernel_dependency"],
+    }
     if fields != expected_fields:
         raise BuildError(f"package control mismatch: expected {expected_fields}, got {fields}")
 
@@ -472,8 +489,8 @@ def verify_package(
         require_text(machine, "Machine:                           AArch64", module.name)
 
     aliases = modinfo("alias", btusb)
-    if not any(alias.startswith("usb:v0B05p1D70") for alias in aliases):
-        raise BuildError("btusb module lacks the exact 0b05:1d70 USB alias")
+    if not any("dcE0dsc01dp01" in alias for alias in aliases):
+        raise BuildError("btusb module lacks its generic Bluetooth USB class alias")
     firmware_names = set(modinfo("firmware", btrtl))
     for name in ("rtl_bt/rtl8761cu_fw.bin", "rtl_bt/rtl8761cu_config.bin"):
         if name not in firmware_names:
@@ -498,6 +515,22 @@ def verify_package(
 
     run(["dpkg-deb", "-x", str(package_path), str(fake_root)])
     run(["depmod", "-b", str(fake_root), release])
+    resolved_alias = run(
+        [
+            "modprobe",
+            "-d",
+            str(fake_root),
+            "-S",
+            release,
+            "-R",
+            package["bt600_modalias_probe"],
+        ],
+        capture=True,
+    ).splitlines()
+    if "btusb" not in resolved_alias:
+        raise BuildError(
+            f"exact {package['bt600_usb_id']} modalias did not resolve to btusb: {resolved_alias}"
+        )
     selected = run(
         ["modinfo", "-b", str(fake_root), "-k", release, "-n", "btusb"], capture=True
     ).strip()

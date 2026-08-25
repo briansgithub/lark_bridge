@@ -12,8 +12,7 @@ Raspberry Pi source c8c7494100e99ee05b11aaa4f0588a223a63d1af.
 diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
 --- a/drivers/bluetooth/btusb.c
 +++ b/drivers/bluetooth/btusb.c
-@@ -799,6 +799,8 @@ static const struct usb_device_id quirks_table[] = {
- 	{ USB_DEVICE(0x2b89, 0x8761), .driver_info = BTUSB_REALTEK |
+@@ -800,6 +800,8 @@ static const struct usb_device_id quirks_table[] = {
  						     BTUSB_WIDEBAND_SPEECH },
  	{ USB_DEVICE(0x2b89, 0x6275), .driver_info = BTUSB_REALTEK |
  						     BTUSB_WIDEBAND_SPEECH },

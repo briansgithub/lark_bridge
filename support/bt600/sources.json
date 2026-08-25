@@ -4,7 +4,9 @@
     "name": "larkbridge-bt600-support",
     "version": "1.0.0-1",
     "architecture": "arm64",
-    "kernel_dependency": "linux-image-6.18.34+rpt-rpi-v8 (= 1:6.18.34-1+rpt1)"
+    "kernel_dependency": "linux-image-6.18.34+rpt-rpi-v8 (= 1:6.18.34-1+rpt1)",
+    "bt600_usb_id": "0b05:1d70",
+    "bt600_modalias_probe": "usb:v0B05p1D70d0200dcE0dsc01dp01icE0isc01ip01in00"
   },
   "build": {
     "container_image": "debian@sha256:c94f5ddd41327aa2d4a7cfba7889056c02936182fd76a513fec6160c97181fc0",
