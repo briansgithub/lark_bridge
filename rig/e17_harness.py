@@ -129,7 +129,7 @@ def parse_events(text: str) -> list[dict[str, Any]]:
 
 
 def _time(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return datetime.fromisoformat(value)
 
 
 def fault_event_allowed(event: dict[str, Any], window: FaultWindow) -> bool:
