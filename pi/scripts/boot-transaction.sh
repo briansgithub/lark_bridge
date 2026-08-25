@@ -16,6 +16,7 @@ safe_target() {
         /usr/local/lib/rpi-lark-bridge/*|\
         /home/admin/.config/pipewire/pipewire.conf.d/20-bridge-endpoints.conf|\
         /home/admin/.config/pipewire/pipewire.conf.d/20-bridge-endpoints.notes.txt|\
+        /home/admin/.config/wireplumber/wireplumber.conf.d/65-bridge-hfp-no-autolink.conf|\
         /etc/cloud/cloud-init.disabled|\
         /etc/NetworkManager/system-connections/*.nmconnection)
             return 0
@@ -55,10 +56,16 @@ restore_transaction() {
         fi
     done < <(tac "$transaction/paths.tsv")
 
+    systemctl daemon-reload
     if [ -f "$transaction/units.tsv" ]; then
-        while IFS=$'\t' read -r unit enabled; do
+        while IFS=$'\t' read -r unit enabled active; do
             case "$unit" in
-                bridge-tuning.service|bridge-btfw.service|bridge-boot-trial-rollback.timer) ;;
+                bridge-tuning.service|\
+                bridge-btfw.service|\
+                bridge-btwatchdog.service|\
+                bridge-btwatchdog@call.service|\
+                bridge-btwatchdog@output.service|\
+                bridge-boot-trial-rollback.timer) ;;
                 *) die "unsafe unit in transaction: $unit" ;;
             esac
             if [ "$enabled" = "enabled" ]; then
@@ -66,10 +73,16 @@ restore_transaction() {
             else
                 systemctl disable "$unit" >/dev/null 2>&1 || true
             fi
+            # Older manifests intentionally omit runtime state. New transactions
+            # restore it so watchdog migration is reversible on install failure.
+            if [ "$active" = active ]; then
+                systemctl start "$unit" >/dev/null
+            elif [ "$active" = inactive ]; then
+                systemctl stop "$unit" >/dev/null 2>&1 || true
+            fi
         done < "$transaction/units.tsv"
     fi
 
-    systemctl daemon-reload
     printf '%s\n' "$(basename "$transaction")" > "$transaction/rolled-back"
     if [ -f "$STATE_ROOT/pending" ] &&
        [ "$(cat "$STATE_ROOT/pending")" = "$(basename "$transaction")" ]; then

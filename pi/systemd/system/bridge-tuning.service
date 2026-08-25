@@ -1,16 +1,16 @@
 [Unit]
-# Latency tuning for the Bluetooth HCI UART (E07).
+# Latency tuning for the Pi 3 real-time Bluetooth/audio path.
 #
 # The BT PL011 runs PIO with a 32-byte FIFO and no DMA (`dmas` absent from the device tree),
 # giving ~347 us of slack at 921600 baud before RX bytes are lost. Losing one byte desynchronises
 # the H4 stream permanently -- only a firmware reload recovers it. Anything that shortens the
 # interrupt-service path is therefore worth having.
 
-Description=rpi-lark-bridge latency tuning for the HCI UART
+Description=rpi-lark-bridge real-time audio latency tuning
 # BRIDGE_TUNING_EARLY_V1
 # Apply the existing performance governor before Bluetooth/HCI startup.
 After=systemd-modules-load.service
-Before=bluetooth.service bridge-btfw.service bridge-btwatchdog.service
+Before=bluetooth.service bridge-btfw.service bridge-btwatchdog.service bridge-btwatchdog@call.service
 
 [Service]
 Type=oneshot

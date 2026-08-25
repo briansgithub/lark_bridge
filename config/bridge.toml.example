@@ -14,7 +14,7 @@
 mode = "bluetooth-wired"
 
 # Friendly name the Pixel shows in its Bluetooth list.
-name = "LarkBridge"
+name = "LarkBridge BT500"
 
 # Start in this mode at boot. Set false to come up in diagnostics and switch by hand.
 autostart = true
@@ -23,6 +23,13 @@ autostart = true
 [devices.phone]
 # The Pixel 7a. Find it with: bluetoothctl devices
 address = "AA:BB:CC:DD:EE:FF"
+# Permanent identity of the USB-BT500 that owns the Pixel bond.  The hciX name is
+# deliberately not configuration: it changes with probe order and replugs.
+adapter = "A0:AD:9F:73:6C:24"
+adapter_product = "ASUS USB-BT500"
+adapter_bus = "USB"
+adapter_usb_vendor_id = "0b05"
+adapter_usb_product_id = "1bf6"
 # The Pi does NOT chase the phone with connect attempts — Android reconnects to trusted
 # headsets aggressively and racing it causes collisions. We stay connectable and wait.
 # One gentle attempt is allowed if the phone is known-present and silent for this long.
@@ -30,13 +37,9 @@ connect_after_idle_seconds = 60
 
 
 [devices.output]
-# Bluetooth headphones or car stereo. Only used in mode = "bluetooth".
-address = "11:22:33:44:55:66"
-# Permanent address of the controller that owns this speaker bond. Never store hci0/hci1:
-# those names follow probe order and can change across boots.
-adapter = "22:33:44:55:66:77"
-# The Pi DOES initiate to this one, with exponential backoff.
-reconnect = true
+# The qualified BT500+AUX build has no Bluetooth output controller.  This stable
+# PipeWire node is the Pi 3 headphone jack used by the Harmony boombox.
+id = "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback"
 
 
 [devices.lark]
@@ -54,7 +57,7 @@ usb_serial     = ""
 # turns off by default. A dongle is strongly preferred; the Pi 3B's PWM audio is poor.
 usb_vendor_id  = ""     # e.g. "0d8c"  (C-Media CM108, the usual suspect)
 usb_product_id = ""     # e.g. "013c"
-use_headphone_jack = false
+use_headphone_jack = true
 
 
 [audio]
@@ -69,6 +72,9 @@ mic_gain_db = 0.0
 mic_muted = false
 # Call audio volume in dB at the bridge.callout loopback.
 output_gain_db = 0.0
+# E09 measured 0.85 as approximately 0 dB at the Pi jack.  1.00 maps to about
+# +4 dB and clips/compresses the PWM output, so the supervisor enforces this value.
+wired_output_volume = 0.85
 
 
 [audio.sidetone]
@@ -82,7 +88,7 @@ level_db = -20.0
 # Acoustic echo cancellation. Not needed with headphones — there is no acoustic loop.
 # Keep disabled until the wired baseline has been captured. When enabled, the supervisor
 # owns a native PipeWire/WebRTC module whose lifetime is limited to an active call.
-enabled = false
+enabled = true
 method = "webrtc"
 # Fixed to the established graph rate and mono to preserve Pi 3 CPU headroom.
 rate = 48000
