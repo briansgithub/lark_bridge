@@ -72,6 +72,8 @@ class FakeRunner:
             return remote.Result(0, "", "")
         if words and words[0] == "journalctl":
             return remote.Result(0, "clean journal\n", "")
+        if words[:3] == ("sudo", "-n", "journalctl"):
+            return remote.Result(0, "clean user journal\n", "")
         if words == ("lsusb",):
             return remote.Result(
                 0,
