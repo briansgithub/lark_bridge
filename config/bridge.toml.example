@@ -23,6 +23,12 @@ autostart = true
 [devices.phone]
 # The Pixel 7a. Find it with: bluetoothctl devices
 address = "AA:BB:CC:DD:EE:FF"
+# Permanent call-controller identity. hciX, port and BlueZ default state are diagnostics only.
+adapter = "B0:82:E2:25:18:36"
+adapter_product = "ASUS USB-BT600"
+adapter_bus = "USB"
+adapter_usb_vendor_id = "0b05"
+adapter_usb_product_id = "1d70"
 # The Pi does NOT chase the phone with connect attempts — Android reconnects to trusted
 # headsets aggressively and racing it causes collisions. We stay connectable and wait.
 # One gentle attempt is allowed if the phone is known-present and silent for this long.
@@ -34,7 +40,12 @@ connect_after_idle_seconds = 60
 address = "11:22:33:44:55:66"
 # Permanent address of the controller that owns this speaker bond. Never store hci0/hci1:
 # those names follow probe order and can change across boots.
-adapter = "22:33:44:55:66:77"
+adapter = "A0:AD:9F:73:6C:24"
+# Product is a diagnostic label. Identity is adapter + bus + USB VID:PID.
+adapter_product = "ASUS USB-BT500"
+adapter_bus = "USB"
+adapter_usb_vendor_id = "0b05"
+adapter_usb_product_id = "1bf6"
 # The Pi DOES initiate to this one, with exponential backoff.
 reconnect = true
 
@@ -114,6 +125,10 @@ node_latency_frames = 1920
 
 
 [bluetooth]
+# Temporary rollback deployments may instead declare the onboard call controller with
+# adapter_bus = "UART", omit both USB ID keys, and set this true. Official/final and
+# power-loss readiness still reject UART regardless of this opt-in.
+allow_transitional_uart_call = false
 # Prefer wideband speech (mSBC, 16 kHz) over CVSD (8 kHz). If the phone or controller
 # refuses, the link silently falls back — which is why bridgectl always reports the
 # codec actually in use. A silent CVSD fallback is the usual cause of "why does this

@@ -94,6 +94,13 @@ class Adapter:
     address: str
     bus: str  # "UART" (onboard BCM43438) or "USB" (dongle)
     rfkill_index: int | None
+    usb_vendor_id: str | None = None
+    usb_product_id: str | None = None
+    usb_parent: str | None = None
+    usb_interface: str | None = None
+    driver: str | None = None
+    product: str | None = None
+    manufacturer: str | None = None
 
     @property
     def path(self) -> str:
@@ -398,6 +405,103 @@ def _run_cancellable(
         raise
 
 
+def _read_sysfs(path: Path, name: str) -> str | None:
+    try:
+        value = (path / name).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return value or None
+
+
+def _uevent_driver(path: Path) -> str | None:
+    try:
+        lines = (path / "uevent").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        if line.startswith("DRIVER=") and line[7:]:
+            return line[7:]
+    return None
+
+
+def _bound_driver(path: Path) -> str | None:
+    try:
+        driver = (path / "driver").resolve(strict=True).name
+    except OSError:
+        driver = None
+    return driver or _uevent_driver(path)
+
+
+def _sysfs_identity(path: Path) -> dict[str, str | None]:
+    """Derive physical diagnostics from ancestors without trusting their topology.
+
+    USB parent/interface names are intentionally reported but never compared by the role
+    resolver.  They change when a dongle moves ports; VID:PID and the permanent address do not.
+    """
+    ancestors = [path, *path.parents]
+    usb_device: Path | None = None
+    usb_interface: Path | None = None
+    driver: str | None = None
+    for candidate in ancestors:
+        if usb_interface is None and (
+            _read_sysfs(candidate, "bInterfaceClass") is not None
+            or re.fullmatch(r"[^:]+:\d+\.\d+", candidate.name) is not None
+        ):
+            usb_interface = candidate
+            driver = _bound_driver(candidate)
+        if (
+            usb_device is None
+            and _read_sysfs(candidate, "idVendor") is not None
+            and _read_sysfs(candidate, "idProduct") is not None
+        ):
+            usb_device = candidate
+        if usb_device is not None and usb_interface is not None:
+            break
+
+    if usb_device is not None:
+        return {
+            "bus": "USB",
+            "usb_vendor_id": (_read_sysfs(usb_device, "idVendor") or "").lower() or None,
+            "usb_product_id": (_read_sysfs(usb_device, "idProduct") or "").lower() or None,
+            "usb_parent": usb_device.name,
+            "usb_interface": usb_interface.name if usb_interface is not None else None,
+            "driver": driver or _bound_driver(usb_device),
+            "product": _read_sysfs(usb_device, "product"),
+            "manufacturer": _read_sysfs(usb_device, "manufacturer"),
+        }
+
+    serial = next(
+        (
+            candidate
+            for candidate in ancestors
+            if "serial" in candidate.as_posix().lower() or "uart" in candidate.name.lower()
+        ),
+        None,
+    )
+    for candidate in ancestors:
+        driver = _bound_driver(candidate)
+        if driver is not None:
+            break
+    return {
+        "bus": "UART" if serial is not None else "unknown",
+        "usb_vendor_id": None,
+        "usb_product_id": None,
+        "usb_parent": None,
+        "usb_interface": None,
+        "driver": driver,
+        "product": None,
+        "manufacturer": None,
+    }
+
+
+def _controller_sysfs_identity(hci: str) -> dict[str, str | None]:
+    try:
+        path = (SYS_BLUETOOTH / hci).resolve(strict=True)
+    except OSError:
+        return _sysfs_identity(SYS_BLUETOOTH / hci)
+    return _sysfs_identity(path)
+
+
 def _bus_type(hci: str) -> str:
     """UART vs USB, from where the device hangs in sysfs.
 
@@ -405,15 +509,7 @@ def _bus_type(hci: str) -> str:
     by unbinding its serdev driver (bt-reset.sh rung 6), a dongle by unbinding btusb.
     Applying the wrong one is a no-op at best.
     """
-    try:
-        target = (SYS_BLUETOOTH / hci).resolve().as_posix()
-    except OSError:
-        return "unknown"
-    if "/usb" in target:
-        return "USB"
-    if "serial" in target:
-        return "UART"
-    return "unknown"
+    return str(_controller_sysfs_identity(hci)["bus"])
 
 
 def _rfkill_index(hci: str) -> int | None:
@@ -460,12 +556,20 @@ def adapters(objects: dict[str, dict] | None = None) -> list[Adapter]:
             continue
         interface = (tree.get(f"/org/bluez/{entry.name}") or {}).get("org.bluez.Adapter1") or {}
         address = str((interface.get("Address") or {}).get("data") or "").upper()
+        identity = _controller_sysfs_identity(entry.name)
         found.append(
             Adapter(
                 hci=entry.name,
                 address=address,
-                bus=_bus_type(entry.name),
+                bus=str(identity["bus"]),
                 rfkill_index=_rfkill_index(entry.name),
+                usb_vendor_id=identity["usb_vendor_id"],
+                usb_product_id=identity["usb_product_id"],
+                usb_parent=identity["usb_parent"],
+                usb_interface=identity["usb_interface"],
+                driver=identity["driver"],
+                product=identity["product"],
+                manufacturer=identity["manufacturer"],
             )
         )
     return sorted(found, key=lambda adapter: (adapter.address == "", adapter.address))
@@ -475,10 +579,8 @@ def adapter_by_address(
     address: str, objects: dict[str, dict] | None = None
 ) -> Adapter | None:
     wanted = address.strip().upper()
-    for adapter in adapters(objects):
-        if adapter.address == wanted:
-            return adapter
-    return None
+    matches = [adapter for adapter in adapters(objects) if adapter.address == wanted]
+    return matches[0] if len(matches) == 1 else None
 
 
 def managed_objects(
@@ -1162,6 +1264,13 @@ def describe() -> dict:
                 "hci": adapter.hci,
                 "address": adapter.address,
                 "bus": adapter.bus,
+                "usb_vendor_id": adapter.usb_vendor_id,
+                "usb_product_id": adapter.usb_product_id,
+                "usb_parent": adapter.usb_parent,
+                "usb_interface": adapter.usb_interface,
+                "driver": adapter.driver,
+                "product": adapter.product,
+                "manufacturer": adapter.manufacturer,
                 "rfkill_index": adapter.rfkill_index,
                 "blocked": is_blocked(adapter),
                 "powered": is_powered(adapter, tree),
