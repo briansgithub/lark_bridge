@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from contextlib import nullcontext
@@ -9,167 +10,313 @@ from unittest import mock
 
 import bt_watchdog
 import btadapters
+import controller_roles
+
+CALL_ADDRESS = "B0:82:E2:25:18:36"
+OUTPUT_ADDRESS = "A0:AD:9F:73:6C:24"
+ONBOARD_ADDRESS = "B8:27:EB:43:8D:51"
+PHONE_ADDRESS = "5C:33:7B:CB:BF:C5"
+SPEAKER_ADDRESS = "C9:5C:FD:6E:28:46"
 
 
-class RecoveryBookkeepingTests(unittest.TestCase):
-    def test_noop_or_failed_recovery_keeps_state_eligible_for_retry(self) -> None:
-        with (
-            mock.patch.object(bt_watchdog, "recover", return_value=False) as recover,
-            mock.patch.object(bt_watchdog.time, "sleep") as sleep,
-            mock.patch.object(bt_watchdog, "reconnect_phone") as reconnect,
-            mock.patch.object(bt_watchdog.time, "monotonic") as monotonic,
+def roles() -> controller_roles.ControllerRoles:
+    return controller_roles.parse_controller_roles(
+        {
+            "devices": {
+                "phone": {
+                    "address": PHONE_ADDRESS,
+                    "adapter": CALL_ADDRESS,
+                    "adapter_product": "ASUS USB-BT600",
+                    "adapter_bus": "USB",
+                    "adapter_usb_vendor_id": "0b05",
+                    "adapter_usb_product_id": "1d70",
+                },
+                "output": {
+                    "adapter": OUTPUT_ADDRESS,
+                    "adapter_product": "ASUS USB-BT500",
+                    "adapter_bus": "USB",
+                    "adapter_usb_vendor_id": "0b05",
+                    "adapter_usb_product_id": "1bf6",
+                },
+            },
+            "bluetooth": {"allow_transitional_uart_call": False},
+        }
+    )
+
+
+def adapter(
+    hci: str, address: str, product_id: str, rfkill_index: int
+) -> btadapters.Adapter:
+    return btadapters.Adapter(
+        hci,
+        address,
+        "USB",
+        rfkill_index,
+        usb_vendor_id="0b05",
+        usb_product_id=product_id,
+        usb_parent="1-1.4",
+        usb_interface="1-1.4:1.0",
+        driver="btusb",
+    )
+
+
+CALL = adapter("hci7", CALL_ADDRESS, "1d70", 7)
+OUTPUT = adapter("hci2", OUTPUT_ADDRESS, "1bf6", 2)
+
+
+class ResolutionTests(unittest.TestCase):
+    def test_each_role_resolves_independently_of_order_or_hci_number(self) -> None:
+        configured = roles()
+        inventory = [OUTPUT, CALL]
+        self.assertIs(
+            bt_watchdog.resolve_role(configured, "call", objects={}, inventory=inventory),
+            CALL,
+        )
+        self.assertIs(
+            bt_watchdog.resolve_role(configured, "output", objects={}, inventory=inventory),
+            OUTPUT,
+        )
+
+    def test_onboard_phone_bond_is_not_inferred_as_the_call_controller(self) -> None:
+        onboard = btadapters.Adapter("hci0", ONBOARD_ADDRESS, "UART", 0)
+        with self.assertRaises(controller_roles.ControllerMissingError):
+            bt_watchdog.resolve_role(
+                roles(), "call", objects={}, inventory=[onboard, OUTPUT]
+            )
+
+
+class IndependentStateTests(unittest.TestCase):
+    def test_role_state_lock_and_backoff_are_independent(self) -> None:
+        call = bt_watchdog.RecoveryState("call", failures=2)
+        output = bt_watchdog.RecoveryState("output", failures=1)
+
+        recovered = bt_watchdog.attempt_recovery(
+            call,
+            lambda: bt_watchdog.RecoveryResult(True, "hci-down-up"),
+            now=500.0,
+        )
+
+        self.assertTrue(recovered)
+        self.assertEqual(call.failures, 0)
+        self.assertEqual(call.recoveries, 1)
+        self.assertEqual(call.backoff, 120.0)
+        self.assertEqual(output.failures, 1)
+        self.assertEqual(output.recoveries, 0)
+        self.assertEqual(output.backoff, 60.0)
+        self.assertNotEqual(
+            bt_watchdog.role_lock_path("call"), bt_watchdog.role_lock_path("output")
+        )
+        self.assertNotEqual(
+            bt_watchdog.role_state_path("call"), bt_watchdog.role_state_path("output")
+        )
+
+    def test_failed_recovery_keeps_only_that_roles_failure_state(self) -> None:
+        call = bt_watchdog.RecoveryState("call", failures=3, backoff=240.0)
+        output = bt_watchdog.RecoveryState("output", failures=2)
+        recover = mock.Mock(
+            return_value=bt_watchdog.RecoveryResult(False, "exhausted", "still wedged")
+        )
+        self.assertFalse(
+            bt_watchdog.attempt_recovery(
+                call,
+                recover,
+                now=500.0,
+            )
+        )
+        self.assertFalse(bt_watchdog.attempt_recovery(call, recover, now=501.0))
+        self.assertEqual((call.failures, call.backoff), (3, 480.0))
+        self.assertEqual(call.last_attempt, 500.0)
+        self.assertEqual(recover.call_count, 1)
+        self.assertEqual((output.failures, output.backoff), (2, 60.0))
+
+    def test_state_files_are_separate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            bt_watchdog, "STATE_DIR", Path(directory)
         ):
-            state = bt_watchdog.attempt_recovery(2, 100.0, 240.0)
-        recover.assert_called_once_with()
-        sleep.assert_not_called()
-        reconnect.assert_not_called()
-        monotonic.assert_not_called()
-        self.assertEqual(state, (2, 100.0, 240.0))
+            bt_watchdog.write_state(bt_watchdog.RecoveryState("call"), CALL)
+            bt_watchdog.write_state(bt_watchdog.RecoveryState("output"), OUTPUT)
+            call = json.loads((Path(directory) / "call.json").read_text(encoding="utf-8"))
+            output = json.loads(
+                (Path(directory) / "output.json").read_text(encoding="utf-8")
+            )
+        self.assertEqual(call["role"], "call")
+        self.assertEqual(call["controller"]["address"], CALL_ADDRESS)
+        self.assertEqual(output["role"], "output")
+        self.assertEqual(output["controller"]["address"], OUTPUT_ADDRESS)
 
-    def test_successful_recovery_resets_failures_and_advances_backoff(self) -> None:
+
+class TargetedRecoveryTests(unittest.TestCase):
+    def test_full_ladder_uses_only_the_call_controller_exact_targets(self) -> None:
+        commands: list[list[str]] = []
+
+        def run(command, **_kwargs):
+            commands.append(command)
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with tempfile.TemporaryDirectory() as directory:
+            driver = Path(directory) / "btusb"
+            driver.mkdir()
+            (driver / "unbind").touch()
+            (driver / "bind").touch()
+            with (
+                mock.patch.object(bt_watchdog, "SYS_USB_DRIVERS", Path(directory)),
+                mock.patch.object(bt_watchdog.subprocess, "run", side_effect=run),
+                mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+                mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
+                mock.patch.object(bt_watchdog.time, "sleep"),
+            ):
+                result = bt_watchdog.targeted_recovery(
+                    roles(),
+                    "call",
+                    refresh=lambda: CALL,
+                    verify=mock.Mock(side_effect=[False, False, False, False, True]),
+                )
+            unbound = (driver / "unbind").read_text(encoding="utf-8")
+            rebound = (driver / "bind").read_text(encoding="utf-8")
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.action, "usb-interface-rebind")
+        disconnect.assert_called_once_with(PHONE_ADDRESS, CALL)
+        self.assertIn(["hciconfig", CALL.hci, "down"], commands)
+        self.assertIn(["hciconfig", CALL.hci, "up"], commands)
+        self.assertIn(["rfkill", "block", str(CALL.rfkill_index)], commands)
+        self.assertIn(["rfkill", "unblock", str(CALL.rfkill_index)], commands)
+        self.assertFalse(any("systemctl" in command for command in commands))
+        self.assertFalse(any("bluetooth" in command for command in commands))
+        self.assertFalse(any(OUTPUT.hci in command for command in commands))
+        self.assertEqual(unbound.strip(), CALL.usb_interface)
+        self.assertEqual(rebound.strip(), CALL.usb_interface)
+
+    def test_output_recovery_disconnects_only_the_desired_speaker_on_bt500(self) -> None:
         with (
-            mock.patch.object(bt_watchdog, "recover", return_value=True) as recover,
-            mock.patch.object(bt_watchdog, "RECONNECT", True),
-            mock.patch.object(bt_watchdog, "RECONNECT_DELAY", 20.0),
-            mock.patch.object(bt_watchdog.time, "sleep") as sleep,
-            mock.patch.object(bt_watchdog, "reconnect_phone") as reconnect,
-            mock.patch.object(bt_watchdog.time, "monotonic", return_value=500.0),
+            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+            mock.patch.object(bt_watchdog, "recovery_device", return_value=SPEAKER_ADDRESS),
+            mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
+            mock.patch.object(bt_watchdog.time, "sleep"),
         ):
-            state = bt_watchdog.attempt_recovery(3, 100.0, 240.0)
-        recover.assert_called_once_with()
-        sleep.assert_called_once_with(20.0)
-        reconnect.assert_called_once_with()
-        self.assertEqual(state, (0, 500.0, 480.0))
+            result = bt_watchdog.targeted_recovery(
+                roles(),
+                "output",
+                refresh=lambda: OUTPUT,
+                verify=mock.Mock(side_effect=[False, True]),
+            )
+        self.assertTrue(result.ok)
+        self.assertEqual(result.action, "device-disconnect")
+        disconnect.assert_called_once_with(SPEAKER_ADDRESS, OUTPUT)
+
+    def test_automatic_source_contains_no_global_recovery_action(self) -> None:
+        source = Path(bt_watchdog.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("bt-reset.sh", source)
+        self.assertNotIn("systemctl restart", source)
+        self.assertNotIn("restart wireplumber", source.lower())
+        self.assertNotIn('["rfkill", "block", "bluetooth"]', source)
 
 
-class SpeakerReconnectTests(unittest.TestCase):
-    def test_speaker_retry_runs_when_due_and_resets_after_success(self) -> None:
-        wanted = ("C9:5C:FD:6E:28:46", "A0:AD:9F:73:6C:24", "hci1")
+class ReconnectTests(unittest.TestCase):
+    def status(self, adapter_address: str = OUTPUT_ADDRESS) -> dict:
+        return {
+            "output": {
+                "desired_id": f"a2dp:{SPEAKER_ADDRESS}",
+                "candidates": [
+                    {
+                        "id": f"a2dp:{SPEAKER_ADDRESS}",
+                        "address": SPEAKER_ADDRESS,
+                        "adapter_address": adapter_address,
+                    }
+                ],
+            }
+        }
+
+    def test_desired_speaker_rejects_wrong_controller_status(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "status.json"
+            path.write_text(json.dumps(self.status(CALL_ADDRESS)), encoding="utf-8")
+            with mock.patch.object(bt_watchdog, "STATUS_PATH", path):
+                self.assertIsNone(bt_watchdog.desired_speaker_address(roles()))
+
+    def test_output_reconnect_uses_bt500_and_the_speaker_radio_lock(self) -> None:
+        state = bt_watchdog.RecoveryState("output")
         with (
-            mock.patch.object(bt_watchdog, "desired_speaker", return_value=wanted),
-            mock.patch.object(bt_watchdog, "reconnect_speaker", return_value=True) as reconnect,
-            mock.patch.object(bt_watchdog.time, "monotonic", side_effect=[100.0, 101.0]),
+            mock.patch.object(bt_watchdog, "recovery_device", return_value=SPEAKER_ADDRESS),
+            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=OUTPUT) as resolve,
+            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "speaker_radio_lock",
+                return_value=nullcontext(True),
+            ) as lock,
+            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "pin_to_adapter",
+                return_value=btadapters.TrustPinResult(True),
+            ) as pin,
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect_profile", return_value=(True, "connected")
+            ) as connect,
         ):
-            attempts, next_try = bt_watchdog.service_speaker_reconnect(2, 99.0)
-        reconnect.assert_called_once_with(*wanted)
-        self.assertEqual(attempts, 0)
-        self.assertEqual(next_try, 101.0 + bt_watchdog.SPEAKER_RETRY_SECONDS)
+            self.assertTrue(bt_watchdog.service_reconnect(roles(), "output", state, now=100.0))
+        self.assertTrue(all(call.args[1] == "output" for call in resolve.call_args_list))
+        lock.assert_called_once_with(bt_watchdog.OUTPUT_RADIO_LOCK, blocking=False)
+        pin.assert_called_once_with(SPEAKER_ADDRESS, OUTPUT)
+        connect.assert_called_once_with(SPEAKER_ADDRESS, OUTPUT)
 
-    def test_speaker_retry_does_not_depend_on_call_controller_probe(self) -> None:
-        wanted = ("C9:5C:FD:6E:28:46", "A0:AD:9F:73:6C:24", "hci1")
+    def test_call_reconnect_uses_bt600_without_the_speaker_transaction(self) -> None:
+        state = bt_watchdog.RecoveryState("call")
         with (
-            mock.patch.object(bt_watchdog, "desired_speaker", return_value=wanted),
-            mock.patch.object(bt_watchdog, "controller_answers", return_value=False) as probe,
-            mock.patch.object(bt_watchdog, "reconnect_speaker", return_value=False) as reconnect,
-            mock.patch.object(bt_watchdog.time, "monotonic", side_effect=[100.0, 101.0]),
+            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=CALL),
+            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
+            mock.patch.object(bt_watchdog.btadapters, "speaker_radio_lock") as output_lock,
+            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect", return_value=(True, "connected")
+            ) as connect,
+            mock.patch.object(bt_watchdog.btadapters, "pin_to_adapter") as pin,
         ):
-            attempts, next_try = bt_watchdog.service_speaker_reconnect(0, 0.0)
-        probe.assert_not_called()
-        reconnect.assert_called_once_with(*wanted)
-        self.assertEqual(attempts, 1)
-        self.assertEqual(next_try, 101.0 + bt_watchdog.SPEAKER_RETRY_SECONDS)
+            self.assertTrue(bt_watchdog.service_reconnect(roles(), "call", state, now=100.0))
+        output_lock.assert_not_called()
+        pin.assert_not_called()
+        connect.assert_called_once_with(PHONE_ADDRESS, CALL)
 
-    def test_busy_radio_lock_skips_without_spending_attempt_or_deadline(self) -> None:
-        wanted = ("C9:5C:FD:6E:28:46", "A0:AD:9F:73:6C:24", "hci1")
+    def test_busy_output_radio_spends_no_attempt(self) -> None:
+        state = bt_watchdog.RecoveryState("output", reconnect_attempts=2)
         with (
-            mock.patch.object(bt_watchdog, "desired_speaker", return_value=wanted),
+            mock.patch.object(bt_watchdog, "recovery_device", return_value=SPEAKER_ADDRESS),
+            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=OUTPUT),
+            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
             mock.patch.object(
                 bt_watchdog.btadapters,
                 "speaker_radio_lock",
                 return_value=nullcontext(False),
-            ) as lock,
-            mock.patch.object(bt_watchdog, "reconnect_speaker") as reconnect,
-            mock.patch.object(bt_watchdog.time, "monotonic", return_value=100.0),
-        ):
-            attempts, next_try = bt_watchdog.service_speaker_reconnect(2, 99.0)
-        self.assertEqual((attempts, next_try), (2, 99.0))
-        reconnect.assert_not_called()
-        lock.assert_called_once_with(bt_watchdog.RADIO_LOCK_PATH, blocking=False)
-
-    def test_status_round_trips_permanent_adapter_identity(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            status = Path(directory) / "status.json"
-            status.write_text(
-                json.dumps(
-                    {
-                        "output": {
-                            "desired_id": "a2dp:C9:5C:FD:6E:28:46",
-                            "candidates": [
-                                {
-                                    "id": "a2dp:C9:5C:FD:6E:28:46",
-                                    "address": "C9:5C:FD:6E:28:46",
-                                    "adapter_address": "A0:AD:9F:73:6C:24",
-                                    "adapter": "hci7",
-                                    "connected": False,
-                                }
-                            ],
-                        }
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with mock.patch.object(bt_watchdog, "STATUS_PATH", str(status)):
-                wanted = bt_watchdog.desired_speaker()
-        self.assertEqual(
-            wanted,
-            ("C9:5C:FD:6E:28:46", "A0:AD:9F:73:6C:24", "hci7"),
-        )
-
-    def test_trust_failure_prevents_a_misleading_connect_attempt(self) -> None:
-        adapter = btadapters.Adapter("hci1", "A0:AD:9F:73:6C:24", "USB", 1)
-        failed = btadapters.TrustPinResult(False, failures=("D-Bus refused",))
-        with (
-            mock.patch.object(
-                bt_watchdog.btadapters, "adapter_by_address", return_value=adapter
             ),
-            mock.patch.object(
-                bt_watchdog.btadapters, "power_on", return_value=(True, "powered")
-            ),
-            mock.patch.object(bt_watchdog.btadapters, "pin_to_adapter", return_value=failed),
             mock.patch.object(bt_watchdog.btadapters, "connect_profile") as connect,
         ):
-            self.assertFalse(
-                bt_watchdog.reconnect_speaker(
-                    "C9:5C:FD:6E:28:46", adapter.address, "hci7"
-                )
-            )
+            self.assertFalse(bt_watchdog.service_reconnect(roles(), "output", state, now=100.0))
+        self.assertEqual(state.reconnect_attempts, 2)
         connect.assert_not_called()
 
-    def test_power_failure_prevents_trust_and_connect(self) -> None:
-        adapter = btadapters.Adapter("hci7", "A0:AD:9F:73:6C:24", "USB", 4)
-        with (
-            mock.patch.object(
-                bt_watchdog.btadapters, "adapter_by_address", return_value=adapter
-            ) as resolve,
-            mock.patch.object(
-                bt_watchdog.btadapters,
-                "power_on",
-                return_value=(False, "rfkill refused"),
-            ),
-            mock.patch.object(bt_watchdog.btadapters, "pin_to_adapter") as pin,
-            mock.patch.object(bt_watchdog.btadapters, "connect_profile") as connect,
-        ):
-            self.assertFalse(
-                bt_watchdog.reconnect_speaker(
-                    "C9:5C:FD:6E:28:46", adapter.address, "hci1"
-                )
-            )
-        resolve.assert_called_once_with(adapter.address)
-        pin.assert_not_called()
-        connect.assert_not_called()
 
-    def test_missing_permanent_address_never_falls_back_to_diagnostic_hci(self) -> None:
-        with (
-            mock.patch.object(bt_watchdog.btadapters, "adapters") as adapters,
-            mock.patch.object(bt_watchdog.btadapters, "pin_to_adapter") as pin,
-            mock.patch.object(bt_watchdog.btadapters, "connect_profile") as connect,
-        ):
-            self.assertFalse(
-                bt_watchdog.reconnect_speaker("C9:5C:FD:6E:28:46", None, "hci1")
-            )
-        adapters.assert_not_called()
-        pin.assert_not_called()
-        connect.assert_not_called()
+class ProbeTests(unittest.TestCase):
+    def test_probe_targets_only_the_resolved_runtime_hci(self) -> None:
+        result = subprocess.CompletedProcess([], 0, "HCI Version: 6.0\n", "")
+        with mock.patch.object(bt_watchdog.subprocess, "run", return_value=result) as run:
+            self.assertIs(bt_watchdog.probe_controller(CALL), bt_watchdog.ProbeStatus.ANSWERED)
+        self.assertEqual(run.call_args.args[0], ["hciconfig", CALL.hci, "version"])
+
+
+class UnitTests(unittest.TestCase):
+    def test_template_runs_one_explicit_role_and_legacy_name_is_call_only(self) -> None:
+        units = Path(bt_watchdog.__file__).resolve().parents[1] / "systemd" / "system"
+        template = (units / "bridge-btwatchdog@.service").read_text(encoding="utf-8")
+        legacy = (units / "bridge-btwatchdog.service").read_text(encoding="utf-8")
+        self.assertIn("bt_watchdog.py --role %i", template)
+        self.assertIn("bt_watchdog.py --role call", legacy)
+        self.assertNotIn("bt-reset.sh", template)
+        self.assertNotIn("bluetooth.service restart", template)
+        self.assertNotIn("wireplumber", template.lower())
 
 
 if __name__ == "__main__":

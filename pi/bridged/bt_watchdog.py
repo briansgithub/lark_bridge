@@ -1,500 +1,523 @@
 #!/usr/bin/env python3
-"""bt-watchdog — detect a wedged Bluetooth controller and recover it unattended.
+"""Independent, role-scoped Bluetooth liveness and recovery watchdogs.
 
-STATUS: WRITTEN, NOT YET DEPLOYED OR TESTED. Do not enable this until it has been run
-against a deliberately wedged controller. See "Validation still owed" at the bottom.
-
-WHY THIS EXISTS
----------------
-E07 recorded four occurrences of the BCM43438 wedging mid-call. The H4 stream between the SoC
-and the controller loses byte alignment, and nothing host-side can resynchronise it — only a
-firmware reload (rung 6 of scripts/bt-reset.sh) recovers. Moving Mode 1W's output off USB
-(E07 runs 11-12) made it far rarer, but "rarer" is not "gone", and the product lives in a car
-where nobody can type a command.
-
-WHY DETECTION IS THE HARD PART
-------------------------------
-Every passive signal lies. Measured during occurrence 4, on a controller that was already dead:
-
-    hciconfig hci0            UP RUNNING PSCAN ISCAN      <- healthy
-    HCI error counters        errors:0 both directions    <- healthy
-    SCO frame flow            still transmitting, nominal <- healthy
-    bridge-supervisor         both legs "verified"        <- healthy
-    bluetoothctl info         Connected: yes              <- healthy
-
-A watchdog built on any of those reports green on a dead radio. Worse, `bluetoothctl` reports
-its own bookkeeping: during occurrence 3 a `disconnect` returned "Disconnection successful"
-while the kernel logged `command 0x0406 tx timeout` — the command never reached the controller.
-
-The only signal that discriminated was **issuing a command and seeing whether it is answered**.
-That is what this does: `hciconfig <call adapter> version` (Read Local Version). One HCI round
-trip per probe against SCO's ~133 frames/s, i.e. not a meaningful addition to UART load.
-
-The adapter is resolved per probe from the phone's bond, never hardcoded: since 2026-08-23 there
-are two controllers, and the one carrying the call is whichever holds the bond.
-
-`Frame reassembly failed` is deliberately NOT used as a trigger: in occurrence 4 it was logged
-**3 minutes 26 seconds** after the actual desync. It is a lagging indicator.
-
-FALSE POSITIVES ARE WORSE THAN LATE DETECTION
----------------------------------------------
-An unnecessary reset drops a live call and takes ~20 s to come back. So:
-  - require CONSECUTIVE probe failures, not one;
-  - back off exponentially after each recovery, so a genuinely broken controller cannot put
-    the machine in a reset loop;
-  - never act while a recovery is already in flight.
+Each process owns exactly one configured controller role. Permanent address, bus, and USB
+VID:PID are resolved afresh before every action; ``hciX`` and USB topology are runtime targets
+only. Automatic recovery never uses class-wide rfkill, restarts BlueZ or WirePlumber, or resets
+the controller assigned to the other role.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import os
+import re
 import signal
 import subprocess
 import sys
+import tempfile
 import time
+from collections.abc import Callable
+from contextlib import nullcontext
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
+from typing import Any, cast
 
 import btadapters
+import controller_roles
 
-REPO = os.environ.get("BRIDGE_REPO", "/home/admin/rpi-lark-bridge")
-BT_RESET = os.path.join(REPO, "scripts", "bt-reset.sh")
+ROLE_NAMES = ("call", "output")
+REPO = Path(os.environ.get("BRIDGE_REPO", "/home/admin/rpi-lark-bridge"))
+CONFIG_PATH = Path(os.environ.get("BRIDGE_CONFIG", REPO / "config" / "bridge.toml"))
+STATUS_PATH = Path(
+    os.environ.get("BRIDGE_WD_STATUS", "/run/user/1000/bridge-status.json")
+)
+STATE_DIR = Path(os.environ.get("BRIDGE_WD_STATE_DIR", "/run/larkbridge/bt-watchdog"))
+LOCK_DIR = Path(os.environ.get("BRIDGE_WD_LOCK_DIR", "/run/lock/larkbridge"))
+OUTPUT_RADIO_LOCK = Path(
+    os.environ.get(
+        "BRIDGE_OUTPUT_RADIO_LOCK",
+        str(STATUS_PATH.with_name("bridge-output-radio.lock")),
+    )
+)
+SYS_RFKILL = Path("/sys/class/rfkill")
+SYS_USB_DRIVERS = Path("/sys/bus/usb/drivers")
+USB_INTERFACE_RE = re.compile(r"^[A-Za-z0-9._-]+:\d+\.\d+$")
 
-# Timing is derived from the acceptance bar: a wedge must self-heal within ~90 s, measured from
-# the fault to call audio being back.
-#
-# The awkward case is a WEDGED controller (as opposed to an absent one): the probe does not fail
-# fast, it BLOCKS until its timeout, because the command is accepted and simply never answered.
-# So detection latency is (timeout + interval + timeout), not (interval x failures).
-#
-#     worst case detect = 20 + 15 + 20 = 55 s
-#     bt-reset.sh       ~= 30 s   (measured: rungs 1-6 plus endpoint re-registration)
-#     total             ~= 85 s   <- inside the 90 s bar
-#
-# The earlier defaults (30 s interval, 25 s timeout) gave 80 s detect + 30 s recovery = 110 s,
-# which missed the bar. Do not raise these without redoing that arithmetic.
 PROBE_INTERVAL = float(os.environ.get("BRIDGE_WD_INTERVAL", "15"))
 FAILURES_TO_ACT = int(os.environ.get("BRIDGE_WD_FAILURES", "2"))
 PROBE_TIMEOUT = float(os.environ.get("BRIDGE_WD_PROBE_TIMEOUT", "20"))
-
-PHONE_MAC = os.environ.get("BRIDGE_PHONE_MAC", "5C:33:7B:CB:BF:C5")
-
-# Which controller carries the call. Resolved from the phone's own bond rather than
-# configured, because the bond already records the answer and a second source of truth is
-# a second thing to get wrong. BRIDGE_CALL_ADAPTER overrides it by BD address for the
-# coexistence experiment, which deliberately moves the call to the other radio.
-#
-# This is never `hci0`: with a dongle present, the index that carries the call is whatever
-# holds the bond, and index order is not stable across boots.
-CALL_ADAPTER = os.environ.get("BRIDGE_CALL_ADAPTER", "")
-
-
-def call_adapter() -> btadapters.Adapter | None:
-    """The controller the phone is bonded on, re-resolved every time it is needed.
-
-    Deliberately not cached: a controller that is unbound and rebound during recovery can
-    come back as a different hciX, and a stale handle would then point the next probe --
-    or the next reset -- at the wrong radio. With two controllers that is not a harmless
-    mistake; resetting the radio carrying the speaker link during a call would drop it.
-    """
-    if CALL_ADAPTER:
-        return btadapters.adapter_by_address(CALL_ADAPTER)
-    owner = btadapters.adapter_for_device(PHONE_MAC)
-    if owner is not None:
-        return owner
-    # No bond visible: bluetoothd may not be up yet, or the pairing database did not
-    # mount. Fall back to the onboard controller, which is where every bond has lived
-    # historically and which is the one this recovery ladder was written for.
-    for adapter in btadapters.adapters():
-        if adapter.bus == "UART":
-            return adapter
-    return None
-# Wait before initiating to the phone ourselves, so we do not race Android's own reconnect.
-# Trap 5: the Pi should normally let Android initiate -- but measured 2026-08-17, the Pixel
-# sometimes will NOT re-initiate after a Bluetooth toggle, and in a car nobody can tap it.
 RECONNECT_DELAY = float(os.environ.get("BRIDGE_WD_RECONNECT_DELAY", "20"))
-RECONNECT = os.environ.get("BRIDGE_WD_RECONNECT", "1") not in ("0", "false", "no")
-# Bounded, because an unbounded reconnector fights the operator. If the phone was
-# deliberately taken elsewhere -- Bluetooth switched off, or the call moved to another
-# device -- pulling it back repeatedly is the same class of bug as e6f4139, where the
-# bridge fought another app for the communication route. The budget resets only when the
-# phone is actually connected, so a deliberate departure costs a few failed attempts and
-# then silence.
-RECONNECT_ATTEMPTS = int(os.environ.get("BRIDGE_WD_RECONNECT_ATTEMPTS", "3"))
-
-# ---------------------------------------------------------------- the speaker
-# Measured 2026-08-23: the Monoprice Boombox drops its A2DP link after a couple of minutes
-# with no audio flowing, and NOTHING on the Pi paged it back. The supervisor handled it
-# correctly -- the user's choice was remembered and the output fell back to the wired jack --
-# but in a car that means the speaker silently leaves mid-drive and stays gone, which makes
-# the whole of Mode 1 unusable however well the radios coexist.
-#
-# Two ways this budget differs from the phone's, both deliberate:
-#
-#   * More attempts. A phone has an owner who can tap it; a speaker in the boot does not, and
-#     the failure is invisible until someone tries to listen.
-#   * Attempts are spent on a TIMER, not on absence. A speaker that is switched off should
-#     cost a few quiet retries and then silence, not a page every 15 s forever -- pages are
-#     ACL traffic and E03 is explicit about what ACL traffic near an active call costs.
-SPEAKER_RECONNECT = os.environ.get("BRIDGE_WD_SPEAKER_RECONNECT", "1") not in ("0", "false", "no")
-SPEAKER_ATTEMPTS = int(os.environ.get("BRIDGE_WD_SPEAKER_ATTEMPTS", "5"))
-SPEAKER_RETRY_SECONDS = float(os.environ.get("BRIDGE_WD_SPEAKER_RETRY", "30"))
-
-# The supervisor is user-scoped and this watchdog is root, so the status file has to be named
-# rather than derived: default_status_path() would resolve to /run/user/0 under root.
-STATUS_PATH = os.environ.get("BRIDGE_WD_STATUS", "/run/user/1000/bridge-status.json")
-RADIO_LOCK_PATH = Path(
-    os.environ.get(
-        "BRIDGE_OUTPUT_RADIO_LOCK",
-        str(Path(STATUS_PATH).with_name("bridge-output-radio.lock")),
-    )
-)
-
+RECONNECT_RETRY = float(os.environ.get("BRIDGE_WD_RECONNECT_RETRY", "30"))
+CALL_RECONNECT_ATTEMPTS = int(os.environ.get("BRIDGE_WD_CALL_ATTEMPTS", "3"))
+OUTPUT_RECONNECT_ATTEMPTS = int(os.environ.get("BRIDGE_WD_OUTPUT_ATTEMPTS", "5"))
 BACKOFF_START = 60.0
 BACKOFF_MAX = 900.0
 
 log = logging.getLogger("bt-watchdog")
 
 
-def controller_answers() -> bool:
-    """Active liveness probe. True only if the controller ANSWERED.
+class ProbeStatus(str, Enum):
+    ANSWERED = "answered"
+    FAILED = "failed"
+    UNKNOWN = "unknown"
 
-    Read Local Version Information via hciconfig. On a wedged controller this returns
-    "Can't read version info hci0: Connection timed out (110)" and a non-zero exit.
-    """
-    adapter = call_adapter()
-    if adapter is None:
-        # We cannot even name the controller to probe. That is our problem or bluetoothd's,
-        # not evidence of a wedge, and resetting on it would be a guess with a live call as
-        # the stake. Same reasoning as the missing-hciconfig case below.
-        log.error("no call adapter could be resolved — treating as UNKNOWN, not failed")
-        return True
+
+@dataclass(frozen=True)
+class RecoveryResult:
+    ok: bool
+    action: str
+    detail: str = ""
+
+
+@dataclass
+class RecoveryState:
+    role: str
+    failures: int = 0
+    recoveries: int = 0
+    reconnect_attempts: int = 0
+    reconnect_next: float = 0.0
+    last_attempt: float = 0.0
+    last_recovery: float = 0.0
+    backoff: float = BACKOFF_START
+    probe: str = ProbeStatus.UNKNOWN.value
+    identity_error: str | None = None
+    last_action: str | None = None
+    last_error: str | None = None
+
+    def as_dict(self, adapter: btadapters.Adapter | None = None) -> dict[str, Any]:
+        return {
+            "timestamp": time.time(),
+            "role": self.role,
+            "configured_state": "independent",
+            "probe": self.probe,
+            "failures": self.failures,
+            "recoveries": self.recoveries,
+            "reconnect_attempts": self.reconnect_attempts,
+            "reconnect_next_monotonic": self.reconnect_next,
+            "last_attempt_monotonic": self.last_attempt,
+            "last_recovery_monotonic": self.last_recovery,
+            "backoff_seconds": self.backoff,
+            "identity_error": self.identity_error,
+            "last_action": self.last_action,
+            "last_error": self.last_error,
+            "controller": (
+                {
+                    "address": adapter.address,
+                    "hci": adapter.hci,
+                    "bus": adapter.bus,
+                    "usb_id": (
+                        f"{adapter.usb_vendor_id}:{adapter.usb_product_id}"
+                        if adapter.usb_vendor_id and adapter.usb_product_id
+                        else None
+                    ),
+                    "usb_interface": adapter.usb_interface,
+                    "driver": adapter.driver,
+                    "rfkill_index": adapter.rfkill_index,
+                }
+                if adapter is not None
+                else None
+            ),
+        }
+
+
+def role_lock_path(role: str) -> Path:
+    if role not in ROLE_NAMES:
+        raise ValueError(f"invalid controller role: {role}")
+    return LOCK_DIR / f"bridge-btwatchdog-{role}.lock"
+
+
+def role_state_path(role: str) -> Path:
+    if role not in ROLE_NAMES:
+        raise ValueError(f"invalid controller role: {role}")
+    return STATE_DIR / f"{role}.json"
+
+
+def write_state(state: RecoveryState, adapter: btadapters.Adapter | None) -> None:
+    target = role_state_path(state.role)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=target.parent, prefix=f".{state.role}-", delete=False
+    ) as handle:
+        json.dump(state.as_dict(adapter), handle, indent=2)
+        handle.write("\n")
+        temporary = Path(handle.name)
+    os.replace(temporary, target)
+
+
+def role_spec(
+    roles: controller_roles.ControllerRoles, role: str
+) -> controller_roles.ControllerSpec:
+    if role == "call":
+        return roles.call
+    if role == "output":
+        return roles.output
+    raise ValueError(f"invalid controller role: {role}")
+
+
+def resolve_role(
+    roles: controller_roles.ControllerRoles,
+    role: str,
+    *,
+    objects: dict[str, dict] | None = None,
+    inventory: list[btadapters.Adapter] | None = None,
+) -> btadapters.Adapter:
+    tree = objects if objects is not None else btadapters.managed_objects()
+    observed = inventory if inventory is not None else btadapters.adapters(tree)
+    resolved = controller_roles.resolve_controller(
+        role_spec(roles, role),
+        observed,
+        policy=controller_roles.ReadinessPolicy.TRANSITIONAL,
+    )
+    return cast(btadapters.Adapter, resolved)
+
+
+def probe_controller(adapter: btadapters.Adapter) -> ProbeStatus:
+    """Issue one active HCI round trip against the already-resolved controller."""
     try:
-        r = subprocess.run(
+        result = subprocess.run(
             ["hciconfig", adapter.hci, "version"],
-            capture_output=True, text=True, timeout=PROBE_TIMEOUT, check=False,
+            capture_output=True,
+            text=True,
+            timeout=PROBE_TIMEOUT,
+            check=False,
         )
     except subprocess.TimeoutExpired:
-        log.warning("probe timed out after %.0fs", PROBE_TIMEOUT)
-        return False
+        return ProbeStatus.FAILED
     except OSError as exc:
-        log.error("probe could not run (%s) — treating as UNKNOWN, not failed", exc)
-        # A missing hciconfig is our bug, not the controller's. Do not reset on it.
-        return True
-    if r.returncode != 0 or "Connection timed out" in (r.stdout + r.stderr):
-        return False
-    return "HCI Version" in r.stdout
+        log.error("%s probe unavailable: %s", adapter.address, exc)
+        return ProbeStatus.UNKNOWN
+    output = (result.stdout or "") + (result.stderr or "")
+    if result.returncode != 0 or "Connection timed out" in output:
+        return ProbeStatus.FAILED
+    return ProbeStatus.ANSWERED if "HCI Version" in result.stdout else ProbeStatus.FAILED
 
 
-def recover() -> bool:
-    """Run the established recovery ladder. Returns True if it reports success."""
-    if not os.path.exists(BT_RESET):
-        log.error("%s not found — cannot recover", BT_RESET)
-        return False
-    adapter = call_adapter()
-    if adapter is None:
-        log.error("no call adapter could be resolved — refusing to reset a guessed radio")
-        return False
-    # Name the target explicitly. bt-reset.sh defaults to hci0, which stopped being a safe
-    # default the moment a second controller existed: resetting the wrong radio mid-call
-    # would drop the link it was not even trying to fix.
-    environment = dict(os.environ, BRIDGE_HCI=adapter.hci)
-    log.warning("running bt-reset.sh against %s (%s)", adapter.hci, adapter.address)
+def wait_for_role_answer(
+    roles: controller_roles.ControllerRoles, role: str, seconds: float = 8.0
+) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        try:
+            adapter = resolve_role(roles, role)
+        except controller_roles.ControllerRoleError:
+            time.sleep(0.25)
+            continue
+        if probe_controller(adapter) is ProbeStatus.ANSWERED:
+            return True
+        time.sleep(0.25)
+    return False
+
+
+def desired_speaker_address(roles: controller_roles.ControllerRoles) -> str | None:
+    """Return only a strict, output-role-owned desired A2DP address."""
     try:
-        r = subprocess.run(
-            ["/bin/bash", BT_RESET], capture_output=True, text=True, timeout=300,
-            check=False, env=environment,
-        )
-    except subprocess.SubprocessError as exc:
-        log.error("bt-reset.sh failed to run: %s", exc)
-        return False
-    for line in (r.stdout or "").splitlines()[-8:]:
-        log.info("  %s", line)
-    ok = "RECOVERED" in (r.stdout or "")
-    log.warning("bt-reset.sh %s", "succeeded" if ok else "did NOT report recovery")
-    return ok
-
-
-def attempt_recovery(
-    failures: int, last_recovery: float, backoff: float
-) -> tuple[int, float, float]:
-    """Run recovery and advance its bookkeeping only after an actual recovery.
-
-    ``bt-reset.sh`` begins with its own liveness probe.  A controller that answers that
-    one command between repeated watchdog failures returns without ``RECOVERED``.  That
-    is an inconclusive/no-op attempt, not a completed recovery: recording it as one would
-    suppress the next attempt behind an increased backoff while the call remains wedged.
-    """
-    if not recover():
-        log.warning("recovery made no change — keeping failure state for prompt retry")
-        return failures, last_recovery, backoff
-
-    if RECONNECT:
-        time.sleep(RECONNECT_DELAY)
-        reconnect_phone()
-    return 0, time.monotonic(), min(backoff * 2, BACKOFF_MAX)
-
-
-def phone_connected() -> bool:
-    # Reads the Connected property of the phone's own D-Bus object. `bluetoothctl info`
-    # resolved the MAC against whichever adapter bluetoothd last called default, which with
-    # a dongle present is the one holding no bonds -- so it reported "not connected" for a
-    # phone that was connected perfectly well, and the reconnect logic below acted on that.
-    #
-    # Deliberately only trusted for the POSITIVE case; a wedge is detected by the active
-    # probe above, never by this.
-    return btadapters.is_connected(PHONE_MAC)
-
-
-def reconnect_phone() -> None:
-    """Initiate to the phone if it has not come back on its own."""
-    if phone_connected():
-        log.info("phone reconnected on its own")
-        return
-    # Deliberately does not restate a duration: callers know how long the phone has been
-    # gone, this function does not, and printing RECONNECT_DELAY here reported a number
-    # that was simply wrong when called from the absence path.
-    adapter = call_adapter()
-    if adapter is None:
-        log.error("no call adapter could be resolved — not initiating")
-        return
-    log.info("initiating connect to %s from %s", PHONE_MAC, adapter.hci)
-    ok, detail = btadapters.connect(PHONE_MAC, adapter)
-    log.info("connect %s: %s", "succeeded" if ok else "failed", detail)
-
-
-def desired_speaker() -> tuple[str, str | None, str | None] | None:
-    """The chosen speaker as (device address, adapter address, diagnostic hci), or None.
-
-    Read from the supervisor's published status rather than recomputed here. The supervisor
-    already resolves config defaults, the runtime override and the candidate list every poll,
-    and a second implementation of that policy in the watchdog is a second thing to disagree
-    with. If the supervisor is not publishing, this returns None and the watchdog does
-    nothing -- which is correct: with no idea what the user wants, paging a guess is worse
-    than waiting.
-    """
-    try:
-        with open(STATUS_PATH, encoding="utf-8") as handle:
-            status = json.load(handle)
+        status = json.loads(STATUS_PATH.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     block = status.get("output") or {}
     desired_id = block.get("desired_id")
-    if not desired_id or not str(desired_id).startswith("a2dp:"):
-        return None  # the wired jack needs no paging, and an unset choice is not ours to guess
-    for candidate in block.get("candidates") or []:
-        if candidate.get("id") == desired_id:
-            if candidate.get("connected"):
-                return None
-            return (
-                str(candidate.get("address") or ""),
-                candidate.get("adapter_address"),
-                candidate.get("adapter"),
-            )
-    # Chosen but not in the candidate list at all: the bond is gone, not merely asleep.
-    return None
-
-
-def reconnect_speaker(
-    address: str, adapter_address: str | None, adapter_hci: str | None
-) -> bool:
-    """Page the chosen speaker on ITS OWN adapter, A2DP profile only."""
-    canonical = btadapters.canonical_mac(adapter_address)
-    adapter = (
-        btadapters.adapter_by_address(canonical)
-        if canonical is not None and canonical == adapter_address
-        else None
+    if not isinstance(desired_id, str) or not desired_id.startswith("a2dp:"):
+        return None
+    address = btadapters.canonical_mac(desired_id.removeprefix("a2dp:"))
+    if address is None or desired_id != f"a2dp:{address}":
+        return None
+    candidate = next(
+        (item for item in block.get("candidates") or [] if item.get("id") == desired_id), None
     )
-    if adapter is None:
-        log.error(
-            "speaker adapter unavailable (address=%s, last hci=%s)",
-            adapter_address or "<legacy status>",
-            adapter_hci or "<none>",
+    if not isinstance(candidate, dict):
+        return None
+    if candidate.get("adapter_address") != roles.output.address:
+        return None
+    return address
+
+
+def recovery_device(roles: controller_roles.ControllerRoles, role: str) -> str | None:
+    return roles.phone_address if role == "call" else desired_speaker_address(roles)
+
+
+def _command_ok(command: list[str], timeout: float = 20.0) -> bool:
+    try:
+        return (
+            subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            ).returncode
+            == 0
         )
+    except (OSError, subprocess.SubprocessError):
         return False
+
+
+def cycle_hci(adapter: btadapters.Adapter) -> bool:
+    down = _command_ok(["hciconfig", adapter.hci, "down"])
+    time.sleep(1)
+    up = _command_ok(["hciconfig", adapter.hci, "up"])
+    time.sleep(2)
+    return down and up
+
+
+def cycle_rfkill(adapter: btadapters.Adapter) -> bool:
+    """Cycle one rfkill index; a device class is never an accepted target."""
+    if adapter.rfkill_index is None:
+        return False
+    index = str(adapter.rfkill_index)
+    blocked = _command_ok(["rfkill", "block", index])
+    time.sleep(1)
+    unblocked = _command_ok(["rfkill", "unblock", index])
+    if blocked and unblocked:
+        time.sleep(2)
+        return True
+    soft = SYS_RFKILL / f"rfkill{index}" / "soft"
+    try:
+        soft.write_text("1", encoding="utf-8")
+        time.sleep(1)
+        soft.write_text("0", encoding="utf-8")
+        time.sleep(2)
+        return True
+    except OSError:
+        return False
+
+
+def rebind_usb(adapter: btadapters.Adapter) -> bool:
+    """Unbind/rebind exactly the currently resolved USB interface."""
+    interface = adapter.usb_interface or ""
+    if (
+        adapter.bus != "USB"
+        or adapter.driver != "btusb"
+        or USB_INTERFACE_RE.fullmatch(interface) is None
+    ):
+        return False
+    driver = SYS_USB_DRIVERS / "btusb"
+    try:
+        (driver / "unbind").write_text(interface + "\n", encoding="utf-8")
+        time.sleep(2)
+        (driver / "bind").write_text(interface + "\n", encoding="utf-8")
+        time.sleep(5)
+        return True
+    except OSError:
+        return False
+
+
+def targeted_recovery(
+    roles: controller_roles.ControllerRoles,
+    role: str,
+    *,
+    verify: Callable[[], bool] | None = None,
+    refresh: Callable[[], btadapters.Adapter] | None = None,
+) -> RecoveryResult:
+    """Run only exact-target recovery rungs and stop at the first answered probe."""
+    check = verify or (lambda: wait_for_role_answer(roles, role))
+    current = refresh or (lambda: resolve_role(roles, role))
+
+    try:
+        adapter = current()
+    except controller_roles.ControllerRoleError as exc:
+        return RecoveryResult(False, "resolve", f"{exc.code}: {exc.detail}")
+
     powered, detail = btadapters.power_on(adapter)
-    if not powered:
-        log.error("speaker adapter power recovery failed: %s", detail)
+    if powered and check():
+        return RecoveryResult(True, "power-on", detail)
+
+    device = recovery_device(roles, role)
+    if device is not None:
+        btadapters.disconnect(device, adapter)
+        time.sleep(1)
+        if check():
+            return RecoveryResult(True, "device-disconnect", device)
+
+    try:
+        adapter = current()
+    except controller_roles.ControllerRoleError as exc:
+        return RecoveryResult(False, "resolve", f"{exc.code}: {exc.detail}")
+    if cycle_hci(adapter) and check():
+        return RecoveryResult(True, "hci-down-up", adapter.hci)
+
+    try:
+        adapter = current()
+    except controller_roles.ControllerRoleError as exc:
+        return RecoveryResult(False, "resolve", f"{exc.code}: {exc.detail}")
+    if cycle_rfkill(adapter) and check():
+        return RecoveryResult(True, "rfkill-index", str(adapter.rfkill_index))
+
+    try:
+        adapter = current()
+    except controller_roles.ControllerRoleError as exc:
+        return RecoveryResult(False, "resolve", f"{exc.code}: {exc.detail}")
+    if rebind_usb(adapter) and check():
+        return RecoveryResult(True, "usb-interface-rebind", adapter.usb_interface or "")
+    return RecoveryResult(False, "exhausted", "all exact-target recovery rungs failed")
+
+
+def attempt_recovery(
+    state: RecoveryState,
+    recover: Callable[[], RecoveryResult],
+    *,
+    now: float | None = None,
+) -> bool:
+    observed = time.monotonic() if now is None else now
+    if state.failures < FAILURES_TO_ACT:
         return False
-    # Idempotent, and it costs no LARKDATA write when already correct. Without it a
-    # speaker can be paged successfully and then have its own reconnection refused.
-    pin = btadapters.pin_to_adapter(address, adapter)
-    if pin.changed:
-        log.warning("speaker trust corrected: %s", ", ".join(pin.changed))
-    if not pin.ok:
-        log.error("speaker trust pinning failed: %s", "; ".join(pin.failures))
+    if state.last_attempt and observed - state.last_attempt < state.backoff:
+        state.last_action = "backoff"
         return False
-    ok, detail = btadapters.connect_profile(address, adapter)
-    log.info("speaker connect %s: %s", "succeeded" if ok else "failed", detail)
-    return ok
+    result = recover()
+    state.last_attempt = observed
+    state.last_action = result.action
+    state.last_error = None if result.ok else result.detail
+    state.backoff = min(state.backoff * 2, BACKOFF_MAX)
+    if not result.ok:
+        return False
+    state.failures = 0
+    state.recoveries += 1
+    state.last_recovery = observed
+    state.reconnect_attempts = 0
+    state.reconnect_next = observed + RECONNECT_DELAY
+    return True
 
 
-def service_speaker_reconnect(attempts: int, next_try: float) -> tuple[int, float]:
-    """Advance the speaker retry budget independently of the call-controller probe.
+def reconnect_budget(role: str) -> int:
+    return CALL_RECONNECT_ATTEMPTS if role == "call" else OUTPUT_RECONNECT_ATTEMPTS
 
-    The speaker is deliberately on another controller.  A live SCO session can make the
-    call controller's legacy ``hciconfig version`` probe time out even while the stronger
-    recovery probe confirms that controller is alive.  Speaker recovery must not be nested
-    under that unrelated result, or one false phone-radio probe strands an awake speaker.
-    """
-    if not SPEAKER_RECONNECT:
-        return attempts, next_try
 
-    wanted = desired_speaker()
-    if wanted is None or not wanted[0]:
-        if attempts:
-            log.info("chosen speaker no longer needs paging")
-        return 0, next_try
+def service_reconnect(
+    roles: controller_roles.ControllerRoles,
+    role: str,
+    state: RecoveryState,
+    *,
+    now: float | None = None,
+) -> bool:
+    """Reconnect only the device assigned to this process's controller role."""
+    observed = time.monotonic() if now is None else now
+    address = recovery_device(roles, role)
+    if address is None:
+        state.reconnect_attempts = 0
+        return False
+    try:
+        tree = btadapters.managed_objects()
+        adapter = resolve_role(roles, role, objects=tree)
+    except controller_roles.ControllerRoleError as exc:
+        state.identity_error = f"{exc.code}: {exc.detail}"
+        return False
+    if btadapters.connected_on(adapter, address, tree):
+        state.reconnect_attempts = 0
+        state.reconnect_next = 0.0
+        return True
+    if observed < state.reconnect_next or state.reconnect_attempts >= reconnect_budget(role):
+        return False
 
-    now = time.monotonic()
-    if now < next_try or attempts >= SPEAKER_ATTEMPTS:
-        return attempts, next_try
-
-    # Scan/pair-select owns the radio as one transaction. A skipped watchdog page is not a
-    # failed attempt and must not move the deadline, or setup could silently consume the
-    # appliance's bounded reconnect budget.
-    with btadapters.speaker_radio_lock(RADIO_LOCK_PATH, blocking=False) as acquired:
+    lock = (
+        btadapters.speaker_radio_lock(OUTPUT_RADIO_LOCK, blocking=False)
+        if role == "output"
+        else nullcontext(True)
+    )
+    with lock as acquired:
         if not acquired:
-            log.info("speaker setup owns the radio; reconnect page skipped")
-            return attempts, next_try
-        attempts += 1
-        log.warning(
-            "chosen speaker %s is absent — paging (attempt %d/%d)",
-            wanted[0], attempts, SPEAKER_ATTEMPTS,
-        )
-        if reconnect_speaker(*wanted):
-            attempts = 0
-        return attempts, time.monotonic() + SPEAKER_RETRY_SECONDS
+            state.last_action = "output-radio-busy"
+            return False
+        try:
+            adapter = resolve_role(roles, role)
+        except controller_roles.ControllerRoleError as exc:
+            state.identity_error = f"{exc.code}: {exc.detail}"
+            return False
+        state.reconnect_attempts += 1
+        state.reconnect_next = observed + RECONNECT_RETRY
+        powered, detail = btadapters.power_on(adapter)
+        if not powered:
+            state.last_error = detail
+            return False
+        if role == "call":
+            ok, detail = btadapters.connect(address, adapter)
+        else:
+            pin = btadapters.pin_to_adapter(address, adapter)
+            if not pin.ok:
+                state.last_error = "; ".join(pin.failures)
+                return False
+            ok, detail = btadapters.connect_profile(address, adapter)
+        state.last_action = "device-reconnect"
+        state.last_error = None if ok else detail
+        if ok:
+            state.reconnect_attempts = 0
+        return ok
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--role", choices=ROLE_NAMES, required=True)
+    parser.add_argument("--config", type=Path, default=CONFIG_PATH)
+    args = parser.parse_args(argv)
     logging.basicConfig(
         level=os.environ.get("BRIDGE_LOG", "INFO").upper(),
         format="%(levelname)s %(message)s",
         stream=sys.stdout,
     )
+    try:
+        roles = controller_roles.load_controller_roles(args.config)
+    except (OSError, ValueError) as exc:
+        log.error("controller role configuration rejected: %s", exc)
+        return 2
 
+    state = RecoveryState(args.role)
     stopping = False
 
-    def on_signal(signum, _frame):
+    def on_signal(signum: int, _frame: Any) -> None:
         nonlocal stopping
-        log.info("signal %s — shutting down", signum)
+        log.info("signal %s; stopping %s watchdog", signum, args.role)
         stopping = True
 
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
 
-    adapter = call_adapter()
-    log.info(
-        "watching %s: probe every %.0fs, act after %d consecutive failures",
-        f"{adapter.hci} ({adapter.address})" if adapter else "<unresolved call adapter>",
-        PROBE_INTERVAL, FAILURES_TO_ACT,
-    )
-    for other in btadapters.adapters():
-        if adapter is None or other.hci != adapter.hci:
-            log.info("other controller present: %s %s on %s", other.hci, other.address, other.bus)
-
-    failures = 0
-    backoff = BACKOFF_START
-    last_recovery = 0.0
-
-    phone_present = False
-    phone_absent_since: float | None = None
-    phone_attempts = 0
-
-    speaker_attempts = 0
-    speaker_next_try = 0.0
-
-    while not stopping:
-        # This is intentionally before and outside controller_answers().  The chosen
-        # speaker lives on hci1 and must keep recovering even if the independent hci0
-        # call-controller probe is inconclusive during SCO.
-        speaker_attempts, speaker_next_try = service_speaker_reconnect(
-            speaker_attempts, speaker_next_try
+    with btadapters.speaker_radio_lock(role_lock_path(args.role), blocking=False) as acquired:
+        if not acquired:
+            log.error("another %s watchdog already owns its role lock", args.role)
+            return 3
+        log.info(
+            "watching %s controller %s (%s)",
+            args.role,
+            role_spec(roles, args.role).address,
+            role_spec(roles, args.role).bus,
         )
+        adapter: btadapters.Adapter | None = None
+        while not stopping:
+            try:
+                tree = btadapters.managed_objects()
+                adapter = resolve_role(roles, args.role, objects=tree)
+                state.identity_error = None
+            except controller_roles.ControllerRoleError as exc:
+                adapter = None
+                state.probe = ProbeStatus.UNKNOWN.value
+                state.identity_error = f"{exc.code}: {exc.detail}"
+                state.last_error = state.identity_error
+                write_state(state, None)
+                time.sleep(PROBE_INTERVAL)
+                continue
 
-        if controller_answers():
-            if failures:
-                log.info("controller answered again after %d failure(s)", failures)
-            failures = 0
-            # A clean probe well past the last recovery means we are stable again.
-            if last_recovery and time.monotonic() - last_recovery > BACKOFF_MAX:
-                backoff = BACKOFF_START
+            result = probe_controller(adapter)
+            state.probe = result.value
+            if result is ProbeStatus.ANSWERED:
+                state.failures = 0
+                if state.last_attempt and time.monotonic() - state.last_attempt > BACKOFF_MAX:
+                    state.backoff = BACKOFF_START
+                service_reconnect(roles, args.role, state)
+            elif result is ProbeStatus.FAILED:
+                state.failures += 1
+                attempt_recovery(
+                    state,
+                    lambda: targeted_recovery(roles, args.role),
+                )
+            write_state(state, adapter)
+            time.sleep(PROBE_INTERVAL)
 
-            # A healthy controller with no phone on it. This is the ordinary in-car case
-            # and it is NOT a wedge: the recovery ladder below never runs, because the
-            # controller is answering perfectly well. Before this branch existed,
-            # reconnect_phone() was reachable only after recover(), so a phone that simply
-            # went out of range was never re-established.
-            #
-            # Measured 2026-08-23 on the hardened card: after a power cut the Pixel did not
-            # re-initiate within 130 s, while a Pi-initiated connect succeeded in 20 s.
-            # In a car there is nobody to tap the phone, so the Pi has to make the call.
-            if RECONNECT:
-                if phone_connected():
-                    if not phone_present:
-                        log.info("phone present")
-                    phone_present = True
-                    phone_absent_since = None
-                    phone_attempts = 0
-                else:
-                    if phone_present:
-                        log.warning("phone dropped")
-                        phone_present = False
-                    if phone_absent_since is None:
-                        phone_absent_since = time.monotonic()
-                    absent = time.monotonic() - phone_absent_since
-                    # Hold off briefly so we do not race Android when it *does* choose to
-                    # re-initiate; only then take over.
-                    if absent >= RECONNECT_DELAY and phone_attempts < RECONNECT_ATTEMPTS:
-                        phone_attempts += 1
-                        log.warning(
-                            "phone absent %.0fs — initiating (attempt %d/%d)",
-                            absent, phone_attempts, RECONNECT_ATTEMPTS,
-                        )
-                        reconnect_phone()
-
-        else:
-            failures += 1
-            log.warning("controller did not answer (%d/%d)", failures, FAILURES_TO_ACT)
-
-            if failures >= FAILURES_TO_ACT:
-                since = time.monotonic() - last_recovery
-                if last_recovery and since < backoff:
-                    log.warning(
-                        "wedged, but only %.0fs since last recovery (backoff %.0fs) — waiting",
-                        since, backoff,
-                    )
-                else:
-                    failures, last_recovery, backoff = attempt_recovery(
-                        failures, last_recovery, backoff
-                    )
-
-        time.sleep(PROBE_INTERVAL)
-
-    log.info("stopped")
+    write_state(state, adapter)
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-# VALIDATION STATUS — measured 2026-08-17
-# ---------------------------------------
-# PASSED, no call active:
-#   * No false positive across `systemctl restart bluetooth` or `hciconfig hci0 down/up`.
-#     Zero bt-reset invocations over both perturbations.
-#   * Detection and recovery end to end: unbinding hci_uart_bcm (so hci0 vanishes) produced
-#         controller did not answer (1/2)
-#         controller did not answer (2/2)
-#         running bt-reset.sh  ->  RECOVERED at rung 6
-#     and hci0 returned UP RUNNING PSCAN ISCAN with the version probe answering.
-#
-# LIVE-CALL CONTINUATION — measured 2026-08-23 (E15):
-#   * After the watchdog recovered a wedged call radio, the phone and eSCO link returned
-#     unaided and the supervisor rebuilt an ACTIVE, AEC-verified graph. Observed once.
-# STILL OWED:
-#   * Detection latency against a REAL wedge rather than an absent adapter. An unbound driver
-#     fails the probe quickly; a wedged controller blocks until PROBE_TIMEOUT. The timing above
-#     assumes the latter; confirm it.

@@ -1,0 +1,20 @@
+[Unit]
+Description=rpi-lark-bridge Bluetooth %i-controller watchdog
+Documentation=file:/home/admin/rpi-lark-bridge/docs/architecture/decisions/ADR-0009-dual-usb-bluetooth-controllers.md
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/admin/rpi-lark-bridge/pi/bridged/bt_watchdog.py --role %i
+Restart=always
+RestartSec=10
+UMask=0077
+
+# Each instance takes its own role lock and writes its own state. Root is required only for
+# exact-index rfkill and exact-interface sysfs recovery; the code never performs a global reset.
+TimeoutStopSec=45
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

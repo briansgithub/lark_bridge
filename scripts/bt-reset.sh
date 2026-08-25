@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Bluetooth controller recovery ladder for the Pi 3B's BCM43438.
+# MANUAL ONBOARD-ROLLBACK ONLY. The role watchdog never calls this script.
+#
+# Bluetooth controller recovery ladder for the Pi 3B's BCM43438. It intentionally retains the
+# historical whole-stack rungs needed to recover the old UART experiment; those actions are not
+# permitted in automatic dual-controller recovery. Use only as an explicit administrative last
+# resort while the onboard rollback remains available.
 #
 # Climbs rungs in order, stopping as soon as the controller responds. Each rung is more
 # disruptive than the last. It never reboots -- that is the operator's call.
