@@ -305,12 +305,15 @@ def evaluate_link_invariants(
         if not aec_ready:
             violation("H5", "ACTIVE requires enabled, verified, owned AEC")
         expected_aec_inputs = {str(selected_node)} if selected_node else set()
-        if set(aec_inputs) != expected_aec_inputs:
+        # Break-before-make deliberately has intervals with no microphone routes.
+        # Missing links are safe silence; the phase expectation below still refuses
+        # to call ACTIVE complete until the exact AEC path has returned.
+        if aec_inputs and set(aec_inputs) != expected_aec_inputs:
             violation(
                 "H5",
                 f"ACTIVE AEC capture ownership is {aec_inputs}",
             )
-        if set(microphone_inputs) != {AEC_SOURCE}:
+        if microphone_inputs and set(microphone_inputs) != {AEC_SOURCE}:
             violation(
                 "H5",
                 f"ACTIVE bridge.mic input ownership is {microphone_inputs}",

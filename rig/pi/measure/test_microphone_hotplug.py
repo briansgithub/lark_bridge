@@ -279,6 +279,28 @@ class MicrophoneHotplugTests(unittest.TestCase):
         sample["graph_generation"] = 6
         self.assertTrue(hotplug.expectation_failures(sample, expected))
 
+    def test_break_before_make_silence_is_safe_but_not_active_completion(self) -> None:
+        status = active_status()
+        invariants = hotplug.evaluate_link_invariants(status, None, [], now=100.0)
+        self.assertEqual(invariants["violations"], [])
+        sample = {
+            "state": "ACTIVE",
+            "status_error": None,
+            "link_error": None,
+            "microphone": hotplug.selected_microphone(status),
+            "candidates": hotplug.candidate_inventory(status),
+            "graph_generation": 7,
+            "aec": status["aec"],
+            "invariants": invariants,
+        }
+        failures = hotplug.expectation_failures(
+            sample,
+            hotplug.Expectation(state="ACTIVE", selected_id="fifine-k054"),
+        )
+        self.assertIn("ACTIVE HFP input ownership is []", failures)
+        self.assertIn("ACTIVE AEC capture ownership is []", failures)
+        self.assertIn("ACTIVE bridge.mic input ownership is []", failures)
+
     def test_active_requires_enabled_verified_owned_aec_without_direct_bypass(
         self,
     ) -> None:
