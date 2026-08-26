@@ -973,6 +973,7 @@ class SshSampleStream:
             document["remote_elapsed_s"] = document.get("elapsed_s")
             document["elapsed_s"] = round(received - self._started_monotonic, 6)
             document["host_timestamp"] = time.time()
+            document["host_received_monotonic"] = received
             document["phase"] = phase
             document["cycle"] = cycle
             document["action_id"] = action_id
@@ -1008,7 +1009,10 @@ class SshSampleStream:
             raise core.CampaignAbort(detail)
         with self._condition:
             self._service_counts = dict(counts)
-        with self._condition:
+            usb_baseline = core.usb_baseline_from_sample(
+                self._recent[-1] if self._recent else None
+            )
+            core.validate_action_usb_baseline(phase, usb_baseline)
             action_monotonic = time.monotonic()
             action_timestamp = time.time()
             self._phase = phase
@@ -1024,6 +1028,12 @@ class SshSampleStream:
                 "cycle": cycle,
                 "action_id": self._action_id,
                 "instruction": instruction,
+                "usb_baseline": usb_baseline,
+                "usb_action_observation_timeout_s": (
+                    core.USB_ACTION_OBSERVATION_TIMEOUT_SECONDS
+                    if phase in core.USB_GATE_BY_PHASE
+                    else None
+                ),
                 "service_restart_counts": counts,
                 "service_error": None,
             }

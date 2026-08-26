@@ -25,6 +25,7 @@ the transition timing gates and never upgrades a short smoke run into qualificat
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import platform
@@ -56,6 +57,24 @@ DEFAULT_TRANSITION_TIMEOUT_SECONDS = QUALIFICATION_MAX_LIMIT_SECONDS
 DEFAULT_FAST_LIMIT_SECONDS = QUALIFICATION_FAST_LIMIT_SECONDS
 DEFAULT_SETTLE_SECONDS = 0.60
 DEFAULT_REPEATED_CYCLES = QUALIFICATION_CYCLES
+USB_ACTION_OBSERVATION_TIMEOUT_SECONDS = 60.0
+USB_SYSFS_ROOT = Path("/sys/bus/usb/devices")
+USB_MICROPHONE_FINGERPRINTS = {
+    "lark-a1": ("3547", "0407"),
+    "fifine-k054": ("0c76", "161e"),
+}
+USB_GATE_BY_PHASE = {
+    "lark_promotion": "promotion",
+    "lark_fallback": "fallback",
+    "restore_fifine": "fifine_replug",
+    "fifine_replug/restore": "fifine_replug",
+}
+USB_GATE_TARGET = {
+    "promotion": ("lark-a1", 0, 1),
+    "fallback": ("lark-a1", 1, 0),
+    "fifine_replug": ("fifine-k054", 0, 1),
+}
+USB_TIMING_ORIGIN = "usb_sysfs_edge"
 MICROPHONE_OUTPUT = invariants.MICROPHONE_OUTPUT
 MICROPHONE_INPUT = invariants.MICROPHONE_INPUT
 AEC_CAPTURE = invariants.AEC_CAPTURE
@@ -118,6 +137,206 @@ def read_status(path: Path) -> tuple[dict[str, Any], str | None]:
     if not isinstance(decoded, dict):
         return {}, "status root is not an object"
     return decoded, None
+
+
+def _optional_sysfs_text(path: Path) -> str | None:
+    try:
+        value = path.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return None
+    return value or None
+
+
+def read_usb_microphones(
+    sysfs_root: Path = USB_SYSFS_ROOT,
+) -> tuple[dict[str, list[dict[str, Any]]], str | None]:
+    """Read the E18 microphone fingerprints directly from USB sysfs.
+
+    ALSA card numbers and PipeWire enumeration order are deliberately absent. The
+    port plus USB ``devnum`` forms an instance generation that changes on replug.
+    """
+    observed: dict[str, list[dict[str, Any]]] = {
+        candidate_id: [] for candidate_id in USB_MICROPHONE_FINGERPRINTS
+    }
+    reverse = {
+        fingerprint: candidate_id
+        for candidate_id, fingerprint in USB_MICROPHONE_FINGERPRINTS.items()
+    }
+    try:
+        entries = sorted(sysfs_root.iterdir(), key=lambda path: path.name)
+    except OSError as exc:
+        return observed, f"USB sysfs inventory failed: {type(exc).__name__}: {exc}"
+
+    errors: list[str] = []
+    for entry in entries:
+        try:
+            vendor_id = (entry / "idVendor").read_text(encoding="ascii").strip().lower()
+            product_id = (
+                (entry / "idProduct").read_text(encoding="ascii").strip().lower()
+            )
+        except FileNotFoundError:
+            # USB interface entries and devices disappearing mid-scan are expected.
+            continue
+        except OSError as exc:
+            errors.append(
+                f"{entry.name}: identity unreadable: {type(exc).__name__}: {exc}"
+            )
+            continue
+        candidate_id = reverse.get((vendor_id, product_id))
+        if candidate_id is None:
+            continue
+        try:
+            raw_devnum = (entry / "devnum").read_text(encoding="ascii").strip()
+        except FileNotFoundError:
+            # A hot-unplug can remove devnum after idVendor/idProduct were read. A
+            # subsequent complete sample will carry the stable topology edge.
+            continue
+        except OSError as exc:
+            errors.append(
+                f"{entry.name}: devnum unreadable: {type(exc).__name__}: {exc}"
+            )
+            continue
+        if not raw_devnum.isdigit():
+            errors.append(f"{entry.name}: devnum is not numeric: {raw_devnum!r}")
+            continue
+        devnum = int(raw_devnum)
+        observed[candidate_id].append(
+            {
+                "id": candidate_id,
+                "usb_vendor_id": vendor_id,
+                "usb_product_id": product_id,
+                "usb_product": _optional_sysfs_text(entry / "product"),
+                "usb_serial": _optional_sysfs_text(entry / "serial"),
+                "usb_port_path": entry.name,
+                "usb_devnum": devnum,
+                "usb_instance_generation": f"{entry.name}@{devnum}",
+            }
+        )
+    for devices in observed.values():
+        devices.sort(
+            key=lambda item: (
+                str(item["usb_port_path"]),
+                int(item["usb_devnum"]),
+            )
+        )
+    return observed, "; ".join(errors) if errors else None
+
+
+def usb_baseline_from_sample(sample: dict[str, Any] | None) -> dict[str, Any]:
+    """Copy the last completed sample's raw USB evidence into an action record."""
+    if not isinstance(sample, dict):
+        return {
+            "seq": None,
+            "remote_seq": None,
+            "capture_started_monotonic": None,
+            "usb_microphones": None,
+            "usb_error": "no completed sample was available before NOW",
+        }
+    return {
+        "seq": sample.get("seq"),
+        "remote_seq": sample.get("remote_seq"),
+        "capture_started_monotonic": sample.get("capture_started_monotonic"),
+        "usb_microphones": copy.deepcopy(sample.get("usb_microphones")),
+        "usb_error": sample.get("usb_error"),
+    }
+
+
+def _validated_usb_devices(
+    topology: Any, candidate_id: str
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    if not isinstance(topology, dict):
+        return None, "USB microphone topology is missing or malformed"
+    devices = topology.get(candidate_id)
+    if not isinstance(devices, list):
+        return None, f"USB topology omitted {candidate_id}"
+    if any(not isinstance(item, dict) for item in devices):
+        return None, f"USB topology for {candidate_id} is malformed"
+    expected_vendor, expected_product = USB_MICROPHONE_FINGERPRINTS[candidate_id]
+    generations: list[str] = []
+    for item in devices:
+        port = item.get("usb_port_path")
+        devnum = item.get("usb_devnum")
+        generation = item.get("usb_instance_generation")
+        if (
+            item.get("id") != candidate_id
+            or item.get("usb_vendor_id") != expected_vendor
+            or item.get("usb_product_id") != expected_product
+            or not isinstance(port, str)
+            or not port
+            or not isinstance(devnum, int)
+            or isinstance(devnum, bool)
+            or devnum < 1
+            or generation != f"{port}@{devnum}"
+        ):
+            return None, f"USB topology for {candidate_id} has invalid raw identity"
+        generations.append(generation)
+    if len(devices) > 1:
+        return None, f"ambiguous {candidate_id} USB instances: {generations}"
+    return devices, None
+
+
+def validate_action_usb_baseline(phase: str, baseline: dict[str, Any]) -> None:
+    """Reject a pre-changed, missing, or ambiguous gated baseline before NOW."""
+    gate_kind = USB_GATE_BY_PHASE.get(phase)
+    if gate_kind is None:
+        return
+    baseline_error = baseline.get("usb_error")
+    if baseline_error:
+        raise CampaignAbort(f"USB action baseline is unsafe: {baseline_error}")
+    candidate_id, expected_before, _expected_after = USB_GATE_TARGET[gate_kind]
+    devices, error = _validated_usb_devices(
+        baseline.get("usb_microphones"), candidate_id
+    )
+    if error:
+        raise CampaignAbort(f"USB action baseline is unsafe: {error}")
+    assert devices is not None
+    if len(devices) != expected_before:
+        raise CampaignAbort(
+            f"USB action baseline for {gate_kind} expected {expected_before} "
+            f"{candidate_id} instance(s), found {len(devices)}"
+        )
+
+
+def observe_expected_usb_edge(
+    gate_kind: str,
+    baseline: dict[str, Any],
+    sample: dict[str, Any],
+) -> tuple[str, str | None]:
+    """Return ``waiting``, ``observed``, or ``error`` for a gated USB edge."""
+    candidate_id, expected_before, expected_after = USB_GATE_TARGET[gate_kind]
+    baseline_devices, baseline_error = _validated_usb_devices(
+        baseline.get("usb_microphones"), candidate_id
+    )
+    if baseline_error:
+        return "error", f"invalid USB action baseline: {baseline_error}"
+    assert baseline_devices is not None
+    if len(baseline_devices) != expected_before:
+        return (
+            "error",
+            (
+                f"invalid USB action baseline for {gate_kind}: expected "
+                f"{expected_before}, found {len(baseline_devices)}"
+            ),
+        )
+    if sample.get("usb_error"):
+        return "error", f"USB sysfs sample failed: {sample['usb_error']}"
+    devices, error = _validated_usb_devices(sample.get("usb_microphones"), candidate_id)
+    if error:
+        return "error", error
+    assert devices is not None
+    if len(devices) == expected_after:
+        return "observed", None
+    if len(devices) != expected_before:
+        return (
+            "error",
+            f"unexpected {candidate_id} USB topology count {len(devices)}",
+        )
+    if expected_before == 1 and devices != baseline_devices:
+        return (
+            "error",
+            f"{candidate_id} changed instance without the expected removal edge",
+        )
+    return "waiting", None
 
 
 def selected_microphone(status: dict[str, Any]) -> dict[str, Any] | None:
@@ -548,6 +767,7 @@ def summarize_timing_gate(
         1
         for item in considered
         if item.get("outcome") == "completed"
+        and item.get("timing_origin") == USB_TIMING_ORIGIN
         and isinstance(item.get("transition_latency_s"), (int, float))
         and not isinstance(item.get("transition_latency_s"), bool)
         and 0.0 <= float(item["transition_latency_s"]) <= fast_limit_s
@@ -557,11 +777,18 @@ def summarize_timing_gate(
         for item in considered
         if (
             item.get("outcome") == "completed"
+            and item.get("timing_origin") == USB_TIMING_ORIGIN
             and isinstance(item.get("transition_latency_s"), (int, float))
             and not isinstance(item.get("transition_latency_s"), bool)
             and 0.0 <= float(item["transition_latency_s"]) <= max_limit_s
         )
-        or item.get("outcome") == "safe_state"
+        or (
+            item.get("outcome") == "safe_state"
+            and item.get("timing_origin") == USB_TIMING_ORIGIN
+        )
+    )
+    usb_timed = sum(
+        1 for item in considered if item.get("timing_origin") == USB_TIMING_ORIGIN
     )
     safety_clean = sum(1 for item in considered if item.get("safety_clean"))
     restart_clean = sum(1 for item in considered if item.get("restart_clean"))
@@ -573,6 +800,7 @@ def summarize_timing_gate(
         and bounded_or_safe == expected_cycles
         and safety_clean == expected_cycles
         and restart_clean == expected_cycles
+        and usb_timed == expected_cycles
     )
     return {
         "verdict": (
@@ -588,6 +816,8 @@ def summarize_timing_gate(
         "required_completed_under_fast_limit": required_fast,
         "completed_under_fast_limit": completed_fast,
         "within_max_or_actionable_safe": bounded_or_safe,
+        "required_timing_origin": USB_TIMING_ORIGIN,
+        "usb_timed_cycles": usb_timed,
         "safety_clean_cycles": safety_clean,
         "restart_clean_cycles": restart_clean,
     }
@@ -740,6 +970,7 @@ class LiveSampler:
                 "gap": gap,
             }
 
+        usb_microphones, usb_error = read_usb_microphones()
         status, status_error = read_status(self.status_path)
         link_text, link_error = command_output(
             ["pw-link", "-l"], timeout=max(0.05, min(self.interval * 0.80, 0.20))
@@ -779,6 +1010,8 @@ class LiveSampler:
                 "state": status.get("state"),
                 "status_timestamp": status.get("timestamp"),
                 "status_error": status_error,
+                "usb_microphones": usb_microphones,
+                "usb_error": usb_error,
                 "selection_reason": (
                     microphone.get("selection_reason")
                     if isinstance(microphone, dict)
@@ -834,6 +1067,10 @@ class LiveSampler:
         with self._condition:
             self._service_counts = dict(counts)
             self._service_error = None
+            usb_baseline = usb_baseline_from_sample(
+                self._recent[-1] if self._recent else None
+            )
+            validate_action_usb_baseline(phase, usb_baseline)
             action_monotonic = time.monotonic()
             self._phase = phase
             self._cycle = cycle
@@ -848,6 +1085,12 @@ class LiveSampler:
                 "cycle": cycle,
                 "action_id": self._action_id,
                 "instruction": instruction,
+                "usb_baseline": usb_baseline,
+                "usb_action_observation_timeout_s": (
+                    USB_ACTION_OBSERVATION_TIMEOUT_SECONDS
+                    if phase in USB_GATE_BY_PHASE
+                    else None
+                ),
                 "service_restart_counts": counts,
             }
         self._emit({key: value for key, value in event.items() if key != "monotonic"})
@@ -907,6 +1150,9 @@ def _sample_captured_by_deadline(
     action: dict[str, Any],
     deadline: float,
 ) -> bool:
+    host_observed = sample.get("host_received_monotonic")
+    if isinstance(host_observed, (int, float)) and not isinstance(host_observed, bool):
+        return float(host_observed) <= deadline
     capture_monotonic = sample.get("capture_started_monotonic")
     if isinstance(capture_monotonic, (int, float)) and not isinstance(
         capture_monotonic, bool
@@ -924,6 +1170,53 @@ def _sample_captured_by_deadline(
     )
 
 
+def _sample_observed_monotonic(sample: dict[str, Any], action: dict[str, Any]) -> float:
+    for key in ("host_received_monotonic", "capture_started_monotonic"):
+        value = sample.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+    sample_elapsed = sample.get("elapsed_s")
+    action_elapsed = action.get("elapsed_s")
+    if not (
+        isinstance(sample_elapsed, (int, float))
+        and not isinstance(sample_elapsed, bool)
+        and isinstance(action_elapsed, (int, float))
+        and not isinstance(action_elapsed, bool)
+    ):
+        raise CampaignAbort("sample omitted monotonic observation evidence")
+    return float(action["monotonic"]) + float(sample_elapsed) - float(action_elapsed)
+
+
+def _sample_interval_seconds(earlier: dict[str, Any], later: dict[str, Any]) -> float:
+    """Measure an interval within the sampler's source monotonic clock domain."""
+    for key in ("capture_started_monotonic", "remote_elapsed_s", "elapsed_s"):
+        before = earlier.get(key)
+        after = later.get(key)
+        if (
+            isinstance(before, (int, float))
+            and not isinstance(before, bool)
+            and isinstance(after, (int, float))
+            and not isinstance(after, bool)
+        ):
+            return float(after) - float(before)
+    raise CampaignAbort("samples omitted a shared monotonic timing origin")
+
+
+def _usb_event_evidence(sample: dict[str, Any], gate_kind: str) -> dict[str, Any]:
+    candidate_id, _before, _after = USB_GATE_TARGET[gate_kind]
+    topology = sample.get("usb_microphones") or {}
+    return {
+        "seq": sample.get("seq"),
+        "remote_seq": sample.get("remote_seq"),
+        "timestamp": sample.get("timestamp"),
+        "elapsed_s": sample.get("elapsed_s"),
+        "remote_elapsed_s": sample.get("remote_elapsed_s"),
+        "capture_started_monotonic": sample.get("capture_started_monotonic"),
+        "candidate_id": candidate_id,
+        "devices": copy.deepcopy(topology.get(candidate_id)),
+    }
+
+
 def wait_for_expectation(
     sampler: LiveSampler,
     action: dict[str, Any],
@@ -933,13 +1226,47 @@ def wait_for_expectation(
     settle_s: float,
     gate_kind: str | None,
 ) -> dict[str, Any]:
-    deadline = float(action["monotonic"]) + timeout_s
+    gated_usb_timing = gate_kind in USB_GATE_TARGET
+    action_observation_timeout_s = float(
+        action.get("usb_action_observation_timeout_s")
+        or USB_ACTION_OBSERVATION_TIMEOUT_SECONDS
+    )
+    deadline = float(action["monotonic"]) + (
+        action_observation_timeout_s if gated_usb_timing else timeout_s
+    )
     after_seq = int(action["after_seq"])
     first_match: dict[str, Any] | None = None
+    usb_event_sample: dict[str, Any] | None = None
+    usb_event_error: str | None = None
     latest: dict[str, Any] | None = None
     seen_seq = after_seq
     outcome = "timeout"
+
+    if gated_usb_timing:
+        baseline = action.get("usb_baseline")
+        if not isinstance(baseline, dict):
+            usb_event_error = "USB action baseline is missing"
+            outcome = "usb_event_error"
+        else:
+            candidate_id, expected_before, _expected_after = USB_GATE_TARGET[gate_kind]
+            baseline_devices, baseline_error = _validated_usb_devices(
+                baseline.get("usb_microphones"), candidate_id
+            )
+            if baseline.get("usb_error"):
+                usb_event_error = f"USB action baseline failed: {baseline['usb_error']}"
+            elif baseline_error:
+                usb_event_error = f"USB action baseline is invalid: {baseline_error}"
+            elif len(baseline_devices or []) != expected_before:
+                usb_event_error = (
+                    f"USB action baseline for {gate_kind} expected {expected_before} "
+                    f"{candidate_id} instance(s), found {len(baseline_devices or [])}"
+                )
+            if usb_event_error:
+                outcome = "usb_event_error"
+
     while time.monotonic() < deadline:
+        if outcome == "usb_event_error":
+            break
         samples = sampler.samples_after(after_seq)
         for sample in samples:
             if int(sample["seq"]) <= seen_seq:
@@ -948,6 +1275,23 @@ def wait_for_expectation(
             if not _sample_captured_by_deadline(sample, action, deadline):
                 continue
             latest = sample
+            if gated_usb_timing and usb_event_sample is None:
+                assert isinstance(action.get("usb_baseline"), dict)
+                edge_state, edge_error = observe_expected_usb_edge(
+                    gate_kind, action["usb_baseline"], sample
+                )
+                if edge_state == "error":
+                    usb_event_error = edge_error or "ambiguous USB topology"
+                    outcome = "usb_event_error"
+                    break
+                if edge_state == "waiting":
+                    continue
+                usb_event_sample = sample
+                # The 60 second runtime window starts only after raw USB sysfs
+                # exposes the expected edge. Host receipt time bounds waiting;
+                # source monotonic timestamps below measure the actual Pi interval.
+                deadline = _sample_observed_monotonic(sample, action) + timeout_s
+                first_match = None
             failures = expectation_failures(sample, expected)
             if failures:
                 first_match = None
@@ -959,8 +1303,17 @@ def wait_for_expectation(
                 break
         if outcome == "completed":
             break
+        if outcome == "usb_event_error":
+            break
         sampler.wait_for_new_sample(
             seen_seq, min(1.0, max(0.01, deadline - time.monotonic()))
+        )
+
+    if gated_usb_timing and usb_event_sample is None and outcome == "timeout":
+        outcome = "usb_event_missing"
+        usb_event_error = (
+            f"expected {gate_kind} USB sysfs edge was not observed within "
+            f"{action_observation_timeout_s:.1f}s"
         )
 
     transition_samples = [
@@ -969,7 +1322,11 @@ def wait_for_expectation(
         if _sample_captured_by_deadline(sample, action, deadline)
     ]
     latest = transition_samples[-1] if transition_samples else latest
-    if outcome != "completed" and latest is not None:
+    if (
+        outcome == "timeout"
+        and (not gated_usb_timing or usb_event_sample is not None)
+        and latest is not None
+    ):
         invariant_block = latest.get("invariants") or {}
         actionable_reason = latest.get("selection_reason") or (
             (latest.get("microphone") or {}).get("reason")
@@ -984,16 +1341,36 @@ def wait_for_expectation(
         ):
             outcome = "safe_state"
 
-    first_latency = (
-        round(float(first_match["elapsed_s"]) - float(action["elapsed_s"]), 6)
-        if first_match is not None
-        else None
-    )
-    completion_latency = (
-        round(float(latest["elapsed_s"]) - float(action["elapsed_s"]), 6)
-        if outcome == "completed" and latest is not None
-        else None
-    )
+    if gated_usb_timing and usb_event_sample is not None:
+        first_latency = (
+            round(_sample_interval_seconds(usb_event_sample, first_match), 6)
+            if first_match is not None
+            else None
+        )
+        completion_latency = (
+            round(_sample_interval_seconds(usb_event_sample, latest), 6)
+            if outcome == "completed" and latest is not None
+            else None
+        )
+        action_to_usb_s = round(
+            _sample_observed_monotonic(usb_event_sample, action)
+            - float(action["monotonic"]),
+            6,
+        )
+        timing_origin = USB_TIMING_ORIGIN
+    else:
+        first_latency = (
+            round(float(first_match["elapsed_s"]) - float(action["elapsed_s"]), 6)
+            if first_match is not None
+            else None
+        )
+        completion_latency = (
+            round(float(latest["elapsed_s"]) - float(action["elapsed_s"]), 6)
+            if outcome == "completed" and latest is not None
+            else None
+        )
+        action_to_usb_s = None
+        timing_origin = "usb_sysfs_edge_missing" if gated_usb_timing else "operator_now"
     violations = _dedupe_transition_violations(transition_samples)
     before_counts = action.get("service_restart_counts") or {}
     after_counts = sampler.service_counts()
@@ -1009,6 +1386,19 @@ def wait_for_expectation(
         "action_id": action["action_id"],
         "action_timestamp": action["timestamp"],
         "outcome": outcome,
+        "timing_origin": timing_origin,
+        "operator_latency_s": action_to_usb_s,
+        "action_to_usb_s": action_to_usb_s,
+        "usb_action_observation_timeout_s": (
+            action_observation_timeout_s if gated_usb_timing else None
+        ),
+        "usb_baseline": copy.deepcopy(action.get("usb_baseline")),
+        "usb_event": (
+            _usb_event_evidence(usb_event_sample, gate_kind)
+            if usb_event_sample is not None and gated_usb_timing
+            else None
+        ),
+        "usb_event_error": usb_event_error,
         "transition_latency_s": first_latency,
         "settled_latency_s": completion_latency,
         "timeout_s": timeout_s,
@@ -1714,6 +2104,7 @@ def remote_sampler(
         known_microphone_nodes: set[str] = set()
         while time.monotonic() - started < duration:
             sample_start = time.monotonic()
+            usb_microphones, usb_error = read_usb_microphones()
             status, status_error = read_status(status_path)
             link_text, link_error = command_output(
                 ["pw-link", "-l"], timeout=max(0.05, min(interval * 0.80, 0.16))
@@ -1749,9 +2140,12 @@ def remote_sampler(
                 "seq": sequence,
                 "timestamp": time.time(),
                 "elapsed_s": round(sample_start - started, 6),
+                "capture_started_monotonic": sample_start,
                 "state": status.get("state"),
                 "status_timestamp": status.get("timestamp"),
                 "status_error": status_error,
+                "usb_microphones": usb_microphones,
+                "usb_error": usb_error,
                 "selection_reason": (
                     microphone.get("selection_reason")
                     if isinstance(microphone, dict)
