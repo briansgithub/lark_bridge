@@ -42,13 +42,36 @@ connect_after_idle_seconds = 60
 id = "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback"
 
 
-[devices.lark]
-# The Hollyland receiver, matched by udev rather than by card number.
-# Fill these in from milestone M1 (Stage A):  lsusb  and  udevadm info
-usb_vendor_id  = ""     # e.g. "3302"
-usb_product_id = ""     # e.g. "1001"
-# Optional: pins the match to one specific unit if you own more than one.
-usb_serial     = ""
+[[devices.microphones]]
+# Ordered microphone candidates: first uniquely usable entry wins. Never use ALSA card numbers.
+id = "lark-a1"
+label = "Hollyland Lark A1"
+node_name = "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+usb_vendor_id = "3547"
+usb_product_id = "0407"
+usb_product = "Wireless Microphone"
+usb_serial = ""
+usb_port_path = ""
+required_rate = 48000
+required_format = "S16LE"
+required_channels = 2
+capture_only = true
+
+[[devices.microphones]]
+# The K054 exposes generic descriptors and no serial. Leaving usb_port_path blank permits moving it
+# between ports but cannot distinguish an unrelated device with the same complete fingerprint.
+id = "fifine-k054"
+label = "FIFINE K054"
+node_name = "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+usb_vendor_id = "0c76"
+usb_product_id = "161e"
+usb_product = "USB PnP Audio Device"
+usb_serial = ""
+usb_port_path = ""
+required_rate = 48000
+required_format = "S16LE"
+required_channels = 1
+capture_only = true
 
 
 [devices.wired_output]

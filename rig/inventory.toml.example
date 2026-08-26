@@ -20,6 +20,7 @@ boot_ssh_timeout_seconds = 8
 boot_shutdown_timeout_seconds = 30
 boot_timeout_seconds = 120
 boot_cold_off_seconds = 10
+boot_expected_microphone = "lark-a1" # use "fifine-k054" for a FIFINE campaign
 boot_power_off_command = []
 boot_power_on_command = []
 boot_serial_capture_command = []
@@ -41,6 +42,12 @@ phone_wifi_ssid = "abridge-village_5G"   # 5 GHz on purpose - see the plan's RF 
 lark_usb_id       = "3547:0407" # stable VID:PID; Lark may use any Pi USB port
 lark_usb_serial   = ""          # optional if a future receiver exposes a unique serial
 lark_port_path    = ""
+
+# K054 descriptors are generic and contain no serial on the characterized unit. Leave the port
+# blank for portable matching or set it to disambiguate another device with the same fingerprint.
+fifine_usb_id       = "0c76:161e"
+fifine_usb_serial   = ""
+fifine_port_path    = ""
 
 dongle_a_port_path = ""      # DUT output  - Mode 1W wired call audio
 dongle_b_port_path = ""      # INSTRUMENT  - out drives the speaker, in captures the BT receiver
