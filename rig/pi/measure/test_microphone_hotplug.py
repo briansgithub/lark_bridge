@@ -299,8 +299,7 @@ def valid_timing_transition(kind: str, *, outcome: str = "completed") -> dict:
         final["capture_started_monotonic"] - first["capture_started_monotonic"]
     )
     state_settle = (
-        final["capture_started_monotonic"]
-        - confirmation["capture_started_monotonic"]
+        final["capture_started_monotonic"] - confirmation["capture_started_monotonic"]
     )
     return {
         "gate_kind": kind,
@@ -320,8 +319,7 @@ def valid_timing_transition(kind: str, *, outcome: str = "completed") -> dict:
             "persistent": True,
             "stable_through_seq": final["seq"],
             "persistence_samples": [
-                hotplug._event_sample_structure(sample, kind)
-                for sample in persistence
+                hotplug._event_sample_structure(sample, kind) for sample in persistence
             ],
         },
         "usb_identity_binding": binding,
@@ -444,9 +442,7 @@ class MicrophoneHotplugTests(unittest.TestCase):
 
     def test_fallback_timing_binds_final_fifine_to_persistent_raw_usb(self) -> None:
         transition = valid_timing_transition("fallback")
-        preaction_binding = json.loads(
-            json.dumps(transition["usb_identity_binding"])
-        )
+        preaction_binding = json.loads(json.dumps(transition["usb_identity_binding"]))
         transition["final_sample"]["microphone"]["identity"][
             "usb_instance_generation"
         ] = "9-9.9@999"
@@ -479,9 +475,9 @@ class MicrophoneHotplugTests(unittest.TestCase):
         observed_zero["final_sample"] = first_match
         observed_zero["settled_latency_s"] = observed_zero["transition_latency_s"]
         observed_zero["state_settle_s"] = 0.0
-        observed_zero["usb_event"]["persistence_samples"] = observed_zero[
-            "usb_event"
-        ]["persistence_samples"][:2]
+        observed_zero["usb_event"]["persistence_samples"] = observed_zero["usb_event"][
+            "persistence_samples"
+        ][:2]
         observed_zero["usb_event"]["stable_through_seq"] = first_match["seq"]
         self.assertIn(
             "remain stable",
