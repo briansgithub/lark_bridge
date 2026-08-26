@@ -3,8 +3,9 @@
 Abrupt-power-loss image preparation and the manual 50-cut acceptance campaign are
 documented in [`docs/power-loss-hardening.md`](docs/power-loss-hardening.md).
 
-Make a **Hollyland Lark A1** USB-C lavalier microphone work as the call microphone on a
-**Google Pixel 7a** (Android 14), with call audio routed somewhere else entirely.
+Make a **Hollyland Lark A1** USB-C lavalier microphone work as the preferred call microphone on a
+**Google Pixel 7a** (Android 14), with a wired **FIFINE K054** as the fallback and call audio
+routed somewhere else entirely.
 
 Android will not treat the Lark's receiver as a communication headset, because it enumerates as a
 **capture-only** USB Audio Class device with no playback endpoint. This project builds an external
@@ -12,12 +13,17 @@ bridge that presents Android with a device it *will* accept — either a Bluetoo
 full-duplex USB headset — while splitting the microphone and playback sides behind the scenes.
 
 ```
-  Lark A1 ──USB──► Raspberry Pi 3B ──┬── Bluetooth HFP ──► Pixel 7a      (Mode 1 / 1W)
-                                     └── Pi Pico ──USB──► Pixel 7a       (Mode 2)
+  Lark A1 ──USB──┐
+                 ├──► Raspberry Pi 3B ──┬── Bluetooth HFP ──► Pixel 7a  (Mode 1 / 1W)
+  FIFINE K054 ───┘                      └── Pi Pico ──USB──► Pixel 7a   (Mode 2)
 ```
 
-**Current branch status (`codex/bt500-aux-fast`, 2026-08-25): qualification in progress.** The
-single-controller implementation binds the Pixel call role to the USB-BT500 by permanent address,
+**Current branch status (`codex/fifine-k054-compat`, 2026-08-25): implementation complete; FIFINE
+field qualification pending.** Ordered resolution and fail-closed Lark/FIFINE switching pass the
+host suites, and a read-only live resolver preflight selected the attached Lark while reporting the
+attached K054 as a native mono S16LE/48 kHz usable fallback with no USB serial. The Pi still runs
+the prior E17 baseline release described below; production promotion remains blocked on E18 field
+QA. The single-controller implementation binds the Pixel call role to the USB-BT500 by permanent address,
 USB VID/PID, and current sysfs identity, and routes call output only to the Pi AUX sink. The Pixel
 is paired, bonded, and trusted specifically beneath that controller, and the two-minute
 AEC-disabled HFP/SCO transport gate passed. With AEC restored, objective AEC measurements passed:
@@ -46,6 +52,7 @@ forwarding are deliberately deferred. See
 | ASUS USB-BT500 | Required call controller for the current branch (`0b05:1bf6`) |
 | Raspberry Pi Pico (RP2040) | USB device capability; presents as the USB headset in Mode 2 |
 | Hollyland Lark A1 | USB-C receiver, capture-only UAC device |
+| FIFINE K054 | Wired USB-A gooseneck, capture-only mono fallback; field qualification pending |
 | Google Pixel 7a | Android 14 |
 | AUX speaker | Pi 3.5 mm output; Harmony boombox is the current fixture |
 | Bluetooth headphones or car stereo | A2DP sink, for Mode 1 |
@@ -58,9 +65,9 @@ to power the Pico that back-feeds the phone, and it is not obvious.
 
 | Mode | Microphone path | Call audio out | Radio does | Status |
 |---|---|---|---|---|
-| **1** Bluetooth bridge | Lark → Pi → HFP → Pixel | A2DP car stereo | HFP + A2DP | **Deferred on this branch.** No Bluetooth-output claim |
-| **1W** Bluetooth + wired | Lark → Pi → HFP → Pixel | Pi 3.5 mm jack | USB-BT500 HFP only | **Persisted; final qualification pending.** Corrective reboot baseline passed; only 2/5 eligible live-call cycles complete |
-| **2** USB headset bridge | Lark → Pi → Pico → Pixel | Pixel → Pico → Pi → any sink | nothing | Independent track |
+| **1** Bluetooth bridge | preferred Lark, K054 fallback → Pi → HFP → Pixel | A2DP car stereo | HFP + A2DP | **Deferred on this branch.** No Bluetooth-output claim |
+| **1W** Bluetooth + wired | preferred Lark, K054 fallback → Pi → HFP → Pixel | Pi 3.5 mm jack | USB-BT500 HFP only | Lark baseline persisted; K054 field qualification pending |
+| **2** USB headset bridge | selected microphone → Pi → Pico → Pixel | Pixel → Pico → Pi → any sink | nothing | Independent track |
 | **3** Diagnostics | raw devices exposed | — | — | Always available |
 
 The current target is intentionally narrower than the later dual-controller experiments: the
@@ -92,6 +99,22 @@ Bluetooth link, so it needs neither Wi-Fi nor an account. The Pi validates every
 the same `--remember --no-chime` transaction; the app is a thin control surface, not a second copy
 of selection state.
 
+## Microphone priority
+
+Microphone order is configuration, not enumeration order: the Lark A1 is selected whenever it is
+uniquely usable; otherwise the bridge falls back to the K054. A higher-priority ambiguous match
+holds the uplink safe instead of silently choosing a different microphone. Inspect the live choice
+and every candidate with:
+
+```bash
+python3 pi/bridged/bridgectl.py microphone list
+python3 pi/bridged/bridgectl.py microphone status --json
+```
+
+The K054 implementation uses its verified native S16LE/48 kHz/mono mode, but physical controls,
+replacement-unit identity, acoustic performance, and AEC endurance remain field-QA gates; see
+[`E18`](docs/experiments/E18-fifine-k054-compat.md).
+
 ## Repository layout
 
 | Path | Contains |
@@ -100,6 +123,7 @@ of selection state.
 | [`docs/BRINGUP-REPORT.md`](docs/BRINGUP-REPORT.md) | **Start here.** What is proven on real hardware, what broke, and the traps. |
 | `docs/` | Architecture, ADRs, hardware, operations, and **experiment reports with raw data** |
 | [`docs/operations/connecting.md`](docs/operations/connecting.md) | How to reach the Pi over the router or a direct cable, and the traps in both. |
+| [`docs/operations/microphones.md`](docs/operations/microphones.md) | Ordered microphone identity, failover, status, deployment, and qualification. |
 | `pi/` | Daemon (`bridged`/`bridgectl`), PipeWire/WirePlumber/BlueZ config, systemd, udev, DT overlays |
 | `pico/` | RP2040 firmware. PlatformIO is the primary build; CMake is the CI reference build. |
 | `config/` | User configuration (device MACs, mode, gains) + JSON schema |

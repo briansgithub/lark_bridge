@@ -49,6 +49,10 @@ def make_install_archive(path: Path) -> str:
             f"pi/scripts/{script}": f"new {script}\n".encode()
             for script in installer.LIB_SCRIPTS
         },
+        **{
+            f"pi/powerloss/{script}": f"new {script}\n".encode()
+            for script in installer.POWERLOSS_SCRIPTS
+        },
         "pi/pipewire/pipewire.conf.d/10-test.conf": b"new pipewire\n",
         "pi/wireplumber/wireplumber.conf.d/10-test.conf": b"new wireplumber\n",
         "pi/bluez/main.conf.d/10-bridge.conf": b"new bluez\n",
@@ -161,6 +165,33 @@ def test_symlink_preimage_is_restored(tmp_path: Path) -> None:
     assert os.readlink(link) == "../original.service"
 
 
+def test_install_deploys_powerloss_verifier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    archive = tmp_path / "release.zip"
+    checksum = make_install_archive(archive)
+    system_root = tmp_path / "root"
+    target = system_root / "home/admin/rpi-lark-bridge"
+
+    def portable_symlink(target_name: str, link: Path) -> None:
+        write_file(link, f"symlink:{target_name}\n".encode())
+
+    monkeypatch.setattr(installer, "symlink", portable_symlink)
+    installer.install(
+        archive,
+        checksum,
+        target=target,
+        system_root=system_root,
+        netplan_fastpath=False,
+    )
+
+    verifier = (
+        system_root
+        / "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py"
+    )
+    assert verifier.read_bytes() == b"new powerloss_verify.py\n"
+
+
 def test_failed_install_restores_all_system_and_user_preimages(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -188,6 +219,10 @@ def test_failed_install_restores_all_system_and_user_preimages(
         ),
         system_root
         / "usr/local/lib/rpi-lark-bridge/boot-path/netplan": (b"old netplan script\n"),
+        system_root
+        / "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py": (
+            b"old powerloss verifier\n"
+        ),
         system_root / "etc/larkbridge/DEPLOYED.json": b'{"old": true}\n',
     }
     for path, payload in existing_files.items():
@@ -242,3 +277,4 @@ def test_failed_install_restores_all_system_and_user_preimages(
     assert "etc/larkbridge/DEPLOYED.json" in paths
     assert "etc/systemd/system/graphical.target.wants/bridge-btfw.service" in paths
     assert "home/admin/.config/wireplumber/wireplumber.conf.d/10-test.conf" in paths
+    assert "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py" in paths

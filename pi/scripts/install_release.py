@@ -43,6 +43,7 @@ LIB_SCRIPTS = (
     "boot-trial.sh",
     "onboard_bluetooth_config.py",
 )
+POWERLOSS_SCRIPTS = ("powerloss_verify.py",)
 DISABLED_SYSTEM_UNITS = (
     "bridge-btfw.service",
     "bridge-btwatchdog.service",
@@ -192,6 +193,10 @@ def managed_system_paths(release_root: Path, system_root: Path) -> list[Path]:
         *(
             system_root / "usr/local/lib/rpi-lark-bridge" / script
             for script in LIB_SCRIPTS
+        ),
+        *(
+            system_root / "usr/local/lib/rpi-lark-bridge/powerloss" / script
+            for script in POWERLOSS_SCRIPTS
         ),
         system_root
         / "etc/systemd/system/multi-user.target.wants/bridge-tuning.service",
@@ -453,6 +458,18 @@ def provision_release(
         copy_managed(
             release_root / "pi" / "scripts" / script,
             system_root / "usr" / "local" / "lib" / "rpi-lark-bridge" / script,
+            0o755,
+        )
+    for script in POWERLOSS_SCRIPTS:
+        copy_managed(
+            release_root / "pi" / "powerloss" / script,
+            system_root
+            / "usr"
+            / "local"
+            / "lib"
+            / "rpi-lark-bridge"
+            / "powerloss"
+            / script,
             0o755,
         )
 
