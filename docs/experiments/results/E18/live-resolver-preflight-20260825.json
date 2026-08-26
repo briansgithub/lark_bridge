@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-25",
+  "source_commit": "3b190d925aff73055aef6a825d8d02422d80df2b",
+  "execution": "read-only temporary resolver execution over SSH; installed supervisor and configuration unchanged",
+  "pi_host": "larkbridge",
+  "result": "PASS",
+  "selection": {
+    "id": "lark-a1",
+    "priority": 0,
+    "reason": "using lark-a1",
+    "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+    "format": {
+      "rate": 48000,
+      "format": "S16LE",
+      "channels": 2
+    }
+  },
+  "candidates": [
+    {
+      "id": "lark-a1",
+      "priority": 0,
+      "state": "selected",
+      "usb_vendor_id": "3547",
+      "usb_product_id": "0407",
+      "usb_product": "Wireless Microphone",
+      "usb_port_path": "1-1.3",
+      "pipewire_object_serial": "59",
+      "device_object_serial": "51",
+      "usb_instance_generation": "1-1.3@4",
+      "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+      "format": {
+        "rate": 48000,
+        "format": "S16LE",
+        "channels": 2
+      },
+      "capture_only": true
+    },
+    {
+      "id": "fifine-k054",
+      "priority": 1,
+      "state": "usable",
+      "usb_vendor_id": "0c76",
+      "usb_product_id": "161e",
+      "usb_product": "USB PnP Audio Device",
+      "usb_serial": null,
+      "usb_port_path": "1-1.2",
+      "pipewire_object_serial": "5001",
+      "device_object_serial": "5000",
+      "usb_instance_generation": "1-1.2@7",
+      "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+      "format": {
+        "rate": 48000,
+        "format": "S16LE",
+        "channels": 1
+      },
+      "capture_only": true
+    }
+  ],
+  "deferred": [
+    "active-call graph transition sampling",
+    "physical mute and gain characterization",
+    "repeated hotplug and reboot matrix",
+    "replacement-unit identity",
+    "acoustic and AEC qualification",
+    "3600-second endurance"
+  ]
+}
