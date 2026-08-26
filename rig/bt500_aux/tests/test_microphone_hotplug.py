@@ -119,6 +119,40 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             hotplug.parse_args(["--interval", "0.201"])
 
+    def test_snapshot_freshness_uses_pi_clock_not_host_clock(self) -> None:
+        document = {
+            "timestamp": 1_000.0,
+            "status": {
+                "timestamp": 999.0,
+                "microphone": {"candidates": []},
+            },
+            "pipewire_links": "",
+        }
+        with (
+            mock.patch.object(hotplug, "validate_snapshot"),
+            mock.patch.object(
+                hotplug.core,
+                "evaluate_link_invariants",
+                return_value={"passed": True, "violations": []},
+            ) as evaluate,
+            mock.patch.object(hotplug.core, "expectation_failures", return_value=[]),
+            mock.patch.object(hotplug.time, "time", return_value=999_999.0),
+        ):
+            hotplug.validate_hotplug_snapshot(
+                document, expected_microphone="fifine-k054"
+            )
+
+        self.assertEqual(evaluate.call_args.kwargs["now"], 1_000.0)
+
+        document["status"]["timestamp"] = 990.0
+        with (
+            mock.patch.object(hotplug, "validate_snapshot"),
+            self.assertRaisesRegex(hotplug.EvidenceError, "stale by 10.00s"),
+        ):
+            hotplug.validate_hotplug_snapshot(
+                document, expected_microphone="fifine-k054"
+            )
+
     def test_provenance_records_full_dirty_state_and_source_hashes(self) -> None:
         remote = {
             "status": "PASS",
