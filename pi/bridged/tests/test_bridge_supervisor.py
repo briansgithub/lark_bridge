@@ -9,6 +9,7 @@ from unittest import mock
 import bridge_supervisor as supervisor
 import btadapters
 import controller_roles
+import microphones
 
 CALL_ADDRESS = "A0:AD:9F:73:6C:24"
 ONBOARD_ADDRESS = "B8:27:EB:43:8D:51"
@@ -138,6 +139,25 @@ wired_output_volume = 0.85
             config = Path(directory) / "bridge.toml"
             config.write_text("[audio]\nwired_output_volume = 1.1\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "between"):
+                supervisor.load_settings(config)
+
+    def test_microphone_controls_and_legacy_candidate_load(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "bridge.toml"
+            config.write_text(
+                "[audio]\nmic_gain_db = -6.0\nmic_muted = true\n",
+                encoding="utf-8",
+            )
+            settings = supervisor.load_settings(config)
+        self.assertEqual(settings.mic_gain_db, -6.0)
+        self.assertTrue(settings.mic_muted)
+        self.assertEqual([item.id for item in settings.microphone_candidates], ["lark-a1"])
+
+    def test_non_numeric_microphone_gain_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "bridge.toml"
+            config.write_text('[audio]\nmic_gain_db = "loud"\n', encoding="utf-8")
+            with self.assertRaisesRegex(TypeError, "mic_gain_db"):
                 supervisor.load_settings(config)
 
 
@@ -350,6 +370,42 @@ class FakeHost:
     def stop(self, _reason: str) -> None:
         self.running = False
         self.pid = None
+
+
+class FakeMicrophoneResolution:
+    def __init__(
+        self,
+        node: str | None,
+        token: str | None,
+        *,
+        selected_id: str = "lark-a1",
+        blocked: bool = False,
+        candidates: list[dict] | None = None,
+    ) -> None:
+        self.node = node
+        self.instance_token = token
+        self.blocked = blocked
+        self._report = {
+            "selected": (
+                {
+                    "id": selected_id,
+                    "label": selected_id,
+                    "priority": 0,
+                    "node": node,
+                    "identity": {},
+                    "format": None,
+                    "instance_token": token,
+                }
+                if node is not None
+                else None
+            ),
+            "selection_reason": "test selection",
+            "blocked": blocked,
+            "candidates": candidates or [],
+        }
+
+    def as_dict(self) -> dict:
+        return self._report
 
 
 class FakeLoopback:
@@ -974,8 +1030,7 @@ class EarlyAutolinkSweepTests(unittest.TestCase):
             "the raw Lark uplink must be cut on the same tick it appears, not after the build",
         )
 
-    def test_sweep_does_not_stall_the_build(self) -> None:
-        """Cutting the link must not abort the tick; that would extend the exposure."""
+    def test_sweep_waits_for_a_clean_snapshot_before_build(self) -> None:
         graph = self._graph()
         nodes = {
             "lark": {},
@@ -988,7 +1043,464 @@ class EarlyAutolinkSweepTests(unittest.TestCase):
             mock.patch.object(supervisor, "unlink", lambda s, t: None),
         ):
             graph.tick(nodes, [("lark", graph.settings.hfp_sink)], "lark")
-        self.assertIsNotNone(graph.aec_host, "the build must still start on this tick")
+            self.assertIsNone(graph.aec_host)
+            graph.tick(nodes, [], "lark")
+        self.assertIsNotNone(graph.aec_host)
+
+    def test_sweep_uses_raw_hfp_presence_when_controller_rejects_call(self) -> None:
+        graph = self._graph()
+        # accepted_call_nodes deliberately hid both HFP endpoints, but the raw
+        # PipeWire snapshot still contained the sink and an unsafe microphone link.
+        accepted_nodes = {
+            "lark": {},
+            graph.settings.wired_output: {},
+        }
+        dangerous = [("lark", graph.settings.hfp_sink)]
+        removed: list[tuple[str, str]] = []
+        with mock.patch.object(
+            supervisor,
+            "unlink",
+            lambda source, target: removed.append((source, target)),
+        ):
+            graph.tick(
+                accepted_nodes,
+                dangerous,
+                "lark",
+                raw_hfp_sink_present=True,
+            )
+        self.assertEqual(removed, dangerous)
+        self.assertEqual(graph.state, supervisor.State.CALL_DOWN)
+        self.assertIsNone(graph.microphone)
+
+
+class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
+    def test_usb_serial_does_not_fall_back_to_pipewire_device_serial(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            sysfs_root = Path(directory) / "sys"
+            usb_parent = sysfs_root / "devices" / "usb1" / "1-1" / "1-1.2"
+            usb_parent.mkdir(parents=True)
+            (usb_parent / "idVendor").write_text("0c76\n", encoding="utf-8")
+            (usb_parent / "idProduct").write_text("161e\n", encoding="utf-8")
+            (usb_parent / "product").write_text(
+                "USB PnP Audio Device\n", encoding="utf-8"
+            )
+            (usb_parent / "devnum").write_text("7\n", encoding="utf-8")
+            device = {
+                "id": 8,
+                "type": "PipeWire:Interface:Device",
+                "info": {
+                    "props": {
+                        "object.serial": 108,
+                        "device.sysfs.path": "/devices/usb1/1-1/1-1.2",
+                        "device.vendor.id": "usb:ffff",
+                        "device.product.id": "usb:ffff",
+                        "device.product.name": "synthetic product",
+                        "device.serial": "0c76_USB_PnP_Audio_Device",
+                    }
+                },
+            }
+
+            facts = supervisor.microphone_sysfs_by_device(
+                [device], sysfs_root=sysfs_root
+            )["8"]
+
+        self.assertEqual(facts["usb_vendor_id"], "0c76")
+        self.assertEqual(facts["usb_product_id"], "161e")
+        self.assertEqual(facts["usb_product"], "USB PnP Audio Device")
+        self.assertIsNone(facts["usb_serial"])
+        self.assertEqual(facts["usb_port_path"], "1-1.2")
+        self.assertEqual(facts["usb_instance_generation"], "1-1.2@7")
+
+    def test_discovery_joins_device_identity_and_structured_capabilities(self) -> None:
+        candidate = microphones.MicrophoneCandidate(
+            id="fifine-k054",
+            label="FIFINE K054",
+            node_name="fifine",
+            usb_vendor_id="0c76",
+            usb_product_id="161e",
+            usb_product="USB PnP Audio Device",
+            required_rate=48000,
+            required_format="S16LE",
+            required_channels=1,
+            capture_only=True,
+        )
+        device = {
+            "id": 8,
+            "type": "PipeWire:Interface:Device",
+            "info": {
+                "props": {
+                    "object.serial": 108,
+                    "device.sysfs.path": "/devices/usb1/1-1/1-1.2",
+                    "device.vendor.id": "usb:0c76",
+                    "device.product.id": "usb:161e",
+                    "device.product.name": "USB PnP Audio Device",
+                }
+            },
+        }
+        node = {
+            "id": 19,
+            "type": "PipeWire:Interface:Node",
+            "info": {
+                "props": {
+                    "node.name": "fifine",
+                    "media.class": "Audio/Source",
+                    "object.serial": 119,
+                    "device.id": 8,
+                    "alsa.components": "USB0C76:161E",
+                },
+                "params": {
+                    "EnumFormat": [
+                        {
+                            "mediaType": "audio",
+                            "mediaSubtype": "raw",
+                            "format": "S16LE",
+                            "rate": 48000,
+                            "channels": 1,
+                        }
+                    ]
+                },
+            },
+        }
+        settings = supervisor.Settings(
+            aec=supervisor.AecSettings(),
+            microphone_candidates=(candidate,),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            sysfs_root = Path(directory) / "sys"
+            usb_parent = sysfs_root / "devices" / "usb1" / "1-1" / "1-1.2"
+            usb_parent.mkdir(parents=True)
+            (usb_parent / "idVendor").write_text("0c76\n", encoding="utf-8")
+            (usb_parent / "idProduct").write_text("161e\n", encoding="utf-8")
+            (usb_parent / "product").write_text(
+                "USB PnP Audio Device\n", encoding="utf-8"
+            )
+            (usb_parent / "devnum").write_text("7\n", encoding="utf-8")
+            with mock.patch.object(supervisor.subprocess, "run") as run:
+                observations, resolution = supervisor.discover_microphones(
+                    [node, device],
+                    settings,
+                    capability_cache={},
+                    sysfs_root=sysfs_root,
+                )
+        self.assertEqual([source.node for source in observations], ["fifine"])
+        self.assertEqual(resolution.node, "fifine")
+        run.assert_not_called()
+
+    def test_enum_format_parser_extracts_required_tuple(self) -> None:
+        output = """
+        Prop: key Spa:Pod:Object:Param:Format:Audio:format (65537)
+          Id 259 (Spa:Enum:AudioFormat:S16LE)
+        Prop: key Spa:Pod:Object:Param:Format:Audio:rate (65539)
+          Int 48000
+        Prop: key Spa:Pod:Object:Param:Format:Audio:channels (65540)
+          Int 1
+        """
+        self.assertEqual(
+            supervisor.parse_enum_format_output(output),
+            ({"rate": 48000, "format": "S16LE", "channels": 1},),
+        )
+
+    def test_structured_pw_dump_enum_format_avoids_an_extra_query(self) -> None:
+        node = {
+            "id": 19,
+            "type": "PipeWire:Interface:Node",
+            "info": {
+                "props": {
+                    "node.name": "fifine",
+                    "media.class": "Audio/Source",
+                    "object.serial": 119,
+                    "device.id": 8,
+                },
+                "params": {
+                    "EnumFormat": [
+                        {
+                            "mediaType": "audio",
+                            "mediaSubtype": "raw",
+                            "format": {"default": "S16LE", "alt1": "S16LE"},
+                            "rate": {"default": 48000, "min": 48000, "max": 48000},
+                            "channels": 1,
+                        }
+                    ]
+                },
+            },
+        }
+        device = {
+            "id": 8,
+            "type": "PipeWire:Interface:Device",
+            "info": {"props": {"object.serial": 108}},
+        }
+        with mock.patch.object(supervisor.subprocess, "run") as run:
+            found = supervisor.microphone_capabilities_by_node([device, node], cache={})
+        self.assertEqual(
+            found["fifine"],
+            ({"rate": 48000, "format": "S16LE", "channels": 1},),
+        )
+        run.assert_not_called()
+
+    def test_failed_capability_query_is_not_cached(self) -> None:
+        node = {
+            "id": 19,
+            "type": "PipeWire:Interface:Node",
+            "info": {
+                "props": {
+                    "node.name": "fifine",
+                    "media.class": "Audio/Source",
+                    "object.serial": 119,
+                    "device.id": 8,
+                }
+            },
+        }
+        device = {
+            "id": 8,
+            "type": "PipeWire:Interface:Device",
+            "info": {"props": {"object.serial": 108}},
+        }
+        cache: dict = {}
+        with mock.patch.object(
+            supervisor.subprocess,
+            "run",
+            return_value=mock.Mock(returncode=1, stdout="", stderr="unavailable"),
+        ):
+            found = supervisor.microphone_capabilities_by_node(
+                [device, node], cache=cache
+            )
+        self.assertEqual(found["fifine"], ())
+        self.assertEqual(cache, {})
+
+    def test_loopback_pins_both_streams_and_starts_microphone_muted(self) -> None:
+        process = mock.Mock()
+        process.poll.return_value = None
+        with mock.patch.object(supervisor.subprocess, "Popen", return_value=process) as popen:
+            loopback = supervisor.Loopback("bridge.mic", "capture", "playback", 1)
+            loopback.defer_playback = True
+            loopback.start()
+        command = popen.call_args.args[0]
+        capture_props = command[command.index("--capture-props") + 1]
+        playback_props = command[command.index("--playback-props") + 1]
+        for props in (capture_props, playback_props):
+            self.assertIn("node.dont-reconnect = true", props)
+            self.assertIn("node.passive = true", props)
+        self.assertIn("node.autoconnect = false", playback_props)
+        self.assertNotIn("--playback", command)
+
+    def test_microphone_gain_and_mute_are_set_then_read_back(self) -> None:
+        replies = [
+            mock.Mock(returncode=0, stdout="", stderr=""),
+            mock.Mock(returncode=0, stdout="", stderr=""),
+            mock.Mock(returncode=0, stdout="", stderr=""),
+            mock.Mock(returncode=0, stdout="Volume: 0.501 [MUTED]\n", stderr=""),
+        ]
+        with mock.patch.object(supervisor.subprocess, "run", side_effect=replies) as run:
+            result = supervisor.set_and_verify_microphone_control(
+                {"output.bridge.mic": {"object.id": 77}},
+                "output.bridge.mic",
+                -6.0,
+                True,
+            )
+        self.assertTrue(result[0])
+        self.assertAlmostEqual(result[1] or 0.0, -6.0, places=1)
+        self.assertTrue(result[2])
+        self.assertEqual(run.call_args_list[0].args[0], ["wpctl", "set-mute", "77", "1"])
+        self.assertEqual(run.call_args_list[-1].args[0], ["wpctl", "get-volume", "77"])
+
+    def test_control_failure_holds_graph_safe(self) -> None:
+        settings = supervisor.Settings(
+            aec=supervisor.AecSettings(),
+            mic_gain_db=0.0,
+            mic_muted=False,
+        )
+        graph = supervisor.CallGraph(settings)
+        nodes = {
+            "mic": {},
+            settings.wired_output: {},
+            settings.hfp_source: {},
+            settings.hfp_sink: {},
+            "output.bridge.mic": {"object.id": 88},
+        }
+        with mock.patch.object(supervisor, "Loopback", FakeLoopback):
+            graph.tick(nodes, [], "mic")
+            assert graph.microphone is not None and graph.callout is not None
+            graph.routes_started -= supervisor.ATTACH_GRACE_SECONDS + 1
+            with mock.patch.object(
+                supervisor,
+                "set_and_verify_microphone_control",
+                return_value=(False, None, True, "readback failed"),
+            ):
+                graph.tick(nodes, [], "mic")
+        self.assertEqual(graph.state, supervisor.State.SAFE)
+        self.assertTrue(graph.mic_control_blocked)
+        self.assertEqual(graph.last_failure, "readback failed")
+        self.assertIsNone(graph.microphone)
+
+    def test_microphone_is_muted_before_link_and_unmuted_only_after_validation(self) -> None:
+        settings = supervisor.Settings(
+            aec=supervisor.AecSettings(),
+            mic_gain_db=0.0,
+            mic_muted=False,
+        )
+        graph = supervisor.CallGraph(settings)
+        nodes = {
+            "mic": {},
+            settings.wired_output: {},
+            settings.hfp_source: {},
+            settings.hfp_sink: {},
+            "output.bridge.mic": {"object.id": 88},
+        }
+        events: list[str] = []
+
+        def controls(_nodes, _node, _gain, muted):
+            events.append(f"mute:{muted}")
+            return True, 0.0, muted, None
+
+        def create_link(source, target):
+            events.append(f"link:{source}->{target}")
+            return True
+
+        with (
+            mock.patch.object(supervisor, "Loopback", FakeLoopback),
+            mock.patch.object(
+                supervisor,
+                "set_and_verify_microphone_control",
+                side_effect=controls,
+            ),
+            mock.patch.object(supervisor, "link", side_effect=create_link),
+        ):
+            graph.tick(nodes, [], "mic")
+            graph.tick(nodes, [], "mic")
+            assert graph.microphone is not None and graph.callout is not None
+            graph.routes_started -= supervisor.ATTACH_GRACE_SECONDS + 1
+            links = [
+                ("mic", graph.microphone.in_node),
+                (graph.microphone.out_node, settings.hfp_sink),
+                (settings.hfp_source, graph.callout.in_node),
+                (graph.callout.out_node, settings.wired_output),
+            ]
+            graph.tick(nodes, links, "mic")
+        self.assertEqual(events[0], "mute:True")
+        self.assertTrue(events[1].startswith("link:output.bridge.mic->"))
+        self.assertEqual(events[2], "mute:False")
+        self.assertEqual(graph.state, supervisor.State.ACTIVE)
+
+
+class MicrophonePriorityLifecycleTests(unittest.TestCase):
+    def nodes(self, graph: supervisor.CallGraph) -> dict[str, dict]:
+        return {
+            "lark": {},
+            "fifine": {},
+            graph.settings.wired_output: {},
+            graph.settings.hfp_source: {},
+            graph.settings.hfp_sink: {},
+        }
+
+    def test_live_call_without_a_candidate_waits_without_uplink(self) -> None:
+        graph = supervisor.CallGraph(supervisor.Settings(aec=supervisor.AecSettings()))
+        resolution = FakeMicrophoneResolution(None, None)
+        graph.tick(self.nodes(graph), [], resolution)
+        self.assertEqual(graph.state, supervisor.State.WAITING_MIC)
+        self.assertIsNone(graph.microphone)
+
+    def test_ambiguous_candidate_is_safe_even_without_a_call(self) -> None:
+        graph = supervisor.CallGraph(supervisor.Settings(aec=supervisor.AecSettings()))
+        resolution = FakeMicrophoneResolution(None, None, blocked=True)
+        graph.tick({graph.settings.wired_output: {}}, [], resolution)
+        self.assertEqual(graph.state, supervisor.State.SAFE)
+        self.assertIsNone(graph.microphone)
+
+    def test_all_candidate_raw_uplinks_are_cut_before_build(self) -> None:
+        graph = supervisor.CallGraph(supervisor.Settings(aec=supervisor.AecSettings(enabled=True)))
+        removed: list[tuple[str, str]] = []
+        resolution = FakeMicrophoneResolution("lark", "lark-generation")
+        links = [
+            ("lark", graph.settings.hfp_sink),
+            ("fifine", graph.settings.hfp_sink),
+        ]
+        with (
+            mock.patch.object(supervisor, "NativeAecHost", FakeHost),
+            mock.patch.object(supervisor, "unlink", lambda source, target: removed.append((source, target))),
+        ):
+            graph.tick(
+                self.nodes(graph),
+                links,
+                resolution,
+                candidate_nodes=("lark", "fifine"),
+            )
+        self.assertEqual(set(removed), set(links))
+        self.assertIsNone(graph.aec_host)
+        with mock.patch.object(supervisor, "NativeAecHost", FakeHost):
+            graph.tick(
+                self.nodes(graph),
+                [],
+                resolution,
+                candidate_nodes=("lark", "fifine"),
+            )
+        self.assertIsNotNone(graph.aec_host)
+
+    def test_same_node_replug_breaks_before_rebuilding(self) -> None:
+        events: list[str] = []
+
+        class OrderedLoopback(FakeLoopback):
+            def start(self) -> None:
+                events.append(f"start:{self.name}")
+                super().start()
+
+            def stop(self, reason: str) -> None:
+                events.append(f"stop:{self.name}")
+                super().stop(reason)
+
+        graph = supervisor.CallGraph(supervisor.Settings(aec=supervisor.AecSettings()))
+        first = FakeMicrophoneResolution("fifine", "generation-1", selected_id="fifine-k054")
+        second = FakeMicrophoneResolution("fifine", "generation-2", selected_id="fifine-k054")
+        with (
+            mock.patch.object(supervisor, "Loopback", OrderedLoopback),
+            mock.patch.object(supervisor, "unlink", return_value=True),
+        ):
+            graph.tick(self.nodes(graph), [], first, candidate_nodes=("lark", "fifine"))
+            assert graph.microphone is not None
+            stale = [(graph.microphone.out_node, graph.settings.hfp_sink)]
+            events.clear()
+            graph.tick(self.nodes(graph), stale, second, candidate_nodes=("lark", "fifine"))
+            self.assertEqual(events[0], "stop:bridge.mic")
+            self.assertFalse(any(event.startswith("start:") for event in events))
+            self.assertTrue(graph.break_before_make)
+            graph.tick(self.nodes(graph), [], second, candidate_nodes=("lark", "fifine"))
+        self.assertEqual(graph.generation, 2)
+        self.assertIsNotNone(graph.microphone)
+
+    def test_status_keeps_actual_lark_separate_from_selected_fifine(self) -> None:
+        candidates = [
+            {
+                "id": "lark-a1",
+                "label": "Lark",
+                "priority": 0,
+                "state": "usable",
+                "matched_nodes": ["lark"],
+                "reason": "usable",
+            },
+            {
+                "id": "fifine-k054",
+                "label": "FIFINE",
+                "priority": 1,
+                "state": "selected",
+                "matched_nodes": ["fifine"],
+                "reason": "selected",
+            },
+        ]
+        resolution = FakeMicrophoneResolution(
+            "fifine",
+            "generation",
+            selected_id="fifine-k054",
+            candidates=candidates,
+        )
+        graph = supervisor.CallGraph(supervisor.Settings(aec=supervisor.AecSettings()))
+        graph.tick({"lark": {}, "fifine": {}, graph.settings.wired_output: {}}, [], resolution)
+        report = graph.status(
+            {"lark": {}, "fifine": {}, graph.settings.wired_output: {}},
+            [],
+            resolution,
+        )
+        self.assertEqual(report["endpoints"]["microphone"], "fifine")
+        self.assertEqual(report["endpoints"]["lark"], "lark")
+        self.assertEqual(report["microphone"]["selected"]["id"], "fifine-k054")
 
 
 if __name__ == "__main__":

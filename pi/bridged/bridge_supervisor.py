@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import signal
@@ -64,12 +65,14 @@ AEC_SINK = "bridge.aec.sink"
 AEC_CAPTURE = "echo-cancel-capture"
 AEC_PLAYBACK = "echo-cancel-playback"
 VOLUME_PERCENT_RE = re.compile(r"/\s*([0-9]+(?:\.[0-9]+)?)%\s*/")
+WPCTL_VOLUME_RE = re.compile(r"Volume:\s+([0-9]+(?:\.[0-9]+)?)")
 
 log = logging.getLogger("bridge-supervisor")
 
 
 class State(str, Enum):
     CALL_DOWN = "CALL_DOWN"
+    WAITING_MIC = "WAITING_MIC"
     DISCOVERING = "DISCOVERING"
     BUILDING = "BUILDING"
     SWITCHING = "SWITCHING"
@@ -125,6 +128,11 @@ class Settings:
     # ``None`` keeps deliberately minimal test/bench Settings free from host mixer I/O.
     # load_settings() supplies the production default and validates the durable value.
     wired_output_volume: float | None = None
+    # ``None`` keeps direct test/bench construction free from mixer I/O. Production
+    # settings always provide explicit software controls for output.bridge.mic.
+    microphone_candidates: tuple[Any, ...] = ()
+    mic_gain_db: float | None = None
+    mic_muted: bool | None = None
 
     @property
     def hfp_sink(self) -> str:
@@ -279,6 +287,38 @@ def load_settings(path: Path | None = None) -> Settings:
     if not 0.0 <= wired_output_volume <= 1.0:
         raise ValueError("audio.wired_output_volume must be between 0.0 and 1.0")
 
+    raw_mic_gain = audio_data.get("mic_gain_db", 0.0)
+    if isinstance(raw_mic_gain, bool) or not isinstance(raw_mic_gain, (int, float)):
+        raise TypeError("audio.mic_gain_db must be a finite number")
+    mic_gain_db = float(raw_mic_gain)
+    if not math.isfinite(mic_gain_db):
+        raise ValueError("audio.mic_gain_db must be finite")
+    mic_muted = toml_bool(audio_data, "mic_muted", False)
+
+    # The resolver owns microphone schema/precedence. Keep this import local because a few
+    # measurement tools load this module by path only to reuse NativeAecHost.
+    import microphones as microphones_module
+
+    microphone_candidates = microphones_module.parse_microphone_candidates(
+        data,
+        environ=os.environ,
+        default_lark_node=DEFAULT_LARK,
+        default_lark_component=DEFAULT_LARK_COMPONENT,
+    )
+    devices_data = data.get("devices") or {}
+    if (
+        isinstance(devices_data, dict)
+        and "microphones" in devices_data
+        and devices_data.get("lark")
+    ):
+        log.warning(
+            "devices.lark is ignored because the explicit devices.microphones list is authoritative"
+        )
+    configured_lark = next(
+        (candidate for candidate in microphone_candidates if candidate.id == "lark-a1"),
+        None,
+    )
+
     aec_data = audio_data.get("aec") or {}
     enabled = toml_bool(aec_data, "enabled", False)
     if "BRIDGE_AEC_ENABLED" in os.environ:
@@ -371,8 +411,16 @@ def load_settings(path: Path | None = None) -> Settings:
             node_latency_frames=node_latency_frames,
             play_delay_frames=play_delay_frames,
         ),
-        lark_node=os.environ.get("BRIDGE_LARK", DEFAULT_LARK),
-        lark_component=os.environ.get("BRIDGE_LARK_COMPONENT", DEFAULT_LARK_COMPONENT),
+        lark_node=(
+            configured_lark.node_name
+            if configured_lark is not None and configured_lark.node_name
+            else os.environ.get("BRIDGE_LARK", DEFAULT_LARK)
+        ),
+        lark_component=(
+            configured_lark.alsa_component
+            if configured_lark is not None and configured_lark.alsa_component
+            else os.environ.get("BRIDGE_LARK_COMPONENT", DEFAULT_LARK_COMPONENT)
+        ),
         wired_output=os.environ.get("BRIDGE_WIRED_OUT", DEFAULT_WIRED_OUT),
         phone_mac=(phone_override or phone).upper(),
         status_path=Path(status_value) if status_value else default_status_path(),
@@ -383,6 +431,9 @@ def load_settings(path: Path | None = None) -> Settings:
         fallback_to_wired=fallback_to_wired,
         controller_roles=roles,
         wired_output_volume=wired_output_volume,
+        microphone_candidates=microphone_candidates,
+        mic_gain_db=mic_gain_db,
+        mic_muted=mic_muted,
     )
 
 
@@ -482,7 +533,8 @@ NodeMap = dict[str, dict[str, Any]]
 LinkList = list[tuple[str, str]]
 
 
-def pw_nodes() -> NodeMap | None:
+def pw_snapshot() -> tuple[NodeMap, list[dict[str, Any]]] | None:
+    """Read PipeWire once and retain both graph nodes and Device join evidence."""
     try:
         result = subprocess.run(
             ["pw-dump"], capture_output=True, text=True, timeout=10, check=False
@@ -490,6 +542,8 @@ def pw_nodes() -> NodeMap | None:
         if result.returncode != 0:
             return None
         objects = json.loads(result.stdout)
+        if not isinstance(objects, list):
+            return None
     except (subprocess.SubprocessError, json.JSONDecodeError, OSError) as exc:
         log.warning("pw-dump failed: %s", exc)
         return None
@@ -501,8 +555,280 @@ def pw_nodes() -> NodeMap | None:
         props = (obj.get("info") or {}).get("props") or {}
         name = props.get("node.name")
         if name:
-            nodes[str(name)] = props
-    return nodes
+            # The numeric global id is needed for verified wpctl controls but is not present
+            # in info.props. Copy rather than mutating the pw-dump object consumed by the
+            # identity resolver.
+            node_props = dict(props)
+            node_props["object.id"] = obj.get("id")
+            nodes[str(name)] = node_props
+    return nodes, objects
+
+
+def pw_nodes() -> NodeMap | None:
+    """Compatibility wrapper for callers that only need Node properties."""
+    snapshot = pw_snapshot()
+    return snapshot[0] if snapshot is not None else None
+
+
+def _pw_object_props(obj: dict[str, Any]) -> dict[str, Any]:
+    props = (obj.get("info") or {}).get("props") or {}
+    return props if isinstance(props, dict) else {}
+
+
+def _read_sysfs_value(path: Path, name: str) -> str | None:
+    try:
+        value = (path / name).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return value or None
+
+
+def microphone_sysfs_by_device(
+    objects: list[dict[str, Any]],
+    *,
+    sysfs_root: Path = Path("/sys"),
+) -> dict[str, dict[str, Any]]:
+    """Join PipeWire Device globals to their nearest USB parent in sysfs."""
+    found: dict[str, dict[str, Any]] = {}
+    for obj in objects:
+        if obj.get("type") != "PipeWire:Interface:Device" or obj.get("id") is None:
+            continue
+        props = _pw_object_props(obj)
+        device_id = str(obj["id"])
+        facts: dict[str, Any] = {
+            # PipeWire's device.* strings are profile/session identifiers, not proof of
+            # hardware identity. In particular device.serial is synthesized for USB audio
+            # devices that expose no USB serial at all. Only the nearest USB sysfs parent
+            # may populate these fields.
+            "usb_vendor_id": None,
+            "usb_product_id": None,
+            "usb_product": None,
+            "usb_serial": None,
+            "usb_port_path": None,
+            "usb_instance_generation": None,
+        }
+        raw_path = next(
+            (
+                str(props[key])
+                for key in ("device.sysfs.path", "sysfs.path", "api.alsa.path")
+                if props.get(key)
+            ),
+            "",
+        )
+        if raw_path:
+            normalized = raw_path.replace("\\", "/")
+            if normalized.startswith("/sys/"):
+                candidate = sysfs_root / normalized.removeprefix("/sys/")
+            elif normalized.startswith("/devices/"):
+                candidate = sysfs_root / normalized.removeprefix("/")
+            else:
+                candidate = Path(raw_path)
+            boundary = sysfs_root.resolve()
+            try:
+                candidate = candidate.resolve()
+            except OSError:
+                pass
+            while candidate != candidate.parent:
+                vendor = _read_sysfs_value(candidate, "idVendor")
+                product_id = _read_sysfs_value(candidate, "idProduct")
+                if vendor and product_id:
+                    port = candidate.name
+                    devnum = _read_sysfs_value(candidate, "devnum")
+                    facts.update(
+                        {
+                            "usb_vendor_id": vendor,
+                            "usb_product_id": product_id,
+                            "usb_product": _read_sysfs_value(candidate, "product"),
+                            "usb_serial": _read_sysfs_value(candidate, "serial"),
+                            "usb_port_path": port,
+                            "usb_instance_generation": (
+                                f"{port}@{devnum}" if devnum else str(candidate)
+                            ),
+                        }
+                    )
+                    break
+                if candidate == boundary:
+                    break
+                candidate = candidate.parent
+        found[device_id] = facts
+    return found
+
+
+def parse_enum_format_output(text: str) -> tuple[dict[str, Any], ...]:
+    """Parse the audio fields from ``pw-cli enum-params ... EnumFormat`` output."""
+    values: dict[str, set[Any]] = {"format": set(), "rate": set(), "channels": set()}
+    active: str | None = None
+    for line in text.splitlines():
+        if "Prop:" in line:
+            if "Audio:format" in line:
+                active = "format"
+            elif "Audio:rate" in line:
+                active = "rate"
+            elif "Audio:channels" in line:
+                active = "channels"
+            else:
+                active = None
+            continue
+        if active == "format":
+            for matched in re.findall(r"AudioFormat:([A-Za-z0-9_]+)", line):
+                values["format"].add(matched)
+        elif active in {"rate", "channels"}:
+            for matched in re.findall(r"\bInt\s+([0-9]+)\b", line):
+                values[active].add(int(matched))
+    if not all(values.values()):
+        return ()
+    return tuple(
+        {"rate": rate, "format": audio_format, "channels": channels}
+        for audio_format in sorted(values["format"])
+        for rate in sorted(values["rate"])
+        for channels in sorted(values["channels"])
+    )
+
+
+def _pw_choice_values(value: Any) -> tuple[Any, ...]:
+    if isinstance(value, dict):
+        values = value.values()
+    elif isinstance(value, (list, tuple, set)):
+        values = value
+    else:
+        values = (value,)
+    return tuple(dict.fromkeys(item for item in values if item is not None))
+
+
+def formats_from_pw_dump_object(obj: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    """Use structured EnumFormat params when pw-dump already supplied them."""
+    params = (obj.get("info") or {}).get("params") or {}
+    entries = params.get("EnumFormat") or [] if isinstance(params, dict) else []
+    found: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("mediaType") not in {None, "audio"}:
+            continue
+        if entry.get("mediaSubtype") not in {None, "raw"}:
+            continue
+        formats = _pw_choice_values(entry.get("format"))
+        rates = _pw_choice_values(entry.get("rate"))
+        channels = _pw_choice_values(entry.get("channels"))
+        for audio_format in formats:
+            for rate in rates:
+                for channel_count in channels:
+                    try:
+                        item = {
+                            "rate": int(rate),
+                            "format": str(audio_format),
+                            "channels": int(channel_count),
+                        }
+                    except (TypeError, ValueError):
+                        continue
+                    if item not in found:
+                        found.append(item)
+    return tuple(found)
+
+
+def microphone_capabilities_by_node(
+    objects: list[dict[str, Any]],
+    *,
+    cache: dict[tuple[str, str], tuple[dict[str, Any], ...]] | None = None,
+) -> dict[str, tuple[dict[str, Any], ...]]:
+    """Read EnumFormat once per PipeWire node/device generation."""
+    remembered = cache if cache is not None else {}
+    device_serials = {
+        str(obj.get("id")): str(_pw_object_props(obj).get("object.serial") or obj.get("id"))
+        for obj in objects
+        if obj.get("type") == "PipeWire:Interface:Device" and obj.get("id") is not None
+    }
+    found: dict[str, tuple[dict[str, Any], ...]] = {}
+    for obj in objects:
+        if obj.get("type") != "PipeWire:Interface:Node" or obj.get("id") is None:
+            continue
+        props = _pw_object_props(obj)
+        if props.get("media.class") != "Audio/Source" or not props.get("node.name"):
+            continue
+        node = str(props["node.name"])
+        node_serial = str(props.get("object.serial") or obj["id"])
+        device_id = str(props.get("device.id") or "")
+        key = (node_serial, device_serials.get(device_id, device_id))
+        formats = remembered.get(key)
+        if formats is None:
+            formats = formats_from_pw_dump_object(obj)
+            if not formats:
+                try:
+                    result = subprocess.run(
+                        ["pw-cli", "enum-params", str(obj["id"]), "EnumFormat"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        check=False,
+                    )
+                except (OSError, subprocess.SubprocessError):
+                    result = None
+                formats = (
+                    parse_enum_format_output(result.stdout)
+                    if result is not None and result.returncode == 0
+                    else ()
+                )
+            # Some recorded/test snapshots carry one already-negotiated format directly.
+            # It is admissible evidence only when all fields are present.
+            if not formats and all(props.get(key) is not None for key in (
+                "audio.rate", "audio.format", "audio.channels"
+            )):
+                try:
+                    formats = (
+                        {
+                            "rate": int(props["audio.rate"]),
+                            "format": str(props["audio.format"]),
+                            "channels": int(props["audio.channels"]),
+                        },
+                    )
+                except (TypeError, ValueError):
+                    formats = ()
+            # Do not make a transient pw-cli/parser failure permanent for this device
+            # generation. Successful evidence is stable and worth caching; absence retries.
+            if formats:
+                remembered[key] = formats
+        found[node] = formats
+    return found
+
+
+def discover_microphones(
+    objects: list[dict[str, Any]],
+    settings: Settings,
+    *,
+    capability_cache: dict[tuple[str, str], tuple[dict[str, Any], ...]] | None = None,
+    sysfs_root: Path = Path("/sys"),
+) -> tuple[tuple[Any, ...], Any]:
+    """Return observations and one deterministic selection from one pw-dump snapshot."""
+    import microphones as microphones_module
+
+    observations = microphones_module.observations_from_pw_dump(
+        objects,
+        sysfs_by_device=microphone_sysfs_by_device(objects, sysfs_root=sysfs_root),
+        capabilities_by_node=microphone_capabilities_by_node(
+            objects,
+            cache=capability_cache,
+        ),
+    )
+    return observations, microphones_module.resolve(
+        settings.microphone_candidates,
+        observations,
+    )
+
+
+def resolve_microphone(
+    objects: list[dict[str, Any]],
+    settings: Settings,
+    *,
+    capability_cache: dict[tuple[str, str], tuple[dict[str, Any], ...]] | None = None,
+    sysfs_root: Path = Path("/sys"),
+) -> Any:
+    """Generic read-only resolver entry point for the supervisor and rig tools."""
+    return discover_microphones(
+        objects,
+        settings,
+        capability_cache=capability_cache,
+        sysfs_root=sysfs_root,
+    )[1]
 
 
 def pw_links() -> LinkList | None:
@@ -638,6 +964,86 @@ def set_and_verify_sink_volume(
     return True, observed, None
 
 
+def set_and_verify_microphone_control(
+    nodes: NodeMap,
+    node: str,
+    gain_db: float,
+    muted: bool,
+    *,
+    tolerance: float = 0.01,
+) -> tuple[bool, float | None, bool | None, str | None]:
+    """Apply and read back software gain/mute on ``output.bridge.mic``.
+
+    wpctl addresses graph objects by global id. The id comes from the same pw-dump snapshot
+    used for endpoint resolution, avoiding a second graph read and the replug race that would
+    create. Failures make a best-effort mute before returning to the caller's SAFE path.
+    """
+    props = nodes.get(node) or {}
+    object_id = props.get("object.id")
+    if object_id is None:
+        return False, None, None, f"microphone control node {node} has no PipeWire object id"
+    target = str(object_id)
+    linear = 10 ** (gain_db / 20.0)
+    limit = max(1.0, linear)
+
+    def run(command: list[str]) -> subprocess.CompletedProcess[str] | None:
+        try:
+            return subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    # New bridge.mic loopbacks are born muted. Keep that containment while changing gain,
+    # and make unmute the final mutating step.
+    commands = [
+        ["wpctl", "set-mute", target, "1"],
+        ["wpctl", "set-volume", target, f"{linear:.6f}", "--limit", f"{limit:.6f}"],
+        ["wpctl", "set-mute", target, "1" if muted else "0"],
+    ]
+    for command in commands:
+        result = run(command)
+        if result is None or result.returncode != 0:
+            run(["wpctl", "set-mute", target, "1"])
+            detail = (
+                "command could not run"
+                if result is None
+                else (result.stderr or result.stdout).strip() or f"exit {result.returncode}"
+            )
+            return False, None, None, f"microphone control failed: {detail}"
+
+    observed = run(["wpctl", "get-volume", target])
+    match = WPCTL_VOLUME_RE.search(observed.stdout) if observed is not None else None
+    if observed is None or observed.returncode != 0 or match is None:
+        run(["wpctl", "set-mute", target, "1"])
+        detail = (
+            "command could not run"
+            if observed is None
+            else (observed.stderr or observed.stdout).strip() or f"exit {observed.returncode}"
+        )
+        return False, None, None, f"microphone control verification failed: {detail}"
+    observed_linear = float(match.group(1))
+    observed_muted = "[MUTED]" in observed.stdout
+    observed_db = 20.0 * math.log10(observed_linear) if observed_linear > 0 else -math.inf
+    if abs(observed_linear - linear) > tolerance or observed_muted != muted:
+        run(["wpctl", "set-mute", target, "1"])
+        return (
+            False,
+            observed_db,
+            observed_muted,
+            (
+                "microphone control mismatch: "
+                f"desired {gain_db:.2f} dB/muted={muted}, "
+                f"observed {observed_db:.2f} dB/muted={observed_muted}"
+            ),
+        )
+    return True, observed_db, observed_muted, None
+
+
 class Loopback:
     """A child pw-loopback with explicit, continuously verified targets."""
 
@@ -647,6 +1053,7 @@ class Loopback:
         self.playback = playback
         self.channels = channels
         self.proc: subprocess.Popen[str] | None = None
+        self.defer_playback = False
 
     @property
     def out_node(self) -> str:
@@ -669,11 +1076,23 @@ class Loopback:
             self.name,
             "--capture",
             self.capture,
-            "--playback",
-            self.playback,
             "--channels",
             str(self.channels),
+            "--capture-props",
+            "{ node.dont-reconnect = true node.passive = true }",
+            "--playback-props",
+            (
+                "{ node.dont-reconnect = true node.passive = true "
+                "node.autoconnect = false }"
+                if self.defer_playback
+                else "{ node.dont-reconnect = true node.passive = true }"
+            ),
         ]
+        if not self.defer_playback:
+            command[command.index("--channels"):command.index("--channels")] = [
+                "--playback",
+                self.playback,
+            ]
         log.info("starting %s: %s -> %s", self.name, self.capture, self.playback)
         self.proc = subprocess.Popen(
             command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True
@@ -823,20 +1242,104 @@ def unexpected_call_links(
     microphone_input: str,
     callout_input: str,
     aec_enabled: bool,
+    microphones: tuple[str, ...] = (),
+    selected_microphone: str | None = None,
+    microphone_output: str | None = None,
 ) -> LinkList:
+    physical = set(microphones) or {lark}
+    selected = selected_microphone or lark
     unexpected: LinkList = []
     for source, target in links:
         if (
-            source == lark
+            source in physical
             and target == hfp_sink
             or source == hfp_source
             and target != callout_input
             or aec_enabled
             and source == AEC_SOURCE
             and target != microphone_input
+            or microphone_output is not None
+            and target == hfp_sink
+            and source != microphone_output
+            or aec_enabled
+            and target == AEC_CAPTURE
+            and source != selected
+            or not aec_enabled
+            and target == microphone_input
+            and source != selected
         ):
             unexpected.append((source, target))
     return unexpected
+
+
+def selected_microphone_node(value: Any) -> str | None:
+    if isinstance(value, str):
+        return value
+    node = getattr(value, "node", None)
+    return str(node) if node else None
+
+
+def selected_microphone_token(value: Any) -> Any:
+    if isinstance(value, str):
+        return value
+    token = getattr(value, "instance_token", None)
+    return token if token is not None else selected_microphone_node(value)
+
+
+def microphone_resolution_report(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, str) or value is None:
+        return None
+    as_dict = getattr(value, "as_dict", None)
+    if not callable(as_dict):
+        return None
+    report = as_dict()
+    return report if isinstance(report, dict) else None
+
+
+def microphone_candidate_nodes(report: dict[str, Any] | None) -> tuple[str, ...]:
+    """Extract every identity-matched node from resolver diagnostics.
+
+    The resolver's public JSON uses ``matched_nodes``. Accept the selected node separately
+    so a legacy/partial diagnostic can never omit the active microphone from safety sweeps.
+    """
+    if not report:
+        return ()
+    found: set[str] = set()
+    selected = report.get("selected") or {}
+    if isinstance(selected, dict) and selected.get("node"):
+        found.add(str(selected["node"]))
+    for candidate in report.get("candidates") or []:
+        if not isinstance(candidate, dict):
+            continue
+        for key in ("matched_nodes", "nodes"):
+            values = candidate.get(key) or []
+            if isinstance(values, str):
+                values = [values]
+            for node in values:
+                if node:
+                    found.add(str(node))
+        if candidate.get("node"):
+            found.add(str(candidate["node"]))
+    return tuple(sorted(found))
+
+
+def lark_node_from_report(report: dict[str, Any] | None) -> str | None:
+    if not report:
+        return None
+    selected = report.get("selected") or {}
+    if isinstance(selected, dict) and selected.get("id") == "lark-a1":
+        return str(selected.get("node") or "") or None
+    for candidate in report.get("candidates") or []:
+        if not isinstance(candidate, dict) or candidate.get("id") != "lark-a1":
+            continue
+        nodes = candidate.get("matched_nodes") or candidate.get("nodes") or []
+        if isinstance(nodes, str):
+            nodes = [nodes]
+        if len(nodes) == 1:
+            return str(nodes[0])
+        if candidate.get("node"):
+            return str(candidate["node"])
+    return None
 
 
 class CallGraph:
@@ -863,18 +1366,37 @@ class CallGraph:
         self.output_volume_observed: float | None = None
         self.output_volume_verified = False
         self.output_volume_error: str | None = None
+        self.selected_microphone: str | None = None
+        self.selected_microphone_token: Any = None
+        self.microphone_report: dict[str, Any] | None = None
+        self.candidate_microphones: tuple[str, ...] = ()
+        self.break_before_make = False
+        self.mic_control_target: str | None = None
+        self.mic_gain_observed_db: float | None = None
+        self.mic_mute_observed: bool | None = None
+        self.mic_control_verified = False
+        self.mic_control_error: str | None = None
+        self.mic_control_blocked = False
+        self.mic_control_primed = False
+        self.mic_link_requested = False
 
     @property
     def output_target(self) -> str:
         return self.output_node or self.settings.wired_output
 
+    @property
+    def microphone_controls_required(self) -> bool:
+        return self.settings.mic_gain_db is not None and self.settings.mic_muted is not None
+
     def teardown(self, reason: str) -> None:
+        # Microphone switches are deliberately break-before-make. Stop the only owned HFP
+        # uplink before touching the callout or AEC owner so there is never a two-mic overlap.
+        if self.microphone is not None:
+            self.microphone.stop(reason)
         if self.aec_host is not None:
             set_aec_mute(True)
         if self.callout is not None:
             self.callout.stop(reason)
-        if self.microphone is not None:
-            self.microphone.stop(reason)
         if self.aec_host is not None:
             self.aec_host.stop(reason)
         self.callout = None
@@ -888,6 +1410,13 @@ class CallGraph:
         self.output_volume_observed = None
         self.output_volume_verified = False
         self.output_volume_error = None
+        self.mic_control_target = None
+        self.mic_gain_observed_db = None
+        self.mic_mute_observed = None
+        self.mic_control_verified = False
+        self.mic_control_error = None
+        self.mic_control_primed = False
+        self.mic_link_requested = False
 
     def ensure_output_volume(self, target: str) -> bool:
         """Verify the selected wired sink once per graph generation."""
@@ -907,15 +1436,88 @@ class CallGraph:
         self.output_volume_error = error
         return ok
 
-    def update_signature(self, signature: tuple[Any, ...]) -> None:
+    def ensure_microphone_control(self, nodes: NodeMap) -> bool:
+        """Verify post-AEC software controls exactly once per graph generation."""
+        gain = self.settings.mic_gain_db
+        muted = self.settings.mic_muted
+        if gain is None or muted is None:
+            self.mic_control_target = "output.bridge.mic"
+            self.mic_gain_observed_db = gain
+            self.mic_mute_observed = muted
+            self.mic_control_verified = True
+            self.mic_control_error = None
+            return True
+        if self.mic_control_verified:
+            return True
+        ok, observed_gain, observed_muted, error = set_and_verify_microphone_control(
+            nodes,
+            "output.bridge.mic",
+            gain,
+            muted,
+        )
+        self.mic_control_target = "output.bridge.mic"
+        self.mic_gain_observed_db = observed_gain
+        self.mic_mute_observed = observed_muted
+        self.mic_control_verified = ok
+        self.mic_control_error = error
+        return ok
+
+    def prime_microphone_control(self, nodes: NodeMap) -> bool:
+        """Set gain while muted before bridge.mic is linked to the HFP sink."""
+        if not self.microphone_controls_required:
+            self.mic_control_primed = True
+            return True
+        if self.mic_control_primed:
+            return True
+        assert self.settings.mic_gain_db is not None
+        ok, observed_gain, observed_muted, error = set_and_verify_microphone_control(
+            nodes,
+            "output.bridge.mic",
+            self.settings.mic_gain_db,
+            True,
+        )
+        self.mic_control_target = "output.bridge.mic"
+        self.mic_gain_observed_db = observed_gain
+        self.mic_mute_observed = observed_muted
+        self.mic_control_error = error
+        self.mic_control_primed = ok
+        return ok
+
+    def hold_microphone_control_safe(self, reason: str) -> None:
+        control_state = (
+            self.mic_control_target,
+            self.mic_gain_observed_db,
+            self.mic_mute_observed,
+            self.mic_control_error,
+        )
+        self.teardown(reason)
+        (
+            self.mic_control_target,
+            self.mic_gain_observed_db,
+            self.mic_mute_observed,
+            self.mic_control_error,
+        ) = control_state
+        self.mic_control_verified = False
+        self.mic_control_blocked = True
+        self.last_failure = reason
+        self.state = State.SAFE
+        log.error("call graph held SAFE: %s", reason)
+
+    def update_signature(self, signature: tuple[Any, ...]) -> bool:
         if signature == self.signature:
-            return
+            return False
+        had_graph = any(
+            item is not None for item in (self.aec_host, self.microphone, self.callout)
+        )
         self.generation += 1
         self.teardown("endpoint generation changed")
         self.signature = signature
         self.attempts = 0
         self.next_attempt = 0.0
         self.last_failure = None
+        self.break_before_make = had_graph
+        self.mic_control_blocked = False
+        return had_graph
 
     def fail(self, reason: str) -> None:
         self.last_failure = reason
@@ -944,6 +1546,7 @@ class CallGraph:
             return
         self.callout = Loopback("bridge.callout", self.settings.hfp_source, self.output_target, 2)
         self.microphone = Loopback("bridge.mic", lark, self.settings.hfp_sink, 1)
+        self.microphone.defer_playback = self.microphone_controls_required
         self.callout.start()
         self.microphone.start()
         self.routes_started = time.monotonic()
@@ -989,14 +1592,41 @@ class CallGraph:
         set_aec_mute(True)
         self.callout = Loopback("bridge.callout", self.settings.hfp_source, AEC_SINK, 1)
         self.microphone = Loopback("bridge.mic", AEC_SOURCE, self.settings.hfp_sink, 1)
+        self.microphone.defer_playback = self.microphone_controls_required
         self.callout.start()
         self.microphone.start()
         self.routes_started = time.monotonic()
 
-    def remove_dangerous_autolinks(self, links: LinkList, lark: str) -> bool:
+    def remove_dangerous_autolinks(
+        self,
+        links: LinkList,
+        microphones: tuple[str, ...],
+        selected: str | None,
+    ) -> bool:
         changed = False
+        physical = set(microphones)
+        if selected:
+            physical.add(selected)
+        owned_uplink = (
+            self.microphone.out_node
+            if self.microphone is not None
+            and (not self.microphone_controls_required or self.mic_control_primed)
+            else None
+        )
         for source, target in links:
-            dangerous = source == lark and target == self.settings.hfp_sink
+            dangerous = source in physical and target == self.settings.hfp_sink
+            dangerous = dangerous or (
+                target == self.settings.hfp_sink and source != owned_uplink
+            )
+            dangerous = dangerous or (
+                target == AEC_CAPTURE and source in physical and source != selected
+            )
+            if self.microphone is not None:
+                dangerous = dangerous or (
+                    target == self.microphone.in_node
+                    and source in physical
+                    and source != self.microphone.capture
+                )
             if self.callout is not None:
                 dangerous = dangerous or (
                     source == self.settings.hfp_source and target != self.callout.in_node
@@ -1011,25 +1641,45 @@ class CallGraph:
                 changed = True
         return changed
 
-    def validate(self, links: LinkList, lark: str) -> bool:
+    def validate(
+        self,
+        links: LinkList,
+        microphone: str,
+        microphones: tuple[str, ...],
+    ) -> bool:
         if self.microphone is None or self.callout is None:
             return False
         if not self.microphone.targets_verified(links) or not self.callout.targets_verified(links):
             return False
+        uplink_sources = {
+            source for source, target in links if target == self.settings.hfp_sink
+        }
+        if uplink_sources != {self.microphone.out_node}:
+            return False
         if self.settings.aec.enabled:
-            if (lark, AEC_CAPTURE) not in links:
+            capture_sources = {source for source, target in links if target == AEC_CAPTURE}
+            if capture_sources != {microphone}:
                 return False
             playback_targets = {target for source, target in links if source == AEC_PLAYBACK}
             if playback_targets != {self.output_target}:
                 return False
+        else:
+            microphone_sources = {
+                source for source, target in links if target == self.microphone.in_node
+            }
+            if microphone_sources != {microphone}:
+                return False
         self.unexpected_links = unexpected_call_links(
             links,
-            lark=lark,
+            lark=microphone,
             hfp_source=self.settings.hfp_source,
             hfp_sink=self.settings.hfp_sink,
             microphone_input=self.microphone.in_node,
             callout_input=self.callout.in_node,
             aec_enabled=self.settings.aec.enabled,
+            microphones=microphones,
+            selected_microphone=microphone,
+            microphone_output=self.microphone.out_node,
         )
         return not self.unexpected_links
 
@@ -1037,10 +1687,40 @@ class CallGraph:
         self,
         nodes: NodeMap,
         links: LinkList,
-        lark: str | None,
+        microphone: Any,
         output_node: str | None = DERIVE_OUTPUT,
+        *,
+        microphone_token: Any = None,
+        candidate_nodes: tuple[str, ...] = (),
+        microphone_report: dict[str, Any] | None = None,
+        microphone_blocked: bool | None = None,
+        raw_hfp_sink_present: bool | None = None,
     ) -> None:
         call_up = self.settings.hfp_sink in nodes and self.settings.hfp_source in nodes
+        safety_hfp_sink_present = (
+            self.settings.hfp_sink in nodes
+            if raw_hfp_sink_present is None
+            else raw_hfp_sink_present
+        )
+        selected = selected_microphone_node(microphone)
+        token = (
+            microphone_token
+            if microphone_token is not None
+            else selected_microphone_token(microphone)
+        )
+        report = microphone_report or microphone_resolution_report(microphone)
+        blocked = (
+            bool(microphone_blocked)
+            if microphone_blocked is not None
+            else bool(getattr(microphone, "blocked", False))
+        )
+        discovered = set(candidate_nodes) | set(microphone_candidate_nodes(report))
+        if selected:
+            discovered.add(selected)
+        self.selected_microphone = selected
+        self.selected_microphone_token = token
+        self.microphone_report = report
+        self.candidate_microphones = tuple(sorted(discovered))
 
         # DERIVE_OUTPUT means the caller does not do output selection -- the test suite and
         # any pre-selection caller -- so fall back to exactly the old rule. An explicit None
@@ -1051,11 +1731,30 @@ class CallGraph:
             else output_node
         )
         old_output = self.output_node
-        signature = (call_up, lark)
+        signature = (call_up, token)
         endpoints_changed = signature != self.signature
         self.update_signature(signature)
 
+        # This is the first graph action on every call tick, including missing/blocked
+        # selections. It covers every identity-matched candidate rather than only the active
+        # one, so an inactive FIFINE can never autolink beside the selected Lark (or vice versa).
+        early_links_removed = False
+        if safety_hfp_sink_present:
+            early_links_removed = self.remove_dangerous_autolinks(
+                links,
+                self.candidate_microphones,
+                selected,
+            )
+
+        if blocked:
+            reason = str((report or {}).get("selection_reason") or "microphone identity is unsafe")
+            self.teardown(reason)
+            self.last_failure = reason
+            self.state = State.SAFE
+            return
+
         if not call_up:
+            self.break_before_make = False
             # ``update_signature`` already tears an active graph down on the
             # call-up -> call-down transition.  Keep the physical AUX sink at
             # its deterministic level while idle as well: a freshly booted,
@@ -1076,9 +1775,42 @@ class CallGraph:
                 )
             self.state = State.CALL_DOWN
             return
-        if lark is None or resolved is None:
+
+        if selected is None:
             self.teardown("required physical endpoint absent")
+            self.last_failure = str(
+                (report or {}).get("selection_reason") or "no usable microphone is present"
+            )
+            self.state = State.WAITING_MIC
+            return
+        if resolved is None:
+            self.teardown("required output endpoint absent")
+            self.last_failure = "no usable output is present"
             self.state = State.DISCOVERING
+            return
+
+        if early_links_removed:
+            if not any(
+                item is not None for item in (self.aec_host, self.microphone, self.callout)
+            ):
+                self.state = State.DISCOVERING
+            # Never construct or validate against the snapshot that contained a raw or
+            # duplicate route. Wait until pw-dump/pw-link prove the unlink completed.
+            return
+
+        # A selected-instance change first stops bridge.mic in update_signature(). The links
+        # are a pre-teardown snapshot, so do not build the new AEC owner until a later snapshot
+        # proves the HFP uplink has no stale feed at all.
+        if self.break_before_make:
+            stale_uplinks = [pair for pair in links if pair[1] == self.settings.hfp_sink]
+            if stale_uplinks:
+                # The early safety sweep above already requested every stale unlink. Wait
+                # for a fresh snapshot instead of issuing duplicate graph mutations.
+                return
+            self.break_before_make = False
+
+        if self.mic_control_blocked:
+            self.state = State.SAFE
             return
 
         # Mixer verification precedes both initial graph construction and a live switch
@@ -1121,20 +1853,6 @@ class CallGraph:
                 self.last_failure = None
             self.output_node = resolved
 
-        # Safety sweep, before any build logic.
-        #
-        # The session manager auto-links a source to the HFP sink the INSTANT that source
-        # appears. Measured in E13: the moment the Lark came back, WirePlumber wired it
-        # straight to bluez_output, sending raw un-cancelled mic audio to the far end and
-        # closing Lark -> phone -> far end -> speaker -> Lark. It stood for 6.4 s.
-        #
-        # The sweep used to run only once routes were up and ATTACH_GRACE_SECONDS had
-        # elapsed -- long after the dangerous link exists. Preventing that link is not a
-        # finishing touch on a built graph, it is the first thing to do on every tick
-        # where a Lark and an HFP sink coexist. It does not return early: the later sweep
-        # still owns "wait a tick and revalidate", and stalling the build here would
-        # simply extend the exposure it is meant to end.
-        self.remove_dangerous_autolinks(links, lark)
         if self.state == State.FAILED:
             if time.monotonic() < self.next_attempt:
                 return
@@ -1150,7 +1868,7 @@ class CallGraph:
             return
         if self.aec_host is None and self.microphone is None and self.callout is None:
             try:
-                self.begin_build(lark)
+                self.begin_build(selected)
             except OSError as exc:
                 self.fail(f"call graph process could not start: {exc}")
             return
@@ -1174,12 +1892,39 @@ class CallGraph:
         if not self.microphone.running or not self.callout.running:
             self.fail("a call loopback exited")
             return
+        if self.microphone_controls_required and not self.mic_link_requested:
+            if self.microphone.out_node not in nodes:
+                if time.monotonic() - self.routes_started > BUILD_TIMEOUT_SECONDS:
+                    self.hold_microphone_control_safe(
+                        "microphone control node did not appear before timeout"
+                    )
+                return
+            if not self.prime_microphone_control(nodes):
+                self.hold_microphone_control_safe(
+                    self.mic_control_error or "microphone controls did not prime muted"
+                )
+                return
+            if not link(self.microphone.out_node, self.settings.hfp_sink):
+                self.hold_microphone_control_safe("muted microphone uplink could not be linked")
+                return
+            self.mic_link_requested = True
+            # Validate the manually created link from a fresh snapshot before applying the
+            # configured (possibly unmuted) state.
+            return
         if time.monotonic() - self.routes_started < ATTACH_GRACE_SECONDS:
             return
-        if self.remove_dangerous_autolinks(links, lark):
+        if self.remove_dangerous_autolinks(
+            links,
+            self.candidate_microphones,
+            selected,
+        ):
             return
-        if not self.validate(links, lark):
+        if not self.validate(links, selected, self.candidate_microphones):
             self.fail("graph targets or safety invariants did not verify")
+            return
+        if not self.ensure_microphone_control(nodes):
+            reason = self.mic_control_error or "microphone controls did not verify"
+            self.hold_microphone_control_safe(reason)
             return
         if self.settings.aec.enabled and not self.verified and not set_aec_mute(False):
             self.fail("AEC sink could not be unmuted")
@@ -1191,8 +1936,40 @@ class CallGraph:
         self.attempts = 0
         self.state = State.ACTIVE
 
-    def status(self, nodes: NodeMap, links: LinkList, lark: str | None) -> dict[str, Any]:
+    def status(
+        self,
+        nodes: NodeMap,
+        links: LinkList,
+        microphone: Any = None,
+        *,
+        microphone_report: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         call_up = self.settings.hfp_sink in nodes and self.settings.hfp_source in nodes
+        selected = selected_microphone_node(microphone) or self.selected_microphone
+        report = (
+            microphone_report
+            or microphone_resolution_report(microphone)
+            or self.microphone_report
+        )
+        if report is None:
+            report = {
+                "selected": (
+                    {
+                        "id": "lark-a1",
+                        "label": "Hollyland Lark A1",
+                        "priority": 0,
+                        "node": selected,
+                    }
+                    if selected
+                    else None
+                ),
+                "selection_reason": (
+                    "legacy Lark microphone is available"
+                    if selected
+                    else "legacy Lark microphone is absent"
+                ),
+                "candidates": [],
+            }
         expected: LinkList = []
         if self.microphone is not None and self.callout is not None:
             expected.extend(
@@ -1203,16 +1980,21 @@ class CallGraph:
                     (self.callout.out_node, self.callout.playback),
                 ]
             )
-        if self.aec_host is not None and lark is not None:
-            expected.extend([(lark, AEC_CAPTURE), (AEC_PLAYBACK, self.output_target)])
+        if self.aec_host is not None and selected is not None:
+            expected.extend([(selected, AEC_CAPTURE), (AEC_PLAYBACK, self.output_target)])
         missing = [pair for pair in expected if pair not in links]
+        actual_lark = lark_node_from_report(report)
+        if actual_lark is None and self.microphone_report is None:
+            actual_lark = selected
         return {
             "timestamp": time.time(),
             "state": self.state.value,
             "generation": self.generation,
             "call": {"hfp_nodes_present": call_up},
+            "microphone": report,
             "endpoints": {
-                "lark": lark,
+                "microphone": selected,
+                "lark": actual_lark,
                 "hfp_source": self.settings.hfp_source if call_up else None,
                 "hfp_sink": self.settings.hfp_sink if call_up else None,
                 "wired_output": (self.output_target if self.output_target in nodes else None),
@@ -1238,6 +2020,15 @@ class CallGraph:
                 "observed": self.output_volume_observed,
                 "verified": self.output_volume_verified,
                 "error": self.output_volume_error,
+            },
+            "microphone_control": {
+                "target": self.mic_control_target,
+                "desired_gain_db": self.settings.mic_gain_db,
+                "observed_gain_db": self.mic_gain_observed_db,
+                "desired_muted": self.settings.mic_muted,
+                "observed_muted": self.mic_mute_observed,
+                "verified": self.mic_control_verified,
+                "error": self.mic_control_error,
             },
             "graph": {
                 "expected_links": expected,
@@ -1367,6 +2158,16 @@ def main() -> int:
     metrics: dict[str, Any] = {}
     output_report: dict[str, Any] | None = None
     last_output: str | None = None
+    microphone_resolution: Any = None
+    microphone_report: dict[str, Any] = {
+        "selected": None,
+        "selection_reason": "microphones have not been inspected",
+        "blocked": False,
+        "candidates": [],
+    }
+    microphone_capability_cache: dict[
+        tuple[str, str], tuple[dict[str, Any], ...]
+    ] = {}
     controller_block: dict[str, Any] = {
         "policy": "transitional",
         "ready": False,
@@ -1379,7 +2180,9 @@ def main() -> int:
         call_binding_accepted, call_binding_error = call_role_acceptance(
             settings, bluez_tree, controller_inventory
         )
-        nodes = pw_nodes()
+        snapshot = pw_snapshot()
+        nodes = snapshot[0] if snapshot is not None else None
+        pw_objects = snapshot[1] if snapshot is not None else []
         links = pw_links()
         observed_desire = desire_stamp()
         if nodes is None or links is None:
@@ -1388,7 +2191,12 @@ def main() -> int:
             links = links or []
         else:
             accepted_nodes = accepted_call_nodes(nodes, settings, call_binding_accepted)
-            lark = find_lark(nodes, settings)
+            _observations, microphone_resolution = discover_microphones(
+                pw_objects,
+                settings,
+                capability_cache=microphone_capability_cache,
+            )
+            microphone_report = microphone_resolution.as_dict()
             desired = read_desire()
             output_node, output_report = resolve_output(
                 nodes,
@@ -1404,16 +2212,30 @@ def main() -> int:
                     desired or settings.desired_output or "<unset>",
                 )
                 last_output = output_node
-            graph.tick(accepted_nodes, links, lark, output_node)
+            graph.tick(
+                accepted_nodes,
+                links,
+                microphone_resolution,
+                output_node,
+                microphone_token=microphone_resolution.instance_token,
+                candidate_nodes=microphone_candidate_nodes(microphone_report),
+                microphone_report=microphone_report,
+                microphone_blocked=microphone_resolution.blocked,
+                raw_hfp_sink_present=settings.hfp_sink in nodes,
+            )
 
         now = time.monotonic()
         if now - last_metrics >= 10:
             metrics = runtime_metrics()
             last_metrics = now
-        lark = find_lark(nodes, settings) if nodes else None
         accepted_nodes = accepted_call_nodes(nodes, settings, call_binding_accepted)
         raw_hfp_nodes_present = settings.hfp_sink in nodes and settings.hfp_source in nodes
-        status = graph.status(accepted_nodes, links, lark)
+        status = graph.status(
+            accepted_nodes,
+            links,
+            microphone_resolution,
+            microphone_report=microphone_report,
+        )
         status["call"].update(
             {
                 "raw_hfp_nodes_present": raw_hfp_nodes_present,
@@ -1440,7 +2262,12 @@ def main() -> int:
     graph.teardown("supervisor shutting down")
     graph.state = State.CALL_DOWN
     try:
-        stopped_status = graph.status({}, [], None)
+        stopped_status = graph.status(
+            {},
+            [],
+            microphone_resolution,
+            microphone_report=microphone_report,
+        )
         stopped_status["call"].update(
             {
                 "raw_hfp_nodes_present": False,
