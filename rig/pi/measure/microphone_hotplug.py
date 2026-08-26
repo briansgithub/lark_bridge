@@ -246,11 +246,15 @@ def _read_usb_hub_ancestors(
 
 def read_usb_microphones(
     sysfs_root: Path = USB_SYSFS_ROOT,
+    *,
+    descriptor_cache: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], str | None]:
     """Read the E18 microphone fingerprints directly from USB sysfs.
 
     ALSA card numbers and PipeWire enumeration order are deliberately absent. The
     port plus USB ``devnum`` forms an instance generation that changes on replug.
+    A live sampler may cache optional descriptors for that generation so an unplug
+    cannot stall link sampling while sysfs tears down USB string files.
     """
     observed: dict[str, list[dict[str, Any]]] = {
         candidate_id: [] for candidate_id in USB_MICROPHONE_FINGERPRINTS
@@ -265,6 +269,7 @@ def read_usb_microphones(
         return observed, f"USB sysfs inventory failed: {type(exc).__name__}: {exc}"
 
     errors: list[str] = []
+    observed_generations: set[str] = set()
     for entry in entries:
         try:
             vendor_id = (entry / "idVendor").read_text(encoding="ascii").strip().lower()
@@ -297,21 +302,47 @@ def read_usb_microphones(
             errors.append(f"{entry.name}: devnum is not numeric: {raw_devnum!r}")
             continue
         devnum = int(raw_devnum)
-        hub_ancestors, hub_errors = _read_usb_hub_ancestors(sysfs_root, entry.name)
-        errors.extend(hub_errors)
+        generation = f"{entry.name}@{devnum}"
+        observed_generations.add(generation)
+        cached_descriptors = (
+            descriptor_cache.setdefault(generation, {})
+            if descriptor_cache is not None
+            else {}
+        )
+        if "usb_hub_ancestors" not in cached_descriptors:
+            hub_ancestors, hub_errors = _read_usb_hub_ancestors(sysfs_root, entry.name)
+            errors.extend(hub_errors)
+            if descriptor_cache is not None and not hub_errors:
+                cached_descriptors["usb_hub_ancestors"] = copy.deepcopy(hub_ancestors)
+        else:
+            hub_ancestors = copy.deepcopy(cached_descriptors["usb_hub_ancestors"])
+        descriptors: dict[str, Any] = {"usb_hub_ancestors": hub_ancestors}
+        for descriptor_field, filename in (
+            ("usb_product", "product"),
+            ("usb_serial", "serial"),
+        ):
+            value = cached_descriptors.get(descriptor_field)
+            if value is None:
+                value = _optional_sysfs_text(entry / filename)
+                if descriptor_cache is not None and value is not None:
+                    cached_descriptors[descriptor_field] = value
+            descriptors[descriptor_field] = value
         observed[candidate_id].append(
             {
                 "id": candidate_id,
                 "usb_vendor_id": vendor_id,
                 "usb_product_id": product_id,
-                "usb_product": _optional_sysfs_text(entry / "product"),
-                "usb_serial": _optional_sysfs_text(entry / "serial"),
+                "usb_product": descriptors["usb_product"],
+                "usb_serial": descriptors["usb_serial"],
                 "usb_port_path": entry.name,
                 "usb_devnum": devnum,
-                "usb_instance_generation": f"{entry.name}@{devnum}",
-                "usb_hub_ancestors": hub_ancestors,
+                "usb_instance_generation": generation,
+                "usb_hub_ancestors": descriptors["usb_hub_ancestors"],
             }
         )
+    if descriptor_cache is not None and not errors:
+        for generation in set(descriptor_cache) - observed_generations:
+            del descriptor_cache[generation]
     for devices in observed.values():
         devices.sort(
             key=lambda item: (
@@ -1215,11 +1246,16 @@ def _timing_evidence_error(item: dict[str, Any], kind: str) -> str | None:
             return "fallback baseline identity binding is invalid"
     elif outcome == "completed":
         final_sample = item.get("final_sample")
-        if not isinstance(final_sample, dict) or not first_devices:
+        if not isinstance(final_sample, dict):
             return "completed transition omitted its final selected sample"
+        final_devices, final_error = _validated_usb_devices(
+            final_sample.get("usb_microphones"), candidate_id
+        )
+        if final_error or len(final_devices or []) != 1:
+            return final_error or "completed transition final USB identity is missing"
         expected_binding = _identity_binding_evidence(
             final_sample.get("microphone"),
-            first_devices[0],
+            final_devices[0],
             candidate_id,
             "final_selected",
         )
@@ -1232,7 +1268,7 @@ def _timing_evidence_error(item: dict[str, Any], kind: str) -> str | None:
             return "completed transition omitted its final selected sample"
         final_candidate_id = USB_FINAL_SELECTED_CANDIDATE[kind]
         final_devices, final_error = _validated_usb_devices(
-            first.get("usb_microphones"), final_candidate_id
+            final_sample.get("usb_microphones"), final_candidate_id
         )
         if final_error or len(final_devices or []) != 1:
             return final_error or (
@@ -1415,6 +1451,7 @@ class LiveSampler:
         self._cycle = 0
         self._action_id: str | None = None
         self._connection_layout: str | None = None
+        self._usb_descriptor_cache: dict[str, dict[str, Any]] = {}
         self._seq = 0
         self._started_monotonic = 0.0
         self._last_sample_monotonic: float | None = None
@@ -1546,7 +1583,9 @@ class LiveSampler:
                 "gap": gap,
             }
 
-        usb_microphones, usb_error = read_usb_microphones()
+        usb_microphones, usb_error = read_usb_microphones(
+            descriptor_cache=self._usb_descriptor_cache
+        )
         status, status_error = read_status(self.status_path)
         link_text, link_error = command_output(
             ["pw-link", "-l"], timeout=max(0.05, min(self.interval * 0.80, 0.20))
@@ -1855,6 +1894,21 @@ def _consecutive_source_samples(
     return None
 
 
+def _usb_generation_topology(
+    topology: Any,
+) -> tuple[dict[str, tuple[str, ...]] | None, str | None]:
+    """Reduce raw USB evidence to the physical generations present per candidate."""
+    generations: dict[str, tuple[str, ...]] = {}
+    for candidate_id in USB_MICROPHONE_FINGERPRINTS:
+        devices, error = _validated_usb_devices(topology, candidate_id)
+        if error or devices is None:
+            return None, error or f"USB topology omitted {candidate_id}"
+        generations[candidate_id] = tuple(
+            sorted(str(device["usb_instance_generation"]) for device in devices)
+        )
+    return generations, None
+
+
 def _latched_usb_topology_error(
     latched_sample: dict[str, Any],
     previous_sample: dict[str, Any],
@@ -1873,7 +1927,17 @@ def _latched_usb_topology_error(
     assert devices is not None
     if len(devices) != expected_after:
         return f"latched {gate_kind} USB edge did not persist"
-    if sample.get("usb_microphones") != latched_sample.get("usb_microphones"):
+    latched_topology, latched_error = _usb_generation_topology(
+        latched_sample.get("usb_microphones")
+    )
+    if latched_error:
+        return f"latched USB topology is invalid: {latched_error}"
+    sample_topology, sample_error = _usb_generation_topology(
+        sample.get("usb_microphones")
+    )
+    if sample_error:
+        return sample_error
+    if sample_topology != latched_topology:
         return f"latched {gate_kind} USB topology changed after the first edge"
     return None
 
@@ -1990,7 +2054,7 @@ def wait_for_expectation(
                     and selected.get("id") == final_candidate_id
                 ):
                     devices, device_error = _validated_usb_devices(
-                        usb_edge_sample.get("usb_microphones"), final_candidate_id
+                        sample.get("usb_microphones"), final_candidate_id
                     )
                     if device_error or not devices:
                         usb_event_error = (
@@ -2029,7 +2093,7 @@ def wait_for_expectation(
                 assert gate_kind is not None
                 final_candidate_id = USB_FINAL_SELECTED_CANDIDATE[gate_kind]
                 devices, device_error = _validated_usb_devices(
-                    usb_edge_sample.get("usb_microphones"), final_candidate_id
+                    sample.get("usb_microphones"), final_candidate_id
                 )
                 if device_error or not devices:
                     usb_event_error = device_error or "latched USB instance is missing"
@@ -3693,9 +3757,12 @@ def remote_sampler(
         next_deadline = started
         known_hfp_sinks: set[str] = set()
         known_microphone_nodes: set[str] = set()
+        usb_descriptor_cache: dict[str, dict[str, Any]] = {}
         while time.monotonic() - started < duration:
             sample_start = time.monotonic()
-            usb_microphones, usb_error = read_usb_microphones()
+            usb_microphones, usb_error = read_usb_microphones(
+                descriptor_cache=usb_descriptor_cache
+            )
             status, status_error = read_status(status_path)
             link_text, link_error = command_output(
                 ["pw-link", "-l"], timeout=max(0.05, min(interval * 0.80, 0.16))
