@@ -1,6 +1,6 @@
 # E18 — Can a FIFINE K054 safely serve as the Lark A1 fallback microphone?
 
-- **Status:** In progress — implementation and automated checks may merge; field qualification is pending
+- **Status:** Implementation/automated integration passed; field qualification is pending
 - **Resolves risk:** microphone identity ambiguity, unsafe hotplug routing, and unqualified acoustic-path substitution
 - **Gates milestone:** FIFINE-compatible production release
 - **Owner / date:** Codex (runtime model identifier unavailable; GPT-5 family), 2026-08-25
@@ -53,8 +53,9 @@ the operator selected portable matching for this installation.
 | # | Date | Variant / conditions | Artifact dir | Verdict |
 |---|---|---|---|---|
 | 1 | 2026-08-25 | Passive USB/ALSA/PipeWire characterization | planning-session SSH transcript | CONFIRMED for the attached unit |
-| 2 | pending | Automated resolver and graph-safety matrix | `docs/experiments/results/E18/automated/` | pending |
-| 3 | pending | Physical controls, hotplug/reboot, acoustic/AEC and endurance | `docs/experiments/results/E18/field/` | pending |
+| 2 | 2026-08-25 | Host resolver, graph, readiness, release, and qualification suites | commit `3b190d925aff73055aef6a825d8d02422d80df2b` | PASS: 227 + 99 tests, 2 hardware skips |
+| 3 | 2026-08-25 | Read-only live resolution with both microphones attached | `docs/experiments/results/E18/live-resolver-preflight-20260825.json` | PASS |
+| 4 | pending | Physical controls, hotplug/reboot, acoustic/AEC and endurance | `docs/experiments/results/E18/field/` | pending |
 
 ## Acceptance gates
 
@@ -68,14 +69,21 @@ the operator selected portable matching for this installation.
 
 ## Result
 
-Implementation result is pending. Hardware identity/format characterization is confirmed only for
-the attached unit. Physical controls, replacement-unit stability, reboot/hotplug repetition, and
-acoustic/AEC behavior remain unmeasured.
+The implementation and automated graph-safety matrix pass. A read-only execution of the commit's
+resolver against the live Pi selected `lark-a1` at priority 0 and reported `fifine-k054` usable at
+priority 1. The FIFINE observation was capture-only mono S16LE/48 kHz at `1-1.2`, with USB serial
+correctly reported as null rather than the synthetic PipeWire `device.serial` label. The installed
+supervisor/configuration were not changed during this preflight.
+
+Hardware identity/format characterization remains confirmed only for the attached unit. Physical
+controls, replacement-unit stability, reboot/hotplug repetition, and acoustic/AEC behavior remain
+unmeasured.
 
 ## Verdict
 
-**INCONCLUSIVE** until automated graph checks and deferred field qualification complete. Code may
-merge with the fallback documented as field-QA pending; production release promotion remains gated.
+**IMPLEMENTATION PASS / FIELD QA INCONCLUSIVE.** Code may merge with the fallback documented as
+field-QA pending; production release promotion remains gated until every deferred acceptance gate
+passes.
 
 ## Consequences for the plan
 
@@ -91,4 +99,3 @@ merge with the fallback documented as field-QA pending; production release promo
   combination of them?
 - What placement and physical gain produce at least 20 dB speech SNR without clipping in the target
   cabin/room?
-
