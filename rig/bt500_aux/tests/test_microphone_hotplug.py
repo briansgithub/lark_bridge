@@ -19,6 +19,42 @@ def service_counts(value: int = 0) -> dict[str, int]:
     return {unit: value for unit in hotplug.core.SERVICE_UNITS}
 
 
+def usb_topology(
+    *, lark: tuple[str, ...] = (), fifine: tuple[str, ...] = ("1-1.2@4",)
+) -> dict[str, list[dict]]:
+    def devices(candidate_id: str, values: tuple[str, ...]) -> list[dict]:
+        vendor_id, product_id = hotplug.core.USB_MICROPHONE_FINGERPRINTS[candidate_id]
+        found = []
+        for value in values:
+            port, raw_devnum = value.rsplit("@", 1)
+            found.append(
+                {
+                    "id": candidate_id,
+                    "usb_vendor_id": vendor_id,
+                    "usb_product_id": product_id,
+                    "usb_port_path": port,
+                    "usb_devnum": int(raw_devnum),
+                    "usb_instance_generation": value,
+                }
+            )
+        return found
+
+    return {
+        "lark-a1": devices("lark-a1", lark),
+        "fifine-k054": devices("fifine-k054", fifine),
+    }
+
+
+def completed_usb_sample(seq: int = 0) -> dict:
+    return {
+        "seq": seq,
+        "remote_seq": seq,
+        "capture_started_monotonic": 10.0,
+        "usb_microphones": usb_topology(),
+        "usb_error": None,
+    }
+
+
 def snapshot(value: int = 0) -> dict:
     return {
         "services": {
@@ -285,6 +321,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                 checkpoint=checkpoint,
             )
             stream._started_monotonic = time.monotonic()
+            stream._recent.append(completed_usb_sample())
             observed_boundaries = []
             responses = iter([(service_counts(2), None), (service_counts(3), None)])
 
@@ -305,6 +342,86 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
         self.assertEqual(observed_boundaries[1][0], "lark_promotion")
         self.assertEqual(action["service_restart_counts"], service_counts(2))
         self.assertEqual(result_counts, service_counts(3))
+
+    def test_host_action_captures_last_completed_remote_usb_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stream = hotplug.SshSampleStream(
+                host="unused",
+                remote_repo="/unused",
+                source_path=root / "unused.py",
+                timeline_path=root / "samples.jsonl",
+                interval=0.15,
+                duration=60.0,
+                status_path=None,
+                checkpoint=hotplug.Checkpoint(root / "checkpoint.json", {}),
+            )
+            stream._started_monotonic = time.monotonic()
+            stream.ingest(
+                {
+                    "type": "stream_start",
+                    "boot_id": "boot-1",
+                    "service_restart_counts": service_counts(),
+                    "service_error": None,
+                }
+            )
+            topology = usb_topology()
+            stream.ingest(
+                {
+                    "type": "sample",
+                    "seq": 1,
+                    "elapsed_s": 0.15,
+                    "capture_started_monotonic": 500.15,
+                    "usb_microphones": topology,
+                    "usb_error": None,
+                    "microphone": None,
+                    "candidates": {},
+                    "invariants": {"passed": True, "violations": []},
+                    "sampling": {"start_gap_s": 0.15},
+                    "service_restart_counts": service_counts(),
+                }
+            )
+            with mock.patch.object(
+                stream,
+                "_query_service_counts",
+                return_value=(service_counts(), None),
+            ):
+                action = stream.mark_action("lark_promotion", 1, "plug")
+
+        self.assertEqual(action["usb_baseline"]["seq"], 1)
+        self.assertEqual(action["usb_baseline"]["remote_seq"], 1)
+        self.assertEqual(action["usb_baseline"]["usb_microphones"], topology)
+        sample = stream.latest()
+        assert sample is not None
+        self.assertEqual(sample["capture_started_monotonic"], 500.15)
+        self.assertIsInstance(sample["host_received_monotonic"], float)
+
+    def test_host_rejects_ambiguous_usb_baseline_before_action(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stream = hotplug.SshSampleStream(
+                host="unused",
+                remote_repo="/unused",
+                source_path=root / "unused.py",
+                timeline_path=root / "samples.jsonl",
+                interval=0.15,
+                duration=60.0,
+                status_path=None,
+                checkpoint=hotplug.Checkpoint(root / "checkpoint.json", {}),
+            )
+            stream._started_monotonic = time.monotonic()
+            sample = completed_usb_sample()
+            sample["usb_microphones"] = usb_topology(lark=("1-1.3@9", "1-1.4@10"))
+            stream._recent.append(sample)
+            with (
+                mock.patch.object(
+                    stream,
+                    "_query_service_counts",
+                    return_value=(service_counts(), None),
+                ),
+                self.assertRaisesRegex(hotplug.core.CampaignAbort, "ambiguous"),
+            ):
+                stream.mark_action("lark_fallback", 1, "unplug")
 
     def test_ingest_cannot_relabel_a_pre_action_sample(self) -> None:
         entered = threading.Event()
@@ -331,6 +448,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                 checkpoint=checkpoint,
             )
             stream._started_monotonic = time.monotonic()
+            stream._recent.append(completed_usb_sample())
             sample = {
                 "type": "sample",
                 "seq": 1,
@@ -452,6 +570,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                     {
                         "gate_kind": gate_kind,
                         "outcome": "completed",
+                        "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
                         "transition_latency_s": 1.0,
                         "safety_clean": True,
                         "restart_clean": True,
@@ -524,6 +643,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                     {
                         "gate_kind": gate_kind,
                         "outcome": "completed",
+                        "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
                         "transition_latency_s": 1.0,
                         "safety_clean": True,
                         "restart_clean": True,
@@ -582,6 +702,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                     {
                         "gate_kind": gate_kind,
                         "outcome": "completed",
+                        "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
                         "transition_latency_s": 31.0,
                         "safety_clean": True,
                         "restart_clean": True,
@@ -617,6 +738,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
             {
                 "gate_kind": gate_kind,
                 "outcome": "completed",
+                "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
                 "transition_latency_s": 1.0,
                 "safety_clean": True,
                 "restart_clean": True,
@@ -757,6 +879,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
             {
                 "gate_kind": gate_kind,
                 "outcome": "completed",
+                "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
                 "transition_latency_s": 1.0,
                 "safety_clean": True,
                 "restart_clean": True,
@@ -890,6 +1013,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                 {
                     "gate_kind": kind,
                     "outcome": "completed",
+                    "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
                     "transition_latency_s": 30.0,
                     "safety_clean": True,
                     "restart_clean": True,
@@ -900,6 +1024,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                 {
                     "gate_kind": kind,
                     "outcome": "safe_state",
+                    "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
                     "transition_latency_s": None,
                     "safety_clean": True,
                     "restart_clean": True,

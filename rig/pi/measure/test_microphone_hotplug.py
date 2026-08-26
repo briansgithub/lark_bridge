@@ -16,6 +16,42 @@ LARK = "alsa_input.usb-LARK.analog-stereo"
 FIFINE = "alsa_input.usb-FIFINE.mono-fallback"
 
 
+def usb_device(candidate_id: str, generation: str) -> dict:
+    port, raw_devnum = generation.rsplit("@", 1)
+    vendor_id, product_id = hotplug.USB_MICROPHONE_FINGERPRINTS[candidate_id]
+    return {
+        "id": candidate_id,
+        "usb_vendor_id": vendor_id,
+        "usb_product_id": product_id,
+        "usb_product": None,
+        "usb_serial": None,
+        "usb_port_path": port,
+        "usb_devnum": int(raw_devnum),
+        "usb_instance_generation": generation,
+    }
+
+
+def usb_topology(
+    *,
+    lark: tuple[str, ...] = (),
+    fifine: tuple[str, ...] = ("1-1.2@4",),
+) -> dict[str, list[dict]]:
+    return {
+        "lark-a1": [usb_device("lark-a1", value) for value in lark],
+        "fifine-k054": [usb_device("fifine-k054", value) for value in fifine],
+    }
+
+
+def usb_baseline(topology: dict[str, list[dict]]) -> dict:
+    return {
+        "seq": 1,
+        "remote_seq": None,
+        "capture_started_monotonic": 99.0,
+        "usb_microphones": topology,
+        "usb_error": None,
+    }
+
+
 def active_status(*, selected_id: str = "fifine-k054") -> dict:
     selected_node = FIFINE if selected_id == "fifine-k054" else LARK
     return {
@@ -95,6 +131,7 @@ def timing_transitions(kind: str) -> list[dict]:
         {
             "gate_kind": kind,
             "outcome": "completed",
+            "timing_origin": hotplug.USB_TIMING_ORIGIN,
             "transition_latency_s": 30.0,
             "safety_clean": True,
             "restart_clean": True,
@@ -105,6 +142,7 @@ def timing_transitions(kind: str) -> list[dict]:
         {
             "gate_kind": kind,
             "outcome": "safe_state",
+            "timing_origin": hotplug.USB_TIMING_ORIGIN,
             "transition_latency_s": None,
             "safety_clean": True,
             "restart_clean": True,
@@ -123,6 +161,209 @@ def summary_sampler(*, max_gap: float = 0.24) -> hotplug.LiveSampler:
 
 
 class MicrophoneHotplugTests(unittest.TestCase):
+    def test_usb_sysfs_inventory_records_port_devnum_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            device = root / "1-1.3"
+            device.mkdir()
+            (device / "idVendor").write_text("3547\n", encoding="ascii")
+            (device / "idProduct").write_text("0407\n", encoding="ascii")
+            (device / "devnum").write_text("9\n", encoding="ascii")
+            (device / "product").write_text("Wireless Microphone\n", encoding="utf-8")
+
+            topology, error = hotplug.read_usb_microphones(root)
+
+        self.assertIsNone(error)
+        self.assertEqual(topology["fifine-k054"], [])
+        self.assertEqual(topology["lark-a1"][0]["usb_instance_generation"], "1-1.3@9")
+        self.assertEqual(topology["lark-a1"][0]["usb_devnum"], 9)
+
+    def test_each_gated_kind_anchors_to_its_expected_usb_edge(self) -> None:
+        cases = (
+            (
+                "promotion",
+                usb_topology(),
+                usb_topology(lark=("1-1.3@9",)),
+            ),
+            (
+                "fallback",
+                usb_topology(lark=("1-1.3@9",)),
+                usb_topology(),
+            ),
+            (
+                "fifine_replug",
+                usb_topology(fifine=()),
+                usb_topology(fifine=("1-1.2@12",)),
+            ),
+        )
+        for gate_kind, before, after in cases:
+            with self.subTest(gate_kind=gate_kind):
+                state, error = hotplug.observe_expected_usb_edge(
+                    gate_kind,
+                    usb_baseline(before),
+                    {"usb_microphones": after, "usb_error": None},
+                )
+                self.assertEqual(state, "observed")
+                self.assertIsNone(error)
+
+        state, error = hotplug.observe_expected_usb_edge(
+            "promotion",
+            usb_baseline(usb_topology()),
+            {
+                "usb_microphones": usb_topology(lark=("1-1.3@9", "1-1.4@10")),
+                "usb_error": None,
+            },
+        )
+        self.assertEqual(state, "error")
+        self.assertIn("ambiguous", error or "")
+
+    def test_gated_latency_uses_usb_edge_source_monotonic(self) -> None:
+        class Sampler:
+            def __init__(self, samples):
+                self.samples = samples
+
+            def samples_after(self, seq):
+                return [sample for sample in self.samples if sample["seq"] > seq]
+
+            def wait_for_new_sample(self, seq, timeout=1.0):
+                return None
+
+            def service_counts(self):
+                return {unit: 0 for unit in hotplug.SERVICE_UNITS}
+
+            def record_event(self, event_type, **values):
+                return None
+
+        event = {
+            "seq": 1,
+            "timestamp": 125.0,
+            "elapsed_s": 25.0,
+            "capture_started_monotonic": 125.0,
+            "state": "DISCOVERING",
+            "microphone": None,
+            "candidates": {},
+            "aec": {},
+            "invariants": {"violations": [], "hfp_inputs": []},
+            "usb_microphones": usb_topology(lark=("1-1.3@9",)),
+            "usb_error": None,
+        }
+        matched = sample_for(active_status(selected_id="lark-a1"), active_links(LARK))
+        matched.update(
+            {
+                "seq": 2,
+                "timestamp": 128.25,
+                "elapsed_s": 28.25,
+                "capture_started_monotonic": 128.25,
+                "usb_microphones": usb_topology(lark=("1-1.3@9",)),
+                "usb_error": None,
+            }
+        )
+        action = {
+            "monotonic": 100.0,
+            "elapsed_s": 0.0,
+            "after_seq": 0,
+            "phase": "lark_promotion",
+            "cycle": 1,
+            "action_id": "action-1",
+            "timestamp": 1_000.0,
+            "usb_baseline": usb_baseline(usb_topology()),
+            "usb_action_observation_timeout_s": 60.0,
+            "service_restart_counts": {unit: 0 for unit in hotplug.SERVICE_UNITS},
+        }
+        with mock.patch.object(hotplug.time, "monotonic", return_value=100.0):
+            result = hotplug.wait_for_expectation(
+                Sampler([event, matched]),
+                action,
+                hotplug.Expectation(state="ACTIVE", selected_id="lark-a1"),
+                timeout_s=60.0,
+                settle_s=0.0,
+                gate_kind="promotion",
+            )
+
+        self.assertEqual(result["outcome"], "completed")
+        self.assertEqual(result["timing_origin"], hotplug.USB_TIMING_ORIGIN)
+        self.assertEqual(result["action_to_usb_s"], 25.0)
+        self.assertEqual(result["operator_latency_s"], 25.0)
+        self.assertEqual(result["transition_latency_s"], 3.25)
+        self.assertEqual(result["settled_latency_s"], 3.25)
+        self.assertEqual(result["usb_event"]["candidate_id"], "lark-a1")
+
+    def test_gated_transition_fails_closed_when_usb_edge_is_missing(self) -> None:
+        class Sampler:
+            def samples_after(self, seq):
+                return [
+                    {
+                        "seq": 1,
+                        "capture_started_monotonic": 130.0,
+                        "elapsed_s": 30.0,
+                        "state": "ACTIVE",
+                        "invariants": {"violations": [], "hfp_inputs": []},
+                        "usb_microphones": usb_topology(),
+                        "usb_error": None,
+                    }
+                ]
+
+            def wait_for_new_sample(self, seq, timeout=1.0):
+                return None
+
+            def service_counts(self):
+                return {unit: 0 for unit in hotplug.SERVICE_UNITS}
+
+            def record_event(self, event_type, **values):
+                return None
+
+        action = {
+            "monotonic": 100.0,
+            "elapsed_s": 0.0,
+            "after_seq": 0,
+            "phase": "lark_promotion",
+            "cycle": 1,
+            "action_id": "action-1",
+            "timestamp": 1_000.0,
+            "usb_baseline": usb_baseline(usb_topology()),
+            "usb_action_observation_timeout_s": 60.0,
+            "service_restart_counts": {unit: 0 for unit in hotplug.SERVICE_UNITS},
+        }
+        clock_values = iter((100.0, 161.0, 161.0))
+        with mock.patch.object(
+            hotplug.time, "monotonic", side_effect=lambda: next(clock_values, 161.0)
+        ):
+            result = hotplug.wait_for_expectation(
+                Sampler(),
+                action,
+                hotplug.Expectation(state="ACTIVE", selected_id="lark-a1"),
+                timeout_s=60.0,
+                settle_s=0.0,
+                gate_kind="promotion",
+            )
+
+        self.assertEqual(result["outcome"], "usb_event_missing")
+        self.assertEqual(result["timing_origin"], "usb_sysfs_edge_missing")
+        self.assertIsNone(result["transition_latency_s"])
+        self.assertIn("not observed", result["usb_event_error"])
+
+    def test_sample_schema_carries_raw_usb_inventory(self) -> None:
+        sampler = hotplug.LiveSampler(Path("status.json"), Path("timeline.jsonl"), 0.15)
+        started = time.monotonic()
+        sampler._started_monotonic = started - 1.0
+        topology = usb_topology()
+        with (
+            mock.patch.object(
+                hotplug, "read_status", return_value=(active_status(), None)
+            ),
+            mock.patch.object(
+                hotplug, "read_usb_microphones", return_value=(topology, None)
+            ),
+            mock.patch.object(hotplug, "command_output", return_value=("", None)),
+            mock.patch.object(hotplug, "parse_pw_links", return_value=active_links()),
+        ):
+            sampler._capture_sample(started)
+
+        sample = sampler.latest()
+        assert sample is not None
+        self.assertEqual(sample["usb_microphones"], topology)
+        self.assertIsNone(sample["usb_error"])
+
     def test_parse_pw_links_preserves_node_level_direction(self) -> None:
         text = "\n".join(
             [
@@ -384,6 +625,7 @@ class MicrophoneHotplugTests(unittest.TestCase):
             {
                 "gate_kind": "promotion",
                 "outcome": "completed",
+                "timing_origin": hotplug.USB_TIMING_ORIGIN,
                 "transition_latency_s": 30.0,
                 "safety_clean": True,
                 "restart_clean": True,
@@ -394,6 +636,7 @@ class MicrophoneHotplugTests(unittest.TestCase):
             {
                 "gate_kind": "promotion",
                 "outcome": "safe_state",
+                "timing_origin": hotplug.USB_TIMING_ORIGIN,
                 "transition_latency_s": None,
                 "safety_clean": True,
                 "restart_clean": True,
@@ -427,6 +670,7 @@ class MicrophoneHotplugTests(unittest.TestCase):
             {
                 "gate_kind": "promotion",
                 "outcome": "completed",
+                "timing_origin": hotplug.USB_TIMING_ORIGIN,
                 "transition_latency_s": 45.0,
                 "safety_clean": True,
                 "restart_clean": True,
@@ -450,6 +694,7 @@ class MicrophoneHotplugTests(unittest.TestCase):
         transition = {
             "gate_kind": "promotion",
             "outcome": "completed",
+            "timing_origin": hotplug.USB_TIMING_ORIGIN,
             "transition_latency_s": 30.0,
             "safety_clean": True,
             "restart_clean": True,
@@ -467,6 +712,21 @@ class MicrophoneHotplugTests(unittest.TestCase):
             )["verdict"],
             "FAIL",
         )
+
+    def test_timing_gate_rejects_legacy_operator_origin(self) -> None:
+        transition = {
+            "gate_kind": "promotion",
+            "outcome": "completed",
+            "timing_origin": "operator_now",
+            "transition_latency_s": 1.0,
+            "safety_clean": True,
+            "restart_clean": True,
+        }
+        gate = hotplug.summarize_timing_gate(
+            [transition], kind="promotion", expected_cycles=1
+        )
+        self.assertEqual(gate["verdict"], "FAIL")
+        self.assertEqual(gate["usb_timed_cycles"], 0)
 
     def test_gate_transition_may_return_actionable_safe_state(self) -> None:
         class Sampler:
@@ -522,7 +782,7 @@ class MicrophoneHotplugTests(unittest.TestCase):
             "monotonic": 0.0,
             "elapsed_s": 0.0,
             "after_seq": 0,
-            "phase": "lark_promotion",
+            "phase": "restore_lark",
             "cycle": 1,
             "action_id": "action-1",
             "timestamp": 100.0,
@@ -545,7 +805,7 @@ class MicrophoneHotplugTests(unittest.TestCase):
                     hotplug.Expectation(state="ACTIVE", selected_id="lark-a1"),
                     timeout_s=60.0,
                     settle_s=0.0,
-                    gate_kind="promotion",
+                    gate_kind=None,
                 )
 
         self.assertEqual(observe(60.0)["outcome"], "safe_state")
@@ -751,10 +1011,48 @@ class MicrophoneHotplugTests(unittest.TestCase):
         )
         self.assertNotIn("NOW:", output.getvalue())
 
+    def test_prechanged_usb_baseline_is_rejected_before_now_prompt(self) -> None:
+        sampler = hotplug.LiveSampler(Path("status.json"), Path("timeline.jsonl"), 0.15)
+        sampler._started_monotonic = time.monotonic()
+        sampler._recent.append(
+            {
+                "seq": 1,
+                "capture_started_monotonic": time.monotonic(),
+                "usb_microphones": usb_topology(lark=("1-1.3@9",)),
+                "usb_error": None,
+            }
+        )
+        output = io.StringIO()
+        with (
+            mock.patch.object(
+                sampler,
+                "_query_service_counts",
+                return_value=({unit: 0 for unit in hotplug.SERVICE_UNITS}, None),
+            ),
+            self.assertRaisesRegex(hotplug.CampaignAbort, "expected 0 lark-a1"),
+            contextlib.redirect_stderr(output),
+        ):
+            hotplug.operator_action(
+                sampler,
+                phase="lark_promotion",
+                cycle=1,
+                instruction="plug it in",
+                input_fn=lambda: "PLUG LARK",
+            )
+        self.assertNotIn("NOW:", output.getvalue())
+
     def test_local_action_boundaries_query_restart_counts_synchronously(self) -> None:
         sampler = hotplug.LiveSampler(Path("status.json"), Path("timeline.jsonl"), 0.15)
         sampler._started_monotonic = time.monotonic()
         sampler._service_counts = {unit: 99 for unit in hotplug.SERVICE_UNITS}
+        sampler._recent.append(
+            {
+                "seq": 0,
+                "capture_started_monotonic": time.monotonic(),
+                "usb_microphones": usb_topology(),
+                "usb_error": None,
+            }
+        )
         with mock.patch.object(
             sampler,
             "_query_service_counts",
@@ -780,6 +1078,14 @@ class MicrophoneHotplugTests(unittest.TestCase):
         sampler = hotplug.LiveSampler(Path("status.json"), Path("timeline.jsonl"), 0.15)
         started = time.monotonic()
         sampler._started_monotonic = started - 1.0
+        sampler._recent.append(
+            {
+                "seq": 0,
+                "capture_started_monotonic": started - 0.1,
+                "usb_microphones": usb_topology(),
+                "usb_error": None,
+            }
+        )
         action: dict = {}
 
         def status_during_capture(_path):
@@ -796,6 +1102,11 @@ class MicrophoneHotplugTests(unittest.TestCase):
                 return_value=({unit: 0 for unit in hotplug.SERVICE_UNITS}, None),
             ),
             mock.patch.object(hotplug, "command_output", return_value=("", None)),
+            mock.patch.object(
+                hotplug,
+                "read_usb_microphones",
+                return_value=(usb_topology(), None),
+            ),
             mock.patch.object(hotplug, "parse_pw_links", return_value=active_links()),
         ):
             sampler._capture_sample(started)
