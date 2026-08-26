@@ -906,6 +906,229 @@ class OutputWakeTests(unittest.TestCase):
             supervisor.wait_for_next_tick(10, lambda: False)
         sleep.assert_called_once_with(supervisor.OUTPUT_EVENT_POLL_SECONDS)
 
+    def test_lark_liveness_change_wakes_before_the_full_poll(self) -> None:
+        with (
+            mock.patch.object(supervisor, "desire_stamp", return_value=10),
+            mock.patch.object(supervisor.time, "monotonic", return_value=0.0),
+            mock.patch.object(supervisor.time, "sleep") as sleep,
+        ):
+            supervisor.wait_for_next_tick(10, lambda: False, wake=lambda: True)
+        sleep.assert_not_called()
+
+
+class LarkPcmLivenessTests(unittest.TestCase):
+    @staticmethod
+    def candidates_and_sources(*, generation: str = "lark@1") -> tuple:
+        lark = microphones.MicrophoneCandidate(
+            id="lark-a1",
+            label="Hollyland Lark A1",
+            node_name=supervisor.DEFAULT_LARK,
+            usb_vendor_id="3547",
+            usb_product_id="0407",
+            usb_product="Wireless Microphone",
+            required_rate=48_000,
+            required_format="S16LE",
+            required_channels=2,
+            capture_only=True,
+        )
+        fifine_node = "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+        fifine = microphones.MicrophoneCandidate(
+            id="fifine-k054",
+            label="FIFINE K054",
+            node_name=fifine_node,
+            usb_vendor_id="0c76",
+            usb_product_id="161e",
+            usb_product="USB PnP Audio Device",
+            required_rate=48_000,
+            required_format="S16LE",
+            required_channels=1,
+            capture_only=True,
+        )
+        lark_source = microphones.ObservedSource(
+            node=supervisor.DEFAULT_LARK,
+            pipewire_id="41",
+            pipewire_object_serial=generation,
+            device_id="40",
+            device_object_serial=generation,
+            alsa_components=("USB3547:0407",),
+            usb_vendor_id="3547",
+            usb_product_id="0407",
+            usb_product="Wireless Microphone",
+            usb_instance_generation=generation,
+            formats=(microphones.MicrophoneFormat(48_000, "S16LE", 2),),
+            device_has_playback=False,
+        )
+        fifine_source = microphones.ObservedSource(
+            node=fifine_node,
+            pipewire_id="51",
+            pipewire_object_serial="fifine@1",
+            device_id="50",
+            device_object_serial="fifine@1",
+            alsa_components=("USB0C76:161E",),
+            usb_vendor_id="0c76",
+            usb_product_id="161e",
+            usb_product="USB PnP Audio Device",
+            usb_instance_generation="fifine@1",
+            formats=(microphones.MicrophoneFormat(48_000, "S16LE", 1),),
+            device_has_playback=False,
+        )
+        return (lark, fifine), (lark_source, fifine_source)
+
+    def test_policy_is_limited_to_explicit_lark_with_fifine_fallback(self) -> None:
+        candidates, _sources = self.candidates_and_sources()
+        self.assertTrue(supervisor.automatic_lark_liveness_enabled(candidates))
+        self.assertFalse(supervisor.automatic_lark_liveness_enabled(candidates[:1]))
+        self.assertFalse(
+            supervisor.automatic_lark_liveness_enabled(
+                (mock.Mock(id="lark-a1", legacy=True), candidates[1])
+            )
+        )
+
+    def test_exact_zero_is_inactive_and_any_nonzero_bit_is_active(self) -> None:
+        states = {
+            "tx1": b"\x01\x00\x00\x00",
+            "tx2": b"\x00\x00\x01\x00",
+            "both": b"\x01\x00\x01\x00",
+        }
+        for label, window in states.items():
+            with self.subTest(label=label):
+                detector = supervisor.PcmActivityDebouncer(
+                    4,
+                    active_windows=1,
+                    inactive_windows=1,
+                )
+                detector.feed(window)
+                self.assertEqual(detector.state, "active")
+
+        detector = supervisor.PcmActivityDebouncer(
+            4,
+            active_windows=1,
+            inactive_windows=1,
+        )
+        self.assertFalse(detector.feed(b""))
+        self.assertEqual(detector.state, "unknown")
+        detector.feed(b"\x00" * 4)
+        self.assertEqual(detector.state, "inactive")
+
+    def test_presence_and_loss_require_consecutive_windows(self) -> None:
+        detector = supervisor.PcmActivityDebouncer(
+            4,
+            active_windows=2,
+            inactive_windows=3,
+        )
+        detector.feed(b"\x01\x00\x00\x00")
+        self.assertEqual(detector.state, "unknown")
+        detector.feed(b"\x01\x00\x00\x00")
+        self.assertEqual(detector.state, "active")
+
+        detector.feed(b"\x00" * 8)
+        self.assertEqual(detector.state, "active")
+        detector.feed(b"\x01\x00\x00\x00")
+        detector.feed(b"\x00" * 8)
+        self.assertEqual(detector.state, "active")
+        detector.feed(b"\x00" * 4)
+        self.assertEqual(detector.state, "inactive")
+
+    def test_monitor_remains_bound_to_lark_while_final_selection_is_fifine(self) -> None:
+        candidates, sources = self.candidates_and_sources()
+        physical = microphones.resolve(candidates, sources)
+        proc = mock.MagicMock()
+        proc.poll.return_value = None
+        proc.stdout.fileno.return_value = 7
+        proc.pid = 123
+        popen = mock.Mock(return_value=proc)
+        monitor = supervisor.LarkPcmLivenessMonitor(
+            popen_factory=popen,
+            clock=lambda: 0.0,
+        )
+        with (
+            mock.patch.object(supervisor.os, "set_blocking"),
+            mock.patch.object(supervisor.os, "read", side_effect=BlockingIOError),
+        ):
+            availability = monitor.reconcile(physical, [], enabled=True)
+            final = microphones.resolve(
+                candidates,
+                sources,
+                {availability.candidate_id: availability},
+            )
+            monitor.reconcile(
+                physical,
+                [(supervisor.DEFAULT_LARK, supervisor.LARK_PCM_MONITOR_NODE)],
+                enabled=True,
+            )
+        self.assertEqual(final.selected.candidate.id, "fifine-k054")
+        self.assertEqual(availability.state, "unknown")
+        popen.assert_called_once()
+        command = popen.call_args.args[0]
+        self.assertEqual(command[command.index("--target") + 1], supervisor.DEFAULT_LARK)
+        self.assertIn("node.dont-reconnect=true", command[command.index("--properties") + 1])
+        monitor.close()
+
+    def test_active_pcm_cannot_promote_lark_before_exact_link_verification(self) -> None:
+        candidates, sources = self.candidates_and_sources()
+        physical = microphones.resolve(candidates, sources)
+        now = [0.0]
+        proc = mock.MagicMock()
+        proc.poll.return_value = None
+        proc.stdout.fileno.return_value = 7
+        monitor = supervisor.LarkPcmLivenessMonitor(
+            popen_factory=mock.Mock(return_value=proc),
+            clock=lambda: now[0],
+        )
+        with (
+            mock.patch.object(supervisor.os, "set_blocking"),
+            mock.patch.object(supervisor.os, "read", side_effect=BlockingIOError),
+        ):
+            monitor.reconcile(physical, [], enabled=True)
+            pcm_window = b"\x01" + b"\x00" * 3_839
+            monitor.feed_pcm(pcm_window * supervisor.LARK_PCM_ACTIVE_WINDOWS)
+            now[0] = 0.36
+            unverified = monitor.reconcile(physical, [], enabled=True)
+            fallback = microphones.resolve(
+                candidates,
+                sources,
+                {unverified.candidate_id: unverified},
+            )
+            now[0] = 0.51
+            verified = monitor.reconcile(
+                physical,
+                [(supervisor.DEFAULT_LARK, supervisor.LARK_PCM_MONITOR_NODE)],
+                enabled=True,
+            )
+            promoted = microphones.resolve(
+                candidates,
+                sources,
+                {verified.candidate_id: verified},
+            )
+        self.assertEqual(unverified.state, "unknown")
+        self.assertEqual(fallback.selected.candidate.id, "fifine-k054")
+        self.assertEqual(verified.state, "active")
+        self.assertEqual(promoted.selected.candidate.id, "lark-a1")
+        monitor.close()
+
+    def test_same_node_new_generation_restarts_monitor_as_unknown(self) -> None:
+        candidates, sources = self.candidates_and_sources(generation="lark@1")
+        first = microphones.resolve(candidates, sources)
+        _same_candidates, replacement_sources = self.candidates_and_sources(generation="lark@2")
+        replacement = microphones.resolve(candidates, replacement_sources)
+        first_proc = mock.MagicMock()
+        first_proc.poll.return_value = None
+        first_proc.stdout.fileno.return_value = 7
+        second_proc = mock.MagicMock()
+        second_proc.poll.return_value = None
+        second_proc.stdout.fileno.return_value = 8
+        monitor = supervisor.LarkPcmLivenessMonitor(
+            popen_factory=mock.Mock(side_effect=[first_proc, second_proc]),
+            clock=lambda: 0.0,
+        )
+        with mock.patch.object(supervisor.os, "set_blocking"):
+            before = monitor.reconcile(first, [], enabled=True)
+            after = monitor.reconcile(replacement, [], enabled=True)
+        self.assertNotEqual(before.instance_token, after.instance_token)
+        self.assertEqual(after.state, "unknown")
+        first_proc.terminate.assert_called_once()
+        monitor.close()
+
 
 class DesireFileTests(unittest.TestCase):
     """Runtime selection is a file on tmpfs, so it costs no LARKDATA writes."""
@@ -1082,9 +1305,7 @@ class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
             usb_parent.mkdir(parents=True)
             (usb_parent / "idVendor").write_text("0c76\n", encoding="utf-8")
             (usb_parent / "idProduct").write_text("161e\n", encoding="utf-8")
-            (usb_parent / "product").write_text(
-                "USB PnP Audio Device\n", encoding="utf-8"
-            )
+            (usb_parent / "product").write_text("USB PnP Audio Device\n", encoding="utf-8")
             (usb_parent / "devnum").write_text("7\n", encoding="utf-8")
             device = {
                 "id": 8,
@@ -1101,9 +1322,7 @@ class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
                 },
             }
 
-            facts = supervisor.microphone_sysfs_by_device(
-                [device], sysfs_root=sysfs_root
-            )["8"]
+            facts = supervisor.microphone_sysfs_by_device([device], sysfs_root=sysfs_root)["8"]
 
         self.assertEqual(facts["usb_vendor_id"], "0c76")
         self.assertEqual(facts["usb_product_id"], "161e")
@@ -1172,9 +1391,7 @@ class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
             usb_parent.mkdir(parents=True)
             (usb_parent / "idVendor").write_text("0c76\n", encoding="utf-8")
             (usb_parent / "idProduct").write_text("161e\n", encoding="utf-8")
-            (usb_parent / "product").write_text(
-                "USB PnP Audio Device\n", encoding="utf-8"
-            )
+            (usb_parent / "product").write_text("USB PnP Audio Device\n", encoding="utf-8")
             (usb_parent / "devnum").write_text("7\n", encoding="utf-8")
             with mock.patch.object(supervisor.subprocess, "run") as run:
                 observations, resolution = supervisor.discover_microphones(
@@ -1262,9 +1479,7 @@ class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
             "run",
             return_value=mock.Mock(returncode=1, stdout="", stderr="unavailable"),
         ):
-            found = supervisor.microphone_capabilities_by_node(
-                [device, node], cache=cache
-            )
+            found = supervisor.microphone_capabilities_by_node([device, node], cache=cache)
         self.assertEqual(found["fifine"], ())
         self.assertEqual(cache, {})
 
@@ -1690,9 +1905,7 @@ class MicrophonePriorityLifecycleTests(unittest.TestCase):
             after.instance_token,
         )
         muted = self.events.index("control:True")
-        linked = self.events.index(
-            f"link:output.bridge.mic->{graph.settings.hfp_sink}"
-        )
+        linked = self.events.index(f"link:output.bridge.mic->{graph.settings.hfp_sink}")
         unmuted = self.events.index("control:False")
         self.assertLess(muted, linked)
         self.assertLess(linked, unmuted)
@@ -1959,9 +2172,7 @@ class MicrophonePriorityLifecycleTests(unittest.TestCase):
             recovered.instance_token,
         )
         muted = self.events.index("control:True")
-        linked = self.events.index(
-            f"link:output.bridge.mic->{graph.settings.hfp_sink}"
-        )
+        linked = self.events.index(f"link:output.bridge.mic->{graph.settings.hfp_sink}")
         unmuted = self.events.index("control:False")
         self.assertLess(muted, linked)
         self.assertLess(linked, unmuted)
@@ -1982,8 +2193,7 @@ class MicrophonePriorityLifecycleTests(unittest.TestCase):
             selected_id="fifine-k054",
         )
         ambiguity_reason = (
-            "lark-a1 ambiguous: 2 physical devices match; "
-            "configure usb_serial or usb_port_path"
+            "lark-a1 ambiguous: 2 physical devices match; " "configure usb_serial or usb_port_path"
         )
         ambiguous = FakeMicrophoneResolution(
             None,
@@ -2073,7 +2283,9 @@ class MicrophonePriorityLifecycleTests(unittest.TestCase):
         ]
         with (
             mock.patch.object(supervisor, "NativeAecHost", FakeHost),
-            mock.patch.object(supervisor, "unlink", lambda source, target: removed.append((source, target))),
+            mock.patch.object(
+                supervisor, "unlink", lambda source, target: removed.append((source, target))
+            ),
         ):
             graph.tick(
                 self.nodes(graph),

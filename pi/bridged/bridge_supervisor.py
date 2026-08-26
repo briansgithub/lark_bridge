@@ -33,6 +33,14 @@ OUTPUT_EVENT_POLL_SECONDS = 0.05
 BUILD_TIMEOUT_SECONDS = 10.0
 ATTACH_GRACE_SECONDS = 4.0
 MAX_BUILD_ATTEMPTS = 5
+LARK_PCM_WINDOW_SECONDS = 0.020
+LARK_PCM_ACTIVE_WINDOWS = 18
+LARK_PCM_INACTIVE_WINDOWS = 88
+LARK_PCM_RETRY_SECONDS = 2.0
+LARK_PCM_MONITOR_NODE = "bridge.lark.liveness"
+# The attached A1 receiver produced exact-zero PCM with both transmitters off and continuous
+# nonzero PCM with TX1, TX2, or both linked. A linked-but-muted transmitter was not available
+# to qualify, so this heuristic is deliberately confined to the known Lark/FIFINE policy.
 # FAILED used to be terminal: tick() returned immediately and update_signature() only
 # resets `attempts` when (call_up, lark, output_up) CHANGES. Measured in E13 -- five AEC
 # host deaths in a burst left the unit permanently dead with the call still up, the far
@@ -770,9 +778,10 @@ def microphone_capabilities_by_node(
                 )
             # Some recorded/test snapshots carry one already-negotiated format directly.
             # It is admissible evidence only when all fields are present.
-            if not formats and all(props.get(key) is not None for key in (
-                "audio.rate", "audio.format", "audio.channels"
-            )):
+            if not formats and all(
+                props.get(key) is not None
+                for key in ("audio.rate", "audio.format", "audio.channels")
+            ):
                 try:
                     formats = (
                         {
@@ -829,6 +838,331 @@ def resolve_microphone(
         capability_cache=capability_cache,
         sysfs_root=sysfs_root,
     )[1]
+
+
+class PcmActivityDebouncer:
+    """Classify native S16 PCM without mistaking brief silence for a lost transmitter."""
+
+    def __init__(
+        self,
+        window_bytes: int,
+        *,
+        active_windows: int = LARK_PCM_ACTIVE_WINDOWS,
+        inactive_windows: int = LARK_PCM_INACTIVE_WINDOWS,
+    ) -> None:
+        if window_bytes <= 0 or active_windows <= 0 or inactive_windows <= 0:
+            raise ValueError("PCM liveness window sizes must be positive")
+        self.window_bytes = window_bytes
+        self.active_windows = active_windows
+        self.inactive_windows = inactive_windows
+        self.state = "unknown"
+        self.revision = 0
+        self._buffer = bytearray()
+        self._nonzero_windows = 0
+        self._zero_windows = 0
+
+    def feed(self, data: bytes) -> bool:
+        """Consume complete windows; an empty read is no evidence either way."""
+        if not data:
+            return False
+        before = self.revision
+        self._buffer.extend(data)
+        while len(self._buffer) >= self.window_bytes:
+            window = bytes(self._buffer[: self.window_bytes])
+            del self._buffer[: self.window_bytes]
+            if any(window):
+                self._zero_windows = 0
+                self._nonzero_windows = min(
+                    self._nonzero_windows + 1,
+                    self.active_windows,
+                )
+                if self._nonzero_windows >= self.active_windows and self.state != "active":
+                    self.state = "active"
+                    self.revision += 1
+            else:
+                self._nonzero_windows = 0
+                self._zero_windows = min(
+                    self._zero_windows + 1,
+                    self.inactive_windows,
+                )
+                if self._zero_windows >= self.inactive_windows and self.state != "inactive":
+                    self.state = "inactive"
+                    self.revision += 1
+        return self.revision != before
+
+
+def automatic_lark_liveness_enabled(candidates: tuple[Any, ...]) -> bool:
+    """Limit the PCM heuristic to the explicit Lark-first/FIFINE-fallback deployment."""
+    lark = next((item for item in candidates if getattr(item, "id", None) == "lark-a1"), None)
+    fifine = next(
+        (item for item in candidates if getattr(item, "id", None) == "fifine-k054"),
+        None,
+    )
+    return bool(lark is not None and not getattr(lark, "legacy", False) and fifine is not None)
+
+
+class LarkPcmLivenessMonitor:
+    """Own one exact-target recorder and publish token-bound Lark eligibility."""
+
+    NO_DATA_SECONDS = 1.0
+    LINK_GRACE_SECONDS = 0.5
+
+    def __init__(self, *, popen_factory: Any = subprocess.Popen, clock: Any = time.monotonic):
+        self._popen_factory = popen_factory
+        self._clock = clock
+        self.proc: subprocess.Popen[bytes] | None = None
+        self.enabled = False
+        self.node: str | None = None
+        self.instance_token: str | None = None
+        self.state = "disabled"
+        self.reason = "Lark transmitter detection is disabled"
+        self.revision = 0
+        self._detector: PcmActivityDebouncer | None = None
+        self._started_at = 0.0
+        self._last_data_at = 0.0
+        self._next_retry = 0.0
+        self._link_verified = False
+        self._link_check_requested = False
+        self._rate = 48_000
+        self._channels = 2
+
+    def _set_state(self, state: str, reason: str) -> bool:
+        changed = state != self.state or reason != self.reason
+        self.state = state
+        self.reason = reason
+        if changed:
+            self.revision += 1
+        return changed
+
+    def _stop_process(self) -> None:
+        proc = self.proc
+        self.proc = None
+        if proc is None:
+            return
+        try:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=2)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        if proc.stdout is not None:
+            try:
+                proc.stdout.close()
+            except OSError:
+                pass
+
+    def _deactivate(self, state: str, reason: str) -> None:
+        self._stop_process()
+        self.node = None
+        self.instance_token = None
+        self._detector = None
+        self._next_retry = 0.0
+        self._link_verified = False
+        self._link_check_requested = False
+        self._set_state(state, reason)
+
+    def _mark_error(self, reason: str) -> bool:
+        self._stop_process()
+        self._next_retry = self._clock() + LARK_PCM_RETRY_SECONDS
+        self._link_verified = False
+        self._link_check_requested = False
+        return self._set_state("error", reason)
+
+    def _start(self) -> None:
+        if self.node is None or self.instance_token is None:
+            return
+        if self._channels == 1:
+            channel_map = "mono"
+        elif self._channels == 2:
+            channel_map = "stereo"
+        else:
+            self._mark_error(f"unsupported Lark channel count for PCM monitoring: {self._channels}")
+            return
+        command = [
+            "pw-record",
+            "--target",
+            self.node,
+            "--properties",
+            (
+                f"node.name={LARK_PCM_MONITOR_NODE} "
+                "node.dont-reconnect=true stream.dont-remix=true"
+            ),
+            "--rate",
+            str(self._rate),
+            "--channels",
+            str(self._channels),
+            "--channel-map",
+            channel_map,
+            "--format",
+            "s16",
+            "--raw",
+            "-",
+        ]
+        try:
+            proc = self._popen_factory(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                bufsize=0,
+            )
+            self.proc = proc
+            if proc.stdout is None:
+                raise OSError("pw-record did not provide a PCM stream")
+            os.set_blocking(proc.stdout.fileno(), False)
+        except (OSError, subprocess.SubprocessError) as exc:
+            self._stop_process()
+            self._next_retry = self._clock() + LARK_PCM_RETRY_SECONDS
+            self._set_state("error", f"Lark transmitter monitor could not start: {exc}")
+            return
+        window_bytes = int(self._rate * self._channels * 2 * LARK_PCM_WINDOW_SECONDS)
+        self._detector = PcmActivityDebouncer(window_bytes)
+        self._started_at = self._clock()
+        self._last_data_at = self._started_at
+        self._next_retry = 0.0
+        self._link_verified = False
+        self._link_check_requested = False
+        self._set_state("unknown", "checking the Lark receiver for transmitter audio")
+        log.info("monitoring Lark transmitter audio on %s", self.node)
+
+    def feed_pcm(self, data: bytes) -> bool:
+        """Testable read seam used by poll(); every nonzero S16 bit counts as activity."""
+        if self._detector is None or not data:
+            return False
+        self._last_data_at = self._clock()
+        if not self._detector.feed(data):
+            return False
+        if self._detector.state == "active":
+            return self._set_state("active", "Lark transmitter audio is active")
+        return self._set_state(
+            "inactive",
+            "Lark receiver is present, but no transmitter audio is detected",
+        )
+
+    def poll(self) -> bool:
+        """Drain available PCM without blocking; return true only for a state change."""
+        before = self.revision
+        proc = self.proc
+        if proc is None:
+            return False
+        if proc.poll() is not None:
+            self._mark_error(f"Lark transmitter monitor exited with status {proc.returncode}")
+            return self.revision != before
+        assert proc.stdout is not None
+        while True:
+            try:
+                data = os.read(proc.stdout.fileno(), 65_536)
+            except BlockingIOError:
+                break
+            except OSError as exc:
+                self._mark_error(f"Lark transmitter monitor read failed: {exc}")
+                return self.revision != before
+            if not data:
+                self._mark_error("Lark transmitter monitor ended without PCM")
+                return self.revision != before
+            self.feed_pcm(data)
+        if self.proc is not None and self._clock() - self._last_data_at > self.NO_DATA_SECONDS:
+            self._mark_error("Lark transmitter monitor produced no PCM")
+        if (
+            self.proc is not None
+            and not self._link_verified
+            and not self._link_check_requested
+            and self._clock() - self._started_at >= self.LINK_GRACE_SECONDS
+        ):
+            # Force one fresh pw-link snapshot before active PCM can affect selection.
+            self._link_check_requested = True
+            return True
+        return self.revision != before
+
+    def reconcile(self, physical_resolution: Any, links: LinkList, *, enabled: bool) -> Any:
+        """Bind monitoring to the physical Lark generation, independent of final selection."""
+        import microphones as microphones_module
+
+        self.enabled = enabled
+        if not enabled:
+            self._deactivate("disabled", "Lark transmitter detection is disabled")
+            return None
+        selection = getattr(physical_resolution, "selected", None)
+        candidate = getattr(selection, "candidate", None)
+        if selection is None or getattr(candidate, "id", None) != "lark-a1":
+            self._deactivate("absent", "no uniquely usable Lark receiver is present")
+            return None
+
+        source = selection.source
+        selected_format = source.matching_format(candidate)
+        token = selection.instance_token
+        node = selection.node
+        if selected_format is None or selected_format.format != "S16LE":
+            if token != self.instance_token or node != self.node:
+                self._stop_process()
+                self.node = node
+                self.instance_token = token
+            self._mark_error("Lark transmitter detection requires native S16LE PCM")
+        else:
+            target_changed = token != self.instance_token or node != self.node
+            if target_changed:
+                self._stop_process()
+                self.node = node
+                self.instance_token = token
+                self._rate = selected_format.rate
+                self._channels = selected_format.channels
+                self._start()
+            else:
+                self.poll()
+                now = self._clock()
+                if self.proc is None and now >= self._next_retry:
+                    self._start()
+
+        if self.proc is not None and self._clock() - self._started_at >= self.LINK_GRACE_SECONDS:
+            linked_sources = {
+                source_name
+                for source_name, target_name in links
+                if target_name == LARK_PCM_MONITOR_NODE
+            }
+            if linked_sources != {self.node}:
+                self._mark_error(
+                    "Lark transmitter monitor is not exclusively linked to the selected receiver"
+                )
+            else:
+                self._link_verified = True
+                self._link_check_requested = False
+
+        assert self.instance_token is not None
+        availability_state = self.state
+        availability_reason = self.reason
+        if availability_state == "active" and not self._link_verified:
+            availability_state = "unknown"
+            availability_reason = "verifying the Lark transmitter monitor target"
+        return microphones_module.DynamicAvailability(
+            candidate_id="lark-a1",
+            instance_token=self.instance_token,
+            state=availability_state,
+            reason=availability_reason,
+        )
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "detector": "pcm_exact_zero",
+            "state": self.state,
+            "active": (
+                True if self.state == "active" else False if self.state == "inactive" else None
+            ),
+            "reason": self.reason,
+            "node": self.node,
+            "instance_token": self.instance_token,
+            "link_verified": self._link_verified,
+            "owner_pid": self.proc.pid if self.proc is not None else None,
+            "active_after_ms": round(LARK_PCM_WINDOW_SECONDS * LARK_PCM_ACTIVE_WINDOWS * 1000),
+            "inactive_after_ms": round(LARK_PCM_WINDOW_SECONDS * LARK_PCM_INACTIVE_WINDOWS * 1000),
+        }
+
+    def close(self) -> None:
+        self.enabled = False
+        self._deactivate("disabled", "supervisor is stopping")
 
 
 def pw_links() -> LinkList | None:
@@ -1082,14 +1416,13 @@ class Loopback:
             "{ node.dont-reconnect = true node.passive = true }",
             "--playback-props",
             (
-                "{ node.dont-reconnect = true node.passive = true "
-                "node.autoconnect = false }"
+                "{ node.dont-reconnect = true node.passive = true " "node.autoconnect = false }"
                 if self.defer_playback
                 else "{ node.dont-reconnect = true node.passive = true }"
             ),
         ]
         if not self.defer_playback:
-            command[command.index("--channels"):command.index("--channels")] = [
+            command[command.index("--channels") : command.index("--channels")] = [
                 "--playback",
                 self.playback,
             ]
@@ -1506,9 +1839,7 @@ class CallGraph:
     def update_signature(self, signature: tuple[Any, ...]) -> bool:
         if signature == self.signature:
             return False
-        had_graph = any(
-            item is not None for item in (self.aec_host, self.microphone, self.callout)
-        )
+        had_graph = any(item is not None for item in (self.aec_host, self.microphone, self.callout))
         self.generation += 1
         self.teardown("endpoint generation changed")
         self.signature = signature
@@ -1615,9 +1946,7 @@ class CallGraph:
         )
         for source, target in links:
             dangerous = source in physical and target == self.settings.hfp_sink
-            dangerous = dangerous or (
-                target == self.settings.hfp_sink and source != owned_uplink
-            )
+            dangerous = dangerous or (target == self.settings.hfp_sink and source != owned_uplink)
             dangerous = dangerous or (
                 target == AEC_CAPTURE and source in physical and source != selected
             )
@@ -1651,9 +1980,7 @@ class CallGraph:
             return False
         if not self.microphone.targets_verified(links) or not self.callout.targets_verified(links):
             return False
-        uplink_sources = {
-            source for source, target in links if target == self.settings.hfp_sink
-        }
+        uplink_sources = {source for source, target in links if target == self.settings.hfp_sink}
         if uplink_sources != {self.microphone.out_node}:
             return False
         if self.settings.aec.enabled:
@@ -1770,9 +2097,7 @@ class CallGraph:
             elif self.ensure_output_volume(resolved):
                 self.last_failure = None
             else:
-                self.last_failure = (
-                    self.output_volume_error or "wired output volume did not verify"
-                )
+                self.last_failure = self.output_volume_error or "wired output volume did not verify"
             self.state = State.CALL_DOWN
             return
 
@@ -1790,9 +2115,7 @@ class CallGraph:
             return
 
         if early_links_removed:
-            if not any(
-                item is not None for item in (self.aec_host, self.microphone, self.callout)
-            ):
+            if not any(item is not None for item in (self.aec_host, self.microphone, self.callout)):
                 self.state = State.DISCOVERING
             # Never construct or validate against the snapshot that contained a raw or
             # duplicate route. Wait until pw-dump/pw-link prove the unlink completed.
@@ -1947,9 +2270,7 @@ class CallGraph:
         call_up = self.settings.hfp_sink in nodes and self.settings.hfp_source in nodes
         selected = selected_microphone_node(microphone) or self.selected_microphone
         report = (
-            microphone_report
-            or microphone_resolution_report(microphone)
-            or self.microphone_report
+            microphone_report or microphone_resolution_report(microphone) or self.microphone_report
         )
         if report is None:
             report = {
@@ -2112,11 +2433,13 @@ def desire_stamp(path: Path | None = None) -> int | None:
         return None
 
 
-def wait_for_next_tick(observed_desire: int | None, should_stop) -> None:
-    """Wake cheaply on an output choice without polling the full audio graph at 20 Hz."""
+def wait_for_next_tick(observed_desire: int | None, should_stop, *, wake=None) -> None:
+    """Wake cheaply on an output choice or stable microphone-liveness transition."""
     deadline = time.monotonic() + POLL_SECONDS
     while not should_stop() and time.monotonic() < deadline:
         if desire_stamp() != observed_desire:
+            return
+        if wake is not None and wake():
             return
         time.sleep(OUTPUT_EVENT_POLL_SECONDS)
 
@@ -2138,6 +2461,10 @@ def main() -> int:
 
     reconcile_stale_pulse_aec()
     graph = CallGraph(settings)
+    lark_liveness = LarkPcmLivenessMonitor()
+    lark_liveness_enabled = automatic_lark_liveness_enabled(settings.microphone_candidates)
+    if lark_liveness_enabled:
+        log.info("Lark transmitter PCM detection enabled with FIFINE fallback")
     stopping = False
 
     def on_signal(signum: int, _frame: Any) -> None:
@@ -2165,9 +2492,7 @@ def main() -> int:
         "blocked": False,
         "candidates": [],
     }
-    microphone_capability_cache: dict[
-        tuple[str, str], tuple[dict[str, Any], ...]
-    ] = {}
+    microphone_capability_cache: dict[tuple[str, str], tuple[dict[str, Any], ...]] = {}
     controller_block: dict[str, Any] = {
         "policy": "transitional",
         "ready": False,
@@ -2191,12 +2516,29 @@ def main() -> int:
             links = links or []
         else:
             accepted_nodes = accepted_call_nodes(nodes, settings, call_binding_accepted)
-            _observations, microphone_resolution = discover_microphones(
+            observations, physical_microphone_resolution = discover_microphones(
                 pw_objects,
                 settings,
                 capability_cache=microphone_capability_cache,
             )
+            dynamic_availability = lark_liveness.reconcile(
+                physical_microphone_resolution,
+                links,
+                enabled=lark_liveness_enabled,
+            )
+            import microphones as microphones_module
+
+            microphone_resolution = microphones_module.resolve(
+                settings.microphone_candidates,
+                observations,
+                (
+                    {dynamic_availability.candidate_id: dynamic_availability}
+                    if dynamic_availability is not None
+                    else None
+                ),
+            )
             microphone_report = microphone_resolution.as_dict()
+            microphone_report["lark_transmitter"] = lark_liveness.status()
             desired = read_desire()
             output_node, output_report = resolve_output(
                 nodes,
@@ -2257,8 +2599,10 @@ def main() -> int:
         wait_for_next_tick(
             observed_desire if nodes is not None and links is not None else desire_stamp(),
             lambda: stopping,
+            wake=lark_liveness.poll,
         )
 
+    lark_liveness.close()
     graph.teardown("supervisor shutting down")
     graph.state = State.CALL_DOWN
     try:
