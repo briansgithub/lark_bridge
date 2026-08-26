@@ -261,6 +261,17 @@ def valid_timing_transition(kind: str, *, outcome: str = "completed") -> dict:
         "capture_started_monotonic": 100.15,
         "microphone": selected,
     }
+    persistence = [first, confirmation]
+    if outcome == "completed":
+        for seq in range(4, 8):
+            persistence.append(
+                {
+                    **confirmation,
+                    "seq": seq,
+                    "capture_started_monotonic": 100.0 + (seq - 2) * 0.15,
+                }
+            )
+    final = persistence[-1]
     baseline = usb_baseline(before)
     if kind == "fallback":
         raw_device = before[target_id][0]
@@ -273,28 +284,50 @@ def valid_timing_transition(kind: str, *, outcome: str = "completed") -> dict:
         )
     else:
         binding = None
+    final_candidate_id = hotplug.USB_FINAL_SELECTED_CANDIDATE[kind]
+    final_binding = (
+        hotplug._identity_binding_evidence(
+            selected,
+            after[final_candidate_id][0],
+            final_candidate_id,
+            "final_selected",
+        )
+        if outcome == "completed"
+        else None
+    )
+    settled_latency = (
+        final["capture_started_monotonic"] - first["capture_started_monotonic"]
+    )
+    state_settle = (
+        final["capture_started_monotonic"]
+        - confirmation["capture_started_monotonic"]
+    )
     return {
         "gate_kind": kind,
         "outcome": outcome,
         "timing_evidence_version": hotplug.TIMING_EVIDENCE_VERSION,
         "timing_origin": hotplug.USB_TIMING_ORIGIN,
         "transition_latency_s": 0.15 if outcome == "completed" else None,
-        "settled_latency_s": 0.15 if outcome == "completed" else None,
+        "settled_latency_s": settled_latency if outcome == "completed" else None,
+        "settle_requirement_s": hotplug.QUALIFICATION_MIN_SETTLE_SECONDS,
+        "state_settle_s": state_settle if outcome == "completed" else None,
+        "safe_state_latency_s": settled_latency if outcome == "safe_state" else None,
         "usb_baseline": baseline,
         "usb_event": {
             **hotplug._usb_event_evidence(first, kind),
             "confirmed": True,
             "confirmation": hotplug._usb_event_evidence(confirmation, kind),
             "persistent": True,
-            "stable_through_seq": 3,
+            "stable_through_seq": final["seq"],
             "persistence_samples": [
-                hotplug._event_sample_structure(first, kind),
-                hotplug._event_sample_structure(confirmation, kind),
+                hotplug._event_sample_structure(sample, kind)
+                for sample in persistence
             ],
         },
         "usb_identity_binding": binding,
+        "usb_final_identity_binding": final_binding,
         "first_matching_sample": confirmation if outcome == "completed" else None,
-        "final_sample": confirmation,
+        "final_sample": final,
         "safety_clean": True,
         "restart_clean": True,
     }
@@ -408,6 +441,92 @@ class MicrophoneHotplugTests(unittest.TestCase):
                     hotplug.usb_identity_binding_error(changed, raw, "fifine-k054")
                     or "",
                 )
+
+    def test_fallback_timing_binds_final_fifine_to_persistent_raw_usb(self) -> None:
+        transition = valid_timing_transition("fallback")
+        preaction_binding = json.loads(
+            json.dumps(transition["usb_identity_binding"])
+        )
+        transition["final_sample"]["microphone"]["identity"][
+            "usb_instance_generation"
+        ] = "9-9.9@999"
+
+        gate = hotplug.summarize_timing_gate(
+            [transition], kind="fallback", expected_cycles=1
+        )
+
+        self.assertEqual(transition["usb_identity_binding"], preaction_binding)
+        self.assertEqual(gate["verdict"], "FAIL")
+        self.assertEqual(gate["structurally_valid_usb_evidence_cycles"], 0)
+
+    def test_timing_gate_requires_canonical_observed_state_settle(self) -> None:
+        valid = valid_timing_transition("promotion")
+        self.assertIsNone(hotplug._timing_evidence_error(valid, "promotion"))
+        self.assertGreaterEqual(
+            valid["state_settle_s"] + 1e-6,
+            hotplug.QUALIFICATION_MIN_SETTLE_SECONDS,
+        )
+
+        configured_zero = valid_timing_transition("promotion")
+        configured_zero["settle_requirement_s"] = 0.0
+        self.assertIn(
+            "immutable qualification settle requirement",
+            hotplug._timing_evidence_error(configured_zero, "promotion") or "",
+        )
+
+        observed_zero = valid_timing_transition("promotion")
+        first_match = observed_zero["first_matching_sample"]
+        observed_zero["final_sample"] = first_match
+        observed_zero["settled_latency_s"] = observed_zero["transition_latency_s"]
+        observed_zero["state_settle_s"] = 0.0
+        observed_zero["usb_event"]["persistence_samples"] = observed_zero[
+            "usb_event"
+        ]["persistence_samples"][:2]
+        observed_zero["usb_event"]["stable_through_seq"] = first_match["seq"]
+        self.assertIn(
+            "remain stable",
+            hotplug._timing_evidence_error(observed_zero, "promotion") or "",
+        )
+
+    def test_safe_state_timing_is_structurally_bounded_by_usb_deadline(self) -> None:
+        def safe_after(sample_count: int) -> dict:
+            transition = valid_timing_transition("promotion", outcome="safe_state")
+            first = transition["usb_event"]["persistence_samples"][0]
+            samples = [first]
+            for index in range(1, sample_count):
+                sample = json.loads(json.dumps(first))
+                sample["seq"] = first["seq"] + index
+                sample["capture_started_monotonic"] = (
+                    first["capture_started_monotonic"] + index * 0.15
+                )
+                samples.append(sample)
+            transition["usb_event"]["persistence_samples"] = samples
+            transition["usb_event"]["confirmation"] = hotplug._usb_event_evidence(
+                samples[1], "promotion"
+            )
+            transition["usb_event"]["stable_through_seq"] = samples[-1]["seq"]
+            transition["final_sample"] = json.loads(json.dumps(samples[-1]))
+            transition["safe_state_latency_s"] = (
+                samples[-1]["capture_started_monotonic"]
+                - first["capture_started_monotonic"]
+            )
+            return transition
+
+        at_deadline = safe_after(401)
+        after_deadline = safe_after(402)
+
+        self.assertIsNone(hotplug._timing_evidence_error(at_deadline, "promotion"))
+        self.assertIn(
+            "after the 60-second deadline",
+            hotplug._timing_evidence_error(after_deadline, "promotion") or "",
+        )
+
+        repeated = [valid_timing_transition("promotion") for _ in range(19)]
+        repeated.append(after_deadline)
+        gate = hotplug.summarize_timing_gate(
+            repeated, kind="promotion", expected_cycles=20
+        )
+        self.assertEqual(gate["verdict"], "FAIL")
 
     def test_timing_gate_revalidates_v2_evidence_structure(self) -> None:
         mutations = {
@@ -1222,7 +1341,6 @@ class MicrophoneHotplugTests(unittest.TestCase):
                     }
                 )
                 evidence["transition_latency_s"] = None if safe else 0.15
-                evidence["settled_latency_s"] = None if safe else 0.15
                 if identity is not None:
                     evidence["final_sample"]["microphone"]["instance_token"] = identity
                     evidence["final_sample"]["graph_generation"] = generation

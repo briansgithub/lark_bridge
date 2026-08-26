@@ -57,7 +57,8 @@ QUALIFICATION_FAST_LIMIT_SECONDS = 30.0
 QUALIFICATION_MAX_LIMIT_SECONDS = 60.0
 DEFAULT_TRANSITION_TIMEOUT_SECONDS = QUALIFICATION_MAX_LIMIT_SECONDS
 DEFAULT_FAST_LIMIT_SECONDS = QUALIFICATION_FAST_LIMIT_SECONDS
-DEFAULT_SETTLE_SECONDS = 0.60
+QUALIFICATION_MIN_SETTLE_SECONDS = 0.60
+DEFAULT_SETTLE_SECONDS = QUALIFICATION_MIN_SETTLE_SECONDS
 DEFAULT_REPEATED_CYCLES = QUALIFICATION_CYCLES
 USB_ACTION_OBSERVATION_TIMEOUT_SECONDS = 60.0
 USB_BASELINE_OBSERVATION_TIMEOUT_SECONDS = 5.0
@@ -79,6 +80,11 @@ USB_GATE_TARGET = {
     "promotion": ("lark-a1", 0, 1),
     "fallback": ("lark-a1", 1, 0),
     "fifine_replug": ("fifine-k054", 0, 1),
+}
+USB_FINAL_SELECTED_CANDIDATE = {
+    "promotion": "lark-a1",
+    "fallback": "fifine-k054",
+    "fifine_replug": "fifine-k054",
 }
 USB_TIMING_ORIGIN = "usb_sysfs_edge"
 TIMING_EVIDENCE_VERSION = 2
@@ -976,6 +982,15 @@ def _timing_evidence_error(item: dict[str, Any], kind: str) -> str | None:
         validate_action_usb_baseline(phase_by_kind[kind], baseline)
     except (CampaignAbort, KeyError) as exc:
         return str(exc)
+    settle_requirement = item.get("settle_requirement_s")
+    if (
+        not _finite_number(settle_requirement)
+        or float(settle_requirement) < QUALIFICATION_MIN_SETTLE_SECONDS
+    ):
+        return (
+            "transition omitted the immutable qualification settle requirement "
+            f"of at least {QUALIFICATION_MIN_SETTLE_SECONDS:.2f}s"
+        )
 
     event = item.get("usb_event")
     if not isinstance(event, dict):
@@ -1047,6 +1062,31 @@ def _timing_evidence_error(item: dict[str, Any], kind: str) -> str | None:
         if binding != expected_binding or not expected_binding["validated"]:
             return "final selected identity binding is invalid"
 
+    if outcome == "completed":
+        final_sample = item.get("final_sample")
+        if not isinstance(final_sample, dict):
+            return "completed transition omitted its final selected sample"
+        final_candidate_id = USB_FINAL_SELECTED_CANDIDATE[kind]
+        final_devices, final_error = _validated_usb_devices(
+            first.get("usb_microphones"), final_candidate_id
+        )
+        if final_error or len(final_devices or []) != 1:
+            return final_error or (
+                f"completed transition did not retain exactly one raw "
+                f"{final_candidate_id} instance"
+            )
+        expected_final_binding = _identity_binding_evidence(
+            final_sample.get("microphone"),
+            final_devices[0],
+            final_candidate_id,
+            "final_selected",
+        )
+        if (
+            item.get("usb_final_identity_binding") != expected_final_binding
+            or not expected_final_binding["validated"]
+        ):
+            return "completed transition final selected identity binding is invalid"
+
     if outcome in {"completed", "safe_state"}:
         final_sample = item.get("final_sample")
         if not isinstance(final_sample, dict):
@@ -1065,6 +1105,7 @@ def _timing_evidence_error(item: dict[str, Any], kind: str) -> str | None:
         try:
             transition_latency = _sample_interval_seconds(first, first_match)
             settled_latency = _sample_interval_seconds(first, final_sample)
+            state_settle = _sample_interval_seconds(first_match, final_sample)
         except CampaignAbort as exc:
             return str(exc)
         reported = item.get("transition_latency_s")
@@ -1078,6 +1119,31 @@ def _timing_evidence_error(item: dict[str, Any], kind: str) -> str | None:
             )
         if not _finite_number(settled) or abs(float(settled) - settled_latency) > 1e-5:
             return "reported settle latency disagrees with source monotonic evidence"
+        reported_state_settle = item.get("state_settle_s")
+        if (
+            not _finite_number(reported_state_settle)
+            or abs(float(reported_state_settle) - state_settle) > 1e-5
+        ):
+            return "reported state settle disagrees with source monotonic evidence"
+        if state_settle + 1e-6 < float(settle_requirement):
+            return "completed transition did not remain stable for the required settle"
+        if settled_latency > QUALIFICATION_MAX_LIMIT_SECONDS + 1e-6:
+            return "completed transition settled after the 60-second deadline"
+    elif outcome == "safe_state":
+        final_sample = item.get("final_sample")
+        assert isinstance(final_sample, dict)
+        try:
+            safe_state_latency = _sample_interval_seconds(first, final_sample)
+        except CampaignAbort as exc:
+            return str(exc)
+        reported_safe_latency = item.get("safe_state_latency_s")
+        if (
+            not _finite_number(reported_safe_latency)
+            or abs(float(reported_safe_latency) - safe_state_latency) > 1e-5
+        ):
+            return "reported safe-state latency disagrees with source monotonic evidence"
+        if safe_state_latency > QUALIFICATION_MAX_LIMIT_SECONDS + 1e-6:
+            return "actionable safe state was reached after the 60-second deadline"
     return None
 
 
@@ -1660,6 +1726,7 @@ def wait_for_expectation(
     usb_event_samples: list[dict[str, Any]] = []
     usb_event_error: str | None = None
     usb_identity_binding: dict[str, Any] | None = None
+    usb_final_identity_binding: dict[str, Any] | None = None
     latest: dict[str, Any] | None = None
     processed_samples: list[dict[str, Any]] = []
     seen_seq = after_seq
@@ -1739,30 +1806,32 @@ def wait_for_expectation(
                 if usb_confirmation_sample is None:
                     usb_confirmation_sample = sample
 
-                if gate_kind in {"promotion", "fifine_replug"}:
-                    candidate_id = USB_GATE_TARGET[gate_kind][0]
-                    selected = sample.get("microphone")
-                    if (
-                        isinstance(selected, dict)
-                        and selected.get("id") == candidate_id
-                    ):
-                        devices, device_error = _validated_usb_devices(
-                            usb_edge_sample.get("usb_microphones"), candidate_id
+                final_candidate_id = USB_FINAL_SELECTED_CANDIDATE[gate_kind]
+                selected = sample.get("microphone")
+                if (
+                    isinstance(selected, dict)
+                    and selected.get("id") == final_candidate_id
+                ):
+                    devices, device_error = _validated_usb_devices(
+                        usb_edge_sample.get("usb_microphones"), final_candidate_id
+                    )
+                    if device_error or not devices:
+                        usb_event_error = (
+                            device_error or "latched USB instance is missing"
                         )
-                        if device_error or not devices:
-                            usb_event_error = (
-                                device_error or "latched USB instance is missing"
-                            )
-                            outcome = "usb_event_error"
-                            break
-                        early_binding = _identity_binding_evidence(
-                            selected, devices[0], candidate_id, "final_selected"
-                        )
-                        if not early_binding["validated"]:
-                            usb_identity_binding = early_binding
-                            usb_event_error = str(early_binding["error"])
-                            outcome = "usb_event_error"
-                            break
+                        outcome = "usb_event_error"
+                        break
+                    early_binding = _identity_binding_evidence(
+                        selected, devices[0], final_candidate_id, "final_selected"
+                    )
+                    if not early_binding["validated"]:
+                        usb_final_identity_binding = early_binding
+                        usb_event_error = str(early_binding["error"])
+                        outcome = "usb_event_error"
+                        break
+                    usb_final_identity_binding = early_binding
+                    if gate_kind != "fallback":
+                        usb_identity_binding = early_binding
 
             failures = expectation_failures(sample, expected)
             if failures:
@@ -1778,23 +1847,29 @@ def wait_for_expectation(
                 break
             if not settled:
                 continue
-            if gated_usb_timing and gate_kind in {"promotion", "fifine_replug"}:
+            if gated_usb_timing:
                 assert usb_edge_sample is not None
-                candidate_id = USB_GATE_TARGET[gate_kind][0]
+                assert gate_kind is not None
+                final_candidate_id = USB_FINAL_SELECTED_CANDIDATE[gate_kind]
                 devices, device_error = _validated_usb_devices(
-                    usb_edge_sample.get("usb_microphones"), candidate_id
+                    usb_edge_sample.get("usb_microphones"), final_candidate_id
                 )
                 if device_error or not devices:
                     usb_event_error = device_error or "latched USB instance is missing"
                     outcome = "usb_event_error"
                     break
-                usb_identity_binding = _identity_binding_evidence(
-                    sample.get("microphone"), devices[0], candidate_id, "final_selected"
+                usb_final_identity_binding = _identity_binding_evidence(
+                    sample.get("microphone"),
+                    devices[0],
+                    final_candidate_id,
+                    "final_selected",
                 )
-                if not usb_identity_binding["validated"]:
-                    usb_event_error = str(usb_identity_binding["error"])
+                if not usb_final_identity_binding["validated"]:
+                    usb_event_error = str(usb_final_identity_binding["error"])
                     outcome = "usb_event_error"
                     break
+                if gate_kind != "fallback":
+                    usb_identity_binding = usb_final_identity_binding
             outcome = "completed"
             break
         if outcome in {"completed", "usb_event_error"}:
@@ -1854,9 +1929,23 @@ def wait_for_expectation(
                 if outcome == "completed" and latest is not None
                 else None
             )
+            state_settle = (
+                round(_sample_interval_seconds(first_match, latest), 6)
+                if outcome == "completed"
+                and first_match is not None
+                and latest is not None
+                else None
+            )
+            safe_state_latency = (
+                round(_sample_interval_seconds(usb_edge_sample, latest), 6)
+                if outcome == "safe_state" and latest is not None
+                else None
+            )
         except CampaignAbort as exc:
             first_latency = None
             completion_latency = None
+            state_settle = None
+            safe_state_latency = None
             outcome = "usb_event_error"
             usb_event_error = str(exc)
         action_to_usb_s = round(
@@ -1876,6 +1965,8 @@ def wait_for_expectation(
             if outcome == "completed" and latest is not None
             else None
         )
+        state_settle = None
+        safe_state_latency = None
         action_to_usb_s = None
         timing_origin = "usb_sysfs_edge_missing" if gated_usb_timing else "operator_now"
     violations = _dedupe_transition_violations(transition_samples)
@@ -1925,8 +2016,12 @@ def wait_for_expectation(
         ),
         "usb_event_error": usb_event_error,
         "usb_identity_binding": usb_identity_binding,
+        "usb_final_identity_binding": usb_final_identity_binding,
         "transition_latency_s": first_latency,
         "settled_latency_s": completion_latency,
+        "settle_requirement_s": settle_s if gated_usb_timing else None,
+        "state_settle_s": state_settle,
+        "safe_state_latency_s": safe_state_latency,
         "timeout_s": timeout_s,
         "samples": len(transition_samples),
         "first_matching_sample": first_match,
