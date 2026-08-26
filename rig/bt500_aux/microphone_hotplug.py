@@ -1569,9 +1569,13 @@ class SshSampleStream:
             return dict(self._service_counts)
 
 
-def initial_fixture(campaign: str) -> tuple[str, str]:
+def initial_fixture(
+    campaign: str, connection_plan: str | None = None
+) -> tuple[str, str]:
     if campaign == "inactive-fifine":
         return "lark-a1", "PREPARE BOTH"
+    if connection_plan == core.CONNECTION_PLAN_DIRECT10_HUB10:
+        return "fifine-k054", "PREPARE DIRECT FIFINE ONLY"
     return "fifine-k054", "PREPARE FIFINE ONLY"
 
 
@@ -1581,12 +1585,19 @@ def final_microphone(campaign: str) -> str:
     return "fifine-k054"
 
 
-def typed_prepare(campaign: str, input_fn=input) -> None:
-    _expected_microphone, phrase = initial_fixture(campaign)
+def typed_prepare(
+    campaign: str, connection_plan: str | None = None, input_fn=input
+) -> None:
+    _expected_microphone, phrase = initial_fixture(campaign, connection_plan)
     description = (
         "Connect both microphones and confirm the Lark is selected"
         if phrase == "PREPARE BOTH"
-        else "Connect only the FIFINE and confirm the Lark is unplugged"
+        else (
+            "Connect only the FIFINE directly to the Pi, leave the external hub out "
+            "of its USB ancestry, and confirm the Lark is unplugged"
+            if phrase == "PREPARE DIRECT FIFINE ONLY"
+            else "Connect only the FIFINE and confirm the Lark is unplugged"
+        )
     )
     print(
         f"{description}. Keep the live call active. Type {phrase!r}: ",
@@ -1630,6 +1641,7 @@ def build_summary(
     artifact_dir: Path,
     commit: str,
     provenance: Mapping[str, Any] | None = None,
+    connection_plan: str | None = None,
 ) -> dict[str, Any]:
     fatal_errors = list(getattr(stream, "fatal_errors", []))
     remote_stderr = list(getattr(stream, "remote_stderr", []))
@@ -1687,6 +1699,14 @@ def build_summary(
         cycles == required_cycles
         and fast_limit_s <= canonical_fast_limit
         and max_limit_s <= canonical_max_limit
+        and (
+            connection_plan is None
+            or (
+                connection_plan == core.CONNECTION_PLAN_DIRECT10_HUB10
+                and campaign in core.CONNECTION_PLAN_CAMPAIGNS
+                and cycles == core.QUALIFICATION_CYCLES
+            )
+        )
     )
     timing_gates = {
         kind: core.summarize_timing_gate(
@@ -1697,6 +1717,15 @@ def build_summary(
             max_limit_s=canonical_max_limit,
         )
         for kind in core.required_gate_kinds(campaign)
+    }
+    connection_layout_gate = core.summarize_connection_layout_gate(
+        transitions,
+        campaign=campaign,
+        connection_plan=connection_plan,
+    )
+    connection_layout_passed = connection_layout_gate["verdict"] in {
+        "PASS",
+        "NOT_REQUESTED",
     }
     transitions_completed = bool(
         transitions
@@ -1727,9 +1756,11 @@ def build_summary(
         and timing_gates
         and all(item["verdict"] == "PASS" for item in timing_gates.values())
         and evidence_verdict == "PASS"
+        and connection_layout_passed
         else (
             "INCOMPLETE"
             if evidence_verdict == "PASS"
+            and connection_layout_passed
             and (
                 not configuration_eligible
                 or (
@@ -1749,6 +1780,7 @@ def build_summary(
         "verdict": evidence_verdict,
         "qualification_gate": qualification_gate,
         "campaign": campaign,
+        "connection_plan": connection_plan,
         "requested_cycles": cycles,
         "commit": commit,
         "provenance": dict(provenance) if provenance is not None else None,
@@ -1762,11 +1794,17 @@ def build_summary(
                 "cycles": cycles,
                 "fast_limit_s": fast_limit_s,
                 "max_limit_s": max_limit_s,
+                "connection_plan": connection_plan,
             },
             "required": {
                 "cycles": required_cycles,
                 "fast_limit_s": canonical_fast_limit,
                 "max_limit_s": canonical_max_limit,
+                "connection_plan": (
+                    core.CONNECTION_PLAN_DIRECT10_HUB10
+                    if connection_plan is not None
+                    else None
+                ),
             },
         },
         "provenance_gate": {
@@ -1815,6 +1853,7 @@ def build_summary(
             ),
         },
         "timing_gates": timing_gates,
+        "connection_layout_gate": connection_layout_gate,
         "transitions": transitions,
         "remote_boot_id": stream.remote_boot_id,
         "remote_stderr": remote_stderr,
@@ -1838,6 +1877,14 @@ def build_parser() -> argparse.ArgumentParser:
         default="matrix",
     )
     parser.add_argument("--cycles", type=int)
+    parser.add_argument(
+        "--connection-plan",
+        choices=(core.CONNECTION_PLAN_DIRECT10_HUB10,),
+        help=(
+            "strict 20-cycle qualification split: cycles 1-10 direct, one "
+            "observed handoff, then cycles 11-20 through an attested powered hub"
+        ),
+    )
     parser.add_argument("--interval", type=float, default=core.DEFAULT_INTERVAL_SECONDS)
     parser.add_argument(
         "--timeout", type=float, default=core.DEFAULT_TRANSITION_TIMEOUT_SECONDS
@@ -1857,8 +1904,21 @@ def build_parser() -> argparse.ArgumentParser:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = build_parser()
     args = parser.parse_args(argv)
+    configured_cycles = args.cycles
     if args.cycles is None:
         args.cycles = 1 if args.campaign == "matrix" else core.DEFAULT_REPEATED_CYCLES
+    if args.connection_plan is not None:
+        if args.campaign not in core.CONNECTION_PLAN_CAMPAIGNS:
+            parser.error(
+                "--connection-plan is accepted only for promotion-fallback or "
+                "fifine-replug"
+            )
+        if configured_cycles not in {None, core.QUALIFICATION_CYCLES}:
+            parser.error(
+                f"--connection-plan {core.CONNECTION_PLAN_DIRECT10_HUB10} requires "
+                f"exactly {core.QUALIFICATION_CYCLES} cycles"
+            )
+        args.cycles = core.QUALIFICATION_CYCLES
     if args.cycles <= 0:
         parser.error("--cycles must be positive")
     configured_interval_limit = float(
@@ -1903,6 +1963,7 @@ def main(
             "verdict": "FAIL",
             "qualification_gate": "FAIL",
             "campaign": args.campaign,
+            "connection_plan": args.connection_plan,
             "requested_cycles": args.cycles,
             "commit": commit,
             "failure": {"type": failure_type, "message": message},
@@ -1921,6 +1982,7 @@ def main(
             "schema_version": 1,
             "status": "starting",
             "campaign": args.campaign,
+            "connection_plan": args.connection_plan,
             "target_cycles": args.cycles,
             "commit": commit,
             "host": args.host,
@@ -1949,7 +2011,7 @@ def main(
     closing: dict[str, Any] | None = None
     provenance: dict[str, Any] | None = None
     aborted: str | None = None
-    expected_initial, _phrase = initial_fixture(args.campaign)
+    expected_initial, _phrase = initial_fixture(args.campaign, args.connection_plan)
     expected_final = final_microphone(args.campaign)
 
     def add_abort(detail: str) -> None:
@@ -1976,7 +2038,11 @@ def main(
         if provenance.get("status") != "PASS":
             raise EvidenceError("local or remote provenance collection failed")
         stream.start()
-        typed_prepare(args.campaign, input_fn=input_fn)
+        typed_prepare(
+            args.campaign,
+            connection_plan=args.connection_plan,
+            input_fn=input_fn,
+        )
         preflight = implementation.snapshot(full=True)
         atomic_json(artifact_dir / "preflight.json", preflight)
         validate_hotplug_snapshot(
@@ -2002,6 +2068,7 @@ def main(
                 timeout_s=args.timeout,
                 settle_s=args.settle,
                 input_fn=input_fn,
+                connection_plan=args.connection_plan,
             )
         elif args.campaign == "fifine-replug":
             core.run_fifine_replug(
@@ -2011,6 +2078,7 @@ def main(
                 timeout_s=args.timeout,
                 settle_s=args.settle,
                 input_fn=input_fn,
+                connection_plan=args.connection_plan,
             )
         else:
             core.run_inactive_fifine(
@@ -2062,6 +2130,7 @@ def main(
         artifact_dir=artifact_dir,
         commit=commit,
         provenance=provenance,
+        connection_plan=args.connection_plan,
     )
     qualified = bool(
         summary["verdict"] == "PASS" and summary["qualification_gate"] == "PASS"
