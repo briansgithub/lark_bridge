@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import subprocess
@@ -32,6 +33,12 @@ def usb_topology(
                     "id": candidate_id,
                     "usb_vendor_id": vendor_id,
                     "usb_product_id": product_id,
+                    "usb_product": (
+                        "Wireless Microphone"
+                        if candidate_id == "lark-a1"
+                        else "USB PnP Audio Device"
+                    ),
+                    "usb_serial": None,
                     "usb_port_path": port,
                     "usb_devnum": int(raw_devnum),
                     "usb_instance_generation": value,
@@ -45,14 +52,190 @@ def usb_topology(
     }
 
 
-def completed_usb_sample(seq: int = 0) -> dict:
+def selected_for_topology(topology: dict[str, list[dict]]) -> dict | None:
+    candidate_id = (
+        "lark-a1"
+        if len(topology["lark-a1"]) == 1
+        else ("fifine-k054" if len(topology["fifine-k054"]) == 1 else None)
+    )
+    if candidate_id is None:
+        return None
+    raw = topology[candidate_id][0]
+    return {
+        "id": candidate_id,
+        "node": f"alsa_input.usb-{candidate_id}",
+        "instance_token": f"{candidate_id}:{raw['usb_instance_generation']}",
+        "identity": {key: raw.get(key) for key in hotplug.core.USB_IDENTITY_FIELDS},
+    }
+
+
+def completed_usb_sample(
+    seq: int = 0,
+    *,
+    topology: dict[str, list[dict]] | None = None,
+    source_monotonic: float | None = None,
+    gap: float = 0.15,
+) -> dict:
+    observed = usb_topology() if topology is None else topology
     return {
         "seq": seq,
         "remote_seq": seq,
-        "capture_started_monotonic": 10.0,
-        "usb_microphones": usb_topology(),
+        "capture_started_monotonic": (
+            10.0 + seq * 0.15 if source_monotonic is None else source_monotonic
+        ),
+        "usb_microphones": observed,
         "usb_error": None,
+        "microphone": selected_for_topology(observed),
+        "sampling": {"start_gap_s": gap},
     }
+
+
+def valid_timing_transition(kind: str, *, outcome: str = "completed") -> dict:
+    before, after, _selected_id = {
+        "promotion": (
+            usb_topology(),
+            usb_topology(lark=("1-1.3@9",)),
+            "lark-a1",
+        ),
+        "fallback": (
+            usb_topology(lark=("1-1.3@9",)),
+            usb_topology(),
+            "fifine-k054",
+        ),
+        "fifine_replug": (
+            usb_topology(fifine=()),
+            usb_topology(fifine=("1-1.2@12",)),
+            "fifine-k054",
+        ),
+    }[kind]
+    baseline_samples = [
+        {
+            **completed_usb_sample(
+                seq,
+                topology=before,
+                source_monotonic=99.0 + seq * 0.15,
+            ),
+            "remote_seq": seq,
+        }
+        for seq in (0, 1)
+    ]
+    baseline = hotplug.core.stable_usb_baseline_from_samples(baseline_samples)
+    target_id = hotplug.core.USB_GATE_TARGET[kind][0]
+    first = {
+        **completed_usb_sample(2, topology=after, source_monotonic=100.0),
+        "remote_seq": 2,
+        "microphone": None,
+    }
+    confirmation = {
+        **completed_usb_sample(3, topology=after, source_monotonic=100.15),
+        "remote_seq": 3,
+        "microphone": selected_for_topology(after),
+    }
+    raw_devices = after[target_id]
+    if kind == "fallback":
+        binding = hotplug.core._identity_binding_evidence(
+            baseline["microphone"], before[target_id][0], target_id, "preaction"
+        )
+    elif outcome == "completed":
+        binding = hotplug.core._identity_binding_evidence(
+            confirmation["microphone"], raw_devices[0], target_id, "final_selected"
+        )
+    else:
+        binding = None
+    return {
+        "gate_kind": kind,
+        "outcome": outcome,
+        "timing_evidence_version": hotplug.core.TIMING_EVIDENCE_VERSION,
+        "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
+        "transition_latency_s": 0.15 if outcome == "completed" else None,
+        "settled_latency_s": 0.15 if outcome == "completed" else None,
+        "usb_baseline": baseline,
+        "usb_event": {
+            **hotplug.core._usb_event_evidence(first, kind),
+            "confirmed": True,
+            "confirmation": hotplug.core._usb_event_evidence(confirmation, kind),
+            "persistent": True,
+            "stable_through_seq": 3,
+            "persistence_samples": [
+                hotplug.core._event_sample_structure(first, kind),
+                hotplug.core._event_sample_structure(confirmation, kind),
+            ],
+        },
+        "usb_identity_binding": binding,
+        "first_matching_sample": confirmation if outcome == "completed" else None,
+        "final_sample": confirmation,
+        "safety_clean": True,
+        "restart_clean": True,
+    }
+
+
+def remote_usb_document(
+    seq: int,
+    topology: dict[str, list[dict]],
+    *,
+    source_monotonic: float,
+    gap: float = 0.15,
+) -> dict:
+    return {
+        "type": "sample",
+        "seq": seq,
+        "elapsed_s": seq * 0.15,
+        "capture_started_monotonic": source_monotonic,
+        "usb_microphones": topology,
+        "usb_error": None,
+        "microphone": selected_for_topology(topology),
+        "candidates": {},
+        "invariants": {"passed": True, "violations": []},
+        "sampling": {"start_gap_s": gap},
+        "service_restart_counts": service_counts(),
+    }
+
+
+@contextlib.contextmanager
+def feed_host_action_baseline(
+    stream,
+    topologies: list[dict[str, list[dict]]],
+    *,
+    gaps: list[float] | None = None,
+):
+    stream.stream_started = True
+    if not stream.initial_service_counts or any(
+        value is None for value in stream.initial_service_counts.values()
+    ):
+        stream.initial_service_counts = service_counts()
+    original = stream._action_usb_baseline_locked
+    producers: list[threading.Thread] = []
+
+    def wrapped(phase: str, after_seq: int) -> dict:
+        first_remote_seq = stream._last_remote_seq + 1
+        latest = stream.latest()
+        source_base = (
+            float(latest["capture_started_monotonic"])
+            if latest is not None
+            and isinstance(latest.get("capture_started_monotonic"), (int, float))
+            else 500.0
+        )
+
+        def produce() -> None:
+            for offset, topology in enumerate(topologies):
+                stream.ingest(
+                    remote_usb_document(
+                        first_remote_seq + offset,
+                        topology,
+                        source_monotonic=source_base + (offset + 1) * 0.15,
+                        gap=(gaps or [0.15] * len(topologies))[offset],
+                    )
+                )
+
+        producer = threading.Thread(target=produce)
+        producers.append(producer)
+        producer.start()
+        return original(phase, after_seq)
+
+    with mock.patch.object(stream, "_action_usb_baseline_locked", side_effect=wrapped):
+        yield
+    for producer in producers:
+        producer.join(2)
 
 
 def snapshot(value: int = 0) -> dict:
@@ -131,6 +314,69 @@ class FakeStream:
 
 
 class MicrophoneHotplugHostTests(unittest.TestCase):
+    def test_host_mark_action_rejects_missing_remote_stream(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stream = hotplug.SshSampleStream(
+                host="unused",
+                remote_repo="/unused",
+                source_path=root / "unused.py",
+                timeline_path=root / "samples.jsonl",
+                interval=0.15,
+                duration=60.0,
+                status_path=None,
+                checkpoint=hotplug.Checkpoint(root / "checkpoint.json", {}),
+            )
+            with (
+                mock.patch.object(
+                    stream,
+                    "_query_service_counts",
+                    return_value=(service_counts(), None),
+                ),
+                self.assertRaisesRegex(hotplug.core.CampaignAbort, "not running"),
+            ):
+                stream.mark_action("lark_promotion", 1, "plug")
+
+    def test_host_mark_action_rejects_stale_and_unstable_remote_baselines(
+        self,
+    ) -> None:
+        cases = (
+            ("stale", [usb_topology()] * 3, [0.15, 0.15, 0.251]),
+            (
+                "unstable",
+                [
+                    usb_topology(),
+                    usb_topology(),
+                    usb_topology(lark=("1-1.3@9",)),
+                ],
+                None,
+            ),
+        )
+        for label, topologies, gaps in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                stream = hotplug.SshSampleStream(
+                    host="unused",
+                    remote_repo="/unused",
+                    source_path=root / "unused.py",
+                    timeline_path=root / "samples.jsonl",
+                    interval=0.15,
+                    duration=60.0,
+                    status_path=None,
+                    checkpoint=hotplug.Checkpoint(root / "checkpoint.json", {}),
+                )
+                stream._started_monotonic = time.monotonic()
+                with (
+                    feed_host_action_baseline(stream, topologies, gaps=gaps),
+                    mock.patch.object(
+                        stream,
+                        "_query_service_counts",
+                        return_value=(service_counts(), None),
+                    ),
+                    self.assertRaises(hotplug.core.CampaignAbort),
+                ):
+                    stream.mark_action("lark_promotion", 1, "plug")
+
     def test_direct_script_entrypoint_loads_from_repository_root(self) -> None:
         script = Path(hotplug.__file__).resolve()
         repo = script.parents[2]
@@ -358,7 +604,6 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                 checkpoint=checkpoint,
             )
             stream._started_monotonic = time.monotonic()
-            stream._recent.append(completed_usb_sample())
             observed_boundaries = []
             responses = iter([(service_counts(2), None), (service_counts(3), None)])
 
@@ -366,11 +611,14 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                 observed_boundaries.append((stream._phase, stream._action_id))
                 return next(responses)
 
-            with mock.patch.object(
-                stream,
-                "_query_service_counts",
-                side_effect=query_counts,
-            ) as query:
+            with (
+                feed_host_action_baseline(stream, [usb_topology()] * 3),
+                mock.patch.object(
+                    stream,
+                    "_query_service_counts",
+                    side_effect=query_counts,
+                ) as query,
+            ):
                 action = stream.mark_action("lark_promotion", 1, "plug")
                 result_counts = stream.service_counts()
 
@@ -418,19 +666,22 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                     "service_restart_counts": service_counts(),
                 }
             )
-            with mock.patch.object(
-                stream,
-                "_query_service_counts",
-                return_value=(service_counts(), None),
+            with (
+                feed_host_action_baseline(stream, [topology] * 3),
+                mock.patch.object(
+                    stream,
+                    "_query_service_counts",
+                    return_value=(service_counts(), None),
+                ),
             ):
                 action = stream.mark_action("lark_promotion", 1, "plug")
 
-        self.assertEqual(action["usb_baseline"]["seq"], 1)
-        self.assertEqual(action["usb_baseline"]["remote_seq"], 1)
+        self.assertEqual(action["usb_baseline"]["seq"], 4)
+        self.assertEqual(action["usb_baseline"]["remote_seq"], 4)
         self.assertEqual(action["usb_baseline"]["usb_microphones"], topology)
         sample = stream.latest()
         assert sample is not None
-        self.assertEqual(sample["capture_started_monotonic"], 500.15)
+        self.assertAlmostEqual(sample["capture_started_monotonic"], 500.6)
         self.assertIsInstance(sample["host_received_monotonic"], float)
 
     def test_host_rejects_ambiguous_usb_baseline_before_action(self) -> None:
@@ -447,10 +698,9 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                 checkpoint=hotplug.Checkpoint(root / "checkpoint.json", {}),
             )
             stream._started_monotonic = time.monotonic()
-            sample = completed_usb_sample()
-            sample["usb_microphones"] = usb_topology(lark=("1-1.3@9", "1-1.4@10"))
-            stream._recent.append(sample)
+            topology = usb_topology(lark=("1-1.3@9", "1-1.4@10"))
             with (
+                feed_host_action_baseline(stream, [topology] * 3),
                 mock.patch.object(
                     stream,
                     "_query_service_counts",
@@ -463,6 +713,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
     def test_ingest_cannot_relabel_a_pre_action_sample(self) -> None:
         entered = threading.Event()
         release = threading.Event()
+        boundary_ready = threading.Event()
 
         class BlockingCandidates(dict):
             def values(self):
@@ -485,11 +736,15 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                 checkpoint=checkpoint,
             )
             stream._started_monotonic = time.monotonic()
-            stream._recent.append(completed_usb_sample())
+            stream.stream_started = True
+            stream.initial_service_counts = service_counts()
             sample = {
                 "type": "sample",
                 "seq": 1,
                 "elapsed_s": 0.15,
+                "capture_started_monotonic": 500.15,
+                "usb_microphones": usb_topology(),
+                "usb_error": None,
                 "microphone": None,
                 "candidates": BlockingCandidates({"candidate": {}}),
                 "invariants": {"passed": True, "violations": []},
@@ -499,20 +754,50 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
             thread = threading.Thread(target=stream.ingest, args=(sample,))
             thread.start()
             self.assertTrue(entered.wait(2))
-            with mock.patch.object(
-                stream,
-                "_query_service_counts",
-                return_value=(service_counts(), None),
+            action: dict = {}
+            original_baseline = stream._action_usb_baseline_locked
+
+            def baseline_after_inflight(phase, after_seq):
+                self.assertEqual(after_seq, 1)
+                boundary_ready.set()
+                return original_baseline(phase, after_seq)
+
+            def mark() -> None:
+                action.update(stream.mark_action("lark_promotion", 1, "plug"))
+
+            with (
+                mock.patch.object(
+                    stream,
+                    "_query_service_counts",
+                    return_value=(service_counts(), None),
+                ),
+                mock.patch.object(
+                    stream,
+                    "_action_usb_baseline_locked",
+                    side_effect=baseline_after_inflight,
+                ),
             ):
-                action = stream.mark_action("lark_promotion", 1, "plug")
-            release.set()
-            thread.join(2)
-            self.assertFalse(thread.is_alive())
-            ingested = stream.latest()
+                action_thread = threading.Thread(target=mark)
+                action_thread.start()
+                self.assertTrue(boundary_ready.wait(2))
+                release.set()
+                thread.join(2)
+                self.assertFalse(thread.is_alive())
+                ingested = stream.latest()
+                for seq in (2, 3, 4):
+                    stream.ingest(
+                        remote_usb_document(
+                            seq,
+                            usb_topology(),
+                            source_monotonic=500.0 + seq * 0.15,
+                        )
+                    )
+                action_thread.join(2)
+                self.assertFalse(action_thread.is_alive())
 
         self.assertIsNotNone(ingested)
         assert ingested is not None
-        self.assertEqual(action["after_seq"], 1)
+        self.assertEqual(action["after_seq"], 4)
         self.assertEqual(ingested["phase"], "preflight")
         self.assertIsNone(ingested["action_id"])
         self.assertLessEqual(ingested["elapsed_s"], action["elapsed_s"])
@@ -603,16 +888,7 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
         def fake_matrix(stream, transitions, **kwargs) -> None:
             self.assertIn("input_fn", kwargs)
             for gate_kind in ("promotion", "fallback", "fifine_replug"):
-                transitions.append(
-                    {
-                        "gate_kind": gate_kind,
-                        "outcome": "completed",
-                        "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
-                        "transition_latency_s": 1.0,
-                        "safety_clean": True,
-                        "restart_clean": True,
-                    }
-                )
+                transitions.append(valid_timing_transition(gate_kind))
 
         with tempfile.TemporaryDirectory() as directory:
             run_dir = Path(directory) / "run"
@@ -1046,27 +1322,8 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
         stream = FakeStream(interval=0.15)
         transitions = []
         for kind in ("promotion", "fallback"):
-            transitions.extend(
-                {
-                    "gate_kind": kind,
-                    "outcome": "completed",
-                    "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
-                    "transition_latency_s": 30.0,
-                    "safety_clean": True,
-                    "restart_clean": True,
-                }
-                for _ in range(19)
-            )
-            transitions.append(
-                {
-                    "gate_kind": kind,
-                    "outcome": "safe_state",
-                    "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
-                    "transition_latency_s": None,
-                    "safety_clean": True,
-                    "restart_clean": True,
-                }
-            )
+            transitions.extend(valid_timing_transition(kind) for _ in range(19))
+            transitions.append(valid_timing_transition(kind, outcome="safe_state"))
         summary = hotplug.build_summary(
             campaign="promotion-fallback",
             cycles=20,
