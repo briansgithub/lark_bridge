@@ -1,0 +1,24 @@
+{
+  "aborted": "EvidenceError: bridge status is stale by 232186.03s",
+  "campaign": "matrix",
+  "candidate_node_union": [
+    "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+  ],
+  "commit": "9359e505c8c4399733a66eff91d5567710ebae2e",
+  "fast_limit_s": 30.0,
+  "host": "larkbridge",
+  "interval_s": 0.15,
+  "pi_mutations_performed": false,
+  "provenance": "provenance.json",
+  "qualification_gate": "FAIL",
+  "remote_repo": "/home/admin/rpi-lark-bridge",
+  "schema": "larkbridge.e18.microphone-hotplug.v1",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": "summary.json",
+  "target_cycles": 1,
+  "timeout_s": 60.0,
+  "transitions": [],
+  "updated_timestamp": 1787724956.9294865,
+  "verdict": "FAIL"
+}

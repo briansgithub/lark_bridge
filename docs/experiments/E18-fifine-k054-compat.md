@@ -50,7 +50,7 @@ the operator selected portable matching for this installation.
 - Conditions varied: available microphone combination, enumeration order, hotplug order, active-call
   transition, K054 placement/gain/mute, and reboot cycle.
 
-### Pending dynamic hotplug qualification
+### Dynamic hotplug qualification protocol
 
 This is an operator-driven physical test with the phone call established and HFP active throughout;
 USB-driver unbind/bind or `CALL_DOWN` simulation does not count toward this field gate. Continuously
@@ -97,7 +97,10 @@ Capture service restart counters before and after each transition and across eac
 | 2 | 2026-08-25 | Host resolver, graph, readiness, release, and qualification suites | commit `1ab27980c5dea31e56c8e8f87e20ead99788623a` | PASS: 227 + 101 tests, 2 hardware skips |
 | 3 | 2026-08-25 | Read-only live resolution with both microphones attached | `docs/experiments/results/E18/live-resolver-preflight-20260825.json` | PASS |
 | 4 | 2026-08-25 | Transactional deployment, one CALL_DOWN failover/promotion cycle, and warm boot | `docs/experiments/results/E18/live-integration-20260825.json` | PASS with deferred gates |
-| 5 | pending | Live active-call physical matrix; 20 promotion, 20 fallback, and 20 FIFINE-replug cycles; physical controls, reboot, acoustic/AEC, and endurance | `docs/experiments/results/E18/field/` | pending |
+| 5 | 2026-08-26 | Initial active-call harness attempt; rejected stale-status comparison between unsynchronized host and Pi wall clocks before any physical transition | `docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/` | FAIL — harness diagnostic only |
+| 6 | 2026-08-26 | Active-call promotion attempt; harness treated intentional break-before-make silence as missing-route H5 violations | `docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/` | INCONCLUSIVE — harness diagnostic only |
+| 7 | 2026-08-26 | Complete live active-call physical both/either/neither matrix with continuous link sampling | `docs/experiments/results/E18/field/hotplug-20260826T063853Z-e0089cc5cd0a/` | BEHAVIOR PASS / TIMING FAIL |
+| 8 | pending | 20 promotion, 20 fallback, and 20 FIFINE-replug cycles; physical controls, reboot, acoustic/AEC, and endurance | `docs/experiments/results/E18/field/` | pending |
 
 ## Acceptance gates
 
@@ -139,15 +142,39 @@ A final warm-boot qualification passed idle readiness in 74.389 seconds. Three B
 matched the broad HCI-failure pattern, but the controller, required call watchdog, failed-unit scan,
 and readiness gate passed; the lines are retained in the evidence rather than silently discarded.
 
+The first physical active-call attempt was rejected before any connector action because its host
+freshness check compared the host wall clock with the directly connected Pi's unsynchronized wall
+clock. The second attempt reached the first Lark promotion but then rejected intentional empty-link
+snapshots during break-before-make teardown as H5 violations. Those runs are retained as harness
+diagnostics; they provide no admissible transition timing. Commit `dae8f3b` changed freshness to
+compare timestamps from the Pi, and commits `68a2245` and `e0089cc` allow transition silence while
+continuing to reject every nonempty route with incorrect ownership.
+
+The subsequent complete physical active-call matrix has evidence verdict `PASS` but qualification
+gate `FAIL`. All nine phases completed safely within 60 seconds. The one measured promotion took
+43.674202 seconds and the fallback took 30.082559 seconds, so neither satisfied the strict 30-second
+matrix gate; the same-name FIFINE replug completed in 25.505366 seconds and passed that gate. The
+inactive FIFINE removal and restoration held the selected Lark token, AEC owner, and graph generation
+14 unchanged. Removing both microphones reached `WAITING_MIC` at generation 15 with no AEC owner or
+uplink. Restoring FIFINE produced a new object/device/USB instance token and generation 16; restoring
+Lark promoted it at generation 17 with verified AEC.
+
+The admissible run contains 4,950 samples at a configured 0.15-second interval; its maximum remote
+sample-start gap was 0.153245 seconds. It recorded zero raw, inactive, duplicate, or AEC-bypassing
+links, zero supervisor/PipeWire/WirePlumber restarts, no new kernel or USB errors, and only
+`output.bridge.mic` feeding HFP. The evidence manifests, byte counts, and SHA-256 hashes verify. This
+is functional evidence for automatic Lark-first switching, not completion of the repeated timing
+gate.
+
 The lower-root wrapper could not return the lower filesystem to read-only immediately after each
 successful online install. Each install was followed immediately by a normal reboot, which restored
 the designed read-only mount before qualification. This deployment observation remains relevant to
 future release procedures.
 
-Hardware identity/format characterization remains confirmed only for the attached unit. Physical
-controls, replacement-unit stability, physical reboot/hotplug repetition, active-call switching,
-and acoustic/AEC behavior remain unmeasured. The live active-call matrix and repeated-cycle
-campaigns defined above remain pending; no dynamic timing or zero-violation result is claimed here.
+Hardware identity/format characterization remains confirmed only for the attached unit. One
+active-call matrix is now measured, including a zero-link-violation result, but its strict timing
+gate failed. The 20-cycle campaigns, physical controls, replacement-unit stability, physical reboot
+repetition, acoustic/AEC behavior, and endurance remain pending.
 
 ## Verdict
 

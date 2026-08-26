@@ -1,0 +1,3608 @@
+{
+  "aborted": null,
+  "artifact_dir": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification\\docs\\experiments\\results\\E18\\field\\hotplug-20260826T063853Z-e0089cc5cd0a",
+  "artifacts": {
+    "checkpoint": "checkpoint.json",
+    "closing": "closing.json",
+    "manifest": "evidence-manifest.json",
+    "preflight": "preflight.json",
+    "provenance": "provenance.json",
+    "samples": "samples.jsonl",
+    "summary": "summary.json"
+  },
+  "campaign": "matrix",
+  "commit": "e0089cc5cd0a02c1e771501c9740566052cc71dc",
+  "fatal_errors": [],
+  "link_safety_gate": {
+    "candidate_node_union": [
+      "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+      "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+    ],
+    "first_violations": [],
+    "requirements": [
+      "zero raw or inactive microphone uplinks",
+      "zero inactive microphone feeds into AEC or bridge.mic",
+      "zero duplicate uplink owners",
+      "only output.bridge.mic may feed HFP"
+    ],
+    "verdict": "PASS",
+    "violation_counts": {}
+  },
+  "pi_mutations_performed": false,
+  "provenance": {
+    "captured_timestamp": 1787726337.1841948,
+    "local_repository": {
+      "dirty": true,
+      "head": "e0089cc5cd0a02c1e771501c9740566052cc71dc",
+      "path": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification",
+      "porcelain": [
+        "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/checkpoint.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/closing.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/evidence-manifest.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/preflight.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/provenance.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/samples.jsonl",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/summary.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/checkpoint.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/closing.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/evidence-manifest.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/preflight.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/provenance.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/samples.jsonl",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/summary.json",
+        "?? docs/experiments/results/E18/field/hotplug-20260826T063853Z-e0089cc5cd0a/checkpoint.json"
+      ]
+    },
+    "local_sources": {
+      "harness_library": {
+        "bytes": 51625,
+        "exists": true,
+        "path": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification\\rig\\bt500_aux\\harness.py",
+        "sha256": "1158a22d6586882ed8bb3fb5c3125b56e856d3161482ac6d5785ab0f2978a7d4"
+      },
+      "host_harness": {
+        "bytes": 59235,
+        "exists": true,
+        "path": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification\\rig\\bt500_aux\\microphone_hotplug.py",
+        "sha256": "0086ea63f946b11fb65560159649337cdc355743ac88921e6fb16297c898a1ba"
+      },
+      "local_invariants": {
+        "bytes": 17527,
+        "exists": true,
+        "path": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification\\rig\\pi\\measure\\invariants.py",
+        "sha256": "222071d08d2b9a976f1eb04e88d869f59115928a4dbb23e91d4a7dc077b453b1"
+      },
+      "streamed_sampler": {
+        "bytes": 76942,
+        "exists": true,
+        "path": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification\\rig\\pi\\measure\\microphone_hotplug.py",
+        "sha256": "e8665a9bf20cc1dc56a52b878061177f8c6b372bb03098096777bdc4d4017c74"
+      }
+    },
+    "read_only": true,
+    "remote": {
+      "deployed_release": {
+        "bytes": 380,
+        "document": {
+          "archive_schema": 1,
+          "archive_sha256": "ee4bb352cdd01fe93b638cc202ca7fe3645135f7d8aabd4403b1b48368e242b5",
+          "base_commit": "4dba442a95166a60630a7f68e0248f8cc4f488fa",
+          "branch": "codex/fifine-k054-compat",
+          "commit": "1ab27980c5dea31e56c8e8f87e20ead99788623a",
+          "created_utc": "2026-08-26T03:46:51.234473Z",
+          "manifest_entries": 461,
+          "profile": "pi3-usb-bt500-aux"
+        },
+        "exists": true,
+        "path": "/etc/larkbridge/DEPLOYED.json",
+        "sha256": "c7ce47f3caa00b2e9a8ce0c8fff160f3e4c8ffd8435aa4c02d2cc42cc5c1a91e"
+      },
+      "errors": [],
+      "installed_files": {
+        "bridge_config": {
+          "bytes": 1700,
+          "exists": true,
+          "path": "/home/admin/rpi-lark-bridge/config/bridge.toml",
+          "sha256": "ba7c00d533d778a3e1d8248e6952aa4a7eb0c64ea0ff973c3c6782b151aaeb5c"
+        },
+        "bridge_supervisor": {
+          "bytes": 90275,
+          "exists": true,
+          "path": "/home/admin/rpi-lark-bridge/pi/bridged/bridge_supervisor.py",
+          "sha256": "cf2f271bde2915b6d2c7802e2fd54817f2b6c87764fb8bcd7d8330da3e7e4c75"
+        },
+        "btadapters": {
+          "bytes": 52271,
+          "exists": true,
+          "path": "/home/admin/rpi-lark-bridge/pi/bridged/btadapters.py",
+          "sha256": "a53ac997255922bc502ff21834398be6ab1e3b662a9912c6e5937fb8e35c6029"
+        },
+        "controller_roles": {
+          "bytes": 16073,
+          "exists": true,
+          "path": "/home/admin/rpi-lark-bridge/pi/bridged/controller_roles.py",
+          "sha256": "c726db876691694a1668ad80261e819c7bf6ca190bbce0b18a8d839b2d577060"
+        },
+        "invariants": {
+          "bytes": 17527,
+          "exists": true,
+          "path": "/home/admin/rpi-lark-bridge/rig/pi/measure/invariants.py",
+          "sha256": "222071d08d2b9a976f1eb04e88d869f59115928a4dbb23e91d4a7dc077b453b1"
+        },
+        "microphone_resolver": {
+          "bytes": 36511,
+          "exists": true,
+          "path": "/home/admin/rpi-lark-bridge/pi/bridged/microphones.py",
+          "sha256": "278ccd31a57486c9d1fb050b8f8655fd2ad3104a73b520af158bb18a96f1a349"
+        },
+        "output_resolver": {
+          "bytes": 16661,
+          "exists": true,
+          "path": "/home/admin/rpi-lark-bridge/pi/bridged/outputs.py",
+          "sha256": "78e7f0cc07fcc6fd8a6df05a66a22b637528f36cb7eb89f104d85fde06462391"
+        },
+        "remote_harness": {
+          "bytes": 51625,
+          "exists": true,
+          "path": "/home/admin/rpi-lark-bridge/rig/bt500_aux/harness.py",
+          "sha256": "1158a22d6586882ed8bb3fb5c3125b56e856d3161482ac6d5785ab0f2978a7d4"
+        },
+        "remote_snapshot": {
+          "bytes": 28106,
+          "exists": true,
+          "path": "/home/admin/rpi-lark-bridge/rig/bt500_aux/remote.py",
+          "sha256": "a7f4b9ff5f48afa8ac7d50e66fa1a46b541fab7713fcfa705c627f81df125d59"
+        }
+      },
+      "repository": {
+        "dirty": null,
+        "git_available": false,
+        "git_checkout": false,
+        "head": "1ab27980c5dea31e56c8e8f87e20ead99788623a",
+        "identity_source": "deployed_release",
+        "path": "/home/admin/rpi-lark-bridge",
+        "porcelain": []
+      },
+      "status": "PASS"
+    },
+    "schema_version": 1,
+    "status": "PASS"
+  },
+  "provenance_gate": {
+    "verdict": "PASS"
+  },
+  "qualification_configuration": {
+    "configured": {
+      "cycles": 1,
+      "fast_limit_s": 30.0,
+      "max_limit_s": 60.0
+    },
+    "required": {
+      "cycles": 1,
+      "fast_limit_s": 30.0,
+      "max_limit_s": 60.0
+    },
+    "verdict": "PASS"
+  },
+  "qualification_gate": "FAIL",
+  "remote_boot_id": "e161d78a-187b-4cbc-b5b6-e3d4ea2e7c06",
+  "remote_returncode": null,
+  "remote_stderr": [],
+  "requested_cycles": 1,
+  "restart_gate": {
+    "snapshot_deltas": {
+      "new_kernel_errors": [],
+      "new_usb_errors": [],
+      "user_service_restarts": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      }
+    },
+    "stream_final": {
+      "bridge-supervisor.service": 0,
+      "pipewire.service": 0,
+      "wireplumber.service": 0
+    },
+    "stream_initial": {
+      "bridge-supervisor.service": 0,
+      "pipewire.service": 0,
+      "wireplumber.service": 0
+    },
+    "supervisor_restart_delta": 0,
+    "verdict": "PASS"
+  },
+  "sampling_gate": {
+    "configured_interval_s": 0.15,
+    "malformed_lines": [],
+    "max_host_receive_gap_s": 0.427501,
+    "max_remote_start_gap_s": 0.153245,
+    "required_max_configured_interval_s": 0.2,
+    "required_max_measured_gap_s": 0.25,
+    "sample_count": 4950,
+    "sequence_complete": true,
+    "sequence_gaps": [],
+    "unexpected_eof": false,
+    "verdict": "PASS"
+  },
+  "schema": "larkbridge.e18.microphone-hotplug.v1",
+  "schema_version": 1,
+  "timing_gates": {
+    "fallback": {
+      "completed_under_fast_limit": 0,
+      "expected_cycles": 1,
+      "fast_limit_s": 30.0,
+      "kind": "fallback",
+      "max_limit_s": 60.0,
+      "observed_cycles": 1,
+      "required_completed_under_fast_limit": 1,
+      "restart_clean_cycles": 1,
+      "safety_clean_cycles": 1,
+      "verdict": "FAIL",
+      "within_max_or_actionable_safe": 1
+    },
+    "fifine_replug": {
+      "completed_under_fast_limit": 1,
+      "expected_cycles": 1,
+      "fast_limit_s": 30.0,
+      "kind": "fifine_replug",
+      "max_limit_s": 60.0,
+      "observed_cycles": 1,
+      "required_completed_under_fast_limit": 1,
+      "restart_clean_cycles": 1,
+      "safety_clean_cycles": 1,
+      "verdict": "PASS",
+      "within_max_or_actionable_safe": 1
+    },
+    "promotion": {
+      "completed_under_fast_limit": 0,
+      "expected_cycles": 1,
+      "fast_limit_s": 30.0,
+      "kind": "promotion",
+      "max_limit_s": 60.0,
+      "observed_cycles": 1,
+      "required_completed_under_fast_limit": 1,
+      "restart_clean_cycles": 1,
+      "safety_clean_cycles": 1,
+      "verdict": "FAIL",
+      "within_max_or_actionable_safe": 1
+    }
+  },
+  "transitions": [
+    {
+      "action_id": "fifine_only_baseline:1:1787726384463780900",
+      "action_timestamp": 1787726384.4637778,
+      "cycle": 1,
+      "expectation_failures_final": [],
+      "final_sample": {
+        "action_id": "fifine_only_baseline:1:1787726384463780900",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 32217,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 0,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 48.075195,
+        "graph_generation": 11,
+        "host_timestamp": 1787726385.2822964,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 1,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "fifine-k054",
+          "identity": {
+            "device_object_serial": "51",
+            "pipewire_object_serial": "60",
+            "usb_instance_generation": "1-1.2@4",
+            "usb_port_path": "1-1.2",
+            "usb_product": "USB PnP Audio Device",
+            "usb_product_id": "161e",
+            "usb_serial": null,
+            "usb_vendor_id": "0c76"
+          },
+          "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.2@4\"]",
+          "label": "FIFINE K054",
+          "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "priority": 1
+        },
+        "phase": "fifine_only_baseline",
+        "remote_elapsed_s": 46.800108,
+        "remote_seq": 313,
+        "sampling": {
+          "capture_duration_s": 0.035028,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000108,
+          "start_gap_s": 0.149998
+        },
+        "schema_version": 1,
+        "selection_reason": "lark-a1 absent; using fifine-k054",
+        "seq": 313,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494201.711187,
+        "timestamp": 1787494202.644571,
+        "type": "sample"
+      },
+      "first_matching_sample": {
+        "action_id": "fifine_only_baseline:1:1787726384463780900",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 32217,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 0,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 47.330055,
+        "graph_generation": 11,
+        "host_timestamp": 1787726384.5371492,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 1,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "fifine-k054",
+          "identity": {
+            "device_object_serial": "51",
+            "pipewire_object_serial": "60",
+            "usb_instance_generation": "1-1.2@4",
+            "usb_port_path": "1-1.2",
+            "usb_product": "USB PnP Audio Device",
+            "usb_product_id": "161e",
+            "usb_serial": null,
+            "usb_vendor_id": "0c76"
+          },
+          "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.2@4\"]",
+          "label": "FIFINE K054",
+          "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "priority": 1
+        },
+        "phase": "fifine_only_baseline",
+        "remote_elapsed_s": 46.050128,
+        "remote_seq": 308,
+        "sampling": {
+          "capture_duration_s": 0.042439,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000128,
+          "start_gap_s": 0.149973
+        },
+        "schema_version": 1,
+        "selection_reason": "lark-a1 absent; using fifine-k054",
+        "seq": 308,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494201.711187,
+        "timestamp": 1787494201.902003,
+        "type": "sample"
+      },
+      "gate_kind": null,
+      "invariant_violations": [],
+      "outcome": "completed",
+      "phase": "fifine_only_baseline",
+      "restart_clean": true,
+      "safety_clean": true,
+      "samples": 6,
+      "service_restart_counts_after": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_counts_before": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_delta": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "settled_latency_s": 0.818447,
+      "supervisor_restart_delta": 0,
+      "timeout_s": 60.0,
+      "transition_latency_s": 0.073307
+    },
+    {
+      "action_id": "lark_promotion:1:1787726440456343400",
+      "action_timestamp": 1787726440.456337,
+      "cycle": 1,
+      "expectation_failures_final": [],
+      "final_sample": {
+        "action_id": "lark_promotion:1:1787726440456343400",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 34799,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "identity and capabilities match",
+            "state": "usable"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 147.52427,
+        "graph_generation": 12,
+        "host_timestamp": 1787726484.731406,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 2,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "lark-a1",
+          "identity": {
+            "device_object_serial": "12167",
+            "pipewire_object_serial": "12168",
+            "usb_instance_generation": "1-1.3@9",
+            "usb_port_path": "1-1.3",
+            "usb_product": "Wireless Microphone",
+            "usb_product_id": "0407",
+            "usb_serial": "Wireless Microphone",
+            "usb_vendor_id": "3547"
+          },
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"12168\",\"12167\",\"1-1.3@9\"]",
+          "label": "Hollyland Lark A1",
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "priority": 0
+        },
+        "phase": "lark_promotion",
+        "remote_elapsed_s": 146.250111,
+        "remote_seq": 976,
+        "sampling": {
+          "capture_duration_s": 0.034857,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000111,
+          "start_gap_s": 0.149998
+        },
+        "schema_version": 1,
+        "selection_reason": "using lark-a1",
+        "seq": 976,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494301.4080522,
+        "timestamp": 1787494302.094404,
+        "type": "sample"
+      },
+      "first_matching_sample": {
+        "action_id": "lark_promotion:1:1787726440456343400",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 34799,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "identity and capabilities match",
+            "state": "usable"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 146.923508,
+        "graph_generation": 12,
+        "host_timestamp": 1787726484.1306086,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 2,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "lark-a1",
+          "identity": {
+            "device_object_serial": "12167",
+            "pipewire_object_serial": "12168",
+            "usb_instance_generation": "1-1.3@9",
+            "usb_port_path": "1-1.3",
+            "usb_product": "Wireless Microphone",
+            "usb_product_id": "0407",
+            "usb_serial": "Wireless Microphone",
+            "usb_vendor_id": "3547"
+          },
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"12168\",\"12167\",\"1-1.3@9\"]",
+          "label": "Hollyland Lark A1",
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "priority": 0
+        },
+        "phase": "lark_promotion",
+        "remote_elapsed_s": 145.650126,
+        "remote_seq": 972,
+        "sampling": {
+          "capture_duration_s": 0.034954,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000126,
+          "start_gap_s": 0.149887
+        },
+        "schema_version": 1,
+        "selection_reason": "using lark-a1",
+        "seq": 972,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494301.4080522,
+        "timestamp": 1787494301.4945176,
+        "type": "sample"
+      },
+      "gate_kind": "promotion",
+      "invariant_violations": [],
+      "outcome": "completed",
+      "phase": "lark_promotion",
+      "restart_clean": true,
+      "safety_clean": true,
+      "samples": 296,
+      "service_restart_counts_after": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_counts_before": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_delta": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "settled_latency_s": 44.274964,
+      "supervisor_restart_delta": 0,
+      "timeout_s": 60.0,
+      "transition_latency_s": 43.674202
+    },
+    {
+      "action_id": "lark_fallback:1:1787726532506155000",
+      "action_timestamp": 1787726532.5061529,
+      "cycle": 1,
+      "expectation_failures_final": [],
+      "final_sample": {
+        "action_id": "lark_fallback:1:1787726532506155000",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 36167,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 0,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 226.125209,
+        "graph_generation": 13,
+        "host_timestamp": 1787726563.3322926,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 1,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "fifine-k054",
+          "identity": {
+            "device_object_serial": "51",
+            "pipewire_object_serial": "60",
+            "usb_instance_generation": "1-1.2@4",
+            "usb_port_path": "1-1.2",
+            "usb_product": "USB PnP Audio Device",
+            "usb_product_id": "161e",
+            "usb_serial": null,
+            "usb_vendor_id": "0c76"
+          },
+          "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.2@4\"]",
+          "label": "FIFINE K054",
+          "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "priority": 1
+        },
+        "phase": "lark_fallback",
+        "remote_elapsed_s": 224.85011,
+        "remote_seq": 1500,
+        "sampling": {
+          "capture_duration_s": 0.036269,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.00011,
+          "start_gap_s": 0.149998
+        },
+        "schema_version": 1,
+        "selection_reason": "lark-a1 absent; using fifine-k054",
+        "seq": 1500,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494379.854442,
+        "timestamp": 1787494380.6958153,
+        "type": "sample"
+      },
+      "first_matching_sample": {
+        "action_id": "lark_fallback:1:1787726532506155000",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 36167,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 0,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 225.381682,
+        "graph_generation": 13,
+        "host_timestamp": 1787726562.588842,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 1,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "fifine-k054",
+          "identity": {
+            "device_object_serial": "51",
+            "pipewire_object_serial": "60",
+            "usb_instance_generation": "1-1.2@4",
+            "usb_port_path": "1-1.2",
+            "usb_product": "USB PnP Audio Device",
+            "usb_product_id": "161e",
+            "usb_serial": null,
+            "usb_vendor_id": "0c76"
+          },
+          "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.2@4\"]",
+          "label": "FIFINE K054",
+          "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "priority": 1
+        },
+        "phase": "lark_fallback",
+        "remote_elapsed_s": 224.100117,
+        "remote_seq": 1495,
+        "sampling": {
+          "capture_duration_s": 0.041389,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000117,
+          "start_gap_s": 0.149946
+        },
+        "schema_version": 1,
+        "selection_reason": "lark-a1 absent; using fifine-k054",
+        "seq": 1495,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494379.854442,
+        "timestamp": 1787494379.9509447,
+        "type": "sample"
+      },
+      "gate_kind": "fallback",
+      "invariant_violations": [],
+      "outcome": "completed",
+      "phase": "lark_fallback",
+      "restart_clean": true,
+      "safety_clean": true,
+      "samples": 206,
+      "service_restart_counts_after": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_counts_before": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_delta": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "settled_latency_s": 30.826086,
+      "supervisor_restart_delta": 0,
+      "timeout_s": 60.0,
+      "transition_latency_s": 30.082559
+    },
+    {
+      "action_id": "inactive_fifine_change/setup_lark:1:1787726611130180200",
+      "action_timestamp": 1787726611.1301768,
+      "cycle": 1,
+      "expectation_failures_final": [],
+      "final_sample": {
+        "action_id": "inactive_fifine_change/setup_lark:1:1787726611130180200",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 37692,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "identity and capabilities match",
+            "state": "usable"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 314.024676,
+        "graph_generation": 14,
+        "host_timestamp": 1787726651.231848,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 2,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "lark-a1",
+          "identity": {
+            "device_object_serial": "13511",
+            "pipewire_object_serial": "13512",
+            "usb_instance_generation": "1-1.3@10",
+            "usb_port_path": "1-1.3",
+            "usb_product": "Wireless Microphone",
+            "usb_product_id": "0407",
+            "usb_serial": "Wireless Microphone",
+            "usb_vendor_id": "3547"
+          },
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"13512\",\"13511\",\"1-1.3@10\"]",
+          "label": "Hollyland Lark A1",
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "priority": 0
+        },
+        "phase": "inactive_fifine_change/setup_lark",
+        "remote_elapsed_s": 312.75012,
+        "remote_seq": 2086,
+        "sampling": {
+          "capture_duration_s": 0.034026,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.00012,
+          "start_gap_s": 0.15001
+        },
+        "schema_version": 1,
+        "selection_reason": "using lark-a1",
+        "seq": 2086,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494467.8981957,
+        "timestamp": 1787494468.593581,
+        "type": "sample"
+      },
+      "first_matching_sample": {
+        "action_id": "inactive_fifine_change/setup_lark:1:1787726611130180200",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 37692,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "identity and capabilities match",
+            "state": "usable"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 313.423688,
+        "graph_generation": 14,
+        "host_timestamp": 1787726650.6307678,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 2,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "lark-a1",
+          "identity": {
+            "device_object_serial": "13511",
+            "pipewire_object_serial": "13512",
+            "usb_instance_generation": "1-1.3@10",
+            "usb_port_path": "1-1.3",
+            "usb_product": "Wireless Microphone",
+            "usb_product_id": "0407",
+            "usb_serial": "Wireless Microphone",
+            "usb_vendor_id": "3547"
+          },
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"13512\",\"13511\",\"1-1.3@10\"]",
+          "label": "Hollyland Lark A1",
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "priority": 0
+        },
+        "phase": "inactive_fifine_change/setup_lark",
+        "remote_elapsed_s": 312.150137,
+        "remote_seq": 2082,
+        "sampling": {
+          "capture_duration_s": 0.034027,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000137,
+          "start_gap_s": 0.149865
+        },
+        "schema_version": 1,
+        "selection_reason": "using lark-a1",
+        "seq": 2082,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494467.8981957,
+        "timestamp": 1787494467.9936,
+        "type": "sample"
+      },
+      "gate_kind": null,
+      "invariant_violations": [],
+      "outcome": "completed",
+      "phase": "inactive_fifine_change/setup_lark",
+      "restart_clean": true,
+      "safety_clean": true,
+      "samples": 268,
+      "service_restart_counts_after": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_counts_before": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_delta": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "settled_latency_s": 40.10153,
+      "supervisor_restart_delta": 0,
+      "timeout_s": 60.0,
+      "transition_latency_s": 39.500542
+    },
+    {
+      "action_id": "inactive_fifine_change/remove:1:1787726699804747600",
+      "action_timestamp": 1787726699.804745,
+      "cycle": 1,
+      "expectation_failures_final": [],
+      "final_sample": {
+        "action_id": "inactive_fifine_change/remove:1:1787726699804747600",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 37692,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 1,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 376.725753,
+        "graph_generation": 14,
+        "host_timestamp": 1787726713.9328897,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 2,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "lark-a1",
+          "identity": {
+            "device_object_serial": "13511",
+            "pipewire_object_serial": "13512",
+            "usb_instance_generation": "1-1.3@10",
+            "usb_port_path": "1-1.3",
+            "usb_product": "Wireless Microphone",
+            "usb_product_id": "0407",
+            "usb_serial": "Wireless Microphone",
+            "usb_vendor_id": "3547"
+          },
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"13512\",\"13511\",\"1-1.3@10\"]",
+          "label": "Hollyland Lark A1",
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "priority": 0
+        },
+        "phase": "inactive_fifine_change/remove",
+        "remote_elapsed_s": 375.450106,
+        "remote_seq": 2504,
+        "sampling": {
+          "capture_duration_s": 0.034817,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000106,
+          "start_gap_s": 0.149965
+        },
+        "schema_version": 1,
+        "selection_reason": "using lark-a1",
+        "seq": 2504,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494530.4346874,
+        "timestamp": 1787494531.294359,
+        "type": "sample"
+      },
+      "first_matching_sample": {
+        "action_id": "inactive_fifine_change/remove:1:1787726699804747600",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 37692,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 1,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 375.974629,
+        "graph_generation": 14,
+        "host_timestamp": 1787726713.1817305,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 2,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "lark-a1",
+          "identity": {
+            "device_object_serial": "13511",
+            "pipewire_object_serial": "13512",
+            "usb_instance_generation": "1-1.3@10",
+            "usb_port_path": "1-1.3",
+            "usb_product": "Wireless Microphone",
+            "usb_product_id": "0407",
+            "usb_serial": "Wireless Microphone",
+            "usb_vendor_id": "3547"
+          },
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"13512\",\"13511\",\"1-1.3@10\"]",
+          "label": "Hollyland Lark A1",
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "priority": 0
+        },
+        "phase": "inactive_fifine_change/remove",
+        "remote_elapsed_s": 374.700128,
+        "remote_seq": 2499,
+        "sampling": {
+          "capture_duration_s": 0.034164,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000128,
+          "start_gap_s": 0.149971
+        },
+        "schema_version": 1,
+        "selection_reason": "using lark-a1",
+        "seq": 2499,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494530.4346874,
+        "timestamp": 1787494530.5437274,
+        "type": "sample"
+      },
+      "gate_kind": null,
+      "invariant_violations": [],
+      "outcome": "completed",
+      "phase": "inactive_fifine_change/remove",
+      "restart_clean": true,
+      "safety_clean": true,
+      "samples": 95,
+      "service_restart_counts_after": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_counts_before": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_delta": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "settled_latency_s": 14.128038,
+      "supervisor_restart_delta": 0,
+      "timeout_s": 60.0,
+      "transition_latency_s": 13.376914
+    },
+    {
+      "action_id": "inactive_fifine_change/restore:1:1787726834596309900",
+      "action_timestamp": 1787726834.5963056,
+      "cycle": 1,
+      "expectation_failures_final": [],
+      "final_sample": {
+        "action_id": "inactive_fifine_change/restore:1:1787726834596309900",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 37692,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "identity and capabilities match",
+            "state": "usable"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 515.776381,
+        "graph_generation": 14,
+        "host_timestamp": 1787726852.9834747,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 2,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "lark-a1",
+          "identity": {
+            "device_object_serial": "13511",
+            "pipewire_object_serial": "13512",
+            "usb_instance_generation": "1-1.3@10",
+            "usb_port_path": "1-1.3",
+            "usb_product": "Wireless Microphone",
+            "usb_product_id": "0407",
+            "usb_serial": "Wireless Microphone",
+            "usb_vendor_id": "3547"
+          },
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"13512\",\"13511\",\"1-1.3@10\"]",
+          "label": "Hollyland Lark A1",
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "priority": 0
+        },
+        "phase": "inactive_fifine_change/restore",
+        "remote_elapsed_s": 514.500125,
+        "remote_seq": 3431,
+        "sampling": {
+          "capture_duration_s": 0.034625,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000125,
+          "start_gap_s": 0.149987
+        },
+        "schema_version": 1,
+        "selection_reason": "using lark-a1",
+        "seq": 3431,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494669.5000014,
+        "timestamp": 1787494670.3441849,
+        "type": "sample"
+      },
+      "first_matching_sample": {
+        "action_id": "inactive_fifine_change/restore:1:1787726834596309900",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 37692,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "identity and capabilities match",
+            "state": "usable"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 515.026944,
+        "graph_generation": 14,
+        "host_timestamp": 1787726852.2340477,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 2,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "lark-a1",
+          "identity": {
+            "device_object_serial": "13511",
+            "pipewire_object_serial": "13512",
+            "usb_instance_generation": "1-1.3@10",
+            "usb_port_path": "1-1.3",
+            "usb_product": "Wireless Microphone",
+            "usb_product_id": "0407",
+            "usb_serial": "Wireless Microphone",
+            "usb_vendor_id": "3547"
+          },
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"13512\",\"13511\",\"1-1.3@10\"]",
+          "label": "Hollyland Lark A1",
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "priority": 0
+        },
+        "phase": "inactive_fifine_change/restore",
+        "remote_elapsed_s": 513.750109,
+        "remote_seq": 3426,
+        "sampling": {
+          "capture_duration_s": 0.034516,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000109,
+          "start_gap_s": 0.149984
+        },
+        "schema_version": 1,
+        "selection_reason": "using lark-a1",
+        "seq": 3426,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494669.5000014,
+        "timestamp": 1787494669.5940602,
+        "type": "sample"
+      },
+      "gate_kind": null,
+      "invariant_violations": [],
+      "outcome": "completed",
+      "phase": "inactive_fifine_change/restore",
+      "restart_clean": true,
+      "safety_clean": true,
+      "samples": 123,
+      "service_restart_counts_after": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_counts_before": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_delta": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "settled_latency_s": 18.387106,
+      "supervisor_restart_delta": 0,
+      "timeout_s": 60.0,
+      "transition_latency_s": 17.637669
+    },
+    {
+      "action_id": "neither_microphone_waiting:1:1787726898138180000",
+      "action_timestamp": 1787726898.1381779,
+      "cycle": 1,
+      "expectation_failures_final": [],
+      "final_sample": {
+        "action_id": "neither_microphone_waiting:1:1787726898138180000",
+        "aec": {
+          "enabled": true,
+          "owner_pid": null,
+          "verified": false
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 1,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 0,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 579.221988,
+        "graph_generation": 15,
+        "host_timestamp": 1787726916.4290807,
+        "invariants": {
+          "aec_capture_inputs": [],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "microphone_inputs": [],
+          "passed": true,
+          "selected_node": null,
+          "violations": []
+        },
+        "link_error": null,
+        "links": [],
+        "microphone": null,
+        "phase": "neither_microphone_waiting",
+        "remote_elapsed_s": 577.950123,
+        "remote_seq": 3854,
+        "sampling": {
+          "capture_duration_s": 0.030069,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000123,
+          "start_gap_s": 0.150022
+        },
+        "schema_version": 1,
+        "selection_reason": "no configured microphone is usable: lark-a1 absent, fifine-k054 absent",
+        "seq": 3854,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "WAITING_MIC",
+        "status_error": null,
+        "status_timestamp": 1787494732.9475768,
+        "timestamp": 1787494733.789627,
+        "type": "sample"
+      },
+      "first_matching_sample": {
+        "action_id": "neither_microphone_waiting:1:1787726898138180000",
+        "aec": {
+          "enabled": true,
+          "owner_pid": null,
+          "verified": false
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 1,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 0,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 578.472756,
+        "graph_generation": 15,
+        "host_timestamp": 1787726915.679932,
+        "invariants": {
+          "aec_capture_inputs": [],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "microphone_inputs": [],
+          "passed": true,
+          "selected_node": null,
+          "violations": []
+        },
+        "link_error": null,
+        "links": [],
+        "microphone": null,
+        "phase": "neither_microphone_waiting",
+        "remote_elapsed_s": 577.20011,
+        "remote_seq": 3849,
+        "sampling": {
+          "capture_duration_s": 0.029975,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.00011,
+          "start_gap_s": 0.14996
+        },
+        "schema_version": 1,
+        "selection_reason": "no configured microphone is usable: lark-a1 absent, fifine-k054 absent",
+        "seq": 3849,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "WAITING_MIC",
+        "status_error": null,
+        "status_timestamp": 1787494732.9475768,
+        "timestamp": 1787494733.0395205,
+        "type": "sample"
+      },
+      "gate_kind": null,
+      "invariant_violations": [],
+      "outcome": "completed",
+      "phase": "neither_microphone_waiting",
+      "restart_clean": true,
+      "safety_clean": true,
+      "samples": 123,
+      "service_restart_counts_after": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_counts_before": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_delta": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "settled_latency_s": 18.290841,
+      "supervisor_restart_delta": 0,
+      "timeout_s": 60.0,
+      "transition_latency_s": 17.541609
+    },
+    {
+      "action_id": "restore_fifine:1:1787726961738564600",
+      "action_timestamp": 1787726961.7385623,
+      "cycle": 1,
+      "expectation_failures_final": [],
+      "final_sample": {
+        "action_id": "restore_fifine:1:1787726961738564600",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 43390,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 0,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 650.77601,
+        "graph_generation": 16,
+        "host_timestamp": 1787726987.9830832,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 1,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "fifine-k054",
+          "identity": {
+            "device_object_serial": "16148",
+            "pipewire_object_serial": "16149",
+            "usb_instance_generation": "1-1.2@12",
+            "usb_port_path": "1-1.2",
+            "usb_product": "USB PnP Audio Device",
+            "usb_product_id": "161e",
+            "usb_serial": null,
+            "usb_vendor_id": "0c76"
+          },
+          "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"16149\",\"16148\",\"1-1.2@12\"]",
+          "label": "FIFINE K054",
+          "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "priority": 1
+        },
+        "phase": "restore_fifine",
+        "remote_elapsed_s": 649.500123,
+        "remote_seq": 4331,
+        "sampling": {
+          "capture_duration_s": 0.032959,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000123,
+          "start_gap_s": 0.150007
+        },
+        "schema_version": 1,
+        "selection_reason": "lark-a1 absent; using fifine-k054",
+        "seq": 4331,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494804.409031,
+        "timestamp": 1787494805.342518,
+        "type": "sample"
+      },
+      "first_matching_sample": {
+        "action_id": "restore_fifine:1:1787726961738564600",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 43390,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 0,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 650.036898,
+        "graph_generation": 16,
+        "host_timestamp": 1787726987.2440221,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 1,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "fifine-k054",
+          "identity": {
+            "device_object_serial": "16148",
+            "pipewire_object_serial": "16149",
+            "usb_instance_generation": "1-1.2@12",
+            "usb_port_path": "1-1.2",
+            "usb_product": "USB PnP Audio Device",
+            "usb_product_id": "161e",
+            "usb_serial": null,
+            "usb_vendor_id": "0c76"
+          },
+          "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"16149\",\"16148\",\"1-1.2@12\"]",
+          "label": "FIFINE K054",
+          "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "priority": 1
+        },
+        "phase": "restore_fifine",
+        "remote_elapsed_s": 648.75012,
+        "remote_seq": 4326,
+        "sampling": {
+          "capture_duration_s": 0.043639,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.00012,
+          "start_gap_s": 0.149931
+        },
+        "schema_version": 1,
+        "selection_reason": "lark-a1 absent; using fifine-k054",
+        "seq": 4326,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494804.409031,
+        "timestamp": 1787494804.603194,
+        "type": "sample"
+      },
+      "gate_kind": "fifine_replug",
+      "invariant_violations": [],
+      "outcome": "completed",
+      "phase": "restore_fifine",
+      "restart_clean": true,
+      "safety_clean": true,
+      "samples": 175,
+      "service_restart_counts_after": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_counts_before": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_delta": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "settled_latency_s": 26.244478,
+      "supervisor_restart_delta": 0,
+      "timeout_s": 60.0,
+      "transition_latency_s": 25.505366
+    },
+    {
+      "action_id": "restore_lark:1:1787727046028955700",
+      "action_timestamp": 1787727046.028954,
+      "cycle": 1,
+      "expectation_failures_final": [],
+      "final_sample": {
+        "action_id": "restore_lark:1:1787727046028955700",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 44873,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "identity and capabilities match",
+            "state": "usable"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 736.128884,
+        "graph_generation": 17,
+        "host_timestamp": 1787727073.3359785,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 2,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "lark-a1",
+          "identity": {
+            "device_object_serial": "16794",
+            "pipewire_object_serial": "16795",
+            "usb_instance_generation": "1-1.3@13",
+            "usb_port_path": "1-1.3",
+            "usb_product": "Wireless Microphone",
+            "usb_product_id": "0407",
+            "usb_serial": "Wireless Microphone",
+            "usb_vendor_id": "3547"
+          },
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"16795\",\"16794\",\"1-1.3@13\"]",
+          "label": "Hollyland Lark A1",
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "priority": 0
+        },
+        "phase": "restore_lark",
+        "remote_elapsed_s": 734.85011,
+        "remote_seq": 4900,
+        "sampling": {
+          "capture_duration_s": 0.035454,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.00011,
+          "start_gap_s": 0.150007
+        },
+        "schema_version": 1,
+        "selection_reason": "using lark-a1",
+        "seq": 4900,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494889.8447003,
+        "timestamp": 1787494890.6950002,
+        "type": "sample"
+      },
+      "first_matching_sample": {
+        "action_id": "restore_lark:1:1787727046028955700",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 44873,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "identity and capabilities match",
+            "state": "usable"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 735.380918,
+        "graph_generation": 17,
+        "host_timestamp": 1787727072.5880575,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 2,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "lark-a1",
+          "identity": {
+            "device_object_serial": "16794",
+            "pipewire_object_serial": "16795",
+            "usb_instance_generation": "1-1.3@13",
+            "usb_port_path": "1-1.3",
+            "usb_product": "Wireless Microphone",
+            "usb_product_id": "0407",
+            "usb_serial": "Wireless Microphone",
+            "usb_vendor_id": "3547"
+          },
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"16795\",\"16794\",\"1-1.3@13\"]",
+          "label": "Hollyland Lark A1",
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "priority": 0
+        },
+        "phase": "restore_lark",
+        "remote_elapsed_s": 734.100113,
+        "remote_seq": 4895,
+        "sampling": {
+          "capture_duration_s": 0.036517,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000113,
+          "start_gap_s": 0.149983
+        },
+        "schema_version": 1,
+        "selection_reason": "using lark-a1",
+        "seq": 4895,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787494889.8447003,
+        "timestamp": 1787494889.946066,
+        "type": "sample"
+      },
+      "gate_kind": null,
+      "invariant_violations": [],
+      "outcome": "completed",
+      "phase": "restore_lark",
+      "restart_clean": true,
+      "safety_clean": true,
+      "samples": 183,
+      "service_restart_counts_after": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_counts_before": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_delta": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "settled_latency_s": 27.30696,
+      "supervisor_restart_delta": 0,
+      "timeout_s": 60.0,
+      "transition_latency_s": 26.558994
+    }
+  ],
+  "verdict": "PASS"
+}

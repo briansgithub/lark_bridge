@@ -1,0 +1,401 @@
+{
+  "aborted": "CampaignAbort: H5: ACTIVE bridge.mic input ownership is []; stream evidence failed: H5: ACTIVE bridge.mic input ownership is []; H5: ACTIVE AEC capture ownership is []",
+  "campaign": "matrix",
+  "candidate_node_union": [
+    "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+    "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+  ],
+  "commit": "dae8f3b0af34ec9804c9a735842016f44e6e4e43",
+  "current_cycle": 1,
+  "current_phase": "lark_promotion",
+  "fast_limit_s": 30.0,
+  "host": "larkbridge",
+  "interval_s": 0.15,
+  "pi_mutations_performed": false,
+  "preflight": "preflight.json",
+  "provenance": "provenance.json",
+  "qualification_gate": "FAIL",
+  "remote_repo": "/home/admin/rpi-lark-bridge",
+  "schema": "larkbridge.e18.microphone-hotplug.v1",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": "summary.json",
+  "target_cycles": 1,
+  "timeout_s": 60.0,
+  "transitions": [
+    {
+      "action_id": "fifine_only_baseline:1:1787725420842703300",
+      "action_timestamp": 1787725420.8427007,
+      "cycle": 1,
+      "expectation_failures_final": [],
+      "final_sample": {
+        "action_id": "fifine_only_baseline:1:1787725420842703300",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 24846,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 0,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 42.258874,
+        "graph_generation": 9,
+        "host_timestamp": 1787725421.7188735,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 1,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "fifine-k054",
+          "identity": {
+            "device_object_serial": "51",
+            "pipewire_object_serial": "60",
+            "usb_instance_generation": "1-1.2@4",
+            "usb_port_path": "1-1.2",
+            "usb_product": "USB PnP Audio Device",
+            "usb_product_id": "161e",
+            "usb_serial": null,
+            "usb_vendor_id": "0c76"
+          },
+          "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.2@4\"]",
+          "label": "FIFINE K054",
+          "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "priority": 1
+        },
+        "phase": "fifine_only_baseline",
+        "remote_elapsed_s": 40.950108,
+        "remote_seq": 274,
+        "sampling": {
+          "capture_duration_s": 0.034521,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000108,
+          "start_gap_s": 0.149998
+        },
+        "schema_version": 1,
+        "selection_reason": "lark-a1 absent; using fifine-k054",
+        "seq": 274,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787493237.906997,
+        "timestamp": 1787493239.0930555,
+        "type": "sample"
+      },
+      "first_matching_sample": {
+        "action_id": "fifine_only_baseline:1:1787725420842703300",
+        "aec": {
+          "enabled": true,
+          "owner_pid": 24846,
+          "verified": true
+        },
+        "candidate_node_union": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+        ],
+        "candidates": {
+          "fifine-k054": {
+            "id": "fifine-k054",
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "highest-priority usable microphone",
+            "state": "selected"
+          },
+          "lark-a1": {
+            "id": "lark-a1",
+            "label": "Hollyland Lark A1",
+            "matched_nodes": [],
+            "node": null,
+            "priority": 0,
+            "reason": "no identity-qualified source is present",
+            "state": "absent"
+          }
+        },
+        "cycle": 1,
+        "elapsed_s": 41.509313,
+        "graph_generation": 9,
+        "host_timestamp": 1787725420.969304,
+        "invariants": {
+          "aec_capture_inputs": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "candidate_nodes": [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+          ],
+          "hfp_inputs": [
+            "output.bridge.mic"
+          ],
+          "hfp_sinks": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "hfp_uplink_targets": [
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          "inactive_candidate_nodes": [],
+          "microphone_inputs": [
+            "bridge.aec.source"
+          ],
+          "passed": true,
+          "selected_node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "violations": []
+        },
+        "link_error": null,
+        "links": [
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "echo-cancel-capture"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "echo-cancel-playback",
+            "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+          ],
+          [
+            "output.bridge.mic",
+            "bluez_output.5C_33_7B_CB_BF_C5.1"
+          ],
+          [
+            "bridge.aec.source",
+            "input.bridge.mic"
+          ],
+          [
+            "output.bridge.callout",
+            "bridge.aec.sink"
+          ],
+          [
+            "bluez_input.5C_33_7B_CB_BF_C5.0",
+            "input.bridge.callout"
+          ]
+        ],
+        "microphone": {
+          "format": {
+            "channels": 1,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "fifine-k054",
+          "identity": {
+            "device_object_serial": "51",
+            "pipewire_object_serial": "60",
+            "usb_instance_generation": "1-1.2@4",
+            "usb_port_path": "1-1.2",
+            "usb_product": "USB PnP Audio Device",
+            "usb_product_id": "161e",
+            "usb_serial": null,
+            "usb_vendor_id": "0c76"
+          },
+          "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.2@4\"]",
+          "label": "FIFINE K054",
+          "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "priority": 1
+        },
+        "phase": "fifine_only_baseline",
+        "remote_elapsed_s": 40.200114,
+        "remote_seq": 269,
+        "sampling": {
+          "capture_duration_s": 0.035212,
+          "configured_interval_s": 0.15,
+          "deadline_late_s": 0.000114,
+          "start_gap_s": 0.149967
+        },
+        "schema_version": 1,
+        "selection_reason": "lark-a1 absent; using fifine-k054",
+        "seq": 269,
+        "service_error": null,
+        "service_restart_counts": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "service_restart_delta": {
+          "bridge-supervisor.service": 0,
+          "pipewire.service": 0,
+          "wireplumber.service": 0
+        },
+        "state": "ACTIVE",
+        "status_error": null,
+        "status_timestamp": 1787493237.906997,
+        "timestamp": 1787493238.3437536,
+        "type": "sample"
+      },
+      "gate_kind": null,
+      "invariant_violations": [],
+      "outcome": "completed",
+      "phase": "fifine_only_baseline",
+      "restart_clean": true,
+      "safety_clean": true,
+      "samples": 6,
+      "service_restart_counts_after": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_counts_before": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "service_restart_delta": {
+        "bridge-supervisor.service": 0,
+        "pipewire.service": 0,
+        "wireplumber.service": 0
+      },
+      "settled_latency_s": 0.876127,
+      "supervisor_restart_delta": 0,
+      "timeout_s": 60.0,
+      "transition_latency_s": 0.126566
+    }
+  ],
+  "updated_timestamp": 1787725590.2394853,
+  "verdict": "INCONCLUSIVE"
+}

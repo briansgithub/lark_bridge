@@ -1,0 +1,36 @@
+{
+  "created_utc": "20260826T062630Z",
+  "files": [
+    {
+      "bytes": 13168,
+      "path": "checkpoint.json",
+      "sha256": "2569d77a2e523104ba71be3d690c6f9adb7ea8f8e01572eff39c91d743c844a5"
+    },
+    {
+      "bytes": 451208,
+      "path": "closing.json",
+      "sha256": "c72d215a7107233d674f92ee9a8fa2b0073fa1b3c83de0206e803d7c1f312d49"
+    },
+    {
+      "bytes": 488730,
+      "path": "preflight.json",
+      "sha256": "0a471b2d1578b1854a86d498da072d77885921eb47f14b58a2909ba00aab60db"
+    },
+    {
+      "bytes": 5625,
+      "path": "provenance.json",
+      "sha256": "c9c86aaa9f1045539eeaef39dc0b3b8ffebb995a1c89007235124e41bd4c164f"
+    },
+    {
+      "bytes": 4661627,
+      "path": "samples.jsonl",
+      "sha256": "968e004e36a8176f97db029990bcbbd09477acd7ca219d884627f2dcbbc8620f"
+    },
+    {
+      "bytes": 26096,
+      "path": "summary.json",
+      "sha256": "67cbed4168162ce6ae5c9305cb73c5a5535702eb14c8f619888333649713f4a4"
+    }
+  ],
+  "schema_version": 1
+}
