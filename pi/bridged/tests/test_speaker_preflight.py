@@ -5,7 +5,6 @@ import sys
 import unittest
 from pathlib import Path
 
-
 SCRIPT = Path(__file__).resolve().parents[3] / "rig" / "pi" / "measure" / "speaker_preflight.py"
 SPEC = importlib.util.spec_from_file_location("speaker_preflight_test", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None

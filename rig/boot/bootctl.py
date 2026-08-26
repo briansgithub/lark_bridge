@@ -25,6 +25,7 @@ import tomllib
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_INVENTORY = REPO / "rig" / "inventory.toml"
 DEFAULT_ARTIFACTS = REPO / "artifacts"
+DEFAULT_EXPECTED_MICROPHONE = "lark-a1"
 SYSTEM_UNITS = (
     "bluetooth.service",
     "bridge-btfw.service",
@@ -71,6 +72,7 @@ bt_show = run(["bluetoothctl", "show"])
 failed_units = run(["systemctl", "--failed", "--no-legend", "--plain"])
 system = unit_states("system", __SYSTEM_UNITS__)
 user = unit_states("user", __USER_UNITS__)
+expected_microphone = __EXPECTED_MICROPHONE__
 failures = []
 failures += [f"{name}={state or 'unknown'}" for name, state in system.items() if state != "active"]
 failures += [f"user:{name}={state or 'unknown'}" for name, state in user.items() if state != "active"]
@@ -78,14 +80,60 @@ if not bt_list["stdout"] or "Powered: yes" not in bt_show["stdout"]:
     failures.append("Bluetooth adapter is not registered and powered")
 if failed_units["stdout"]:
     failures.append("failed systemd units are present")
+endpoints = bridge.get("endpoints") or {}
+selected_microphone = None
+microphone_error = None
 if bridge.get("error"):
     failures.append("bridge status is unavailable")
-elif bridge.get("state") == "DEGRADED" or bridge.get("last_failure"):
-    failures.append(f"bridge unhealthy: {bridge.get('last_failure') or bridge.get('state')}")
-elif not (bridge.get("endpoints") or {}).get("lark"):
-    failures.append("Lark endpoint is absent")
-elif not (bridge.get("endpoints") or {}).get("wired_output"):
-    failures.append("configured output is absent")
+    microphone_error = "bridge status is unavailable"
+elif not isinstance(endpoints, dict):
+    failures.append("bridge endpoints are malformed")
+    microphone_error = "bridge endpoints are malformed"
+else:
+    if "microphone" in bridge:
+        microphone = bridge.get("microphone")
+        if not isinstance(microphone, dict):
+            microphone_error = "microphone status is malformed"
+        else:
+            selected = microphone.get("selected")
+            if not isinstance(selected, dict):
+                microphone_error = str(
+                    microphone.get("selection_reason") or "no candidate selected"
+                )
+            else:
+                candidate_id = selected.get("id")
+                microphone_node = selected.get("node")
+                if not candidate_id:
+                    microphone_error = "selected microphone has no candidate id"
+                elif not microphone_node:
+                    microphone_error = "selected microphone has no node"
+                elif endpoints.get("microphone") != microphone_node:
+                    microphone_error = (
+                        "selected microphone does not match endpoints.microphone"
+                    )
+                else:
+                    selected_microphone = selected
+    else:
+        # Schema-1/E17 compatibility: the only selectable microphone was the Lark.
+        legacy_node = endpoints.get("lark")
+        if legacy_node:
+            selected_microphone = {
+                "id": "lark-a1", "node": legacy_node, "legacy": True
+            }
+        else:
+            microphone_error = "no legacy Lark endpoint is present"
+
+    if microphone_error:
+        failures.append("selected microphone is absent: " + microphone_error)
+    elif selected_microphone.get("id") != expected_microphone:
+        failures.append(
+            "selected microphone is " + repr(selected_microphone.get("id"))
+            + ", expected " + repr(expected_microphone)
+        )
+    if bridge.get("state") == "DEGRADED" or bridge.get("last_failure"):
+        failures.append(f"bridge unhealthy: {bridge.get('last_failure') or bridge.get('state')}")
+    if not endpoints.get("wired_output"):
+        failures.append("configured output is absent")
 if (bridge.get("graph") or {}).get("missing_links"):
     failures.append("bridge graph has missing links")
 if (bridge.get("graph") or {}).get("unexpected_links"):
@@ -105,6 +153,11 @@ print(json.dumps({
     "bluetooth": {"list": bt_list, "show": bt_show},
     "failed_units": failed_units,
     "bridge": bridge,
+    "microphone": {
+        "expected_id": expected_microphone,
+        "observed": selected_microphone,
+        "error": microphone_error,
+    },
     "power": power,
     "ready": not failures,
     "failures": failures,
@@ -157,6 +210,75 @@ def utc_stamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
+def selected_microphone(bridge: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """Interpret current and legacy bridge status without reviving stale endpoints."""
+
+    endpoints = bridge.get("endpoints") or {}
+    if not isinstance(endpoints, dict):
+        return None, "bridge endpoints are malformed"
+    if "microphone" in bridge:
+        microphone = bridge.get("microphone")
+        if not isinstance(microphone, dict):
+            return None, "microphone status is malformed"
+        selected = microphone.get("selected")
+        if not isinstance(selected, dict):
+            return None, str(
+                microphone.get("selection_reason") or "no microphone candidate is selected"
+            )
+        candidate_id = selected.get("id")
+        node = selected.get("node")
+        if not isinstance(candidate_id, str) or not candidate_id:
+            return None, "selected microphone has no candidate id"
+        if not isinstance(node, str) or not node:
+            return None, "selected microphone has no node"
+        if endpoints.get("microphone") != node:
+            return None, "selected microphone does not match endpoints.microphone"
+        return selected, None
+    # Schema-1/E17 compatibility is Lark-specific. A generic endpoint without the
+    # identity-bearing microphone object cannot prove which candidate was selected.
+    legacy_node = endpoints.get("lark")
+    if isinstance(legacy_node, str) and legacy_node:
+        return {"id": "lark-a1", "node": legacy_node, "legacy": True}, None
+    return None, "no legacy Lark endpoint is present"
+
+
+def microphone_evidence(
+    probe: dict[str, Any], expected_microphone: str
+) -> dict[str, Any]:
+    bridge = probe.get("bridge")
+    if not isinstance(bridge, dict):
+        return {
+            "expected_id": expected_microphone,
+            "observed": None,
+            "observed_id": None,
+            "matches": False,
+            "error": "probe bridge status is missing or malformed",
+        }
+    observed, error = selected_microphone(bridge)
+    observed_id = observed.get("id") if observed else None
+    return {
+        "expected_id": expected_microphone,
+        "observed": observed,
+        "observed_id": observed_id,
+        "matches": error is None and observed_id == expected_microphone,
+        "error": error,
+    }
+
+
+def require_expected_microphone(
+    probe: dict[str, Any], expected_microphone: str
+) -> dict[str, Any]:
+    evidence = microphone_evidence(probe, expected_microphone)
+    if evidence["error"]:
+        raise RuntimeError(f"selected microphone unavailable: {evidence['error']}")
+    if not evidence["matches"]:
+        raise RuntimeError(
+            f"selected microphone is {evidence['observed_id']!r}, "
+            f"expected {expected_microphone!r}"
+        )
+    return evidence
+
+
 def write_json(path: Path, value: Any) -> None:
     path.write_text(
         json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -198,6 +320,7 @@ class Config:
     boot_timeout_s: int
     shutdown_timeout_s: int
     cold_off_seconds: float
+    expected_microphone: str
     artifacts: Path
     power_off: tuple[str, ...]
     power_on: tuple[str, ...]
@@ -219,6 +342,11 @@ class Config:
             return tuple(value)
 
         host = str(data.get("pi_host", "larkbridge"))
+        expected_microphone = str(
+            data.get("boot_expected_microphone", DEFAULT_EXPECTED_MICROPHONE)
+        ).strip()
+        if not expected_microphone:
+            raise ValueError("boot_expected_microphone cannot be empty")
         return cls(
             inventory=path,
             pi_host=host,
@@ -228,6 +356,7 @@ class Config:
             boot_timeout_s=int(data.get("boot_timeout_seconds", 120)),
             shutdown_timeout_s=int(data.get("boot_shutdown_timeout_seconds", 30)),
             cold_off_seconds=float(data.get("boot_cold_off_seconds", 10)),
+            expected_microphone=expected_microphone,
             artifacts=artifacts or DEFAULT_ARTIFACTS,
             power_off=command("boot_power_off_command"),
             power_on=command("boot_power_on_command"),
@@ -281,10 +410,12 @@ class Ssh:
             check=False,
         )
 
-    def probe(self) -> dict[str, Any]:
+    def probe(self, expected_microphone: str | None = None) -> dict[str, Any]:
+        expected = expected_microphone or self.config.expected_microphone
         script = REMOTE_PROBE.replace("__SYSTEM_UNITS__", repr(SYSTEM_UNITS)).replace(
             "__USER_UNITS__", repr(USER_UNITS)
         )
+        script = script.replace("__EXPECTED_MICROPHONE__", repr(expected))
         result = self.run("python3 -", input_text=script)
         if result.returncode != 0:
             raise RuntimeError(
@@ -437,8 +568,16 @@ def stop_serial(process: subprocess.Popen | None) -> None:
 
 
 def run_boot(
-    config: Config, *, mode: str, candidate: str, require_functional: bool
+    config: Config,
+    *,
+    mode: str,
+    candidate: str,
+    require_functional: bool,
+    expected_microphone: str | None = None,
 ) -> Path:
+    expected = (expected_microphone or config.expected_microphone).strip()
+    if not expected:
+        raise ValueError("expected microphone id cannot be empty")
     run_id = f"{utc_stamp()}-{candidate}-{mode}"
     directory = config.artifacts / f"boot-run-{run_id}"
     directory.mkdir(parents=True, exist_ok=False)
@@ -446,16 +585,20 @@ def run_boot(
     ssh = Ssh(config)
     meta = git_metadata()
     remote_manifest = ssh.manifest()
-    write_json(
-        directory / "manifest.json",
-        {
-            "run_id": run_id,
-            "candidate": candidate,
-            "mode": mode,
-            "git": meta,
-            "remote": remote_manifest,
+    manifest = {
+        "run_id": run_id,
+        "candidate": candidate,
+        "mode": mode,
+        "git": meta,
+        "remote": remote_manifest,
+        "microphone": {
+            "expected_id": expected,
+            "preboot": None,
+            "idle": None,
+            "functional": None,
         },
-    )
+    }
+    write_json(directory / "manifest.json", manifest)
     result: dict[str, Any] = {
         "run_id": run_id,
         "candidate": candidate,
@@ -464,6 +607,13 @@ def run_boot(
         "readiness_level": "none",
         "timings_s": {},
         "git": meta,
+        "expected_microphone": expected,
+        "observed_microphone": None,
+        "microphone_evidence": {
+            "preboot": None,
+            "idle": None,
+            "functional": None,
+        },
     }
     serial: subprocess.Popen | None = None
     try:
@@ -471,8 +621,13 @@ def run_boot(
             raise RuntimeError(
                 "tracked worktree changes exist; commit or restore them before timing"
             )
-        before = ssh.probe()
+        before = ssh.probe(expected)
         write_json(directory / "preboot.json", before)
+        preboot_microphone = microphone_evidence(before, expected)
+        manifest["microphone"]["preboot"] = preboot_microphone
+        result["microphone_evidence"]["preboot"] = preboot_microphone
+        result["observed_microphone"] = preboot_microphone["observed"]
+        write_json(directory / "manifest.json", manifest)
         old_boot_id = before["boot_id"]
 
         if mode == "cold":
@@ -519,7 +674,7 @@ def run_boot(
         last_error = ""
         while time.monotonic() < deadline:
             try:
-                probe = ssh.probe()
+                probe = ssh.probe(expected)
                 if probe.get("boot_id") == old_boot_id:
                     last_error = "SSH answered from the previous boot"
                 else:
@@ -539,6 +694,12 @@ def run_boot(
             raise RuntimeError(f"idle readiness timed out: {last_error}")
 
         write_json(directory / "ready.json", ready)
+        idle_microphone = microphone_evidence(ready, expected)
+        manifest["microphone"]["idle"] = idle_microphone
+        result["microphone_evidence"]["idle"] = idle_microphone
+        result["observed_microphone"] = idle_microphone["observed"]
+        write_json(directory / "manifest.json", manifest)
+        require_expected_microphone(ready, expected)
         result["timings_s"]["idle_ready"] = recorder.event("idle_ready")
         result["readiness_level"] = "idle"
 
@@ -550,6 +711,7 @@ def run_boot(
                 run_dir=str(directory),
                 run_id=run_id,
                 candidate=candidate,
+                expected_microphone=expected,
                 watermark=watermark,
             )
             if hook.returncode != 0:
@@ -558,8 +720,19 @@ def run_boot(
                 directory / "functional-result.json", run_id, watermark
             )
             write_json(directory / "functional-result.validated.json", functional)
-            functional_probe = ssh.probe()
+            functional_probe = ssh.probe(expected)
             write_json(directory / "functional-ready.json", functional_probe)
+            functional_microphone = microphone_evidence(functional_probe, expected)
+            manifest["microphone"]["functional"] = functional_microphone
+            result["microphone_evidence"]["functional"] = functional_microphone
+            result["observed_microphone"] = functional_microphone["observed"]
+            write_json(directory / "manifest.json", manifest)
+            require_expected_microphone(functional_probe, expected)
+            if not functional_probe.get("ready"):
+                raise RuntimeError(
+                    "post-functional readiness failed: "
+                    + "; ".join(map(str, functional_probe.get("failures", [])))
+                )
             bridge = functional_probe.get("bridge") or {}
             graph = bridge.get("graph") or {}
             aec = bridge.get("aec") or {}
@@ -784,9 +957,13 @@ def screen(
     mode: str,
     require_functional: bool,
     seed: int,
+    expected_microphone: str | None = None,
 ) -> int:
     if pairs < 10:
         raise ValueError("candidate screening requires at least ten randomized pairs")
+    expected = (expected_microphone or config.expected_microphone).strip()
+    if not expected:
+        raise ValueError("expected microphone id cannot be empty")
     rng = random.Random(seed)
     assignments = [
         (baseline_label, baseline_revision),
@@ -805,6 +982,7 @@ def screen(
                     mode=mode,
                     candidate=label,
                     require_functional=require_functional,
+                    expected_microphone=expected,
                 )
                 result = json.loads((path / "result.json").read_text(encoding="utf-8"))
                 failures += result["verdict"] != "PASS"
@@ -870,6 +1048,15 @@ def parser() -> argparse.ArgumentParser:
     screen_cmd.add_argument("--mode", choices=("warm", "cold"), default="warm")
     screen_cmd.add_argument("--seed", type=int, default=0)
     screen_cmd.add_argument("--require-functional", action="store_true")
+    for command in (run, baseline, screen_cmd):
+        command.add_argument(
+            "--expected-microphone",
+            metavar="ID",
+            help=(
+                "microphone candidate id required for readiness; defaults to "
+                "boot_expected_microphone from inventory or lark-a1"
+            ),
+        )
     trial_cmd = commands.add_parser("trial")
     trial_cmd.add_argument("action", choices=("arm", "confirm", "rollback", "status"))
     trial_cmd.add_argument("--transaction")
@@ -883,15 +1070,18 @@ def main() -> int:
     if args.command == "doctor":
         return doctor(config)
     if args.command == "run":
+        expected_microphone = args.expected_microphone or config.expected_microphone
         path = run_boot(
             config,
             mode=args.mode,
             candidate=args.candidate,
             require_functional=args.require_functional,
+            expected_microphone=expected_microphone,
         )
         result = json.loads((path / "result.json").read_text(encoding="utf-8"))
         return 0 if result["verdict"] == "PASS" else 1
     if args.command == "baseline":
+        expected_microphone = args.expected_microphone or config.expected_microphone
         failures = 0
         for _ in range(args.count):
             path = run_boot(
@@ -899,6 +1089,7 @@ def main() -> int:
                 mode=args.mode,
                 candidate=args.candidate,
                 require_functional=args.require_functional,
+                expected_microphone=expected_microphone,
             )
             verdict = json.loads((path / "result.json").read_text(encoding="utf-8"))[
                 "verdict"
@@ -921,6 +1112,9 @@ def main() -> int:
             mode=args.mode,
             require_functional=args.require_functional,
             seed=args.seed,
+            expected_microphone=(
+                args.expected_microphone or config.expected_microphone
+            ),
         )
     if args.command == "trial":
         return trial(config, args.action, args.transaction)

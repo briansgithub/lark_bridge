@@ -12,13 +12,13 @@ run_speaker_preflight() {
   local local_dir="$1" remote rc
   remote="/tmp/larkbridge-speaker-preflight-$(timestamp)"
   mkdir -p "$local_dir"
-  pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/speaker_preflight.py --out '$remote'" \
+  pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/speaker_preflight.py --out '$remote' --expected-microphone '$EXPECTED_MICROPHONE'" \
     > "$local_dir/speaker-preflight.json" 2> "$local_dir/speaker-preflight.err"
   rc=$?
   if [ "$rc" -eq 0 ]; then
     ok "speaker preflight PASS"
   elif [ "$rc" -eq 78 ]; then
-    warn "speaker not detected at the Lark; wake or reconnect it before continuing"
+    warn "speaker not detected at the selected microphone; wake or reconnect it before continuing"
   else
     err "speaker preflight failed; no acoustic benchmark was started"
   fi
@@ -68,7 +68,7 @@ speaker_series() {
       escaped+=" $quoted"
     done
     info "$label trial $trial/$runs"
-    pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote_trial'$escaped" \
+    pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote_trial' --expected-microphone '$EXPECTED_MICROPHONE'$escaped" \
       > "$local_trial/bench-run.json" 2> "$local_trial/bench-run.err" || true
     scp -q -r "$(pi_host):$remote_trial/." "$local_trial/" 2>/dev/null || true
     [ -s "$local_trial/bench.json" ] && bench_jsons+=("$local_trial/bench.json")
@@ -145,7 +145,7 @@ speaker_paired() {
         escaped+=" $quoted"
       done
       info "pair $pair/$pairs: $profile"
-      pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote_trial'$escaped" \
+      pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote_trial' --expected-microphone '$EXPECTED_MICROPHONE'$escaped" \
         > "$local_trial/bench-run.json" 2> "$local_trial/bench-run.err" || true
       scp -q -r "$(pi_host):$remote_trial/." "$local_trial/" 2>/dev/null || true
       [ -s "$local_trial/bench.json" ] && bench_jsons+=("$local_trial/bench.json")
@@ -185,7 +185,7 @@ speaker_thermal() {
   done
   info "running gated speaker-only AEC thermal screen"
   run_speaker_preflight "$dir" || return $?
-  pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_thermal.py --out '$remote'$escaped" \
+  pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_thermal.py --out '$remote' --expected-microphone '$EXPECTED_MICROPHONE'$escaped" \
     > "$dir/thermal-run.json" 2> "$dir/thermal-run.err" || fail=1
   for artifact in thermal.json runtime-samples.json runtime-summary.json pw-top.txt \
       pipewire-journal.txt module-command.txt links-active.txt; do
@@ -217,7 +217,7 @@ snapshot() {
   git -C "$REPO_ROOT" rev-parse HEAD > "$dir/git-head.txt"
   pi 'uname -a; cat /etc/os-release; pipewire --version; wireplumber --version; bluetoothctl --version; dpkg-query -W pipewire libpipewire-0.3-modules libspa-0.2-modules wireplumber 2>/dev/null' \
     > "$dir/versions.txt" 2>&1 || fail=1
-  pi 'sha256sum ~/rpi-lark-bridge/pi/bridged/bridge_supervisor.py ~/rpi-lark-bridge/pi/bridged/bt_watchdog.py' \
+  pi 'sha256sum ~/rpi-lark-bridge/pi/bridged/bridge_supervisor.py ~/rpi-lark-bridge/pi/bridged/microphones.py ~/rpi-lark-bridge/pi/bridged/bt_watchdog.py' \
     > "$dir/deployed-hashes.txt" 2>&1 || fail=1
   pi 'systemctl is-active bluetooth bridge-btfw bridge-btwatchdog bridge-tuning; systemctl --user is-active pipewire wireplumber bridge-supervisor' \
     > "$dir/services.txt" 2>&1 || fail=1
@@ -239,6 +239,7 @@ snapshot() {
   fi
 
   "$PY" "$RIG_ROOT/analysis/aec_status.py" "$dir/bridge-status.json" --expect "$expectation" \
+    --expected-microphone "$EXPECTED_MICROPHONE" \
     > "$dir/assertions.json" || fail=1
 
   if [ "$fail" -eq 0 ]; then
@@ -253,6 +254,21 @@ snapshot() {
 }
 
 command="${1:-}"; shift || true
+EXPECTED_MICROPHONE="${BRIDGE_EXPECTED_MICROPHONE:-lark-a1}"
+expect_next=0
+for argument in "$@"; do
+  if [ "$expect_next" -eq 1 ]; then
+    EXPECTED_MICROPHONE="$argument"
+    expect_next=0
+    continue
+  fi
+  case "$argument" in
+    --expected-microphone) expect_next=1 ;;
+    --expected-microphone=*) EXPECTED_MICROPHONE="${argument#*=}" ;;
+  esac
+done
+[ "$expect_next" -eq 0 ] || die "--expected-microphone requires a candidate ID"
+[ -n "$EXPECTED_MICROPHONE" ] || die "expected microphone candidate ID cannot be blank"
 case "$command" in
   baseline)
     snapshot baseline baseline
@@ -278,9 +294,9 @@ case "$command" in
     dir="$(artifact_dir wired-aec-bench)"
     remote="/var/tmp/wired-aec-bench-$(timestamp)"
     fail=0
-    info "running low-level AUX/speaker/Lark AEC capture"
+    info "running low-level AUX/speaker/microphone AEC capture"
     run_speaker_preflight "$dir" || exit $?
-    pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote' $*" \
+    pi "cd ~/rpi-lark-bridge && python3 rig/pi/measure/aec_bench.py --out '$remote' --expected-microphone '$EXPECTED_MICROPHONE' $*" \
       > "$dir/bench-run.json" 2> "$dir/bench-run.err" || fail=1
     scp -q "$(pi_host):$remote/stimulus.wav" "$dir/" 2>/dev/null || true
     scp -q "$(pi_host):$remote/reference.wav" "$dir/" 2>/dev/null || true

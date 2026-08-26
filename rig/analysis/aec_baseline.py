@@ -176,10 +176,19 @@ def main() -> int:
         ):
             failures.append("PipeWire playback resynchronization occurred")
 
-    larks = {run.get("lark") for run in runs}
+    microphones = {
+        json.dumps(
+            run.get("microphone") or {"node": run.get("lark")},
+            sort_keys=True,
+        )
+        for run in runs
+    }
     outputs = {run.get("wired_output") for run in runs}
-    if len(larks) != 1 or None in larks:
-        failures.append(f"Lark target changed or was absent: {sorted(map(str, larks))}")
+    if len(microphones) != 1 or '{"node": null}' in microphones:
+        failures.append(
+            "microphone target changed or was absent: "
+            f"{sorted(map(str, microphones))}"
+        )
     if len(outputs) != 1 or None in outputs:
         failures.append(
             f"wired output changed or was absent: {sorted(map(str, outputs))}"

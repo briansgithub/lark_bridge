@@ -6,7 +6,7 @@ set -uo pipefail
 DIR="$(artifact_dir doctor)"
 fail=0
 
-info "checking Ethernet SSH, Pi services, stable Lark identity, power, and Pixel ADB"
+info "checking Ethernet SSH, Pi services, microphone policy, power, and Pixel ADB"
 
 if pi true >/dev/null 2>&1; then
   ok "Pi reachable over non-interactive Ethernet SSH"
@@ -20,13 +20,31 @@ if [ "$fail" -eq 0 ]; then
     > "$DIR/versions.txt" 2>&1 || fail=1
   pi 'systemctl is-active bluetooth bridge-btfw bridge-btwatchdog bridge-tuning; systemctl --user is-active pipewire wireplumber bridge-supervisor' \
     > "$DIR/services.txt" 2>&1 || fail=1
-  pi "cd ~/rpi-lark-bridge && LARK_USB_ID='$(inv lark_usb_id 3547:0407)' LARK_USB_SERIAL='$(inv lark_usb_serial '')' bash rig/pi/measure/devices.sh" \
+  pi "cd ~/rpi-lark-bridge && LARK_USB_ID='$(inv lark_usb_id 3547:0407)' LARK_USB_SERIAL='$(inv lark_usb_serial '')' FIFINE_USB_ID='$(inv fifine_usb_id 0c76:161e)' FIFINE_USB_SERIAL='$(inv fifine_usb_serial '')' FIFINE_PORT='$(inv fifine_port_path '')' bash rig/pi/measure/devices.sh" \
     > "$DIR/devices.txt" 2>&1 || fail=1
+  pi 'cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bridge-status.json"' \
+    > "$DIR/bridge-status.json" 2>&1 || fail=1
   pi 'vcgencmd get_throttled; vcgencmd measure_temp; vcgencmd measure_clock arm' \
     > "$DIR/power.txt" 2>&1 || fail=1
   grep -q 'throttled=0x0' "$DIR/power.txt" || { err "Pi reports throttling or undervoltage history"; fail=1; }
-  grep -qE '^lark[[:space:]]+3547:0407[[:space:]]+[0-9]+' "$DIR/devices.txt" \
-    || { err "Lark was not resolved by stable USB identity"; fail=1; }
+  PY="$(command -v python3 2>/dev/null || command -v py 2>/dev/null || true)"
+  if [ -z "$PY" ] || ! "$PY" -c '
+import json, sys
+s = json.load(open(sys.argv[1], encoding="utf-8"))
+m = s.get("microphone") or {}
+selected = m.get("selected") or {}
+candidates = m.get("candidates") or []
+if not selected.get("id") or not selected.get("node"):
+    raise SystemExit("no usable selected microphone")
+if selected.get("id") != "lark-a1" and any(
+    c.get("id") == "lark-a1" and c.get("state") in {"usable", "selected"}
+    for c in candidates
+):
+    raise SystemExit("microphone priority inversion")
+' "$DIR/bridge-status.json"; then
+    err "microphone selection is absent, ambiguous, or violates priority"
+    fail=1
+  fi
 fi
 
 if require_phone >/dev/null 2>&1 && phone get-state > "$DIR/adb-state.txt" 2>&1; then

@@ -86,7 +86,7 @@ def send_command(dev_id: int, ogf: int, ocf: int, params: bytes, timeout: float)
         while time.monotonic() < deadline:
             try:
                 data = sock.recv(260)
-            except socket.timeout:
+            except TimeoutError:
                 break
             if len(data) < 4 or data[0] != HCI_EVENT_PKT:
                 continue

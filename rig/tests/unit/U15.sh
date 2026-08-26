@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# U15 — Acoustic injection path: dongle B -> speaker -> Lark transmitter mic
+# U15 — Acoustic injection path: dongle B -> speaker -> selected microphone
 set -euo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/lib/common.sh"
 
 unit_header "U15" "Acoustic path calibration" \
-  "a known stimulus reaches the Lark at a usable, non-clipping level" \
+  "a known stimulus reaches the selected microphone at a usable, non-clipping level" \
   "prove room noise is stable over hours — re-run if the bench is rearranged"
 
 require_pi
@@ -16,18 +16,20 @@ info "sweeping speaker volume to find the setting that hits the target level"
 pi "cd ~/rpi-lark-bridge && bash rig/pi/measure/acoustic-cal.sh" \
   > "$DIR/acoustic.json" 2>"$DIR/acoustic.err" \
   || { sed 's/^/  /' "$DIR/acoustic.err" >&2
-       need_hardware "speaker on dongle B green, aimed at the Lark TRANSMITTER mic" \
-         "Also confirm the Lark transmitter is powered and paired to its receiver."; }
+       need_hardware "speaker on dongle B green, aimed at the selected microphone" \
+         "Also confirm the configured microphone is powered and available."; }
 
 VOL="$("$PY" "$J" chosen_volume        < "$DIR/acoustic.json")"
 PEAK="$("$PY" "$J" chosen_peak_dbfs    < "$DIR/acoustic.json")"
 SNR="$("$PY" "$J" acoustic_snr_db      < "$DIR/acoustic.json")"
-NOISE="$("$PY" "$J" lark_noise_floor.rms_dbfs < "$DIR/acoustic.json")"
+MICROPHONE_ID="$("$PY" "$J" microphone_id < "$DIR/acoustic.json")"
+NOISE="$("$PY" "$J" microphone_noise_floor.rms_dbfs < "$DIR/acoustic.json")"
 CLIP="$("$PY" "$J" any_clipping        < "$DIR/acoustic.json")"
 
-printf '  Lark noise floor : %s dBFS\n' "$NOISE" >&2
+printf '  microphone       : %s\n' "$MICROPHONE_ID" >&2
+printf '  noise floor      : %s dBFS\n' "$NOISE" >&2
 printf '  chosen speaker vol: %s\n'     "$VOL"   >&2
-printf '  Lark level at that: %s dBFS\n' "$PEAK" >&2
+printf '  mic level at that: %s dBFS\n' "$PEAK" >&2
 printf '  acoustic SNR      : %s dB\n'  "$SNR"   >&2
 echo >&2
 
@@ -59,12 +61,12 @@ fi
 if [ "$fail" -eq 0 ]; then
   sed -i -e "s|^cal_acoustic_snr_db .*|cal_acoustic_snr_db     = \"$SNR\"|" "$RIG_ROOT/inventory.toml"
   grep -q '^cal_speaker_volume' "$RIG_ROOT/inventory.toml" \
-    || printf 'cal_speaker_volume      = "%s"   # dongle B numid=6, gives %s dBFS at the Lark\n' \
+    || printf 'cal_speaker_volume      = "%s"   # dongle B numid=6, gives %s dBFS at the selected mic\n' \
          "$VOL" "$PEAK" >> "$RIG_ROOT/inventory.toml"
   ok "recorded speaker volume $VOL and acoustic SNR $SNR dB in inventory"
   ok "U15 PASS"
-  emit_result U15 PASS "$DIR" speaker_volume "$VOL" lark_peak_dbfs "$PEAK" \
-    acoustic_snr_db "$SNR" lark_noise_dbfs "$NOISE"
+  emit_result U15 PASS "$DIR" microphone_id "$MICROPHONE_ID" speaker_volume "$VOL" \
+    microphone_peak_dbfs "$PEAK" acoustic_snr_db "$SNR" microphone_noise_dbfs "$NOISE"
 else
   err "U15 FAIL"
   emit_result U15 FAIL "$DIR" speaker_volume "${VOL:-none}" acoustic_snr_db "${SNR:-none}"

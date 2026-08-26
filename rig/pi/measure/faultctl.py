@@ -58,15 +58,118 @@ def sh(cmd: str, timeout: float = 30.0) -> tuple[int, str]:
         return -1, str(exc)
 
 
-def lark_usb_path() -> str | None:
-    """Find the Lark's USB device directory by product string, not a hardcoded port."""
-    for node in Path("/sys/bus/usb/devices").glob("*/product"):
-        try:
-            if "Wireless Microphone" in node.read_text():
-                return str(node.parent)
-        except OSError:
-            continue
-    return None
+def _read_sysfs(path: Path, name: str) -> str | None:
+    try:
+        value = (path / name).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return value or None
+
+
+def _selected_microphone(status: dict, expected_id: str) -> dict:
+    authoritative = "microphone" in status
+    microphone = status.get("microphone") or {}
+    selected = microphone.get("selected") if isinstance(microphone, dict) else None
+    if not isinstance(selected, dict) and not authoritative:
+        legacy = (status.get("endpoints") or {}).get("lark")
+        if legacy and expected_id == "lark-a1":
+            selected = {
+                "id": "lark-a1",
+                "node": legacy,
+                "identity": {
+                    "usb_vendor_id": "3547",
+                    "usb_product_id": "0407",
+                    "usb_product": "Wireless Microphone",
+                },
+                "legacy": True,
+            }
+    if not isinstance(selected, dict):
+        raise RuntimeError("bridge status has no selected microphone")  # noqa: TRY004
+    if selected.get("id") != expected_id:
+        raise RuntimeError(
+            f"selected microphone is {selected.get('id')!r}, expected {expected_id!r}"
+        )
+    return selected
+
+
+def microphone_usb_path(
+    expected_id: str,
+    *,
+    status: dict | None = None,
+    sysfs_root: Path = Path("/sys/bus/usb/devices"),
+) -> Path:
+    """Resolve exactly one selected USB instance and verify its reported fingerprint."""
+    if status is None:
+        status, error = INV.read_status()
+        if error:
+            raise RuntimeError(f"bridge status unavailable: {error}")
+    selected = _selected_microphone(status, expected_id)
+    identity = selected.get("identity") or {}
+    if not isinstance(identity, dict):
+        raise RuntimeError("selected microphone identity is malformed")  # noqa: TRY004
+
+    vendor = str(identity.get("usb_vendor_id") or "").lower().removeprefix("0x").zfill(4)
+    product_id = (
+        str(identity.get("usb_product_id") or "").lower().removeprefix("0x").zfill(4)
+    )
+    if len(vendor) != 4 or len(product_id) != 4:
+        raise RuntimeError("selected microphone status has no USB VID:PID")
+
+    def matches(path: Path) -> bool:
+        if (_read_sysfs(path, "idVendor") or "").lower() != vendor:
+            return False
+        if (_read_sysfs(path, "idProduct") or "").lower() != product_id:
+            return False
+        for key, filename in (("usb_product", "product"), ("usb_serial", "serial")):
+            expected = identity.get(key)
+            if expected and _read_sysfs(path, filename) != str(expected):
+                return False
+        return True
+
+    port = str(identity.get("usb_port_path") or "").strip()
+    if port:
+        pinned = sysfs_root / port
+        if matches(pinned):
+            return pinned
+        raise RuntimeError(
+            f"selected microphone USB port {port!r} no longer matches its fingerprint"
+        )
+
+    matches_found = [
+        path
+        for path in sysfs_root.iterdir()
+        if path.is_dir() and matches(path)
+    ]
+    if len(matches_found) != 1:
+        raise RuntimeError(
+            f"selected microphone fingerprint resolves to {len(matches_found)} USB devices"
+        )
+    return matches_found[0]
+
+
+def _set_usb_authorized(path: Path, authorized: int) -> dict:
+    try:
+        result = subprocess.run(
+            ["sudo", "tee", str(path / "authorized")],
+            input=f"{authorized}\n",
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {
+            "usb_path": str(path),
+            "authorized": authorized,
+            "rc": -1,
+            "out": str(exc),
+        }
+    return {
+        "usb_path": str(path),
+        "authorized": authorized,
+        "rc": result.returncode,
+        "out": (result.stdout + result.stderr).strip(),
+    }
 
 
 def speaker_level(seconds: float = 6.0) -> dict:
@@ -215,41 +318,99 @@ def fault_restart_pipewire(_args) -> dict:
             "note": "bridge-supervisor is PartOf=pipewire.service and follows it down"}
 
 
-def _set_lark(authorized: int) -> dict:
-    path = lark_usb_path()
-    if not path:
-        return {"skipped": "Lark USB device not found"}
-    rc, out = sh(f"echo {authorized} | sudo tee {path}/authorized >/dev/null")
-    return {"usb_path": path, "authorized": authorized, "rc": rc, "out": out}
-
-
-def fault_lark_cycle(args) -> dict:
-    """Remove the Lark and put it back.
+def _fault_microphone_cycle(args, *, action: str, expected_id: str) -> dict:
+    """Remove one identity-verified microphone and put the same USB instance back.
 
     Deauthorizing is not electrically identical to unplugging -- the device stays powered
     and the hub port is untouched -- but it drives the same kernel/ALSA/PipeWire removal
     path, which is all the supervisor can see.
     """
-    off = _set_lark(0)
+    try:
+        path = microphone_usb_path(expected_id)
+    except (OSError, RuntimeError) as exc:
+        return {
+            "action": action,
+            "expected_microphone": expected_id,
+            "error": str(exc),
+        }
+    off = _set_usb_authorized(path, 0)
     time.sleep(args.gap)
-    on = _set_lark(1)
-    return {"action": "lark-cycle", "gap_s": args.gap, "off": off, "on": on}
+    on = _set_usb_authorized(path, 1)
+    return {
+        "action": action,
+        "expected_microphone": expected_id,
+        "gap_s": args.gap,
+        "off": off,
+        "on": on,
+    }
 
 
-def fault_lark_unplug_during_build(args) -> dict:
-    """Remove the Lark mid-BUILDING -- a window that is unhittable by hand.
+def fault_microphone_cycle(args) -> dict:
+    if not args.expected_microphone:
+        return {
+            "action": "microphone-cycle",
+            "error": "--expected-microphone is required for a generic microphone fault",
+        }
+    return _fault_microphone_cycle(
+        args, action="microphone-cycle", expected_id=args.expected_microphone
+    )
+
+
+def fault_lark_cycle(args) -> dict:
+    """Compatibility name for the historical Lark-only campaign."""
+    return _fault_microphone_cycle(args, action="lark-cycle", expected_id="lark-a1")
+
+
+def _fault_microphone_unplug_during_build(
+    args, *, action: str, expected_id: str
+) -> dict:
+    """Remove the selected microphone mid-BUILDING -- a window unhittable by hand.
 
     Restart the supervisor to force a rebuild, then deauthorize `--delay` seconds in.
     BUILD_TIMEOUT_SECONDS is 10, so a delay of 1-3 s lands inside the window between the
     AEC module starting and its nodes appearing.
     """
+    try:
+        path = microphone_usb_path(expected_id)
+    except (OSError, RuntimeError) as exc:
+        return {
+            "action": action,
+            "expected_microphone": expected_id,
+            "error": str(exc),
+        }
     sh("systemctl --user restart bridge-supervisor.service")
     time.sleep(args.delay)
-    off = _set_lark(0)
+    off = _set_usb_authorized(path, 0)
     time.sleep(args.gap)
-    on = _set_lark(1)
-    return {"action": "lark-unplug-during-build", "delay_s": args.delay,
-            "gap_s": args.gap, "off": off, "on": on}
+    on = _set_usb_authorized(path, 1)
+    return {
+        "action": action,
+        "expected_microphone": expected_id,
+        "delay_s": args.delay,
+        "gap_s": args.gap,
+        "off": off,
+        "on": on,
+    }
+
+
+def fault_microphone_unplug_during_build(args) -> dict:
+    if not args.expected_microphone:
+        return {
+            "action": "microphone-unplug-during-build",
+            "error": "--expected-microphone is required for a generic microphone fault",
+        }
+    return _fault_microphone_unplug_during_build(
+        args,
+        action="microphone-unplug-during-build",
+        expected_id=args.expected_microphone,
+    )
+
+
+def fault_lark_unplug_during_build(args) -> dict:
+    """Compatibility name for the historical Lark-only campaign."""
+    return _fault_microphone_unplug_during_build(
+        args, action="lark-unplug-during-build", expected_id="lark-a1"
+    )
 
 
 def fault_restart_churn(args) -> dict:
@@ -315,6 +476,8 @@ FAULTS = {
     "restart-supervisor": fault_restart_supervisor,
     "restart-wireplumber": fault_restart_wireplumber,
     "restart-pipewire": fault_restart_pipewire,
+    "microphone-cycle": fault_microphone_cycle,
+    "microphone-unplug-during-build": fault_microphone_unplug_during_build,
     "lark-cycle": fault_lark_cycle,
     "lark-unplug-during-build": fault_lark_unplug_during_build,
     "restart-churn": fault_restart_churn,
@@ -330,7 +493,12 @@ def main() -> int:
     ap.add_argument("--observe", type=float, default=60.0, help="seconds to watch after the fault")
     ap.add_argument("--settle", type=float, default=3.0, help="seconds of baseline before the fault")
     ap.add_argument("--delay", type=float, default=2.0, help="race-window delay for timed faults")
-    ap.add_argument("--gap", type=float, default=5.0, help="seconds to leave the Lark removed")
+    ap.add_argument("--gap", type=float, default=5.0, help="seconds to leave the microphone removed")
+    ap.add_argument(
+        "--expected-microphone",
+        metavar="ID",
+        help="candidate ID targeted by generic microphone faults",
+    )
     ap.add_argument("--no-audio-check", dest="audio_check", action="store_false",
                     help="skip the post-fault speaker/downlink measurement")
     ap.add_argument("--churn-count", type=int, default=8, help="supervisor restarts for restart-churn")
@@ -348,6 +516,7 @@ def main() -> int:
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
+    baseline_status, _ = INV.read_status()
     before = [sample()]
     end = time.monotonic() + args.settle
     while time.monotonic() < end:
@@ -383,8 +552,14 @@ def main() -> int:
             quantum_low_run = 0
 
     audio = speaker_level() if args.audio_check else None
+    final_status, _ = INV.read_status()
     report = {
         "fault": args.fault,
+        "expected_microphone": args.expected_microphone,
+        "microphone_before": (baseline_status.get("microphone") or {}).get("selected"),
+        "graph_generation_before": baseline_status.get("generation"),
+        "microphone_after": (final_status.get("microphone") or {}).get("selected"),
+        "graph_generation_after": final_status.get("generation"),
         "audio_after": audio,
         "detail": detail,
         "injected_at": injected_at,

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Verify that the selected speaker is audible at the Lark before acoustic tests.
+"""Verify that the selected speaker is audible at the selected microphone.
 
 This is a fixture check, not benchmark evidence.  It records room noise, plays a
-short low-level tone directly to the selected physical output, records the Lark
+short low-level tone directly to the selected physical output, records the microphone
 again, and rejects the fixture unless the tone is clearly above the idle level.
 """
 
@@ -18,12 +18,16 @@ import time
 from pathlib import Path
 from types import ModuleType
 
+from aec_bench import DEFAULT_EXPECTED_MICROPHONE, resolve_selected_microphone
 
 REPO = Path(__file__).resolve().parents[3]
 RECORDER_NAME = "bridge.fixture.speaker-recorder"
 
 
 def load_module(name: str, path: Path) -> ModuleType:
+    module_dir = str(path.parent)
+    if module_dir not in sys.path:
+        sys.path.insert(0, module_dir)
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load {path}")
@@ -59,10 +63,10 @@ def wait_for_recorder(module: ModuleType, source: str, timeout: float = 5.0) -> 
                 )
             return
         time.sleep(0.1)
-    raise RuntimeError(f"Lark recorder did not attach to {source}")
+    raise RuntimeError(f"microphone recorder did not attach to {source}")
 
 
-def record_lark(module: ModuleType, source: str, path: Path, seconds: float) -> None:
+def record_microphone(module: ModuleType, source: str, path: Path, seconds: float) -> None:
     properties = json.dumps(
         {"node.name": RECORDER_NAME, "node.dont-reconnect": True},
         separators=(",", ":"),
@@ -91,7 +95,7 @@ def record_lark(module: ModuleType, source: str, path: Path, seconds: float) -> 
         wait_for_recorder(module, source)
         time.sleep(seconds)
         if recorder.poll() is not None:
-            raise RuntimeError("Lark recorder exited early")
+            raise RuntimeError("microphone recorder exited early")
     finally:
         stop_process(recorder)
 
@@ -139,7 +143,7 @@ def record_while_playing(
         )
         time.sleep(0.25)
         if recorder.poll() is not None:
-            raise RuntimeError("Lark recorder exited during playback")
+            raise RuntimeError("microphone recorder exited during playback")
     finally:
         stop_process(recorder)
 
@@ -174,7 +178,7 @@ def verdict(idle: dict, active: dict) -> dict:
         signal_reasons.append(f"tone margin is only {tone_margin:.1f} dB")
     # Do not gate fixture presence on tone SNR. A real speaker/room/microphone path can
     # add harmonics, reverberation and transmitter processing while still proving exactly
-    # what this preflight needs to prove: audible output reached the Lark. Tone SNR stays
+    # what this preflight needs to prove: audible output reached the microphone. Tone SNR stays
     # in the captured metrics for diagnosis; level and narrow-band margins own presence.
 
     safety_reasons: list[str] = []
@@ -211,6 +215,12 @@ def main() -> int:
     parser.add_argument("--output", help="explicit PipeWire output node")
     parser.add_argument("--tone", type=float, default=1000.0)
     parser.add_argument("--tone-dbfs", type=float, default=-30.0)
+    parser.add_argument(
+        "--expected-microphone",
+        default=DEFAULT_EXPECTED_MICROPHONE,
+        metavar="ID",
+        help="candidate ID that must be selected (configured priority is used when omitted)",
+    )
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -218,16 +228,34 @@ def main() -> int:
         "speaker_preflight_supervisor", REPO / "pi" / "bridged" / "bridge_supervisor.py"
     )
     levels = load_module("speaker_preflight_levels", REPO / "rig" / "analysis" / "wav_level.py")
-    nodes = supervisor.pw_nodes()
-    if nodes is None:
-        raise SystemExit("PipeWire graph unavailable")
     settings = supervisor.load_settings()
-    lark = supervisor.find_lark(nodes, settings)
+    try:
+        nodes, microphone_node, microphone, microphone_resolution = (
+            resolve_selected_microphone(
+                supervisor, settings, args.expected_microphone
+            )
+        )
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     output = selected_output(supervisor, args.output)
-    if lark is None:
-        raise SystemExit("Lark is absent")
     if output is None or output not in nodes:
-        print(json.dumps({"verdict": "speaker-not-detected", "reason": "selected output is absent"}))
+        result = {
+            "fixture_check": True,
+            "benchmark_evidence": False,
+            "verdict": "speaker-not-detected",
+            "exit_code": 78,
+            "reason": "selected output is absent",
+            "output": output,
+            "microphone": microphone,
+            "microphone_resolution": microphone_resolution,
+            "expected_microphone": args.expected_microphone,
+            "graph_generation": microphone["graph_generation"],
+            "lark": microphone_node if microphone["id"] == "lark-a1" else None,
+        }
+        (args.out / "preflight.json").write_text(
+            json.dumps(result, indent=2) + "\n", encoding="utf-8"
+        )
+        print(json.dumps(result, indent=2))
         return 78
     if settings.hfp_source in nodes or settings.hfp_sink in nodes:
         raise SystemExit("phone call audio is present; run the fixture check before the call")
@@ -235,8 +263,8 @@ def main() -> int:
         raise SystemExit("AEC nodes are present; fixture checks must bypass AEC")
 
     stimulus = args.out / "stimulus.wav"
-    idle_path = args.out / "idle-lark.wav"
-    active_path = args.out / "active-lark.wav"
+    idle_path = args.out / "idle-microphone.wav"
+    active_path = args.out / "active-microphone.wav"
     subprocess.run(
         [
             sys.executable,
@@ -260,8 +288,10 @@ def main() -> int:
         stdout=subprocess.DEVNULL,
     )
 
-    record_lark(supervisor, lark, idle_path, 2.0)
-    record_while_playing(supervisor, lark, output, stimulus, active_path)
+    record_microphone(supervisor, microphone_node, idle_path, 2.0)
+    record_while_playing(
+        supervisor, microphone_node, output, stimulus, active_path
+    )
     idle = levels.analyse(str(idle_path), None, skip_start=0.25)
     active = levels.analyse(
         str(active_path), args.tone, skip_start=0.75, search_hz=5.0
@@ -270,7 +300,11 @@ def main() -> int:
         "fixture_check": True,
         "benchmark_evidence": False,
         "output": output,
-        "lark": lark,
+        "microphone": microphone,
+        "microphone_resolution": microphone_resolution,
+        "expected_microphone": args.expected_microphone,
+        "graph_generation": microphone["graph_generation"],
+        "lark": microphone_node if microphone["id"] == "lark-a1" else None,
         "tone_hz": args.tone,
         "tone_dbfs": args.tone_dbfs,
         **verdict(idle, active),

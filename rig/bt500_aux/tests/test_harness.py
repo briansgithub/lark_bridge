@@ -9,7 +9,12 @@ from pathlib import Path
 from rig.bt500_aux import harness
 
 
-def good_snapshot(*, active: bool = True) -> dict:
+def good_snapshot(*, active: bool = True, microphone_id: str = "lark-a1") -> dict:
+    microphone_node = (
+        "alsa_input.usb-LARK"
+        if microphone_id == "lark-a1"
+        else "alsa_input.usb-FIFINE"
+    )
     return {
         "timestamp": 1.0,
         "collection_errors": [],
@@ -34,8 +39,38 @@ def good_snapshot(*, active: bool = True) -> dict:
             "state": "ACTIVE" if active else "CALL_DOWN",
             "mode": "bluetooth-wired",
             "endpoints": {
-                "lark": "alsa_input.usb-LARK",
+                "microphone": microphone_node,
+                "lark": (
+                    microphone_node if microphone_id == "lark-a1" else None
+                ),
                 "wired_output": "alsa_output.platform-aux",
+            },
+            "microphone": {
+                "selected": {
+                    "id": microphone_id,
+                    "label": (
+                        "Hollyland Lark A1"
+                        if microphone_id == "lark-a1"
+                        else "FIFINE K054"
+                    ),
+                    "priority": 0,
+                    "node": microphone_node,
+                    "identity": {},
+                    "format": {
+                        "rate": 48000,
+                        "format": "S16LE",
+                        "channels": 2 if microphone_id == "lark-a1" else 1,
+                    },
+                },
+                "selection_reason": f"using {microphone_id}",
+                "candidates": [
+                    {
+                        "id": microphone_id,
+                        "state": "selected",
+                        "node": microphone_node,
+                        "matched_nodes": [microphone_node],
+                    }
+                ],
             },
             "wired_output_volume": {
                 "required": True,
@@ -203,7 +238,9 @@ class CampaignTests(unittest.TestCase):
 
     def test_hardware_readiness_is_checkpointed_without_a_false_failure(self) -> None:
         missing = good_snapshot(active=False)
-        missing["status"]["endpoints"]["lark"] = None
+        missing["status"]["endpoints"]["microphone"] = None
+        missing["status"]["microphone"]["selected"] = None
+        missing["status"]["microphone"]["candidates"][0]["state"] = "absent"
         self.backend.snapshots = [missing]
         with self.assertRaises(harness.HardwareNotReady):
             self.subject.baseline()
@@ -261,6 +298,16 @@ class CampaignTests(unittest.TestCase):
         with self.assertRaises(harness.EvidenceError):
             self.store.load()
 
+    def test_legacy_checkpoint_defaults_to_lark(self) -> None:
+        checkpoint = self.store.load()
+        checkpoint.pop("expected_microphone")
+        self.store.save(checkpoint)
+
+        loaded = self.store.load()
+        self.assertNotIn("expected_microphone", loaded)
+        subject = harness.QualificationHarness(self.backend, self.store)
+        self.assertEqual(subject.baseline()["baseline"]["status"], "passed")
+
     def test_soak_requires_all_cycles_then_collects_checksummed_evidence(self) -> None:
         self.subject.campaign(seconds=60)
         started = self.subject.start_soak()
@@ -293,6 +340,75 @@ class CampaignTests(unittest.TestCase):
 
 
 class ValidationTests(unittest.TestCase):
+    def test_both_microphones_accepts_selected_lark(self) -> None:
+        snapshot = good_snapshot()
+        snapshot["status"]["microphone"]["candidates"].append(
+            {
+                "id": "fifine-k054",
+                "state": "usable",
+                "node": "alsa_input.usb-FIFINE",
+                "matched_nodes": ["alsa_input.usb-FIFINE"],
+            }
+        )
+
+        harness.validate_snapshot(snapshot, require_active=True)
+
+    def test_fifine_only_requires_matching_campaign_identity(self) -> None:
+        snapshot = good_snapshot(microphone_id="fifine-k054")
+
+        harness.validate_snapshot(
+            snapshot,
+            require_active=True,
+            expected_microphone="fifine-k054",
+        )
+        with self.assertRaises(harness.HardFailure):
+            harness.validate_snapshot(snapshot, require_active=True)
+
+    def test_no_microphone_is_hardware_not_ready(self) -> None:
+        snapshot = good_snapshot(active=False)
+        snapshot["status"]["microphone"] = {
+            "selected": None,
+            "selection_reason": "all configured microphones are absent",
+            "candidates": [
+                {"id": "lark-a1", "state": "absent", "matched_nodes": []},
+                {"id": "fifine-k054", "state": "absent", "matched_nodes": []},
+            ],
+        }
+        snapshot["status"]["endpoints"]["microphone"] = None
+
+        with self.assertRaises(harness.HardwareNotReady):
+            harness.validate_snapshot(snapshot, require_active=False)
+
+    def test_ambiguous_higher_priority_microphone_is_hard_failure(self) -> None:
+        snapshot = good_snapshot(active=False)
+        snapshot["status"]["microphone"] = {
+            "selected": None,
+            "selection_reason": "lark-a1 is ambiguous",
+            "candidates": [
+                {
+                    "id": "lark-a1",
+                    "state": "ambiguous",
+                    "matched_nodes": ["lark-1", "lark-2"],
+                },
+                {
+                    "id": "fifine-k054",
+                    "state": "usable",
+                    "matched_nodes": ["fifine"],
+                },
+            ],
+        }
+        snapshot["status"]["endpoints"]["microphone"] = None
+
+        with self.assertRaises(harness.HardFailure):
+            harness.validate_snapshot(snapshot, require_active=False)
+
+    def test_legacy_lark_snapshot_remains_valid_for_e17(self) -> None:
+        snapshot = good_snapshot()
+        snapshot["status"].pop("microphone")
+        snapshot["status"]["endpoints"].pop("microphone")
+
+        harness.validate_snapshot(snapshot, require_active=True)
+
     def test_new_kernel_or_usb_error_fails_cycle(self) -> None:
         before = good_snapshot()
         after = good_snapshot()
@@ -321,7 +437,9 @@ class ValidationTests(unittest.TestCase):
 
     def test_cli_uses_exit_78_for_readiness(self) -> None:
         missing = good_snapshot(active=False)
-        missing["status"]["endpoints"]["lark"] = None
+        missing["status"]["endpoints"]["microphone"] = None
+        missing["status"]["microphone"]["selected"] = None
+        missing["status"]["microphone"]["candidates"][0]["state"] = "absent"
         backend = FakeBackend()
         backend.snapshots = [missing]
         with tempfile.TemporaryDirectory() as directory:
@@ -334,6 +452,27 @@ class ValidationTests(unittest.TestCase):
                 backend=backend,
             )
         self.assertEqual(code, harness.EXIT_HARDWARE_READY)
+
+    def test_cli_binds_new_campaign_to_fifine(self) -> None:
+        backend = FakeBackend()
+        backend.snapshots = [good_snapshot(active=False, microphone_id="fifine-k054")]
+        with tempfile.TemporaryDirectory() as directory:
+            campaign = Path(directory) / "campaign"
+            code = harness.main(
+                [
+                    "baseline",
+                    "--campaign",
+                    str(campaign),
+                    "--expected-microphone",
+                    "fifine-k054",
+                ],
+                backend=backend,
+            )
+            checkpoint = json.loads(
+                (campaign / "checkpoint.json").read_text(encoding="utf-8")
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(checkpoint["expected_microphone"], "fifine-k054")
 
 
 if __name__ == "__main__":

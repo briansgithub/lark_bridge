@@ -69,7 +69,7 @@ def main() -> int:
             rh = f.read(24)
             if len(rh) < 24:
                 break
-            olen, ilen, flags, _drops, ts = struct.unpack(">IIIIq", rh)
+            _olen, ilen, flags, _drops, ts = struct.unpack(">IIIIq", rh)
             data = f.read(ilen)
             if len(data) < ilen:
                 break

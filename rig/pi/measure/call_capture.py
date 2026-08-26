@@ -163,6 +163,27 @@ def read_status() -> dict:
         return {}
 
 
+def microphone_from_status(status: dict) -> tuple[dict | None, str | None]:
+    """Return artifact metadata and capture target without reviving stale aliases.
+
+    Once the generic microphone block exists it is authoritative, including when its
+    selection is null. ``endpoints.lark`` is a one-release compatibility field and may
+    describe an observed but deliberately unselected Lark.
+    """
+    endpoints = status.get("endpoints") or {}
+    if not isinstance(endpoints, dict):
+        endpoints = {}
+    if "microphone" in status:
+        microphone = status.get("microphone")
+        selected = microphone.get("selected") if isinstance(microphone, dict) else None
+        selected = selected if isinstance(selected, dict) else None
+        selected_node = selected.get("node") if selected is not None else None
+        node = selected_node or endpoints.get("microphone")
+        return selected, str(node) if node else None
+    legacy = endpoints.get("lark")
+    return None, str(legacy) if legacy else None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--label", required=True)
@@ -183,10 +204,14 @@ def main() -> int:
     output_node = settings.wired_output
 
     status = read_status()
-    lark = (status.get("endpoints") or {}).get("lark")
+    selected_microphone, microphone_node = microphone_from_status(status)
     if args.mode == "echo":
-        if not lark:
-            print(json.dumps({"error": "no Lark endpoint; cannot record the raw near-end tap"}))
+        if not microphone_node:
+            print(
+                json.dumps(
+                    {"error": "no selected microphone endpoint; cannot record the raw near-end tap"}
+                )
+            )
             return 1
         # aec_metrics wants exactly three: the echo source, the microphone that hears it,
         # and what actually leaves for the far end.
@@ -199,7 +224,7 @@ def main() -> int:
         # AEC, and it is what the far end will actually hear.
         taps = [
             (module.AEC_SINK, REFERENCE_RECORDER, True),
-            (lark, RAW_RECORDER, False),
+            (microphone_node, RAW_RECORDER, False),
             (settings.hfp_sink, CLEAN_RECORDER, True),
         ]
     else:
@@ -215,6 +240,8 @@ def main() -> int:
         "seconds": args.seconds,
         "state_before": status.get("state"),
         "aec_before": status.get("aec", {}),
+        "microphone": selected_microphone,
+        "graph_generation": status.get("generation"),
         "wavs": {name: str(path) for name, path in paths.items()},
         "health_before": system_health(),
     }
