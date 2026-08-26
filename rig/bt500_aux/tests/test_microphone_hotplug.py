@@ -131,6 +131,19 @@ def valid_timing_transition(kind: str, *, outcome: str = "completed") -> dict:
         "remote_seq": 3,
         "microphone": selected_for_topology(after),
     }
+    settle_samples = [
+        {
+            **completed_usb_sample(
+                seq,
+                topology=after,
+                source_monotonic=100.15 + (seq - 3) * 0.15,
+            ),
+            "remote_seq": seq,
+            "microphone": selected_for_topology(after),
+        }
+        for seq in range(4, 8)
+    ]
+    final = settle_samples[-1]
     raw_devices = after[target_id]
     if kind == "fallback":
         binding = hotplug.core._identity_binding_evidence(
@@ -142,28 +155,49 @@ def valid_timing_transition(kind: str, *, outcome: str = "completed") -> dict:
         )
     else:
         binding = None
+    final_candidate_id = hotplug.core.USB_FINAL_SELECTED_CANDIDATE[kind]
+    final_binding = (
+        hotplug.core._identity_binding_evidence(
+            final["microphone"],
+            after[final_candidate_id][0],
+            final_candidate_id,
+            "final_selected",
+        )
+        if outcome == "completed"
+        else None
+    )
+    persistence_samples = [
+        hotplug.core._event_sample_structure(first, kind),
+        hotplug.core._event_sample_structure(confirmation, kind),
+    ]
+    if outcome == "completed":
+        persistence_samples.extend(
+            hotplug.core._event_sample_structure(sample, kind)
+            for sample in settle_samples
+        )
     return {
         "gate_kind": kind,
         "outcome": outcome,
         "timing_evidence_version": hotplug.core.TIMING_EVIDENCE_VERSION,
         "timing_origin": hotplug.core.USB_TIMING_ORIGIN,
         "transition_latency_s": 0.15 if outcome == "completed" else None,
-        "settled_latency_s": 0.15 if outcome == "completed" else None,
+        "settled_latency_s": 0.75 if outcome == "completed" else None,
+        "settle_requirement_s": hotplug.core.QUALIFICATION_MIN_SETTLE_SECONDS,
+        "state_settle_s": 0.6 if outcome == "completed" else None,
+        "safe_state_latency_s": 0.15 if outcome == "safe_state" else None,
         "usb_baseline": baseline,
         "usb_event": {
             **hotplug.core._usb_event_evidence(first, kind),
             "confirmed": True,
             "confirmation": hotplug.core._usb_event_evidence(confirmation, kind),
             "persistent": True,
-            "stable_through_seq": 3,
-            "persistence_samples": [
-                hotplug.core._event_sample_structure(first, kind),
-                hotplug.core._event_sample_structure(confirmation, kind),
-            ],
+            "stable_through_seq": 7 if outcome == "completed" else 3,
+            "persistence_samples": persistence_samples,
         },
         "usb_identity_binding": binding,
+        "usb_final_identity_binding": final_binding,
         "first_matching_sample": confirmation if outcome == "completed" else None,
-        "final_sample": confirmation,
+        "final_sample": final if outcome == "completed" else confirmation,
         "safety_clean": True,
         "restart_clean": True,
     }
@@ -263,6 +297,130 @@ def passing_provenance() -> dict:
         "remote": {"status": "PASS"},
         "read_only": True,
     }
+
+
+def initialize_provenance_repository(
+    root: Path,
+    *,
+    omit_remote_path: str | None = None,
+    non_blob_remote_path: str | None = None,
+) -> tuple[str, dict[str, bytes]]:
+    paths = set(hotplug.LOCAL_DECISION_SOURCE_PATHS.values())
+    paths.update(hotplug.REMOTE_TRACKED_SOURCE_PATHS.values())
+    payloads: dict[str, bytes] = {}
+    for repository_path in sorted(paths):
+        if repository_path == omit_remote_path:
+            continue
+        if repository_path == non_blob_remote_path:
+            repository_path = f"{repository_path}/child.py"
+        payload = f"tracked source: {repository_path}\n".encode()
+        path = root / repository_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        payloads[repository_path] = payload
+
+    commands = (
+        ["git", "init", "--quiet"],
+        ["git", "config", "core.autocrlf", "false"],
+        ["git", "config", "user.name", "Hotplug Test"],
+        ["git", "config", "user.email", "hotplug@example.invalid"],
+        ["git", "add", "--", *sorted(payloads)],
+        ["git", "commit", "--quiet", "-m", "fixture"],
+    )
+    for command in commands:
+        subprocess.run(command, cwd=root, capture_output=True, check=True)
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    return head, payloads
+
+
+def remote_provenance_document(
+    commit: str,
+    payloads: dict[str, bytes],
+    *,
+    hash_overrides: dict[str, str] | None = None,
+) -> dict:
+    overrides = hash_overrides or {}
+    installed = {}
+    for name, repository_path in hotplug.REMOTE_TRACKED_SOURCE_PATHS.items():
+        payload = payloads.get(repository_path, b"remote file without a tracked blob\n")
+        installed[name] = {
+            "path": f"/srv/bridge/{repository_path}",
+            "exists": True,
+            "sha256": overrides.get(name, hashlib.sha256(payload).hexdigest()),
+        }
+    config_payload = b"preserved deployment configuration\n"
+    installed[hotplug.PRESERVED_CONFIG_SOURCE] = {
+        "path": "/srv/bridge/config/bridge.toml",
+        "exists": True,
+        "sha256": overrides.get(
+            hotplug.PRESERVED_CONFIG_SOURCE,
+            hashlib.sha256(config_payload).hexdigest(),
+        ),
+    }
+    return {
+        "status": "PASS",
+        "repository": {
+            "path": "/srv/bridge",
+            "head": commit,
+            "dirty": None,
+            "porcelain": [],
+            "identity_source": "deployed_release",
+        },
+        "installed_files": installed,
+        "deployed_release": {
+            "path": "/etc/larkbridge/DEPLOYED.json",
+            "exists": True,
+            "sha256": "e" * 64,
+            "document": {
+                "commit": commit,
+                "archive_sha256": "f" * 64,
+            },
+        },
+        "errors": [],
+    }
+
+
+def provenance_runner(remote: dict):
+    def runner(command, **kwargs):
+        if command[0] == "ssh":
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(remote),
+                stderr="",
+            )
+        return subprocess.run(command, check=kwargs.pop("check", False), **kwargs)
+
+    return runner
+
+
+def collect_fixture_provenance(
+    root: Path,
+    *,
+    commit: str,
+    remote: dict,
+) -> dict:
+    return hotplug.collect_provenance(
+        host="bridge",
+        remote_repo="/srv/bridge",
+        sampler_source=root / hotplug.LOCAL_DECISION_SOURCE_PATHS["streamed_sampler"],
+        host_source=root / hotplug.LOCAL_DECISION_SOURCE_PATHS["host_harness"],
+        harness_library_source=(
+            root / hotplug.LOCAL_DECISION_SOURCE_PATHS["harness_library"]
+        ),
+        local_invariants_source=(
+            root / hotplug.LOCAL_DECISION_SOURCE_PATHS["local_invariants"]
+        ),
+        repo=root,
+        commit=commit,
+        runner=provenance_runner(remote),
+    )
 
 
 class FakeBackend:
@@ -472,96 +630,143 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                     document, expected_microphone="fifine-k054"
                 )
 
-    def test_provenance_records_full_dirty_state_and_source_hashes(self) -> None:
-        remote = {
-            "status": "PASS",
-            "repository": {
-                "path": "/srv/bridge",
-                "head": "b" * 40,
-                "dirty": False,
-                "porcelain": [],
-            },
-            "installed_files": {
-                "invariants": {
-                    "path": "/srv/bridge/rig/pi/measure/invariants.py",
-                    "exists": True,
-                    "sha256": "c" * 64,
-                },
-                "bridge_config": {
-                    "path": "/srv/bridge/config/bridge.toml",
-                    "exists": True,
-                    "sha256": "d" * 64,
-                },
-                "remote_snapshot": {"exists": True, "sha256": "1" * 64},
-                "remote_harness": {"exists": True, "sha256": "5" * 64},
-                "bridge_supervisor": {"exists": True, "sha256": "2" * 64},
-                "microphone_resolver": {"exists": True, "sha256": "3" * 64},
-                "output_resolver": {"exists": True, "sha256": "4" * 64},
-                "controller_roles": {"exists": True, "sha256": "6" * 64},
-                "btadapters": {"exists": True, "sha256": "7" * 64},
-            },
-            "deployed_release": {
-                "path": "/etc/larkbridge/DEPLOYED.json",
-                "exists": True,
-                "sha256": "e" * 64,
-                "document": {
-                    "commit": "b" * 40,
-                    "archive_sha256": "f" * 64,
-                },
-            },
-            "errors": [],
-        }
-
-        def runner(command, **_kwargs):
-            if command[0] == "git":
-                return subprocess.CompletedProcess(
-                    command,
-                    0,
-                    stdout=" M rig/bt500_aux/microphone_hotplug.py\n",
-                    stderr="",
-                )
-            self.assertEqual(command[0], "ssh")
-            return subprocess.CompletedProcess(
-                command,
-                0,
-                stdout=json.dumps(remote),
-                stderr="",
-            )
-
+    def test_provenance_binds_clean_local_and_remote_sources(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            harness_source = root / "host.py"
-            harness_library = root / "harness.py"
-            sampler_source = root / "sampler.py"
-            local_invariants = root / "invariants.py"
-            harness_source.write_bytes(b"host source\n")
-            harness_library.write_bytes(b"harness library\n")
-            sampler_source.write_bytes(b"sampler source\n")
-            local_invariants.write_bytes(b"local invariants\n")
-            document = hotplug.collect_provenance(
-                host="bridge",
-                remote_repo="/srv/bridge",
-                sampler_source=sampler_source,
-                host_source=harness_source,
-                harness_library_source=harness_library,
-                local_invariants_source=local_invariants,
-                repo=root,
-                commit="a" * 40,
-                runner=runner,
+            commit, payloads = initialize_provenance_repository(root)
+            document = collect_fixture_provenance(
+                root,
+                commit=commit,
+                remote=remote_provenance_document(commit, payloads),
             )
 
         self.assertEqual(document["status"], "PASS")
-        self.assertEqual(document["local_repository"]["head"], "a" * 40)
+        self.assertEqual(document["local_repository"]["status"], "PASS")
+        self.assertFalse(document["local_repository"]["dirty"])
+        for record in document["local_sources"].values():
+            self.assertEqual(record["binding"]["status"], "PASS")
+            self.assertTrue(record["binding"]["matches_working_file"])
+            self.assertEqual(record["sha256"], record["binding"]["git_blob_sha256"])
+        for name in hotplug.REMOTE_TRACKED_SOURCE_PATHS:
+            binding = document["remote"]["installed_files"][name]["binding"]
+            self.assertEqual(binding["status"], "PASS")
+            self.assertTrue(binding["matches_installed_file"])
+
+    def test_provenance_rejects_modified_local_decision_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commit, payloads = initialize_provenance_repository(root)
+            source = root / hotplug.LOCAL_DECISION_SOURCE_PATHS["host_harness"]
+            source.write_text("modified decision source\n", encoding="utf-8")
+            document = collect_fixture_provenance(
+                root,
+                commit=commit,
+                remote=remote_provenance_document(commit, payloads),
+            )
+
+        binding = document["local_sources"]["host_harness"]["binding"]
+        self.assertEqual(document["status"], "FAIL")
+        self.assertEqual(binding["status"], "FAIL")
+        self.assertFalse(binding["matches_working_file"])
+        self.assertTrue(any("does not match" in item for item in binding["errors"]))
+
+    def test_provenance_allows_unrelated_dirty_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commit, payloads = initialize_provenance_repository(root)
+            evidence = root / "docs/experiments/results/E18/field/untracked.json"
+            evidence.parent.mkdir(parents=True)
+            evidence.write_text("{}\n", encoding="utf-8")
+            document = collect_fixture_provenance(
+                root,
+                commit=commit,
+                remote=remote_provenance_document(commit, payloads),
+            )
+
+        self.assertEqual(document["status"], "PASS")
         self.assertTrue(document["local_repository"]["dirty"])
-        self.assertEqual(
-            document["local_sources"]["host_harness"]["sha256"],
-            hashlib.sha256(b"host source\n").hexdigest(),
+        self.assertTrue(
+            any(
+                "untracked.json" in item
+                for item in document["local_repository"]["porcelain"]
+            )
         )
-        self.assertEqual(
-            document["local_sources"]["streamed_sampler"]["sha256"],
-            hashlib.sha256(b"sampler source\n").hexdigest(),
+
+    def test_provenance_rejects_remote_tracked_source_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commit, payloads = initialize_provenance_repository(root)
+            remote = remote_provenance_document(
+                commit,
+                payloads,
+                hash_overrides={"bridge_supervisor": "0" * 64},
+            )
+            document = collect_fixture_provenance(
+                root,
+                commit=commit,
+                remote=remote,
+            )
+
+        binding = document["remote"]["installed_files"]["bridge_supervisor"]["binding"]
+        self.assertEqual(document["status"], "FAIL")
+        self.assertEqual(binding["status"], "FAIL")
+        self.assertTrue(any("does not match" in item for item in binding["errors"]))
+
+    def test_provenance_rejects_missing_deployed_commit_path_or_blob(self) -> None:
+        cases = (
+            ("missing commit", None, None, "0" * 40, "unavailable"),
+            (
+                "missing path",
+                hotplug.REMOTE_TRACKED_SOURCE_PATHS["btadapters"],
+                None,
+                None,
+                "missing at commit",
+            ),
+            (
+                "non-blob path",
+                None,
+                hotplug.REMOTE_TRACKED_SOURCE_PATHS["btadapters"],
+                None,
+                "not a blob",
+            ),
         )
-        self.assertEqual(document["remote"], remote)
+        for label, omitted_path, non_blob_path, deployed_override, expected in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                commit, payloads = initialize_provenance_repository(
+                    root,
+                    omit_remote_path=omitted_path,
+                    non_blob_remote_path=non_blob_path,
+                )
+                deployed_commit = deployed_override or commit
+                remote = remote_provenance_document(deployed_commit, payloads)
+                document = collect_fixture_provenance(
+                    root,
+                    commit=commit,
+                    remote=remote,
+                )
+                self.assertEqual(document["status"], "FAIL")
+                all_errors = json.dumps(document["remote"], sort_keys=True)
+                self.assertIn(expected, all_errors)
+
+    def test_preserved_bridge_config_is_explicit_hash_only_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            commit, payloads = initialize_provenance_repository(root)
+            document = collect_fixture_provenance(
+                root,
+                commit=commit,
+                remote=remote_provenance_document(commit, payloads),
+            )
+
+        config = document["remote"]["installed_files"][hotplug.PRESERVED_CONFIG_SOURCE]
+        self.assertEqual(document["status"], "PASS")
+        self.assertEqual(
+            config["binding"]["kind"], hotplug.PRESERVED_CONFIG_BINDING_KIND
+        )
+        self.assertEqual(config["binding"]["status"], "PASS")
+        self.assertIn("intentionally not bound", config["binding"]["exception"])
+        self.assertNotIn("git_blob_sha256", config["binding"])
 
     def test_remote_provenance_rejects_missing_deployed_release(self) -> None:
         installed = {
