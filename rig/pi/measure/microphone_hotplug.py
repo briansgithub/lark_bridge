@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import math
 import os
 import platform
 import subprocess
@@ -407,10 +408,18 @@ def evaluate_link_invariants(
     current_wall = time.time() if now is None else now
     if not isinstance(timestamp, (int, float)) or isinstance(timestamp, bool):
         violation("H0", "bridge status timestamp is absent or nonnumeric")
-    elif current_wall - float(timestamp) > 6.0:
-        violation(
-            "H0", f"bridge status stale by {current_wall - float(timestamp):.2f}s"
-        )
+    elif not math.isfinite(float(timestamp)):
+        violation("H0", "bridge status timestamp is non-finite")
+    elif not isinstance(current_wall, (int, float)) or isinstance(current_wall, bool):
+        violation("H0", "sample timestamp is absent or nonnumeric")
+    elif not math.isfinite(float(current_wall)):
+        violation("H0", "sample timestamp is non-finite")
+    else:
+        age = float(current_wall) - float(timestamp)
+        if age < 0:
+            violation("H0", f"bridge status timestamp is {-age:.2f}s in the future")
+        elif age > 6.0:
+            violation("H0", f"bridge status stale by {age:.2f}s")
 
     endpoints = status.get("endpoints") or {}
     if not isinstance(endpoints, dict):
@@ -1443,6 +1452,10 @@ def operator_action(
         "restore_lark": "PLUG LARK",
         "fifine_replug/remove": "UNPLUG FIFINE",
         "fifine_replug/restore": "PLUG FIFINE",
+        "lark_promotion/recovery": "RECOVER BOTH",
+        "lark_fallback/recovery": "RECOVER FIFINE",
+        "restore_fifine/recovery": "RECOVER FIFINE",
+        "fifine_replug/restore/recovery": "RECOVER FIFINE",
     }
     required = acknowledgements.get(phase, "READY")
     print(f"\n[{phase} cycle {cycle}] {instruction}", file=sys.stderr, flush=True)
@@ -1537,6 +1550,42 @@ def _sample_identity(result: dict[str, Any]) -> tuple[str, int]:
     return token, generation
 
 
+def _identity_after_gate_or_recovery(
+    sampler: LiveSampler,
+    transitions: list[dict[str, Any]],
+    result: dict[str, Any],
+    *,
+    recovery_phase: str,
+    cycle: int,
+    recovery_instruction: str,
+    recovery_expected: Expectation,
+    timeout_s: float,
+    settle_s: float,
+    input_fn=input,
+) -> tuple[str, int]:
+    """Return completed identity, recovering ACTIVE after an actionable safe result."""
+    outcome = result.get("outcome")
+    if outcome == "completed":
+        return _sample_identity(result)
+    if outcome != "safe_state":
+        raise CampaignAbort(
+            f"{result.get('phase', 'gated transition')} cannot provide identity after "
+            f"outcome {outcome!r}"
+        )
+    recovery = run_step(
+        sampler,
+        transitions,
+        phase=recovery_phase,
+        cycle=cycle,
+        instruction=recovery_instruction,
+        expected=recovery_expected,
+        timeout_s=timeout_s,
+        settle_s=settle_s,
+        input_fn=input_fn,
+    )
+    return _sample_identity(recovery)
+
+
 def run_matrix(
     sampler: LiveSampler,
     transitions: list[dict[str, Any]],
@@ -1566,44 +1615,74 @@ def run_matrix(
             input_fn=input_fn,
         )
         fifine_token, fifine_generation = _sample_identity(baseline)
+        promotion_expected = Expectation(
+            state="ACTIVE",
+            selected_id="lark-a1",
+            different_instance_token=fifine_token,
+            generation_after=fifine_generation,
+            candidate_states={"fifine-k054": frozenset({"usable"})},
+        )
         promotion = run_step(
             sampler,
             transitions,
             phase="lark_promotion",
             cycle=cycle,
             instruction="Plug in the Lark while leaving the FIFINE connected.",
-            expected=Expectation(
-                state="ACTIVE",
-                selected_id="lark-a1",
-                different_instance_token=fifine_token,
-                generation_after=fifine_generation,
-                candidate_states={"fifine-k054": frozenset({"usable"})},
-            ),
+            expected=promotion_expected,
             timeout_s=timeout_s,
             settle_s=settle_s,
             gate_kind="promotion",
             input_fn=input_fn,
         )
-        lark_token, lark_generation = _sample_identity(promotion)
+        lark_token, lark_generation = _identity_after_gate_or_recovery(
+            sampler,
+            transitions,
+            promotion,
+            recovery_phase="lark_promotion/recovery",
+            cycle=cycle,
+            recovery_instruction=(
+                "Ensure both Lark and FIFINE are connected; reconnect Lark if needed, "
+                "then leave both connected."
+            ),
+            recovery_expected=promotion_expected,
+            timeout_s=timeout_s,
+            settle_s=settle_s,
+            input_fn=input_fn,
+        )
+        fallback_expected = Expectation(
+            state="ACTIVE",
+            selected_id="fifine-k054",
+            different_instance_token=lark_token,
+            generation_after=lark_generation,
+            candidate_states={"lark-a1": frozenset({"absent"})},
+        )
         fallback = run_step(
             sampler,
             transitions,
             phase="lark_fallback",
             cycle=cycle,
             instruction="Unplug the Lark while leaving the FIFINE connected.",
-            expected=Expectation(
-                state="ACTIVE",
-                selected_id="fifine-k054",
-                different_instance_token=lark_token,
-                generation_after=lark_generation,
-                candidate_states={"lark-a1": frozenset({"absent"})},
-            ),
+            expected=fallback_expected,
             timeout_s=timeout_s,
             settle_s=settle_s,
             gate_kind="fallback",
             input_fn=input_fn,
         )
-        prior_fifine_token, prior_fifine_generation = _sample_identity(fallback)
+        prior_fifine_token, prior_fifine_generation = _identity_after_gate_or_recovery(
+            sampler,
+            transitions,
+            fallback,
+            recovery_phase="lark_fallback/recovery",
+            cycle=cycle,
+            recovery_instruction=(
+                "Ensure only FIFINE is connected; unplug Lark if needed, then leave "
+                "FIFINE connected."
+            ),
+            recovery_expected=fallback_expected,
+            timeout_s=timeout_s,
+            settle_s=settle_s,
+            input_fn=input_fn,
+        )
 
         inactive_setup = run_step(
             sampler,
@@ -1673,25 +1752,39 @@ def run_matrix(
             settle_s=settle_s,
             input_fn=input_fn,
         )
+        restored_fifine_expected = Expectation(
+            state="ACTIVE",
+            selected_id="fifine-k054",
+            different_instance_token=prior_fifine_token,
+            generation_after=prior_fifine_generation,
+            candidate_states={"lark-a1": frozenset({"absent"})},
+        )
         restored_fifine = run_step(
             sampler,
             transitions,
             phase="restore_fifine",
             cycle=cycle,
             instruction="Reconnect only the FIFINE.",
-            expected=Expectation(
-                state="ACTIVE",
-                selected_id="fifine-k054",
-                different_instance_token=prior_fifine_token,
-                generation_after=prior_fifine_generation,
-                candidate_states={"lark-a1": frozenset({"absent"})},
-            ),
+            expected=restored_fifine_expected,
             timeout_s=timeout_s,
             settle_s=settle_s,
             gate_kind="fifine_replug",
             input_fn=input_fn,
         )
-        restored_token, restored_generation = _sample_identity(restored_fifine)
+        restored_token, restored_generation = _identity_after_gate_or_recovery(
+            sampler,
+            transitions,
+            restored_fifine,
+            recovery_phase="restore_fifine/recovery",
+            cycle=cycle,
+            recovery_instruction=(
+                "Ensure only the same FIFINE is connected; reconnect it if needed."
+            ),
+            recovery_expected=restored_fifine_expected,
+            timeout_s=timeout_s,
+            settle_s=settle_s,
+            input_fn=input_fn,
+        )
         run_step(
             sampler,
             transitions,
@@ -1737,44 +1830,74 @@ def run_promotion_fallback(
     )
     previous_token, previous_generation = _sample_identity(opening)
     for cycle in range(1, cycles + 1):
+        promotion_expected = Expectation(
+            state="ACTIVE",
+            selected_id="lark-a1",
+            different_instance_token=previous_token,
+            generation_after=previous_generation,
+            candidate_states={"fifine-k054": frozenset({"usable"})},
+        )
         promoted = run_step(
             sampler,
             transitions,
             phase="lark_promotion",
             cycle=cycle,
             instruction="Plug in the Lark; leave FIFINE connected.",
-            expected=Expectation(
-                state="ACTIVE",
-                selected_id="lark-a1",
-                different_instance_token=previous_token,
-                generation_after=previous_generation,
-                candidate_states={"fifine-k054": frozenset({"usable"})},
-            ),
+            expected=promotion_expected,
             timeout_s=timeout_s,
             settle_s=settle_s,
             gate_kind="promotion",
             input_fn=input_fn,
         )
-        previous_token, previous_generation = _sample_identity(promoted)
+        previous_token, previous_generation = _identity_after_gate_or_recovery(
+            sampler,
+            transitions,
+            promoted,
+            recovery_phase="lark_promotion/recovery",
+            cycle=cycle,
+            recovery_instruction=(
+                "Ensure both Lark and FIFINE are connected; reconnect Lark if needed, "
+                "then leave both connected."
+            ),
+            recovery_expected=promotion_expected,
+            timeout_s=timeout_s,
+            settle_s=settle_s,
+            input_fn=input_fn,
+        )
+        fallback_expected = Expectation(
+            state="ACTIVE",
+            selected_id="fifine-k054",
+            different_instance_token=previous_token,
+            generation_after=previous_generation,
+            candidate_states={"lark-a1": frozenset({"absent"})},
+        )
         fallback = run_step(
             sampler,
             transitions,
             phase="lark_fallback",
             cycle=cycle,
             instruction="Unplug the Lark; leave FIFINE connected.",
-            expected=Expectation(
-                state="ACTIVE",
-                selected_id="fifine-k054",
-                different_instance_token=previous_token,
-                generation_after=previous_generation,
-                candidate_states={"lark-a1": frozenset({"absent"})},
-            ),
+            expected=fallback_expected,
             timeout_s=timeout_s,
             settle_s=settle_s,
             gate_kind="fallback",
             input_fn=input_fn,
         )
-        previous_token, previous_generation = _sample_identity(fallback)
+        previous_token, previous_generation = _identity_after_gate_or_recovery(
+            sampler,
+            transitions,
+            fallback,
+            recovery_phase="lark_fallback/recovery",
+            cycle=cycle,
+            recovery_instruction=(
+                "Ensure only FIFINE is connected; unplug Lark if needed, then leave "
+                "FIFINE connected."
+            ),
+            recovery_expected=fallback_expected,
+            timeout_s=timeout_s,
+            settle_s=settle_s,
+            input_fn=input_fn,
+        )
 
 
 def run_fifine_replug(
@@ -1818,25 +1941,39 @@ def run_fifine_replug(
             settle_s=settle_s,
             input_fn=input_fn,
         )
+        restored_expected = Expectation(
+            state="ACTIVE",
+            selected_id="fifine-k054",
+            different_instance_token=previous_token,
+            generation_after=previous_generation,
+            candidate_states={"lark-a1": frozenset({"absent"})},
+        )
         restored = run_step(
             sampler,
             transitions,
             phase="fifine_replug/restore",
             cycle=cycle,
             instruction="Reconnect the same FIFINE to any allowed USB port.",
-            expected=Expectation(
-                state="ACTIVE",
-                selected_id="fifine-k054",
-                different_instance_token=previous_token,
-                generation_after=previous_generation,
-                candidate_states={"lark-a1": frozenset({"absent"})},
-            ),
+            expected=restored_expected,
             timeout_s=timeout_s,
             settle_s=settle_s,
             gate_kind="fifine_replug",
             input_fn=input_fn,
         )
-        previous_token, previous_generation = _sample_identity(restored)
+        previous_token, previous_generation = _identity_after_gate_or_recovery(
+            sampler,
+            transitions,
+            restored,
+            recovery_phase="fifine_replug/restore/recovery",
+            cycle=cycle,
+            recovery_instruction=(
+                "Ensure only the same FIFINE is connected; reconnect it if needed."
+            ),
+            recovery_expected=restored_expected,
+            timeout_s=timeout_s,
+            settle_s=settle_s,
+            input_fn=input_fn,
+        )
 
 
 def run_inactive_fifine(

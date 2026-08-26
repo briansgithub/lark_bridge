@@ -390,8 +390,16 @@ class MicrophoneHotplugTests(unittest.TestCase):
         self.assertEqual(result["aec_capture_inputs"], [FIFINE])
         self.assertEqual(result["inactive_candidate_nodes"], [LARK])
 
-    def test_status_timestamp_must_be_present_and_numeric(self) -> None:
-        for timestamp in (None, "100.0", True):
+    def test_status_timestamp_must_be_finite_and_not_future(self) -> None:
+        for timestamp in (
+            None,
+            "100.0",
+            True,
+            float("nan"),
+            float("inf"),
+            float("-inf"),
+            100.001,
+        ):
             with self.subTest(timestamp=timestamp):
                 status = active_status()
                 status["timestamp"] = timestamp
@@ -760,6 +768,255 @@ class MicrophoneHotplugTests(unittest.TestCase):
                 input_fn=lambda: "PLUG LARK",
             )
         self.assertEqual(observed["outcome"], "safe_state")
+
+    def test_repeated_promotion_fallback_recovers_each_safe_gate(self) -> None:
+        transitions: list[dict] = []
+        calls: list[dict] = []
+
+        def fake_run_step(_sampler, recorded, **values):
+            phase = values["phase"]
+            calls.append(values)
+            identities = {
+                "fifine_only_baseline": ("fifine-opening", 0),
+                "lark_promotion/recovery": ("lark-recovered", 1),
+                "lark_fallback/recovery": ("fifine-recovered", 2),
+            }
+            outcome = (
+                "safe_state"
+                if phase in {"lark_promotion", "lark_fallback"}
+                else "completed"
+            )
+            token, generation = identities.get(phase, (None, None))
+            result = {
+                "phase": phase,
+                "cycle": values["cycle"],
+                "gate_kind": values.get("gate_kind"),
+                "outcome": outcome,
+                "timing_origin": (
+                    hotplug.USB_TIMING_ORIGIN
+                    if values.get("gate_kind")
+                    else "operator_now"
+                ),
+                "transition_latency_s": None if outcome == "safe_state" else 0.0,
+                "safety_clean": True,
+                "restart_clean": True,
+                "final_sample": {
+                    "microphone": (
+                        {"instance_token": token} if token is not None else None
+                    ),
+                    "graph_generation": generation,
+                },
+            }
+            recorded.append(result)
+            return result
+
+        with mock.patch.object(hotplug, "run_step", side_effect=fake_run_step):
+            hotplug.run_promotion_fallback(
+                object(),
+                transitions,
+                cycles=1,
+                timeout_s=60.0,
+                settle_s=0.6,
+            )
+
+        self.assertEqual(
+            [item["phase"] for item in calls],
+            [
+                "fifine_only_baseline",
+                "lark_promotion",
+                "lark_promotion/recovery",
+                "lark_fallback",
+                "lark_fallback/recovery",
+            ],
+        )
+        self.assertEqual(
+            [item["gate_kind"] for item in transitions if item["gate_kind"]],
+            ["promotion", "fallback"],
+        )
+        fallback_call = next(item for item in calls if item["phase"] == "lark_fallback")
+        self.assertEqual(
+            fallback_call["expected"].different_instance_token, "lark-recovered"
+        )
+        self.assertEqual(fallback_call["expected"].generation_after, 1)
+
+    def test_matrix_recovers_after_each_gated_safe_state(self) -> None:
+        transitions: list[dict] = []
+        calls: list[dict] = []
+        safe_phases = {"lark_promotion", "lark_fallback", "restore_fifine"}
+        identities = {
+            "fifine_only_baseline": ("fifine-opening", 0),
+            "lark_promotion/recovery": ("lark-recovered", 1),
+            "lark_fallback/recovery": ("fifine-fallback-recovered", 2),
+            "inactive_fifine_change/setup_lark": ("lark-setup", 3),
+            "restore_fifine/recovery": ("fifine-replug-recovered", 4),
+            "restore_lark": ("lark-final", 5),
+        }
+
+        def fake_run_step(_sampler, recorded, **values):
+            phase = values["phase"]
+            calls.append(values)
+            outcome = "safe_state" if phase in safe_phases else "completed"
+            token, generation = identities.get(phase, (None, None))
+            result = {
+                "phase": phase,
+                "cycle": values["cycle"],
+                "gate_kind": values.get("gate_kind"),
+                "outcome": outcome,
+                "timing_origin": (
+                    hotplug.USB_TIMING_ORIGIN
+                    if values.get("gate_kind")
+                    else "operator_now"
+                ),
+                "transition_latency_s": None if outcome == "safe_state" else 0.0,
+                "safety_clean": True,
+                "restart_clean": True,
+                "final_sample": {
+                    "microphone": (
+                        {"instance_token": token} if token is not None else None
+                    ),
+                    "graph_generation": generation,
+                },
+            }
+            recorded.append(result)
+            return result
+
+        with mock.patch.object(hotplug, "run_step", side_effect=fake_run_step):
+            hotplug.run_matrix(
+                object(),
+                transitions,
+                cycles=1,
+                timeout_s=60.0,
+                settle_s=0.6,
+            )
+
+        self.assertEqual(
+            [item["phase"] for item in calls if item["phase"].endswith("/recovery")],
+            [
+                "lark_promotion/recovery",
+                "lark_fallback/recovery",
+                "restore_fifine/recovery",
+            ],
+        )
+        self.assertEqual(
+            [item["gate_kind"] for item in transitions if item["gate_kind"]],
+            ["promotion", "fallback", "fifine_replug"],
+        )
+        restore_lark = next(item for item in calls if item["phase"] == "restore_lark")
+        self.assertEqual(
+            restore_lark["expected"].different_instance_token,
+            "fifine-replug-recovered",
+        )
+        self.assertEqual(restore_lark["expected"].generation_after, 4)
+
+    def test_twenty_cycle_replug_qualifies_with_one_safe_recovery(self) -> None:
+        transitions: list[dict] = []
+        calls: list[dict] = []
+
+        def fake_run_step(_sampler, recorded, **values):
+            phase = values["phase"]
+            cycle = values["cycle"]
+            calls.append(values)
+            safe = phase == "fifine_replug/restore" and cycle == 20
+            identity = None
+            generation = None
+            if phase == "fifine_only_baseline":
+                identity, generation = "fifine-0", 0
+            elif phase == "fifine_replug/restore" and not safe:
+                identity, generation = f"fifine-{cycle}", cycle
+            elif phase == "fifine_replug/restore/recovery":
+                identity, generation = "fifine-20", 20
+            result = {
+                "phase": phase,
+                "cycle": cycle,
+                "gate_kind": values.get("gate_kind"),
+                "outcome": "safe_state" if safe else "completed",
+                "timing_origin": (
+                    hotplug.USB_TIMING_ORIGIN
+                    if values.get("gate_kind")
+                    else "operator_now"
+                ),
+                "transition_latency_s": (
+                    None if safe else (30.0 if values.get("gate_kind") else 0.0)
+                ),
+                "safety_clean": True,
+                "restart_clean": True,
+                "final_sample": {
+                    "microphone": (
+                        {"instance_token": identity} if identity is not None else None
+                    ),
+                    "graph_generation": generation,
+                },
+            }
+            recorded.append(result)
+            return result
+
+        with mock.patch.object(hotplug, "run_step", side_effect=fake_run_step):
+            hotplug.run_fifine_replug(
+                object(),
+                transitions,
+                cycles=20,
+                timeout_s=60.0,
+                settle_s=0.6,
+            )
+
+        gated = [item for item in transitions if item["gate_kind"] == "fifine_replug"]
+        recoveries = [
+            item
+            for item in transitions
+            if item["phase"] == "fifine_replug/restore/recovery"
+        ]
+        self.assertEqual(len(gated), 20)
+        self.assertEqual(sum(item["outcome"] == "completed" for item in gated), 19)
+        self.assertEqual(sum(item["outcome"] == "safe_state" for item in gated), 1)
+        self.assertEqual(len(recoveries), 1)
+        recovery_call = next(
+            item for item in calls if item["phase"] == "fifine_replug/restore/recovery"
+        )
+        self.assertEqual(
+            recovery_call["expected"].different_instance_token, "fifine-19"
+        )
+        self.assertEqual(recovery_call["expected"].generation_after, 19)
+
+        summary = hotplug.build_summary(
+            sampler=summary_sampler(),
+            campaign="fifine-replug",
+            cycles=20,
+            transitions=transitions,
+            aborted=None,
+            fast_limit_s=30.0,
+            max_limit_s=60.0,
+            started_wall=100.0,
+        )
+        self.assertEqual(summary["qualification_gate"], "PASS")
+
+    def test_recovery_actions_use_explicit_acknowledgements(self) -> None:
+        class Sampler:
+            def mark_action(self, phase, cycle, instruction):
+                return {
+                    "phase": phase,
+                    "cycle": cycle,
+                    "instruction": instruction,
+                    "action_id": "recovery-action",
+                }
+
+            def record_event(self, event_type, **values):
+                return None
+
+        for phase, acknowledgement in (
+            ("lark_promotion/recovery", "RECOVER BOTH"),
+            ("lark_fallback/recovery", "RECOVER FIFINE"),
+            ("restore_fifine/recovery", "RECOVER FIFINE"),
+            ("fifine_replug/restore/recovery", "RECOVER FIFINE"),
+        ):
+            with self.subTest(phase=phase):
+                action = hotplug.operator_action(
+                    Sampler(),
+                    phase=phase,
+                    cycle=1,
+                    instruction="recover the active fixture",
+                    input_fn=lambda value=acknowledgement: value,
+                )
+                self.assertEqual(action["required_acknowledgement"], acknowledgement)
 
     def test_actionable_safe_state_must_be_captured_by_deadline(self) -> None:
         class Sampler:
