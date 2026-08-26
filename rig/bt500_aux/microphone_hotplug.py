@@ -77,6 +77,25 @@ ARTIFACT_NAMES = {
     "summary": SUMMARY_NAME,
     "manifest": MANIFEST_NAME,
 }
+LOCAL_DECISION_SOURCE_PATHS = {
+    "host_harness": "rig/bt500_aux/microphone_hotplug.py",
+    "harness_library": "rig/bt500_aux/harness.py",
+    "streamed_sampler": "rig/pi/measure/microphone_hotplug.py",
+    "local_invariants": "rig/pi/measure/invariants.py",
+}
+REMOTE_TRACKED_SOURCE_PATHS = {
+    "invariants": "rig/pi/measure/invariants.py",
+    "remote_snapshot": "rig/bt500_aux/remote.py",
+    "remote_harness": "rig/bt500_aux/harness.py",
+    "bridge_supervisor": "pi/bridged/bridge_supervisor.py",
+    "microphone_resolver": "pi/bridged/microphones.py",
+    "output_resolver": "pi/bridged/outputs.py",
+    "controller_roles": "pi/bridged/controller_roles.py",
+    "btadapters": "pi/bridged/btadapters.py",
+}
+PRESERVED_CONFIG_SOURCE = "bridge_config"
+PRESERVED_CONFIG_REPOSITORY_PATH = "config/bridge.toml"
+PRESERVED_CONFIG_BINDING_KIND = "preserved_untracked_hash_only"
 
 
 def utc_stamp() -> str:
@@ -116,20 +135,209 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _git_blob_binding(
+    repo: Path,
+    *,
+    commit: str,
+    repository_path: str,
+    runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
+) -> dict[str, Any]:
+    """Hash one blob exactly as stored at ``commit`` without checking it out."""
+    binding: dict[str, Any] = {
+        "commit": commit,
+        "repository_path": repository_path,
+        "git_object_type": None,
+        "git_blob_sha256": None,
+        "status": "FAIL",
+        "errors": [],
+    }
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
+        binding["errors"].append(
+            f"declared commit {commit!r} is not a full 40-character hexadecimal id"
+        )
+        return binding
+
+    object_name = f"{commit}:{repository_path}"
+    try:
+        object_type = runner(
+            ["git", "cat-file", "-t", object_name],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        binding["errors"].append(
+            f"cannot resolve tracked path {repository_path!r} at {commit}: {exc}"
+        )
+        return binding
+    if object_type.returncode != 0:
+        detail = str(object_type.stderr or "").strip() or "object is unavailable"
+        binding["errors"].append(
+            f"tracked path {repository_path!r} is missing at commit {commit}: {detail}"
+        )
+        return binding
+    binding["git_object_type"] = str(object_type.stdout or "").strip()
+    if binding["git_object_type"] != "blob":
+        binding["errors"].append(
+            f"tracked path {repository_path!r} at {commit} resolves to "
+            f"{binding['git_object_type']!r}, not a blob"
+        )
+        return binding
+
+    try:
+        blob = runner(
+            ["git", "cat-file", "blob", object_name],
+            cwd=repo,
+            capture_output=True,
+            text=False,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        binding["errors"].append(
+            f"cannot read tracked blob {repository_path!r} at {commit}: {exc}"
+        )
+        return binding
+    if blob.returncode != 0:
+        stderr = blob.stderr
+        if isinstance(stderr, bytes):
+            detail = stderr.decode("utf-8", errors="replace").strip()
+        else:
+            detail = str(stderr or "").strip()
+        binding["errors"].append(
+            f"cannot read tracked blob {repository_path!r} at {commit}: "
+            f"{detail or 'git cat-file failed'}"
+        )
+        return binding
+    payload = blob.stdout
+    if isinstance(payload, str):
+        payload = payload.encode("utf-8")
+    if not isinstance(payload, bytes):
+        binding["errors"].append(
+            f"git returned malformed blob content for {repository_path!r} at {commit}"
+        )
+        return binding
+    binding["git_blob_sha256"] = hashlib.sha256(payload).hexdigest()
+    binding["status"] = "PASS"
+    return binding
+
+
+def _local_source_provenance(
+    repo: Path,
+    *,
+    name: str,
+    path: Path,
+    expected_repository_path: str,
+    commit: str,
+    runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
+) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "path": str(path),
+        "exists": path.is_file(),
+        "repository_path": None,
+        "sha256": None,
+        "binding": {
+            "kind": "local_head_git_blob",
+            "commit": commit,
+            "repository_path": expected_repository_path,
+            "status": "FAIL",
+            "matches_working_file": False,
+            "errors": [],
+        },
+    }
+    binding = record["binding"]
+    try:
+        repository_path = path.resolve().relative_to(repo.resolve()).as_posix()
+    except (OSError, ValueError) as exc:
+        binding["errors"].append(
+            f"local decision source {name!r} is outside repository {repo}: {exc}"
+        )
+        repository_path = None
+    record["repository_path"] = repository_path
+    if repository_path != expected_repository_path:
+        binding["errors"].append(
+            f"local decision source {name!r} must be {expected_repository_path!r}; "
+            f"observed {repository_path!r}"
+        )
+
+    if not record["exists"]:
+        binding["errors"].append(f"local decision source is missing: {path}")
+    else:
+        try:
+            record.update(bytes=path.stat().st_size, sha256=sha256_file(path))
+        except OSError as exc:
+            binding["errors"].append(f"cannot hash local decision source {path}: {exc}")
+
+    blob_binding = _git_blob_binding(
+        repo,
+        commit=commit,
+        repository_path=expected_repository_path,
+        runner=runner,
+    )
+    binding.update(
+        git_object_type=blob_binding.get("git_object_type"),
+        git_blob_sha256=blob_binding.get("git_blob_sha256"),
+    )
+    binding["errors"].extend(blob_binding.get("errors", []))
+    if (
+        not binding["errors"]
+        and blob_binding.get("status") == "PASS"
+        and record.get("sha256") == blob_binding.get("git_blob_sha256")
+    ):
+        binding["matches_working_file"] = True
+        binding["status"] = "PASS"
+    elif (
+        record.get("sha256")
+        and blob_binding.get("git_blob_sha256")
+        and record.get("sha256") != blob_binding.get("git_blob_sha256")
+    ):
+        binding["errors"].append(
+            f"local decision source {expected_repository_path!r} does not match "
+            f"the blob at declared HEAD {commit}"
+        )
+    return record
+
+
 def _local_repository_provenance(
     repo: Path,
     *,
     commit: str,
-    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
 ) -> dict[str, Any]:
     document: dict[str, Any] = {
         "path": str(repo),
         "head": commit,
+        "observed_head": None,
+        "head_matches": False,
         "dirty": None,
         "porcelain": [],
+        "status": "FAIL",
+        "errors": [],
     }
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
+        document["errors"].append(
+            f"declared local HEAD {commit!r} is not a full 40-character hexadecimal id"
+        )
     try:
-        result = runner(
+        head_result = runner(
+            ["git", "rev-parse", "--verify", "HEAD^{commit}"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        commit_type = runner(
+            ["git", "cat-file", "-t", commit],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        status_result = runner(
             ["git", "status", "--porcelain=v1", "--untracked-files=all"],
             cwd=repo,
             capture_output=True,
@@ -138,15 +346,49 @@ def _local_repository_provenance(
             check=False,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        document["error"] = str(exc)
+        document["errors"].append(f"cannot inspect local Git repository: {exc}")
+        document["error"] = document["errors"][-1]
         return document
-    lines = [line for line in result.stdout.splitlines() if line]
-    document["porcelain"] = lines
-    document["dirty"] = bool(lines) if result.returncode == 0 else None
-    if result.returncode != 0:
-        document["error"] = (
-            f"git status exited {result.returncode}: {result.stderr.strip()}"
+
+    if head_result.returncode != 0:
+        document["errors"].append(
+            "cannot resolve local HEAD: "
+            f"{str(head_result.stderr or '').strip() or 'git rev-parse failed'}"
         )
+    else:
+        observed_head = str(head_result.stdout or "").strip()
+        document["observed_head"] = observed_head
+        document["head_matches"] = bool(
+            re.fullmatch(r"[0-9a-fA-F]{40}", observed_head)
+            and observed_head.lower() == commit.lower()
+        )
+        if not document["head_matches"]:
+            document["errors"].append(
+                f"declared local HEAD {commit} does not match observed HEAD {observed_head!r}"
+            )
+    if commit_type.returncode != 0:
+        document["errors"].append(
+            f"declared local HEAD {commit} is unavailable (the checkout may be shallow): "
+            f"{str(commit_type.stderr or '').strip() or 'git cat-file failed'}"
+        )
+    elif str(commit_type.stdout or "").strip() != "commit":
+        document["errors"].append(
+            f"declared local HEAD {commit} is not a commit object: "
+            f"{str(commit_type.stdout or '').strip()!r}"
+        )
+
+    lines = [line for line in status_result.stdout.splitlines() if line]
+    document["porcelain"] = lines
+    document["dirty"] = bool(lines) if status_result.returncode == 0 else None
+    if status_result.returncode != 0:
+        document["errors"].append(
+            f"git status exited {status_result.returncode}: "
+            f"{str(status_result.stderr or '').strip()}"
+        )
+    if not document["errors"]:
+        document["status"] = "PASS"
+    elif document["errors"]:
+        document["error"] = document["errors"][0]
     return document
 
 
@@ -271,6 +513,157 @@ print(json.dumps({{
 """
 
 
+def _bind_remote_sources_to_deployed_commit(
+    remote: Mapping[str, Any],
+    *,
+    repo: Path,
+    runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
+) -> dict[str, Any]:
+    """Bind installed tracked hashes to blobs from the declared deployed commit."""
+    bound = dict(remote)
+    deployed = remote.get("deployed_release")
+    deployed = deployed if isinstance(deployed, Mapping) else {}
+    deployed_document = deployed.get("document")
+    deployed_document = (
+        deployed_document if isinstance(deployed_document, Mapping) else {}
+    )
+    deployed_commit = deployed_document.get("commit")
+    commit = deployed_commit if isinstance(deployed_commit, str) else ""
+
+    original_installed = remote.get("installed_files")
+    original_installed = (
+        original_installed if isinstance(original_installed, Mapping) else {}
+    )
+    installed: dict[str, Any] = {}
+    binding_errors: list[str] = []
+
+    commit_binding: dict[str, Any] = {
+        "commit": commit,
+        "git_object_type": None,
+        "status": "FAIL",
+        "errors": [],
+    }
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
+        commit_binding["errors"].append(
+            f"deployed commit {commit!r} is not a full 40-character hexadecimal id"
+        )
+    else:
+        try:
+            commit_type = runner(
+                ["git", "cat-file", "-t", commit],
+                cwd=repo,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            commit_binding["errors"].append(
+                f"cannot resolve deployed commit {commit} locally: {exc}"
+            )
+        else:
+            if commit_type.returncode != 0:
+                commit_binding["errors"].append(
+                    f"deployed commit {commit} is unavailable locally "
+                    "(the checkout may be shallow): "
+                    f"{str(commit_type.stderr or '').strip() or 'git cat-file failed'}"
+                )
+            else:
+                commit_binding["git_object_type"] = str(
+                    commit_type.stdout or ""
+                ).strip()
+                if commit_binding["git_object_type"] != "commit":
+                    commit_binding["errors"].append(
+                        f"deployed object {commit} resolves to "
+                        f"{commit_binding['git_object_type']!r}, not a commit"
+                    )
+                else:
+                    commit_binding["status"] = "PASS"
+    bound["deployed_commit_binding"] = commit_binding
+    binding_errors.extend(
+        f"remote deployed commit: {error}" for error in commit_binding["errors"]
+    )
+
+    for name, repository_path in REMOTE_TRACKED_SOURCE_PATHS.items():
+        original_record = original_installed.get(name)
+        record = dict(original_record) if isinstance(original_record, Mapping) else {}
+        blob_binding = _git_blob_binding(
+            repo,
+            commit=commit,
+            repository_path=repository_path,
+            runner=runner,
+        )
+        remote_sha256 = record.get("sha256")
+        binding_errors_for_source = list(blob_binding.get("errors", []))
+        matches = bool(
+            blob_binding.get("status") == "PASS"
+            and isinstance(remote_sha256, str)
+            and re.fullmatch(r"[0-9a-fA-F]{64}", remote_sha256)
+            and remote_sha256.lower()
+            == str(blob_binding.get("git_blob_sha256") or "").lower()
+        )
+        if (
+            blob_binding.get("status") == "PASS"
+            and isinstance(remote_sha256, str)
+            and re.fullmatch(r"[0-9a-fA-F]{64}", remote_sha256)
+            and not matches
+        ):
+            binding_errors_for_source.append(
+                f"installed {name} hash does not match {repository_path!r} "
+                f"at deployed commit {commit}"
+            )
+        binding = {
+            "kind": "deployed_commit_git_blob",
+            "commit": commit,
+            "repository_path": repository_path,
+            "git_object_type": blob_binding.get("git_object_type"),
+            "git_blob_sha256": blob_binding.get("git_blob_sha256"),
+            "matches_installed_file": matches,
+            "status": "PASS" if matches and not binding_errors_for_source else "FAIL",
+            "errors": binding_errors_for_source,
+        }
+        record["binding"] = binding
+        installed[name] = record
+        binding_errors.extend(f"remote {name}: {error}" for error in binding["errors"])
+
+    config_original = original_installed.get(PRESERVED_CONFIG_SOURCE)
+    config_record = (
+        dict(config_original) if isinstance(config_original, Mapping) else {}
+    )
+    config_hash = config_record.get("sha256")
+    config_errors: list[str] = []
+    if (
+        not config_record.get("exists")
+        or not isinstance(config_hash, str)
+        or not re.fullmatch(r"[0-9a-fA-F]{64}", config_hash)
+    ):
+        config_errors.append(
+            "preserved bridge.toml is absent or its SHA-256 identity is unavailable"
+        )
+    config_record["binding"] = {
+        "kind": PRESERVED_CONFIG_BINDING_KIND,
+        "repository_path": PRESERVED_CONFIG_REPOSITORY_PATH,
+        "status": "PASS" if not config_errors else "FAIL",
+        "errors": config_errors,
+        "exception": (
+            "bridge.toml is a preserved deployment-local, untracked configuration; "
+            "it is identified by its collected SHA-256 and is intentionally not bound "
+            "to the deployed Git commit"
+        ),
+    }
+    installed[PRESERVED_CONFIG_SOURCE] = config_record
+    binding_errors.extend(
+        f"remote {PRESERVED_CONFIG_SOURCE}: {error}" for error in config_errors
+    )
+
+    for name, original_record in original_installed.items():
+        if name not in installed:
+            installed[name] = original_record
+    bound["installed_files"] = installed
+    bound["source_binding_errors"] = binding_errors
+    return bound
+
+
 def _remote_provenance_errors(remote: Mapping[str, Any]) -> list[str]:
     errors: list[str] = []
     if remote.get("status") != "PASS":
@@ -308,23 +701,62 @@ def _remote_provenance_errors(remote: Mapping[str, Any]) -> list[str]:
 
     installed = remote.get("installed_files")
     installed = installed if isinstance(installed, Mapping) else {}
-    for name in (
-        "invariants",
-        "bridge_config",
-        "remote_snapshot",
-        "remote_harness",
-        "bridge_supervisor",
-        "microphone_resolver",
-        "output_resolver",
-        "controller_roles",
-        "btadapters",
-    ):
+    for name in (*REMOTE_TRACKED_SOURCE_PATHS, PRESERVED_CONFIG_SOURCE):
         record = installed.get(name)
         record = record if isinstance(record, Mapping) else {}
         if not record.get("exists") or not re.fullmatch(
             r"[0-9a-fA-F]{64}", str(record.get("sha256") or "")
         ):
             errors.append(f"remote {name} source hash is unavailable")
+        binding = record.get("binding")
+        binding = binding if isinstance(binding, Mapping) else {}
+        expected_kind = (
+            PRESERVED_CONFIG_BINDING_KIND
+            if name == PRESERVED_CONFIG_SOURCE
+            else "deployed_commit_git_blob"
+        )
+        if binding.get("kind") != expected_kind:
+            errors.append(f"remote {name} source binding kind is missing or malformed")
+        if binding.get("status") != "PASS":
+            detail = binding.get("errors")
+            errors.append(f"remote {name} source is not commit-bound: {detail}")
+        if name == PRESERVED_CONFIG_SOURCE:
+            if not binding.get("exception"):
+                errors.append(
+                    "remote bridge_config hash-only preserved-config exception is unlabeled"
+                )
+            if binding.get("repository_path") != PRESERVED_CONFIG_REPOSITORY_PATH:
+                errors.append("remote bridge_config repository path is malformed")
+            continue
+        if binding.get("commit") != deployed_commit:
+            errors.append(f"remote {name} binding commit does not match DEPLOYED.json")
+        if binding.get("repository_path") != REMOTE_TRACKED_SOURCE_PATHS[name]:
+            errors.append(f"remote {name} binding repository path is malformed")
+        if binding.get("git_object_type") != "blob":
+            errors.append(f"remote {name} deployed object is not a blob")
+        expected_hash = binding.get("git_blob_sha256")
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", str(expected_hash or "")):
+            errors.append(f"remote {name} deployed blob hash is unavailable")
+        elif str(record.get("sha256") or "").lower() != str(expected_hash).lower():
+            errors.append(f"remote {name} installed hash does not match deployed blob")
+        if binding.get("matches_installed_file") is not True:
+            errors.append(f"remote {name} installed-file binding did not match")
+    source_binding_errors = remote.get("source_binding_errors")
+    if not isinstance(source_binding_errors, list):
+        errors.append("remote source binding errors are missing or malformed")
+    elif source_binding_errors:
+        errors.extend(str(item) for item in source_binding_errors)
+    commit_binding = remote.get("deployed_commit_binding")
+    commit_binding = commit_binding if isinstance(commit_binding, Mapping) else {}
+    if commit_binding.get("status") != "PASS":
+        errors.append(
+            "deployed commit is not available as a commit object in the local "
+            f"repository: {commit_binding.get('errors')}"
+        )
+    if commit_binding.get("commit") != deployed_commit:
+        errors.append("deployed commit binding does not match DEPLOYED.json")
+    if commit_binding.get("git_object_type") != "commit":
+        errors.append("deployed release identity is not a Git commit object")
     return errors
 
 
@@ -338,7 +770,7 @@ def collect_provenance(
     host_source: Path | None = None,
     harness_library_source: Path | None = None,
     local_invariants_source: Path | None = None,
-    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
 ) -> dict[str, Any]:
     """Capture immutable local/remote identity without mutating the Pi."""
     harness_source = host_source or Path(__file__).resolve()
@@ -351,20 +783,23 @@ def collect_provenance(
         commit=commit,
         runner=runner,
     )
-    local_sources: dict[str, Any] = {}
-    for name, path in {
+    local_source_paths = {
         "host_harness": harness_source,
         "harness_library": harness_library,
         "streamed_sampler": sampler_source,
         "local_invariants": local_invariants,
-    }.items():
-        record: dict[str, Any] = {"path": str(path), "exists": path.is_file()}
-        try:
-            if path.is_file():
-                record.update(bytes=path.stat().st_size, sha256=sha256_file(path))
-        except OSError as exc:
-            record["error"] = str(exc)
-        local_sources[name] = record
+    }
+    local_sources = {
+        name: _local_source_provenance(
+            repo,
+            name=name,
+            path=path,
+            expected_repository_path=LOCAL_DECISION_SOURCE_PATHS[name],
+            commit=commit,
+            runner=runner,
+        )
+        for name, path in local_source_paths.items()
+    }
 
     encoded = base64.b64encode(
         _remote_provenance_program(remote_repo).encode("utf-8")
@@ -415,6 +850,11 @@ def collect_provenance(
                     }
                 )
 
+    remote = _bind_remote_sources_to_deployed_commit(
+        remote,
+        repo=repo,
+        runner=runner,
+    )
     validation_errors = _remote_provenance_errors(remote)
     if validation_errors:
         remote = dict(remote)
@@ -422,9 +862,12 @@ def collect_provenance(
         remote["host_validation_errors"] = validation_errors
 
     local_complete = bool(
-        re.fullmatch(r"[0-9a-fA-F]{40,64}", commit)
-        and local_repository.get("dirty") is not None
-        and all(item.get("sha256") for item in local_sources.values())
+        local_repository.get("status") == "PASS"
+        and all(
+            isinstance(item.get("binding"), Mapping)
+            and item["binding"].get("status") == "PASS"
+            for item in local_sources.values()
+        )
     )
     return {
         "schema_version": 1,
