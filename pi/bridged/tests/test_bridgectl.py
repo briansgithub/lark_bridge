@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import tomllib
 import unittest
 from argparse import Namespace
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -85,6 +88,47 @@ class StatusParsingTests(unittest.TestCase):
         self.assertTrue(bridgectl._call_is_up({"call": {"hfp_nodes_present": True}}))
         self.assertFalse(bridgectl._call_is_up({"call": {"hfp_nodes_present": False}}))
         self.assertFalse(bridgectl._call_is_up({}))
+
+    def test_missing_microphone_inventory_is_explained(self) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            bridgectl.microphones_of({"state": "ACTIVE"})
+        self.assertIn("ordered microphone selection", str(caught.exception))
+
+    def test_microphone_status_reports_selected_candidate(self) -> None:
+        status = {
+            "microphone": {
+                "selected": {"id": "fifine-k054", "label": "FIFINE K054"},
+                "selection_reason": "lark-a1 absent; using fifine-k054",
+                "candidates": [],
+            }
+        }
+        output = StringIO()
+        with (
+            mock.patch.object(bridgectl, "read_status", return_value=status),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(
+                bridgectl.do_microphone_status(Namespace(json=False)),
+                0,
+            )
+        self.assertIn("FIFINE K054", output.getvalue())
+        self.assertIn("lark-a1 absent", output.getvalue())
+
+    def test_microphone_cli_is_read_only_and_supports_json(self) -> None:
+        block = {
+            "selected": None,
+            "selection_reason": "no configured microphone is usable",
+            "candidates": [{"id": "lark-a1", "label": "Lark", "state": "absent"}],
+        }
+        output = StringIO()
+        with (
+            mock.patch.object(bridgectl, "read_status", return_value={"microphone": block}),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(bridgectl.main(["microphone", "list", "--json"]), 0)
+        self.assertEqual(json.loads(output.getvalue()), block)
+        with self.assertRaises(SystemExit):
+            bridgectl.main(["microphone", "set"])
 
 
 class SelectionSafetyTests(unittest.TestCase):

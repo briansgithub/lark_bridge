@@ -15,3 +15,5 @@ def test_hfp_nodes_are_not_autoconnected() -> None:
     assert 'api.bluez5.profile = "headset-audio-gateway"' in policy
     assert "node.autoconnect = false" in policy
     assert "a2dp-sink" not in policy
+    assert "Lark A1" in policy
+    assert "FIFINE K054" in policy

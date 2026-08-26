@@ -9,6 +9,8 @@
     bridgectl output rename 2 "Car stereo"
     bridgectl output clear        # revert to the configured default
     bridgectl output status       # one line, or --json
+    bridgectl microphone list     # ordered candidates and live diagnostics
+    bridgectl microphone status   # selected microphone, or --json
 
 This is the first slice of the CLI PLAN.md 4.2 has specified since the beginning and which
 never existed. It is deliberately the FIRST front-end rather than the phone app, because it
@@ -151,6 +153,49 @@ def do_status(args: argparse.Namespace) -> int:
         return 0
     chosen = block.get("chosen") or {}
     print(f"{chosen.get('label') or '<none>'}  [{chosen.get('id') or '-'}]  {block.get('reason', '')}")
+    return 0
+
+
+def microphones_of(status: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    block = status.get("microphone")
+    if not isinstance(block, dict) or not isinstance(block.get("candidates"), list):
+        raise SystemExit(
+            "the supervisor published no microphone inventory.\n"
+            "Its build may predate ordered microphone selection."
+        )
+    return block, list(block["candidates"])
+
+
+def do_microphone_list(args: argparse.Namespace) -> int:
+    block, candidates = microphones_of(read_status())
+    if args.json:
+        print(json.dumps(block, indent=2))
+        return 0
+    selected_id = (block.get("selected") or {}).get("id")
+    print("   #  microphone                 status")
+    for index, candidate in enumerate(candidates, start=1):
+        marker = "->" if candidate.get("id") == selected_id else "  "
+        state = str(candidate.get("state") or "unknown")
+        nodes = candidate.get("matched_nodes") or []
+        detail = f"{state}: {candidate.get('reason') or ''}"
+        if nodes:
+            detail += f" ({', '.join(str(node) for node in nodes)})"
+        print(f" {marker}{index:2}  {str(candidate.get('label') or candidate.get('id'))[:24]:24}   {detail}")
+    print()
+    print(f"  {block.get('selection_reason') or ''}")
+    return 0
+
+
+def do_microphone_status(args: argparse.Namespace) -> int:
+    block, _candidates = microphones_of(read_status())
+    if args.json:
+        print(json.dumps(block, indent=2))
+        return 0
+    selected = block.get("selected") or {}
+    print(
+        f"{selected.get('label') or '<none>'}  "
+        f"[{selected.get('id') or '-'}]  {block.get('selection_reason') or ''}"
+    )
     return 0
 
 
@@ -668,6 +713,24 @@ def main(argv: list[str] | None = None) -> int:
 
     # `bridgectl output` with no action lists, because listing is the harmless one.
     output.set_defaults(func=do_list, json=False)
+
+    microphone = top.add_parser("microphone", help="which configured microphone is active")
+    microphone_actions = microphone.add_subparsers(dest="action")
+
+    microphone_listing = microphone_actions.add_parser(
+        "list", help="list ordered microphone candidates (default)"
+    )
+    microphone_listing.add_argument("--json", action="store_true")
+    microphone_listing.set_defaults(func=do_microphone_list)
+
+    microphone_status = microphone_actions.add_parser(
+        "status", help="one line about the selected microphone"
+    )
+    microphone_status.add_argument("--json", action="store_true")
+    microphone_status.set_defaults(func=do_microphone_status)
+
+    # Read-only by design: configured order is authoritative and there is no runtime set.
+    microphone.set_defaults(func=do_microphone_list, json=False)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

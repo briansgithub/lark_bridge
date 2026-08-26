@@ -255,6 +255,9 @@ class ObservationTests(unittest.TestCase):
                     "props": {
                         "object.serial": 700,
                         "device.product.name": "untrusted PipeWire label",
+                        "device.serial": "0c76_USB_PnP_Audio_Device",
+                        "device.vendor.id": "0xffff",
+                        "device.product.id": "0xffff",
                     }
                 },
             },
@@ -295,9 +298,47 @@ class ObservationTests(unittest.TestCase):
         self.assertEqual(item.pipewire_object_serial, "701")
         self.assertEqual(item.usb_vendor_id, "0c76")
         self.assertEqual(item.usb_product, "USB PnP Audio Device")
+        self.assertIsNone(item.usb_serial)
         self.assertEqual(item.usb_instance_generation, "1-1.2@14")
         self.assertFalse(item.device_has_playback)
         self.assertEqual(item.formats[0].as_dict(), {"rate": 48_000, "format": "S16LE", "channels": 1})
+
+    def test_pipewire_device_properties_are_not_usb_identity_evidence(self) -> None:
+        dump = [
+            {
+                "id": 70,
+                "type": "PipeWire:Interface:Device",
+                "info": {
+                    "props": {
+                        "object.serial": 700,
+                        "device.vendor.id": "0x0c76",
+                        "device.product.id": "0x161e",
+                        "device.product.name": "USB PnP Audio Device",
+                        "device.serial": "0c76_USB_PnP_Audio_Device",
+                    }
+                },
+            },
+            {
+                "id": 71,
+                "type": "PipeWire:Interface:Node",
+                "info": {
+                    "props": {
+                        "node.name": FIFINE_NODE,
+                        "media.class": "Audio/Source",
+                        "object.serial": 701,
+                        "device.id": 70,
+                        "alsa.components": "USB0c76:161e",
+                    }
+                },
+            },
+        ]
+
+        item = microphones.observations_from_pw_dump(dump)[0]
+
+        self.assertIsNone(item.usb_vendor_id)
+        self.assertIsNone(item.usb_product_id)
+        self.assertIsNone(item.usb_product)
+        self.assertIsNone(item.usb_serial)
 
     def test_capture_only_fingerprint_observes_a_sink_on_the_same_device(self) -> None:
         dump = [

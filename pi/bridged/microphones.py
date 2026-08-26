@@ -622,15 +622,13 @@ def observations_from_pw_dump(
             device_serial=device_serial,
             node=node,
         )
-        combined = {**device_props, **node_props, **enrichment}
-
         raw_vendor = _first(
-            combined,
-            ("usb_vendor_id", "idVendor", "ID_VENDOR_ID", "device.vendor.id"),
+            enrichment,
+            ("usb_vendor_id", "idVendor", "ID_VENDOR_ID"),
         )
         raw_product_id = _first(
-            combined,
-            ("usb_product_id", "idProduct", "ID_MODEL_ID", "device.product.id"),
+            enrichment,
+            ("usb_product_id", "idProduct", "ID_MODEL_ID"),
         )
         try:
             vendor = _optional_usb_id(raw_vendor)
@@ -651,12 +649,12 @@ def observations_from_pw_dump(
             supplied_formats = inferred if all(value is not None for value in inferred.values()) else None
 
         port = _optional_text(
-            _first(combined, ("usb_port_path", "sysfs_path", "device.bus-path"))
+            _first(enrichment, ("usb_port_path", "sysfs_path"))
         )
         generation = _optional_text(
-            _first(combined, ("usb_instance_generation", "instance_generation"))
+            _first(enrichment, ("usb_instance_generation", "instance_generation"))
         )
-        devnum = _optional_text(_first(combined, ("devnum", "device_number")))
+        devnum = _optional_text(_first(enrichment, ("devnum", "device_number")))
         if generation is None and port is not None and devnum is not None:
             generation = f"{port}@{devnum}"
 
@@ -672,10 +670,10 @@ def observations_from_pw_dump(
                 usb_vendor_id=vendor,
                 usb_product_id=product_id,
                 usb_product=_optional_text(
-                    _first(combined, ("usb_product", "product", "device.product.name"))
+                    _first(enrichment, ("usb_product", "product"))
                 ),
                 usb_serial=_optional_text(
-                    _first(combined, ("usb_serial", "serial", "device.serial"))
+                    _first(enrichment, ("usb_serial", "serial"))
                 ),
                 usb_port_path=port,
                 usb_instance_generation=generation,
