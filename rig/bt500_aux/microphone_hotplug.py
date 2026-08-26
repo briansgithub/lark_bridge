@@ -1042,6 +1042,7 @@ class SshSampleStream:
         self._phase = "preflight"
         self._cycle = 0
         self._action_id: str | None = None
+        self._connection_layout: str | None = None
         self._started_monotonic = 0.0
         self._local_seq = 0
         self._last_remote_seq = 0
@@ -1361,6 +1362,7 @@ class SshSampleStream:
             phase = self._phase
             cycle = self._cycle
             action_id = self._action_id
+            connection_layout = self._connection_layout
             host_gap = (
                 received - self._last_host_sample_at
                 if self._last_host_sample_at is not None
@@ -1426,6 +1428,7 @@ class SshSampleStream:
             document["phase"] = phase
             document["cycle"] = cycle
             document["action_id"] = action_id
+            document["connection_layout"] = connection_layout
             document["candidate_node_union"] = sorted(self.candidate_node_union)
             document["service_restart_delta"] = deltas
             document["seq"] = local_seq
@@ -1482,7 +1485,13 @@ class SshSampleStream:
                 )
             self._condition.wait(min(remaining, max(self.interval * 2.0, 0.05)))
 
-    def mark_action(self, phase: str, cycle: int, instruction: str) -> dict[str, Any]:
+    def mark_action(
+        self,
+        phase: str,
+        cycle: int,
+        instruction: str,
+        connection_layout: str | None = None,
+    ) -> dict[str, Any]:
         counts, service_error = self._query_service_counts()
         if service_error:
             detail = f"restart-count evidence failed: {service_error}"
@@ -1504,6 +1513,7 @@ class SshSampleStream:
             self._phase = phase
             self._cycle = cycle
             self._action_id = f"{phase}:{cycle}:{time.time_ns()}"
+            self._connection_layout = connection_layout
             event = {
                 "type": "operator_action",
                 "timestamp": action_timestamp,
@@ -1513,6 +1523,7 @@ class SshSampleStream:
                 "phase": phase,
                 "cycle": cycle,
                 "action_id": self._action_id,
+                "connection_layout": connection_layout,
                 "instruction": instruction,
                 "usb_baseline": usb_baseline,
                 "usb_action_observation_timeout_s": (
@@ -1528,6 +1539,7 @@ class SshSampleStream:
             status="running",
             current_phase=phase,
             current_cycle=cycle,
+            current_connection_layout=connection_layout,
             candidate_node_union=sorted(self.candidate_node_union),
         )
         return event

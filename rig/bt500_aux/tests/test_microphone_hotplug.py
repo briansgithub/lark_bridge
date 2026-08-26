@@ -854,13 +854,39 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                     side_effect=query_counts,
                 ) as query,
             ):
-                action = stream.mark_action("lark_promotion", 1, "plug")
+                action = stream.mark_action(
+                    "lark_promotion",
+                    1,
+                    "plug",
+                    connection_layout=hotplug.core.CONNECTION_LAYOUT_POWERED_HUB,
+                )
                 result_counts = stream.service_counts()
+                stream.ingest(
+                    remote_usb_document(
+                        4,
+                        usb_topology(),
+                        source_monotonic=500.6,
+                    )
+                )
+                tagged_sample = stream.latest()
 
         self.assertEqual(query.call_count, 2)
         self.assertEqual(observed_boundaries[0], ("preflight", None))
         self.assertEqual(observed_boundaries[1][0], "lark_promotion")
         self.assertEqual(action["service_restart_counts"], service_counts(2))
+        self.assertEqual(
+            action["connection_layout"],
+            hotplug.core.CONNECTION_LAYOUT_POWERED_HUB,
+        )
+        self.assertEqual(
+            stream._connection_layout,
+            hotplug.core.CONNECTION_LAYOUT_POWERED_HUB,
+        )
+        self.assertIsNotNone(tagged_sample)
+        self.assertEqual(
+            tagged_sample["connection_layout"],
+            hotplug.core.CONNECTION_LAYOUT_POWERED_HUB,
+        )
         self.assertEqual(result_counts, service_counts(3))
 
     def test_host_action_captures_last_completed_remote_usb_baseline(self) -> None:

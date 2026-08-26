@@ -244,14 +244,24 @@ def valid_timing_transition(
     outcome: str = "completed",
     connection_layout: str | None = None,
     cycle: int | None = None,
+    direct_external_hub: bool = False,
 ) -> dict:
-    hub_generations = (
-        ("1-1.2.1@8", "1-1.2@7")
-        if connection_layout == hotplug.CONNECTION_LAYOUT_POWERED_HUB
-        else ()
-    )
-    fifine_generation = "1-1.2.1.3@17" if hub_generations else "1-1.2@4"
-    lark_generation = "1-1.2.1.1@16" if hub_generations else "1-1.3@9"
+    powered_layout = connection_layout == hotplug.CONNECTION_LAYOUT_POWERED_HUB
+    if powered_layout:
+        hub_generations = ("1-1.2.1@8", "1-1.2@7", "1-1@2")
+        fifine_generation = "1-1.2.1.3@17"
+        lark_generation = "1-1.2.1.1@16"
+        restore_fifine_generation = fifine_generation
+    elif direct_external_hub:
+        hub_generations = ("1-1.4@6", "1-1@2")
+        fifine_generation = "1-1.4.3@17"
+        lark_generation = "1-1.4.1@16"
+        restore_fifine_generation = fifine_generation
+    else:
+        hub_generations = ("1-1@2",)
+        fifine_generation = "1-1.2@4"
+        lark_generation = "1-1.3@9"
+        restore_fifine_generation = "1-1.2@12"
     fifine_only = usb_topology(fifine=(fifine_generation,), fifine_hubs=hub_generations)
     both = usb_topology(
         lark=(lark_generation,),
@@ -265,7 +275,7 @@ def valid_timing_transition(
         "fifine_replug": (
             usb_topology(fifine=()),
             usb_topology(
-                fifine=("1-1.2.1.3@17" if hub_generations else "1-1.2@12",),
+                fifine=(restore_fifine_generation,),
                 fifine_hubs=hub_generations,
             ),
             "fifine-k054",
@@ -382,12 +392,20 @@ def timing_transitions(kind: str) -> list[dict]:
     return transitions
 
 
-def valid_layout_handoff() -> dict:
-    direct_device = usb_device("fifine-k054", "1-1.2@4")
+def valid_layout_handoff(*, direct_external_hub: bool = False) -> dict:
+    direct_device = (
+        usb_device(
+            "fifine-k054",
+            "1-1.4.3@17",
+            hubs=("1-1.4@6", "1-1@2"),
+        )
+        if direct_external_hub
+        else usb_device("fifine-k054", "1-1.2@4", hubs=("1-1@2",))
+    )
     powered_device = usb_device(
         "fifine-k054",
         "1-1.2.1.3@17",
-        hubs=("1-1.2.1@8", "1-1.2@7"),
+        hubs=("1-1.2.1@8", "1-1.2@7", "1-1@2"),
     )
     return {
         "phase": hotplug.CONNECTION_LAYOUT_HANDOFF_PHASE,
@@ -419,7 +437,9 @@ def valid_layout_handoff() -> dict:
     }
 
 
-def split_layout_transitions(campaign: str) -> list[dict]:
+def split_layout_transitions(
+    campaign: str, *, direct_external_hub: bool = False
+) -> list[dict]:
     kinds = (
         ("promotion", "fallback")
         if campaign == "promotion-fallback"
@@ -428,7 +448,9 @@ def split_layout_transitions(campaign: str) -> list[dict]:
     transitions: list[dict] = []
     for cycle in range(1, 21):
         if cycle == 11:
-            transitions.append(valid_layout_handoff())
+            transitions.append(
+                valid_layout_handoff(direct_external_hub=direct_external_hub)
+            )
         layout = hotplug.connection_layout_for_cycle(
             cycle, hotplug.CONNECTION_PLAN_DIRECT10_HUB10
         )
@@ -437,6 +459,7 @@ def split_layout_transitions(campaign: str) -> list[dict]:
                 kind,
                 connection_layout=layout,
                 cycle=cycle,
+                direct_external_hub=direct_external_hub and cycle <= 10,
             )
             for kind in kinds
         )
@@ -714,6 +737,32 @@ class MicrophoneHotplugTests(unittest.TestCase):
             topology["fifine-k054"][0]["usb_hub_ancestors"][0]["usb_product"],
             "USB2.1 Hub",
         )
+
+    def test_hub_ancestry_must_be_a_nearest_first_parent_route(self) -> None:
+        device = usb_device(
+            "fifine-k054",
+            "1-1.2.1.3@17",
+            hubs=("1-1.2.1@8", "1-1.2@7", "1-1@2"),
+        )
+        ancestors, error = hotplug._validated_hub_ancestors(device)
+        self.assertIsNone(error)
+        self.assertIsNotNone(ancestors)
+
+        unrelated = json.loads(json.dumps(device))
+        unrelated["usb_hub_ancestors"][0]["usb_port_path"] = "8-8"
+        unrelated["usb_hub_ancestors"][0]["usb_instance_generation"] = "8-8@8"
+        _ancestors, error = hotplug._validated_hub_ancestors(unrelated)
+        self.assertIn("non-parent", str(error))
+
+        reversed_order = json.loads(json.dumps(device))
+        reversed_order["usb_hub_ancestors"].reverse()
+        _ancestors, error = hotplug._validated_hub_ancestors(reversed_order)
+        self.assertIn("nearest-first", str(error))
+
+        incomplete = json.loads(json.dumps(device))
+        incomplete["usb_hub_ancestors"].pop()
+        _ancestors, error = hotplug._validated_hub_ancestors(incomplete)
+        self.assertIn("incomplete", str(error))
 
     def test_each_gated_kind_anchors_to_its_expected_usb_edge(self) -> None:
         cases = (
@@ -1251,12 +1300,13 @@ class MicrophoneHotplugTests(unittest.TestCase):
 
     def test_gate_transition_may_return_actionable_safe_state(self) -> None:
         class Sampler:
-            def mark_action(self, phase, cycle, instruction):
+            def mark_action(self, phase, cycle, instruction, connection_layout=None):
                 return {
                     "phase": phase,
                     "cycle": cycle,
                     "instruction": instruction,
                     "action_id": "action-1",
+                    "connection_layout": connection_layout,
                 }
 
             def record_event(self, event_type, **values):
@@ -1521,7 +1571,7 @@ class MicrophoneHotplugTests(unittest.TestCase):
 
     def test_recovery_actions_use_explicit_acknowledgements(self) -> None:
         class Sampler:
-            def mark_action(self, phase, cycle, instruction):
+            def mark_action(self, phase, cycle, instruction, connection_layout=None):
                 return {
                     "phase": phase,
                     "cycle": cycle,
@@ -1705,6 +1755,20 @@ class MicrophoneHotplugTests(unittest.TestCase):
             any("operator attestation" in error for error in gate["errors"])
         )
 
+    def test_split_layout_gate_rejects_external_hub_during_direct_cycles(self) -> None:
+        transitions = split_layout_transitions(
+            "promotion-fallback", direct_external_hub=True
+        )
+        gate = hotplug.summarize_connection_layout_gate(
+            transitions,
+            campaign="promotion-fallback",
+            connection_plan=hotplug.CONNECTION_PLAN_DIRECT10_HUB10,
+        )
+        self.assertEqual(gate["verdict"], "FAIL")
+        self.assertTrue(
+            any("already on an external USB hub" in error for error in gate["errors"])
+        )
+
     def test_nonqualifying_summary_status_is_incomplete_not_pass(self) -> None:
         summary = hotplug.build_summary(
             sampler=summary_sampler(),
@@ -1840,12 +1904,13 @@ class MicrophoneHotplugTests(unittest.TestCase):
             def __init__(self) -> None:
                 self.events = []
 
-            def mark_action(self, phase, cycle, instruction):
+            def mark_action(self, phase, cycle, instruction, connection_layout=None):
                 return {
                     "phase": phase,
                     "cycle": cycle,
                     "instruction": instruction,
                     "action_id": "action-1",
+                    "connection_layout": connection_layout,
                 }
 
             def record_event(self, event_type, **values):
@@ -1857,15 +1922,23 @@ class MicrophoneHotplugTests(unittest.TestCase):
             phase="lark_promotion",
             cycle=1,
             instruction="plug it in",
+            connection_layout=hotplug.CONNECTION_LAYOUT_POWERED_HUB,
             input_fn=lambda: "PLUG LARK",
         )
         self.assertTrue(action["operator_acknowledged"])
         self.assertEqual(action["required_acknowledgement"], "PLUG LARK")
+        self.assertEqual(
+            action["connection_layout"], hotplug.CONNECTION_LAYOUT_POWERED_HUB
+        )
         self.assertEqual(sampler.events[0][0], "operator_acknowledgement")
+        self.assertEqual(
+            sampler.events[0][1]["connection_layout"],
+            hotplug.CONNECTION_LAYOUT_POWERED_HUB,
+        )
 
     def test_action_waits_for_restart_snapshot_before_now_prompt(self) -> None:
         class Sampler:
-            def mark_action(self, phase, cycle, instruction):
+            def mark_action(self, phase, cycle, instruction, connection_layout=None):
                 raise hotplug.CampaignAbort("restart-count evidence failed")
 
             def record_event(self, event_type, **values):
@@ -1929,13 +2002,24 @@ class MicrophoneHotplugTests(unittest.TestCase):
                 ],
             ) as query,
         ):
-            action = sampler.mark_action("lark_promotion", 1, "plug it in")
+            action = sampler.mark_action(
+                "lark_promotion",
+                1,
+                "plug it in",
+                connection_layout=hotplug.CONNECTION_LAYOUT_POWERED_HUB,
+            )
             after = sampler.service_counts()
 
         self.assertEqual(query.call_count, 2)
         self.assertEqual(
             action["service_restart_counts"],
             {unit: 2 for unit in hotplug.SERVICE_UNITS},
+        )
+        self.assertEqual(
+            action["connection_layout"], hotplug.CONNECTION_LAYOUT_POWERED_HUB
+        )
+        self.assertEqual(
+            sampler._connection_layout, hotplug.CONNECTION_LAYOUT_POWERED_HUB
         )
         self.assertEqual(
             hotplug.service_restart_delta(action["service_restart_counts"], after),
