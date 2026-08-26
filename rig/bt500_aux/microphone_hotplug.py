@@ -23,6 +23,7 @@ import threading
 import time
 from collections import Counter, deque
 from collections.abc import Callable, Mapping, Sequence
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -1006,6 +1007,38 @@ class SshSampleStream:
             self._condition.notify_all()
         self._emit(document)
 
+    def _action_usb_baseline_locked(
+        self, phase: str, post_query_seq: int
+    ) -> dict[str, Any]:
+        deadline = time.monotonic() + core.USB_BASELINE_OBSERVATION_TIMEOUT_SECONDS
+        required = core.USB_BASELINE_DISCARD_SAMPLES + core.USB_BASELINE_STABLE_SAMPLES
+        while True:
+            if self.fatal_errors:
+                raise core.CampaignAbort(
+                    f"USB action baseline is unsafe: {self.fatal_errors[-1]}"
+                )
+            fresh = [
+                sample
+                for sample in self._recent
+                if int(sample.get("seq", -1)) > post_query_seq
+            ]
+            if len(fresh) >= required:
+                observed = fresh[core.USB_BASELINE_DISCARD_SAMPLES :]
+                for earlier, later in pairwise(observed):
+                    core.stable_usb_baseline_from_samples([earlier, later])
+                baseline = core.stable_usb_baseline_from_samples(
+                    observed[-core.USB_BASELINE_STABLE_SAMPLES :]
+                )
+                core.validate_action_usb_baseline(phase, baseline)
+                return baseline
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise core.CampaignAbort(
+                    "USB action baseline timed out waiting for fresh "
+                    "post-query remote samples"
+                )
+            self._condition.wait(min(remaining, max(self.interval * 2.0, 0.05)))
+
     def mark_action(self, phase: str, cycle: int, instruction: str) -> dict[str, Any]:
         counts, service_error = self._query_service_counts()
         if service_error:
@@ -1014,10 +1047,15 @@ class SshSampleStream:
             raise core.CampaignAbort(detail)
         with self._condition:
             self._service_counts = dict(counts)
-            usb_baseline = core.usb_baseline_from_sample(
-                self._recent[-1] if self._recent else None
-            )
-            core.validate_action_usb_baseline(phase, usb_baseline)
+            if not self.stream_started or self.stream_stopped or self.fatal_errors:
+                detail = (
+                    self.fatal_errors[-1]
+                    if self.fatal_errors
+                    else "remote sample stream is not running"
+                )
+                raise core.CampaignAbort(f"USB action baseline is unsafe: {detail}")
+            post_query_seq = self._local_seq
+            usb_baseline = self._action_usb_baseline_locked(phase, post_query_seq)
             action_monotonic = time.monotonic()
             action_timestamp = time.time()
             self._phase = phase
@@ -1028,7 +1066,7 @@ class SshSampleStream:
                 "timestamp": action_timestamp,
                 "elapsed_s": round(action_monotonic - self._started_monotonic, 6),
                 "monotonic": action_monotonic,
-                "after_seq": self._local_seq,
+                "after_seq": int(usb_baseline["seq"]),
                 "phase": phase,
                 "cycle": cycle,
                 "action_id": self._action_id,
