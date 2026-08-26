@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Acoustic path calibration: dongle B -> speaker -> Lark transmitter mic.
+# Acoustic path calibration: dongle B -> speaker -> selected microphone.
 # Runs ON THE PI, emits JSON on stdout.
 #
-# Finds the dongle B speaker-volume setting that lands the Lark at a target peak level,
+# Finds the dongle B speaker-volume setting that lands the microphone at a target peak level,
 # then measures SNR there.
 #
 # Why this needs calibrating rather than "turn it up until you hear it": with the speaker
@@ -18,11 +18,17 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/devices.sh"
 
 rig_resolve
-L="${LARK_CARD:-}"; B="${DONGLE_B_CARD:-}"
-[ -n "$L" ] || { echo "Lark $LARK_USB_ID not present on any USB port" >&2; exit 78; }
+M="${MICROPHONE_CARD:-}"; B="${DONGLE_B_CARD:-}"
+[ -n "$M" ] || { echo "no unambiguous configured microphone is present" >&2; exit 78; }
 [ -n "$B" ] || { echo "dongle B not present at $DONGLE_B_PORT" >&2; exit 78; }
 
-TARGET_PEAK="${TARGET_PEAK:--18}"   # dBFS at the Lark: healthy level with real headroom
+case "$MICROPHONE_ID" in
+  lark-a1) MICROPHONE_CHANNELS=2 ;;
+  fifine-k054) MICROPHONE_CHANNELS=1 ;;
+  *) echo "unsupported microphone identity: ${MICROPHONE_ID:-none}" >&2; exit 78 ;;
+esac
+
+TARGET_PEAK="${TARGET_PEAK:--18}"   # healthy level with real headroom
 TONE=1000
 
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT; cd "$WORK"
@@ -30,8 +36,8 @@ WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT; cd "$WORK"
 python3 "$REPO/tools/audio/tone_gen.py" --mode sine --freq "$TONE" \
   --seconds 4 --rate 48000 --channels 2 --dbfs -6 --out t.wav >/dev/null
 
-# Lark noise floor with nothing playing — the reference for acoustic SNR.
-arecord -D "plughw:$L,0" -f S16_LE -r 48000 -c 2 -d 3 idle.wav 2>/dev/null
+# Microphone noise floor with nothing playing — the reference for acoustic SNR.
+arecord -D "plughw:$M,0" -f S16_LE -r 48000 -c "$MICROPHONE_CHANNELS" -d 3 idle.wav 2>/dev/null
 NOISE="$(python3 "$REPO/rig/analysis/wav_level.py" idle.wav --json)"
 
 measure_at_volume() {
@@ -40,7 +46,7 @@ measure_at_volume() {
   aplay -D "plughw:$B,0" t.wav >/dev/null 2>&1 &
   local P=$!
   sleep 0.5
-  arecord -D "plughw:$L,0" -f S16_LE -r 48000 -c 2 -d 2 c.wav 2>/dev/null
+  arecord -D "plughw:$M,0" -f S16_LE -r 48000 -c "$MICROPHONE_CHANNELS" -d 2 c.wav 2>/dev/null
   wait "$P" 2>/dev/null || true
   python3 "$REPO/rig/analysis/wav_level.py" c.wav --tone "$TONE" --json
 }
@@ -57,5 +63,6 @@ for VOL in 37 31 25 19 13 7; do
 done
 SWEEP="$SWEEP]"
 
-printf '{"target_peak_dbfs":%s,"noise_raw":%s,"sweep":%s}\n' "$TARGET_PEAK" "$NOISE" "$SWEEP" \
+printf '{"microphone_id":"%s","microphone_card":"%s","format":{"rate":48000,"format":"S16LE","channels":%s},"target_peak_dbfs":%s,"noise_raw":%s,"sweep":%s}\n' \
+  "$MICROPHONE_ID" "$M" "$MICROPHONE_CHANNELS" "$TARGET_PEAK" "$NOISE" "$SWEEP" \
   | python3 "$REPO/rig/analysis/acoustic_reduce.py"

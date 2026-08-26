@@ -98,6 +98,41 @@ def pairing_identity(path: Path) -> dict[str, str]:
     return identity
 
 
+def selected_microphone(bridge: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """Return the selected microphone while accepting pre-candidate status snapshots.
+
+    Once the generic ``microphone`` object exists it is authoritative.  In particular,
+    do not resurrect a stale endpoint during an ambiguous/conflicting selection.
+    """
+
+    endpoints = bridge.get("endpoints") or {}
+    if not isinstance(endpoints, dict):
+        return None, "bridge endpoints are malformed"
+    if "microphone" in bridge:
+        microphone = bridge.get("microphone")
+        if not isinstance(microphone, dict):
+            return None, "microphone status is malformed"
+        selected = microphone.get("selected")
+        if not isinstance(selected, dict):
+            reason = microphone.get("selection_reason")
+            return None, str(reason or "no microphone candidate is selected")
+        candidate_id = selected.get("id")
+        node = selected.get("node")
+        if not isinstance(candidate_id, str) or not candidate_id:
+            return None, "selected microphone has no candidate id"
+        if not isinstance(node, str) or not node:
+            return None, "selected microphone has no node"
+        if endpoints.get("microphone") != node:
+            return None, "selected microphone does not match endpoints.microphone"
+        return selected, None
+
+    # Schema-1/E17 compatibility: the only selectable microphone was the Lark.
+    legacy_node = endpoints.get("microphone") or endpoints.get("lark")
+    if isinstance(legacy_node, str) and legacy_node:
+        return {"id": "lark-a1", "node": legacy_node, "legacy": True}, None
+    return None, "no microphone endpoint is present"
+
+
 def main() -> int:
     failures: list[str] = []
     details: dict[str, Any] = {}
@@ -160,8 +195,10 @@ def main() -> int:
     else:
         endpoints = bridge.get("endpoints") or {}
         graph = bridge.get("graph") or {}
-        if not endpoints.get("lark"):
-            failures.append("Lark endpoint is absent")
+        microphone, microphone_error = selected_microphone(bridge)
+        details["microphone"] = microphone
+        if microphone_error:
+            failures.append(f"selected microphone is absent: {microphone_error}")
         if not endpoints.get("wired_output"):
             failures.append("configured wired output is absent")
         if graph.get("missing_links"):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Time how long a raw Lark -> HFP sink link exists, by polling the GRAPH.
+"""Time how long any configured microphone -> HFP raw link exists.
 
 This exists because the obvious instrument cannot see the thing being measured.
 
@@ -19,14 +19,17 @@ the other instrument structurally cannot.
 
     linkprobe.py 35        # poll for 35 seconds, print the window if one appears
 
-Run it in the background and cycle the Lark underneath it.
+Run it in the background and cycle either microphone underneath it.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import time
+
+MICROPHONE_COMPONENTS = {"USB3547:0407", "USB0C76:161E"}
 
 
 def run(cmd: list[str]) -> str:
@@ -36,11 +39,22 @@ def run(cmd: list[str]) -> str:
         return ""
 
 
-def lark_name() -> str | None:
-    for line in run(["pactl", "list", "short", "sources"]).splitlines():
-        if "Hollyland" in line and "\t" in line:
-            return line.split("\t")[1]
-    return None
+def microphone_names() -> set[str]:
+    try:
+        objects = json.loads(run(["pw-dump"]))
+    except json.JSONDecodeError:
+        return set()
+    names: set[str] = set()
+    for item in objects:
+        if item.get("type") != "PipeWire:Interface:Node":
+            continue
+        props = (item.get("info") or {}).get("props") or {}
+        component = str(props.get("alsa.components", "")).upper()
+        if props.get("media.class") == "Audio/Source" and component in MICROPHONE_COMPONENTS:
+            name = props.get("node.name")
+            if name:
+                names.add(str(name))
+    return names
 
 
 def hfp_sink() -> str | None:
@@ -54,45 +68,52 @@ def hfp_sink() -> str | None:
     return None
 
 
-def dangerous_present(lark: str, sink: str) -> bool:
+def dangerous_present(microphones: set[str], sink: str) -> set[str]:
+    dangerous: set[str] = set()
     current = None
     for raw in run(["pw-link", "-l"]).splitlines():
         if not raw.startswith((" ", "\t")):
             current = raw.strip().split(":")[0]
             continue
         value = raw.strip()
-        if current == lark and value.startswith("|->") and sink in value:
-            return True
-    return False
+        if current in microphones and value.startswith("|->") and sink in value:
+            dangerous.add(str(current))
+    return dangerous
 
 
 def main() -> int:
     seconds = float(sys.argv[1]) if len(sys.argv) > 1 else 35.0
-    lark = lark_name()
+    microphones = microphone_names()
     sink = hfp_sink()
     first = last = None
     hits = polls = 0
+    observed: set[str] = set()
 
     end = time.monotonic() + seconds
     while time.monotonic() < end:
-        if lark is None:
-            lark = lark_name()
+        microphones |= microphone_names()
+        if not microphones:
             continue
         if sink is None:
             sink = hfp_sink()
             continue
         polls += 1
-        if dangerous_present(lark, sink):
+        exposed = dangerous_present(microphones, sink)
+        if exposed:
             now = time.monotonic()
             if first is None:
                 first = now
             last = now
             hits += 1
+            observed.update(exposed)
 
     if first is None:
         print(f"  raw uplink NEVER observed ({polls} polls over {seconds:.0f}s)")
     else:
-        print(f"  RAW UPLINK: {hits} of {polls} polls, window {last - first:.2f}s")
+        print(
+            f"  RAW UPLINK: {hits} of {polls} polls, window {last - first:.2f}s, "
+            f"sources={sorted(observed)}"
+        )
     return 0
 
 

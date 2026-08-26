@@ -50,6 +50,10 @@ def command(*args: str) -> str:
 
 
 def load_supervisor():
+    bridged_dir = str(SUPERVISOR_PATH.parent)
+    if bridged_dir not in sys.path:
+        # Direct importlib loading does not expose sibling resolver modules.
+        sys.path.insert(0, bridged_dir)
     spec = importlib.util.spec_from_file_location(
         "aec_capability_supervisor", SUPERVISOR_PATH
     )

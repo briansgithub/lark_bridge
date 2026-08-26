@@ -22,9 +22,15 @@ SUPERVISOR_PATH = REPO / "pi" / "bridged" / "bridge_supervisor.py"
 RAW_RECORDER = "bridge.bench.raw-recorder"
 CLEAN_RECORDER = "bridge.bench.clean-recorder"
 REFERENCE_RECORDER = "bridge.bench.reference-recorder"
+DEFAULT_EXPECTED_MICROPHONE: str | None = None
 
 
 def load_supervisor():
+    bridged_dir = str(SUPERVISOR_PATH.parent)
+    if bridged_dir not in sys.path:
+        # bridge_supervisor imports the sibling pure resolver by module name.  Direct
+        # importlib loaders do not add that directory the way normal script startup does.
+        sys.path.insert(0, bridged_dir)
     spec = importlib.util.spec_from_file_location(
         "aec_bench_supervisor", SUPERVISOR_PATH
     )
@@ -34,6 +40,47 @@ def load_supervisor():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _status_generation(module) -> int | None:
+    """Best-effort generation annotation for qualification artifacts."""
+    try:
+        status = json.loads(module.default_status_path().read_text(encoding="utf-8"))
+    except (AttributeError, OSError, json.JSONDecodeError):
+        return None
+    generation = status.get("generation")
+    return generation if isinstance(generation, int) and not isinstance(generation, bool) else None
+
+
+def resolve_selected_microphone(module, settings, expected_id: str | None):
+    """Resolve one identity-qualified microphone from one PipeWire snapshot.
+
+    The returned artifact contains the full selected identity, native format, instance
+    token, and the supervisor generation that was current when the instrument started.
+    Ambiguity/conflict is fail-closed and an expected candidate never silently falls back.
+    """
+    snapshot = module.pw_snapshot()
+    if snapshot is None:
+        raise RuntimeError("PipeWire graph unavailable")
+    nodes, objects = snapshot
+    resolution = module.resolve_microphone(objects, settings)
+    report = resolution.as_dict()
+    if resolution.blocked:
+        raise RuntimeError(
+            f"microphone selection is unsafe: {report.get('selection_reason', 'unknown reason')}"
+        )
+    selected = resolution.selected
+    if selected is None:
+        raise RuntimeError(
+            str(report.get("selection_reason") or "no usable microphone is present")
+        )
+    selected_artifact = selected.as_dict()
+    if expected_id and selected_artifact.get("id") != expected_id:
+        raise RuntimeError(
+            f"selected microphone is {selected_artifact.get('id')!r}, expected {expected_id!r}"
+        )
+    selected_artifact["graph_generation"] = _status_generation(module)
+    return nodes, selected.node, selected_artifact, report
 
 
 def stop_process(process: subprocess.Popen[bytes]) -> None:
@@ -207,6 +254,12 @@ def main() -> int:
     parser.add_argument(
         "--output", help="explicit PipeWire output node for instrument tests"
     )
+    parser.add_argument(
+        "--expected-microphone",
+        default=DEFAULT_EXPECTED_MICROPHONE,
+        metavar="ID",
+        help="candidate ID that must be selected (configured priority is used when omitted)",
+    )
     args = parser.parse_args()
     if args.seconds <= 0 or args.silence_seconds < 0:
         raise SystemExit("seconds must be positive and silence-seconds non-negative")
@@ -214,17 +267,19 @@ def main() -> int:
 
     module = load_supervisor()
     settings = module.load_settings()
-    nodes = module.pw_nodes()
-    if nodes is None:
-        raise SystemExit("PipeWire graph unavailable")
+    try:
+        nodes, microphone_node, microphone, microphone_resolution = (
+            resolve_selected_microphone(module, settings, args.expected_microphone)
+        )
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     if settings.hfp_source in nodes or settings.hfp_sink in nodes:
         raise SystemExit("HFP nodes are present; refusing an acoustic bench injection")
     if module.AEC_SOURCE in nodes or module.AEC_SINK in nodes:
         raise SystemExit("AEC nodes already exist; refusing a second instance")
-    lark = module.find_lark(nodes, settings)
     output_node = effective_output(module, settings.wired_output, args.output)
-    if lark is None or output_node not in nodes:
-        raise SystemExit("Lark or selected output is absent")
+    if output_node not in nodes:
+        raise SystemExit("selected output is absent")
     wired_volume, wired_muted = output_volume(output_node)
     if wired_muted:
         raise SystemExit("output is muted")
@@ -288,7 +343,7 @@ def main() -> int:
     )
     host = module.NativeAecHost(
         tuning,
-        lark,
+        microphone_node,
         output_node,
         latency_frames=node_latency_frames,
         play_delay_frames=args.play_delay_frames,
@@ -304,7 +359,7 @@ def main() -> int:
         wait_nodes(module, {module.AEC_SOURCE, module.AEC_SINK})
         wait_links(
             module,
-            {(lark, module.AEC_CAPTURE), (module.AEC_PLAYBACK, output_node)},
+            {(microphone_node, module.AEC_CAPTURE), (module.AEC_PLAYBACK, output_node)},
         )
         if args.internal_debug_wav:
             internal_path = args.out / "aec-internal.wav"
@@ -356,7 +411,7 @@ def main() -> int:
         )
         profiler.start()
         for target, recorder_name, capture_sink, output in (
-            (lark, RAW_RECORDER, False, raw_path),
+            (microphone_node, RAW_RECORDER, False, raw_path),
             (module.AEC_SOURCE, CLEAN_RECORDER, False, clean_path),
             (module.AEC_SINK, REFERENCE_RECORDER, True, reference_path),
         ):
@@ -392,7 +447,7 @@ def main() -> int:
         if any(recorder.poll() is not None for recorder in recorders):
             raise RuntimeError("one or more bench recorders exited before playback")
         recorder_links = {
-            (lark, RAW_RECORDER),
+            (microphone_node, RAW_RECORDER),
             (module.AEC_SOURCE, CLEAN_RECORDER),
             (module.AEC_SINK, REFERENCE_RECORDER),
         }
@@ -499,7 +554,13 @@ def main() -> int:
         "verdict": metrics["verdict"],
         "duration_s": round(time.monotonic() - started, 3),
         "module_startup_ms": module_started_ms,
-        "lark": lark,
+        "microphone": microphone,
+        "microphone_resolution": microphone_resolution,
+        "expected_microphone": args.expected_microphone,
+        "graph_generation": microphone["graph_generation"],
+        # Historical E17 readers consume this key. It remains the actual Lark node and
+        # is deliberately null for another selected candidate.
+        "lark": microphone_node if microphone["id"] == "lark-a1" else None,
         "wired_output": output_node,
         "wired_output_volume": wired_volume,
         "node_latency_frames": node_latency_frames,

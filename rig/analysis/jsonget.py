@@ -50,7 +50,7 @@ def main() -> int:
         else:
             cur = MISSING
         if cur is MISSING:
-            print("")
+            print()
             return 1
 
     if want_len:

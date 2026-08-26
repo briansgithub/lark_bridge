@@ -8,7 +8,6 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-
 SCRIPT = Path(__file__).resolve().parents[3] / "rig" / "pi" / "measure" / "aec_bench.py"
 if not hasattr(os, "sysconf"):
     os.sysconf_names = {"SC_CLK_TCK": "SC_CLK_TCK"}  # type: ignore[attr-defined]

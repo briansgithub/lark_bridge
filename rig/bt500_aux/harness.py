@@ -23,6 +23,7 @@ DEFAULT_CYCLES = 5
 DEFAULT_SOAK_SECONDS = 3600
 DEFAULT_SAMPLE_SECONDS = 5.0
 DEFAULT_CAPTURE_SECONDS = 60.0
+DEFAULT_EXPECTED_MICROPHONE = "lark-a1"
 BT500_ADDRESS = "A0:AD:9F:73:6C:24"
 BT500_USB_ID = "0b05:1bf6"
 REQUIRED_SYSTEM_SERVICES = (
@@ -154,7 +155,73 @@ def service_restarts(snapshot: Mapping[str, Any], scope: str, unit: str) -> int:
         raise EvidenceError(f"invalid NRestarts for {scope}:{unit}: {raw!r}") from exc
 
 
-def validate_snapshot(snapshot: Mapping[str, Any], *, require_active: bool) -> None:
+def selected_microphone(
+    status: Mapping[str, Any], expected_microphone: str
+) -> dict[str, Any]:
+    """Require one identity-bearing selection, with schema-1 Lark compatibility."""
+
+    endpoints = require_dict(status, "endpoints", "snapshot.status")
+    if "microphone" not in status:
+        legacy_node = endpoints.get("lark")
+        if not isinstance(legacy_node, str) or not legacy_node:
+            raise HardwareNotReady("the expected microphone is absent")
+        if expected_microphone != DEFAULT_EXPECTED_MICROPHONE:
+            raise HardFailure(
+                "legacy status cannot prove the expected microphone identity "
+                f"{expected_microphone!r}"
+            )
+        return {
+            "id": DEFAULT_EXPECTED_MICROPHONE,
+            "node": legacy_node,
+            "legacy": True,
+        }
+
+    microphone = require_dict(status, "microphone", "snapshot.status")
+    selected = microphone.get("selected")
+    if not isinstance(selected, dict):
+        candidates = microphone.get("candidates")
+        blockers = []
+        if isinstance(candidates, list):
+            blockers = [
+                candidate
+                for candidate in candidates
+                if isinstance(candidate, dict)
+                and candidate.get("state") in {"ambiguous", "conflict"}
+            ]
+        reason = str(
+            microphone.get("selection_reason") or "no microphone candidate is selected"
+        )
+        if blockers:
+            raise HardFailure(f"microphone selection is unsafe: {reason}")
+        raise HardwareNotReady(f"the expected microphone is absent: {reason}")
+
+    candidate_id = selected.get("id")
+    node = selected.get("node")
+    if not isinstance(candidate_id, str) or not candidate_id:
+        raise EvidenceError("selected microphone omitted its candidate id")
+    if not isinstance(node, str) or not node:
+        raise EvidenceError("selected microphone omitted its node")
+    if candidate_id != expected_microphone:
+        raise HardFailure(
+            f"selected microphone is {candidate_id!r}, expected {expected_microphone!r}"
+        )
+    if endpoints.get("microphone") != node:
+        raise HardFailure(
+            "selected microphone node does not match endpoints.microphone"
+        )
+    if candidate_id == DEFAULT_EXPECTED_MICROPHONE:
+        lark = endpoints.get("lark")
+        if lark is not None and lark != node:
+            raise HardFailure("selected Lark node does not match endpoints.lark")
+    return selected
+
+
+def validate_snapshot(
+    snapshot: Mapping[str, Any],
+    *,
+    require_active: bool,
+    expected_microphone: str = DEFAULT_EXPECTED_MICROPHONE,
+) -> None:
     errors = snapshot.get("collection_errors")
     if not isinstance(errors, list):
         raise EvidenceError("snapshot.collection_errors is missing or malformed")
@@ -190,8 +257,7 @@ def validate_snapshot(snapshot: Mapping[str, Any], *, require_active: bool) -> N
         raise HardFailure("an output Bluetooth controller is configured in AUX mode")
     require_bool(output_controller, "ready", True, "snapshot.controllers.output")
 
-    if not endpoints.get("lark"):
-        raise HardwareNotReady("Lark A1 is absent")
+    selected_microphone(status, expected_microphone)
     if not endpoints.get("wired_output"):
         raise HardwareNotReady("the Pi wired output is absent")
     if status.get("mode") != "bluetooth-wired":
@@ -339,11 +405,21 @@ def validate_cycle(
     metrics: Mapping[str, Any],
     after: Mapping[str, Any],
     requested_seconds: float,
+    *,
+    expected_microphone: str = DEFAULT_EXPECTED_MICROPHONE,
 ) -> dict[str, Any]:
-    validate_snapshot(before, require_active=True)
+    validate_snapshot(
+        before,
+        require_active=True,
+        expected_microphone=expected_microphone,
+    )
     validate_capture(capture, requested_seconds)
     validate_metrics(metrics)
-    validate_snapshot(after, require_active=True)
+    validate_snapshot(
+        after,
+        require_active=True,
+        expected_microphone=expected_microphone,
+    )
 
     for scope, units in (
         ("system", REQUIRED_SYSTEM_SERVICES),
@@ -365,11 +441,14 @@ def validate_cycle(
         raise HardFailure(f"new kernel Bluetooth errors: {kernel!r}")
     if usb:
         raise HardFailure(f"new USB errors: {usb!r}")
+    microphone = selected_microphone(after["status"], expected_microphone)
     return {
         "verdict": "PASS",
         "suppression_db": metrics["suppression_db"],
         "capture_seconds": capture["seconds"],
         "graph_quantum": after["graph_quantum"],
+        "graph_generation": after["status"].get("generation"),
+        "microphone": microphone,
     }
 
 
@@ -377,6 +456,8 @@ def validate_recycle(
     recycle: Mapping[str, Any],
     before: Mapping[str, Any],
     rejoined: Mapping[str, Any],
+    *,
+    expected_microphone: str = DEFAULT_EXPECTED_MICROPHONE,
 ) -> None:
     if recycle.get("verdict") != "PASS":
         raise HardwareNotReady(f"fresh call session was not restored: {recycle!r}")
@@ -386,7 +467,11 @@ def validate_recycle(
         raise EvidenceError("call-session recycle never observed teardown")
     if recycle.get("active_observed") is not True:
         raise HardwareNotReady("Pixel did not restore HFP audio after reconnect")
-    validate_snapshot(rejoined, require_active=True)
+    validate_snapshot(
+        rejoined,
+        require_active=True,
+        expected_microphone=expected_microphone,
+    )
     for scope, units in (
         ("system", REQUIRED_SYSTEM_SERVICES),
         ("user", REQUIRED_USER_SERVICES),
@@ -419,6 +504,7 @@ class CampaignStore:
         target_cycles: int = DEFAULT_CYCLES,
         soak_seconds: int = DEFAULT_SOAK_SECONDS,
         sample_seconds: float = DEFAULT_SAMPLE_SECONDS,
+        expected_microphone: str = DEFAULT_EXPECTED_MICROPHONE,
     ) -> dict[str, Any]:
         if self.path.exists() and any(self.path.iterdir()):
             return self.load()
@@ -430,6 +516,7 @@ class CampaignStore:
             "target_cycles": target_cycles,
             "soak_seconds": soak_seconds,
             "sample_seconds": sample_seconds,
+            "expected_microphone": expected_microphone,
             "baseline": {"status": "pending"},
             "cycles": [],
             "soak": {"status": "pending"},
@@ -454,6 +541,11 @@ class CampaignStore:
                 raise EvidenceError(f"checkpoint {key} is invalid")
         if not isinstance(document.get("sample_seconds"), (int, float)):
             raise EvidenceError("checkpoint sample_seconds is invalid")
+        expected_microphone = document.get(
+            "expected_microphone", DEFAULT_EXPECTED_MICROPHONE
+        )
+        if not isinstance(expected_microphone, str) or not expected_microphone:
+            raise EvidenceError("checkpoint expected_microphone is invalid")
         require_dict(document, "baseline", "checkpoint")
         require_dict(document, "soak", "checkpoint")
         return document
@@ -472,9 +564,27 @@ class CampaignStore:
 
 
 class QualificationHarness:
-    def __init__(self, backend: Backend, store: CampaignStore):
+    def __init__(
+        self,
+        backend: Backend,
+        store: CampaignStore,
+        *,
+        expected_microphone: str = DEFAULT_EXPECTED_MICROPHONE,
+    ):
         self.backend = backend
         self.store = store
+        if not expected_microphone:
+            raise EvidenceError("expected microphone id cannot be empty")
+        checkpoint = store.load()
+        stored_microphone = checkpoint.get(
+            "expected_microphone", DEFAULT_EXPECTED_MICROPHONE
+        )
+        if stored_microphone != expected_microphone:
+            raise EvidenceError(
+                f"campaign expects microphone {stored_microphone!r}, not "
+                f"{expected_microphone!r}"
+            )
+        self.expected_microphone = expected_microphone
 
     def baseline(self) -> dict[str, Any]:
         checkpoint = self.store.load()
@@ -485,7 +595,11 @@ class QualificationHarness:
         try:
             snapshot = self.backend.snapshot(full=True)
             atomic_json(directory / "snapshot.json", snapshot)
-            validate_snapshot(snapshot, require_active=False)
+            validate_snapshot(
+                snapshot,
+                require_active=False,
+                expected_microphone=self.expected_microphone,
+            )
         except HardwareNotReady as exc:
             checkpoint["baseline"] = {"status": "waiting", "reason": str(exc)}
             self.store.save(checkpoint)
@@ -536,7 +650,11 @@ class QualificationHarness:
         try:
             before = self.backend.snapshot(full=True)
             atomic_json(directory / "before.json", before)
-            validate_snapshot(before, require_active=True)
+            validate_snapshot(
+                before,
+                require_active=True,
+                expected_microphone=self.expected_microphone,
+            )
             capture = self.backend.capture(
                 label=f"bt500-aux-{index:03d}-a{attempt_number:02d}",
                 seconds=seconds,
@@ -548,12 +666,24 @@ class QualificationHarness:
             atomic_json(directory / "aec-metrics.json", metrics)
             after = self.backend.snapshot(full=True)
             atomic_json(directory / "after.json", after)
-            summary = validate_cycle(before, capture, metrics, after, seconds)
+            summary = validate_cycle(
+                before,
+                capture,
+                metrics,
+                after,
+                seconds,
+                expected_microphone=self.expected_microphone,
+            )
             recycle = self.backend.recycle_call()
             atomic_json(directory / "session-recycle.json", recycle)
             rejoined = self.backend.snapshot(full=True)
             atomic_json(directory / "rejoined.json", rejoined)
-            validate_recycle(recycle, after, rejoined)
+            validate_recycle(
+                recycle,
+                after,
+                rejoined,
+                expected_microphone=self.expected_microphone,
+            )
             summary["fresh_session_rejoined"] = True
         except KeyboardInterrupt:
             attempt["status"] = "interrupted"
@@ -648,10 +778,15 @@ class QualificationHarness:
             local,
             duration=int(checkpoint["soak_seconds"]),
             interval=float(checkpoint["sample_seconds"]),
+            expected_microphone=self.expected_microphone,
         )
         soak_closing = self.backend.snapshot(full=True)
         atomic_json(self.store.path / "soak-closing-snapshot.json", soak_closing)
-        validate_snapshot(soak_closing, require_active=True)
+        validate_snapshot(
+            soak_closing,
+            require_active=True,
+            expected_microphone=self.expected_microphone,
+        )
         final_capture_dir = self.store.path / "soak" / "final-aec"
         final_capture_dir.mkdir(parents=True, exist_ok=True)
         final_remote = f"{remote_out}/final-aec"
@@ -672,13 +807,19 @@ class QualificationHarness:
             metrics,
             after_capture,
             DEFAULT_CAPTURE_SECONDS,
+            expected_microphone=self.expected_microphone,
         )
         summary["final_aec"] = final_aec
         recycle = self.backend.recycle_call()
         atomic_json(self.store.path / "final-session-recycle.json", recycle)
         final_snapshot = self.backend.snapshot(full=True)
         atomic_json(self.store.path / "final-snapshot.json", final_snapshot)
-        validate_recycle(recycle, after_capture, final_snapshot)
+        validate_recycle(
+            recycle,
+            after_capture,
+            final_snapshot,
+            expected_microphone=self.expected_microphone,
+        )
         atomic_json(self.store.path / "soak-summary.json", summary)
         soak.update(status="passed", completed_utc=utc_stamp(), summary=summary)
         checkpoint["verdict"] = "PASS"
@@ -689,7 +830,11 @@ class QualificationHarness:
 
 
 def validate_soak_evidence(
-    directory: Path, *, duration: int, interval: float
+    directory: Path,
+    *,
+    duration: int,
+    interval: float,
+    expected_microphone: str = DEFAULT_EXPECTED_MICROPHONE,
 ) -> dict[str, Any]:
     state_path = directory / "state.json"
     samples_path = directory / "samples.jsonl"
@@ -702,7 +847,11 @@ def validate_soak_evidence(
     opening = state.get("opening")
     if not isinstance(opening, dict):
         raise EvidenceError("soak state omitted its opening evidence")
-    validate_snapshot(opening, require_active=True)
+    validate_snapshot(
+        opening,
+        require_active=True,
+        expected_microphone=expected_microphone,
+    )
     elapsed = state.get("elapsed_s")
     if not isinstance(elapsed, (int, float)) or float(elapsed) < duration:
         raise EvidenceError(f"soak elapsed time is only {elapsed!r}s")
@@ -719,7 +868,11 @@ def validate_soak_evidence(
             if document.get("event") == "hard_failure":
                 raise HardFailure(f"soak recorded a hard failure: {document!r}")
             continue
-        validate_snapshot(document, require_active=True)
+        validate_snapshot(
+            document,
+            require_active=True,
+            expected_microphone=expected_microphone,
+        )
         for scope, units in (
             ("system", REQUIRED_SYSTEM_SERVICES),
             ("user", REQUIRED_USER_SERVICES),
@@ -749,6 +902,7 @@ def validate_soak_evidence(
         "samples": len(samples),
         "interval_s": interval,
         "runs": state.get("runs"),
+        "expected_microphone": expected_microphone,
     }
 
 
@@ -1016,20 +1170,41 @@ def build_parser() -> argparse.ArgumentParser:
 
     collect = commands.add_parser("collect")
     collect.add_argument("--campaign", type=Path, required=True)
+    for command in (baseline, cycle, campaign, soak, collect):
+        command.add_argument(
+            "--expected-microphone",
+            metavar="ID",
+            help=(
+                "candidate id that every snapshot must select; new campaigns "
+                f"default to {DEFAULT_EXPECTED_MICROPHONE}"
+            ),
+        )
     return parser
 
 
 def _store_for(args: argparse.Namespace) -> tuple[CampaignStore, dict[str, Any]]:
     chosen = args.campaign or default_campaign_path(args.artifacts)
     store = CampaignStore(chosen)
+    requested_microphone = getattr(args, "expected_microphone", None)
     if args.command in {"baseline", "campaign"}:
         document = store.create(
             target_cycles=int(args.cycles),
             soak_seconds=int(args.soak_seconds),
             sample_seconds=float(args.sample_seconds),
+            expected_microphone=(
+                requested_microphone or DEFAULT_EXPECTED_MICROPHONE
+            ),
         )
     else:
         document = store.load()
+    stored_microphone = document.get(
+        "expected_microphone", DEFAULT_EXPECTED_MICROPHONE
+    )
+    if requested_microphone and requested_microphone != stored_microphone:
+        raise EvidenceError(
+            f"campaign expects microphone {stored_microphone!r}, not "
+            f"{requested_microphone!r}"
+        )
     return store, document
 
 
@@ -1048,7 +1223,14 @@ def main(argv: Sequence[str] | None = None, *, backend: Backend | None = None) -
     try:
         store, checkpoint = _store_for(args)
         implementation = backend or SshBackend(args.host, args.repo)
-        harness = QualificationHarness(implementation, store)
+        expected_microphone = str(
+            checkpoint.get("expected_microphone", DEFAULT_EXPECTED_MICROPHONE)
+        )
+        harness = QualificationHarness(
+            implementation,
+            store,
+            expected_microphone=expected_microphone,
+        )
         if args.command == "baseline":
             checkpoint = harness.baseline()
         elif args.command == "cycle":
@@ -1076,6 +1258,7 @@ def main(argv: Sequence[str] | None = None, *, backend: Backend | None = None) -
             json.dumps(
                 {
                     "campaign": str(store.path),
+                    "expected_microphone": expected_microphone,
                     "verdict": checkpoint.get("verdict"),
                     "baseline": checkpoint.get("baseline", {}).get("status"),
                     "cycles_passed": sum(

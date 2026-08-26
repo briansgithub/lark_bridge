@@ -48,10 +48,14 @@ import subprocess
 import time
 from pathlib import Path
 
-STATUS = Path(f"/run/user/{os.getuid()}/bridge-status.json")
+STATUS = Path(f"/run/user/{getattr(os, 'getuid', lambda: 1000)()}/bridge-status.json")
 POLL_SECONDS = 2.0
 ORPHAN_PATTERNS = ("echo-cancel", "null-sink")
 ORPHAN_PROCS = ("pw-loopback", "pw-cli")
+AEC_CAPTURE = "echo-cancel-capture"
+AEC_SOURCE = "bridge.aec.source"
+MICROPHONE_INPUT = "input.bridge.mic"
+MICROPHONE_OUTPUT = "output.bridge.mic"
 
 
 def run(cmd: list[str], timeout: float = 10.0) -> str:
@@ -169,6 +173,48 @@ def resource_counts(status: dict) -> dict:
     }
 
 
+def microphone_inventory(status: dict) -> tuple[dict | None, set[str]]:
+    """Return the authoritative selection and every observed candidate node."""
+
+    endpoints = status.get("endpoints") or {}
+    microphone = status.get("microphone")
+    nodes: set[str] = set()
+    if isinstance(microphone, dict):
+        selected_value = microphone.get("selected")
+        selected = selected_value if isinstance(selected_value, dict) else None
+        candidates = microphone.get("candidates")
+        if isinstance(candidates, list):
+            for candidate in candidates:
+                if not isinstance(candidate, dict):
+                    continue
+                node = candidate.get("node")
+                if isinstance(node, str) and node:
+                    nodes.add(node)
+                matched = candidate.get("matched_nodes")
+                if isinstance(matched, list):
+                    nodes.update(
+                        node for node in matched if isinstance(node, str) and node
+                    )
+        if selected is not None:
+            node = selected.get("node")
+            if isinstance(node, str) and node:
+                nodes.add(node)
+    else:
+        legacy = endpoints.get("microphone") or endpoints.get("lark")
+        selected = (
+            {"id": "lark-a1", "node": legacy, "legacy": True}
+            if isinstance(legacy, str) and legacy
+            else None
+        )
+
+    # These aliases make the checker conservative when reading a transitional status.
+    for key in ("microphone", "lark"):
+        node = endpoints.get(key)
+        if isinstance(node, str) and node:
+            nodes.add(node)
+    return selected, nodes
+
+
 def check(status: dict, status_error: str | None) -> tuple[list[dict], dict]:
     """Return (violations, observations). A violation names the invariant it breaks."""
     violations: list[dict] = []
@@ -176,6 +222,10 @@ def check(status: dict, status_error: str | None) -> tuple[list[dict], dict]:
     endpoints = status.get("endpoints") or {}
     aec = status.get("aec") or {}
     lark = endpoints.get("lark")
+    selected_microphone, microphone_nodes = microphone_inventory(status)
+    selected_node = (
+        selected_microphone.get("node") if selected_microphone is not None else None
+    )
     hfp_sink = endpoints.get("hfp_sink")
     state = status.get("state")
 
@@ -188,14 +238,42 @@ def check(status: dict, status_error: str | None) -> tuple[list[dict], dict]:
             violations.append({"id": "I5", "detail": f"status file stale by {age:.1f}s"})
 
     # I1 -- the feedback loop this whole component exists to prevent.
-    if lark and hfp_sink and (lark, hfp_sink) in links:
-        violations.append({"id": "I1", "detail": f"FEEDBACK LOOP: {lark} -> {hfp_sink}"})
+    raw_uplinks = [
+        (source, target)
+        for source, target in links
+        if source in microphone_nodes
+        and target
+        and (target == hfp_sink or "bluez_output" in target)
+    ]
+    if raw_uplinks:
+        violations.append(
+            {"id": "I1", "detail": f"raw microphone uplink: {raw_uplinks}"}
+        )
+    unselected_nodes = microphone_nodes - (
+        {selected_node} if isinstance(selected_node, str) and selected_node else set()
+    )
+    unselected_routes = [
+        (source, target)
+        for source, target in links
+        if source in unselected_nodes
+        and target in {AEC_CAPTURE, MICROPHONE_INPUT, hfp_sink}
+    ]
+    if unselected_routes:
+        violations.append(
+            {
+                "id": "I1",
+                "detail": (
+                    "inactive microphone linked into the managed graph: "
+                    f"{unselected_routes}"
+                ),
+            }
+        )
 
     # I2 -- fail_closed. An unverified AEC must not leave a raw uplink standing.
-    if aec.get("enabled") and not aec.get("verified"):
-        raw_uplinks = [(s, t) for s, t in links if s == lark and t and "bluez_output" in t]
-        if raw_uplinks:
-            violations.append({"id": "I2", "detail": f"raw uplink while unverified: {raw_uplinks}"})
+    if aec.get("enabled") and not aec.get("verified") and raw_uplinks:
+        violations.append(
+            {"id": "I2", "detail": f"raw uplink while unverified: {raw_uplinks}"}
+        )
 
     # I3 -- orphans. Only meaningful once the call is down and teardown should be complete.
     orphans: list[str] = []
@@ -218,6 +296,62 @@ def check(status: dict, status_error: str | None) -> tuple[list[dict], dict]:
             violations.append({"id": "I4", "detail": f"ACTIVE with unexpected links: {graph['unexpected_links']}"})
         if aec.get("enabled") and not aec.get("verified"):
             violations.append({"id": "I4", "detail": "ACTIVE but AEC never verified"})
+        if not isinstance(selected_node, str) or not selected_node:
+            violations.append({"id": "I4", "detail": "ACTIVE without a selected microphone"})
+        else:
+            microphone_endpoint = endpoints.get("microphone")
+            if (
+                isinstance(status.get("microphone"), dict)
+                and microphone_endpoint != selected_node
+            ):
+                violations.append(
+                    {
+                        "id": "I4",
+                        "detail": (
+                            "selected microphone does not match endpoints.microphone: "
+                            f"{selected_node!r} != {microphone_endpoint!r}"
+                        ),
+                    }
+                )
+            physical_target = (
+                AEC_CAPTURE if aec.get("enabled") else MICROPHONE_INPUT
+            )
+            physical_routes = {
+                (source, target)
+                for source, target in links
+                if source in microphone_nodes
+                and target in {AEC_CAPTURE, MICROPHONE_INPUT}
+            }
+            expected_route = (selected_node, physical_target)
+            if physical_routes != {expected_route}:
+                violations.append(
+                    {
+                        "id": "I4",
+                        "detail": (
+                            "physical microphone ownership mismatch: "
+                            f"expected {[expected_route]}, found {sorted(physical_routes)}"
+                        ),
+                    }
+                )
+            if aec.get("enabled") and (AEC_SOURCE, MICROPHONE_INPUT) not in links:
+                violations.append(
+                    {
+                        "id": "I4",
+                        "detail": "verified AEC source does not feed bridge.mic",
+                    }
+                )
+        if hfp_sink:
+            hfp_inputs = {source for source, target in links if target == hfp_sink}
+            if hfp_inputs != {MICROPHONE_OUTPUT}:
+                violations.append(
+                    {
+                        "id": "I4",
+                        "detail": (
+                            "HFP uplink ownership mismatch: expected only "
+                            f"{MICROPHONE_OUTPUT}, found {sorted(hfp_inputs)}"
+                        ),
+                    }
+                )
 
     # I7 is reported as an OBSERVATION, not a violation.
     #
@@ -239,6 +373,28 @@ def check(status: dict, status_error: str | None) -> tuple[list[dict], dict]:
         "attempts": status.get("attempts"),
         "last_failure": status.get("last_failure"),
         "lark_present": bool(lark),
+        "microphone_present": bool(selected_node),
+        "microphone_id": (
+            selected_microphone.get("id") if selected_microphone is not None else None
+        ),
+        "microphone_node": selected_node,
+        "microphone_candidate_nodes": sorted(microphone_nodes),
+        "microphone_identity": (
+            selected_microphone.get("identity")
+            if selected_microphone is not None
+            else None
+        ),
+        "microphone_format": (
+            selected_microphone.get("format")
+            if selected_microphone is not None
+            else None
+        ),
+        "microphone_instance_token": (
+            selected_microphone.get("instance_token")
+            if selected_microphone is not None
+            else None
+        ),
+        "graph_generation": status.get("generation"),
         "call_up": bool(endpoints.get("hfp_source")),
         "graph_quantum": quantum,
         "configured_quantum": configured,

@@ -13,8 +13,18 @@ import sys
 import time
 from pathlib import Path
 
-from aec_bench import load_supervisor, output_volume, stop_process, wait_links, wait_nodes
-from aec_profile import ActiveProfiler, PI3_ARM_CLOCK_HZ, gate_failures, parse_pw_top
+from aec_bench import (
+    DEFAULT_EXPECTED_MICROPHONE,
+    effective_output,
+    is_pwm_output,
+    load_supervisor,
+    output_volume,
+    resolve_selected_microphone,
+    stop_process,
+    wait_links,
+    wait_nodes,
+)
+from aec_profile import PI3_ARM_CLOCK_HZ, ActiveProfiler, gate_failures, parse_pw_top
 
 REPO = Path(__file__).resolve().parents[3]
 THERMAL_CONSUMER = "bridge.thermal.clean-consumer"
@@ -51,6 +61,13 @@ def main() -> int:
     parser.add_argument("--signal", choices=("multitone", "speech"), default="speech")
     parser.add_argument("--tone-dbfs", type=float, default=-28.0)
     parser.add_argument("--node-latency-frames", type=int, default=1920)
+    parser.add_argument("--output", help="explicit PipeWire output node")
+    parser.add_argument(
+        "--expected-microphone",
+        default=DEFAULT_EXPECTED_MICROPHONE,
+        metavar="ID",
+        help="candidate ID that must be selected (configured priority is used when omitted)",
+    )
     args = parser.parse_args()
     if args.minutes <= 0 or args.sample_seconds <= 0:
         raise SystemExit("minutes and sample-seconds must be positive")
@@ -59,20 +76,24 @@ def main() -> int:
     duration = args.minutes * 60
     module = load_supervisor()
     settings = module.load_settings()
-    nodes = module.pw_nodes()
-    if nodes is None:
-        raise SystemExit("PipeWire graph unavailable")
+    try:
+        nodes, microphone_node, microphone, microphone_resolution = (
+            resolve_selected_microphone(module, settings, args.expected_microphone)
+        )
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     if settings.hfp_source in nodes or settings.hfp_sink in nodes:
         raise SystemExit("HFP nodes are present; refusing the speaker thermal screen")
     if module.AEC_SOURCE in nodes or module.AEC_SINK in nodes:
         raise SystemExit("AEC nodes already exist; refusing a second instance")
-    lark = module.find_lark(nodes, settings)
-    output = settings.wired_output
-    if lark is None or output not in nodes:
-        raise SystemExit("Lark or wired output is absent")
+    output = effective_output(module, settings.wired_output, args.output)
+    if output not in nodes:
+        raise SystemExit("selected output is absent")
     volume, muted = output_volume(output)
-    if muted or volume > 0.86:
-        raise SystemExit("wired output must be unmuted at the measured-safe 0.85 setting")
+    if muted:
+        raise SystemExit("selected output is muted")
+    if is_pwm_output(output) and volume > 0.86:
+        raise SystemExit("wired output exceeds the measured-safe 0.85 setting")
 
     reference = args.out / "thermal-reference.wav"
     subprocess.run(
@@ -98,7 +119,7 @@ def main() -> int:
 
     tuning = dataclasses.replace(settings.aec, enabled=True)
     host = module.NativeAecHost(
-        tuning, lark, output, latency_frames=args.node_latency_frames
+        tuning, microphone_node, output, latency_frames=args.node_latency_frames
     )
     recorder: subprocess.Popen[bytes] | None = None
     playback: subprocess.Popen[bytes] | None = None
@@ -111,7 +132,10 @@ def main() -> int:
     try:
         host.start()
         wait_nodes(module, {module.AEC_SOURCE, module.AEC_SINK})
-        wait_links(module, {(lark, module.AEC_CAPTURE), (module.AEC_PLAYBACK, output)})
+        wait_links(
+            module,
+            {(microphone_node, module.AEC_CAPTURE), (module.AEC_PLAYBACK, output)},
+        )
         if not module.set_aec_mute(False) or host.pid is None:
             raise RuntimeError("AEC graph did not become runnable")
         profiler = ActiveProfiler(
@@ -273,6 +297,12 @@ def main() -> int:
         "signal": args.signal,
         "tone_dbfs": args.tone_dbfs,
         "node_latency_frames": args.node_latency_frames,
+        "microphone": microphone,
+        "microphone_resolution": microphone_resolution,
+        "expected_microphone": args.expected_microphone,
+        "graph_generation": microphone["graph_generation"],
+        "lark": microphone_node if microphone["id"] == "lark-a1" else None,
+        "output": output,
         "recording_enabled": False,
         "runtime": runtime,
         "failures": failures,

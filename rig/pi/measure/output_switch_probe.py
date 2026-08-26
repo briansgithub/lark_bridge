@@ -29,14 +29,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pi" / "bridged"))
 
-import bridge_supervisor as supervisor  # noqa: E402
+import bridge_supervisor as supervisor
 
 
 def links() -> list[tuple[str, str]]:

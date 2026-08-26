@@ -34,18 +34,24 @@ def main() -> int:
     clean = [p for p in pts if p["clipped_pct"] <= 0.01]
     chosen = min(clean, key=lambda p: abs(p["peak_dbfs"] - target)) if clean else None
 
-    # Acoustic SNR measured against the Lark's own idle noise floor, which includes room
+    # Acoustic SNR measured against the microphone's own idle noise floor, which includes room
     # noise. This is the figure that decides whether the acoustic injection path is a
     # usable stimulus, and it is what U15 gates on.
     acoustic_snr = None
     if chosen is not None:
         acoustic_snr = round(chosen["peak_dbfs"] - noise["rms_dbfs"], 2)
 
+    microphone_noise_floor = {
+        "rms_dbfs": noise["rms_dbfs"],
+        "peak_dbfs": noise["peak_dbfs"],
+    }
     out = {
-        "lark_noise_floor": {
-            "rms_dbfs": noise["rms_dbfs"],
-            "peak_dbfs": noise["peak_dbfs"],
-        },
+        "microphone_id": d.get("microphone_id"),
+        "microphone_card": d.get("microphone_card"),
+        "format": d.get("format"),
+        "microphone_noise_floor": microphone_noise_floor,
+        # Compatibility alias for existing E17 result readers.
+        "lark_noise_floor": microphone_noise_floor,
         "target_peak_dbfs": target,
         "chosen_volume": chosen["volume"] if chosen else None,
         "chosen_peak_dbfs": chosen["peak_dbfs"] if chosen else None,

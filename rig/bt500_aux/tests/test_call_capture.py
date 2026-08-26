@@ -55,3 +55,52 @@ def test_pwtop_discovery_row_does_not_inflate_error_delta(tmp_path: Path) -> Non
     assert result["bridge.aec.source"]["err_first"] == 6
     assert result["bridge.aec.source"]["err_last"] == 6
     assert result["bridge.aec.source"]["err_delta"] == 0
+
+
+def test_authoritative_null_microphone_does_not_fall_back_to_lark_alias() -> None:
+    spec = importlib.util.spec_from_file_location(
+        "bt500_aux_call_capture", CAPTURE_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    capture = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(capture)
+
+    selected, node = capture.microphone_from_status(
+        {
+            "microphone": {"selected": None, "selection_reason": "identity conflict"},
+            "endpoints": {
+                "microphone": None,
+                "lark": "alsa_input.usb-STALE-LARK",
+            },
+        }
+    )
+
+    assert selected is None
+    assert node is None
+
+
+def test_microphone_status_endpoint_and_legacy_fallback_are_separate() -> None:
+    spec = importlib.util.spec_from_file_location(
+        "bt500_aux_call_capture", CAPTURE_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    capture = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(capture)
+
+    selected, node = capture.microphone_from_status(
+        {
+            "microphone": {"selected": None},
+            "endpoints": {
+                "microphone": "alsa_input.usb-FIFINE",
+                "lark": "alsa_input.usb-STALE-LARK",
+            },
+        }
+    )
+    assert selected is None
+    assert node == "alsa_input.usb-FIFINE"
+
+    selected, node = capture.microphone_from_status(
+        {"endpoints": {"lark": "alsa_input.usb-LEGACY-LARK"}}
+    )
+    assert selected is None
+    assert node == "alsa_input.usb-LEGACY-LARK"

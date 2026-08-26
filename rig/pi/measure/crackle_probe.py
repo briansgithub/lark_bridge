@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce far-end playback crackle without a phone, a call, or the Lark.
+"""Reproduce far-end playback crackle without a phone, a call, or a physical microphone.
 
 The far-end path is  SCO -> bridge.callout -> bridge.aec.sink -> WebRTC APM ->
 echo-cancel-playback -> onboard jack.  Everything downstream of Bluetooth can be
@@ -8,8 +8,8 @@ call fixture: if crackle appears here, Bluetooth is not involved.
 
 The AEC host is constructed from the REAL supervisor module and the REAL deployed
 config, so the module arguments are byte-for-byte what production loads. The one
-substitution is the capture target: production aims it at the Lark, and the Lark
-is not always plugged in, so a null sink stands in for it.
+substitution is the capture target: production aims it at the selected microphone,
+which is not required for this playback-only probe, so a null sink stands in for it.
 
     crackle_probe.py --label production            # exactly what the unit runs
     crackle_probe.py --label lat1920 --latency-frames 1920
@@ -36,6 +36,10 @@ NULL_SINK = "bridge.probe.fakemic"
 
 
 def load_supervisor():
+    bridged_dir = str(SUPERVISOR_PATH.parent)
+    if bridged_dir not in sys.path:
+        # Direct importlib loading does not expose sibling resolver modules.
+        sys.path.insert(0, bridged_dir)
     spec = importlib.util.spec_from_file_location("crackle_probe_supervisor", SUPERVISOR_PATH)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"could not load supervisor from {SUPERVISOR_PATH}")
@@ -100,7 +104,7 @@ def main() -> int:
     top = outdir / f"pwtop_{args.label}.txt"
     output_node = settings.wired_output
 
-    # Stand-in for the Lark so the capture side has a real, linkable target.
+    # Stand-in for a physical microphone so the capture side has a real, linkable target.
     made = run(["pactl", "load-module", "module-null-sink",
                 f"sink_name={NULL_SINK}",
                 f"sink_properties=node.description={NULL_SINK}"])
