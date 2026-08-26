@@ -489,10 +489,19 @@ def validate_hotplug_snapshot(
         expected_microphone=expected_microphone,
     )
     status = _snapshot_status(snapshot)
+    snapshot_timestamp = snapshot.get("timestamp")
+    if not isinstance(snapshot_timestamp, (int, float)) or isinstance(
+        snapshot_timestamp, bool
+    ):
+        raise EvidenceError("snapshot timestamp is absent or nonnumeric")
     timestamp = status.get("timestamp")
-    if not isinstance(timestamp, (int, float)):
+    if not isinstance(timestamp, (int, float)) or isinstance(timestamp, bool):
         raise EvidenceError("bridge status timestamp is absent or nonnumeric")
-    age = time.time() - float(timestamp)
+    # Both values originate on the Pi. Comparing a Pi timestamp with the host clock
+    # fails whenever the directly connected Pi has no NTP source.
+    age = float(snapshot_timestamp) - float(timestamp)
+    if age < 0:
+        raise EvidenceError(f"bridge status timestamp is {-age:.2f}s in the future")
     if age > 6.0:
         raise EvidenceError(f"bridge status is stale by {age:.2f}s")
     candidates = core.candidate_inventory(status)
@@ -510,6 +519,7 @@ def validate_hotplug_snapshot(
         status,
         None,
         core.parse_pw_links(raw_links),
+        now=float(snapshot_timestamp),
     )
     if evaluated["violations"]:
         raise HardFailure(
