@@ -28,8 +28,7 @@ DEFAULT_ARTIFACTS = REPO / "artifacts"
 DEFAULT_EXPECTED_MICROPHONE = "lark-a1"
 SYSTEM_UNITS = (
     "bluetooth.service",
-    "bridge-btfw.service",
-    "bridge-btwatchdog.service",
+    "bridge-btwatchdog@call.service",
     "bridge-tuning.service",
 )
 USER_UNITS = ("pipewire.service", "wireplumber.service", "bridge-supervisor.service")
@@ -185,7 +184,7 @@ def digest(path):
 
 files = [
     "/etc/systemd/system/bridge-tuning.service",
-    "/etc/systemd/system/bridge-btfw.service",
+    "/etc/systemd/system/bridge-btwatchdog@.service",
     "/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh",
     "/usr/local/lib/rpi-lark-bridge/boot-path/netplan",
     "/etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf",

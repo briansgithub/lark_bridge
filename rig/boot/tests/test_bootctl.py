@@ -111,6 +111,25 @@ def mocked_boot_run(
 
 
 class BootCtlTests(unittest.TestCase):
+    def test_bt500_wired_probe_uses_active_watchdog_policy(self):
+        self.assertEqual(
+            bootctl.SYSTEM_UNITS,
+            (
+                "bluetooth.service",
+                "bridge-btwatchdog@call.service",
+                "bridge-tuning.service",
+            ),
+        )
+        self.assertIn(
+            '["systemctl", "--failed", "--no-legend", "--plain"]',
+            bootctl.REMOTE_PROBE,
+        )
+        self.assertIn(
+            '"/etc/systemd/system/bridge-btwatchdog@.service"',
+            bootctl.REMOTE_MANIFEST,
+        )
+        self.assertNotIn("bridge-btfw.service", bootctl.REMOTE_MANIFEST)
+
     def test_config_defaults_expected_microphone_and_accepts_override(self):
         with tempfile.TemporaryDirectory() as directory:
             inventory = Path(directory) / "inventory.toml"
