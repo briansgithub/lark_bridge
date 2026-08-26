@@ -165,7 +165,7 @@ class MicrophoneHotplugTests(unittest.TestCase):
             active_status(), None, links, now=100.0
         )
         rules = {item["id"] for item in result["violations"]}
-        self.assertTrue({"H1", "H2", "H3", "H4"}.issubset(rules))
+        self.assertTrue({"H1", "H2", "H3", "H4", "H5"}.issubset(rules))
 
     def test_new_bluez_sink_is_guarded_before_status_publishes_it(self) -> None:
         status = active_status()
@@ -281,25 +281,33 @@ class MicrophoneHotplugTests(unittest.TestCase):
 
     def test_break_before_make_silence_is_safe_but_not_active_completion(self) -> None:
         status = active_status()
-        invariants = hotplug.evaluate_link_invariants(status, None, [], now=100.0)
-        self.assertEqual(invariants["violations"], [])
-        sample = {
-            "state": "ACTIVE",
-            "status_error": None,
-            "link_error": None,
-            "microphone": hotplug.selected_microphone(status),
-            "candidates": hotplug.candidate_inventory(status),
-            "graph_generation": 7,
-            "aec": status["aec"],
-            "invariants": invariants,
+        safe_partial_routes = {
+            "empty": [],
+            "aec_capture_only": [(FIFINE, hotplug.AEC_CAPTURE)],
+            "aec_source_only": [(hotplug.AEC_SOURCE, hotplug.MICROPHONE_INPUT)],
+            "hfp_output_only": [(hotplug.MICROPHONE_OUTPUT, HFP_SINK)],
         }
-        failures = hotplug.expectation_failures(
-            sample,
-            hotplug.Expectation(state="ACTIVE", selected_id="fifine-k054"),
-        )
-        self.assertIn("ACTIVE HFP input ownership is []", failures)
-        self.assertIn("ACTIVE AEC capture ownership is []", failures)
-        self.assertIn("ACTIVE bridge.mic input ownership is []", failures)
+        for name, links in safe_partial_routes.items():
+            with self.subTest(name=name):
+                invariants = hotplug.evaluate_link_invariants(
+                    status, None, links, now=100.0
+                )
+                self.assertEqual(invariants["violations"], [])
+                sample = {
+                    "state": "ACTIVE",
+                    "status_error": None,
+                    "link_error": None,
+                    "microphone": hotplug.selected_microphone(status),
+                    "candidates": hotplug.candidate_inventory(status),
+                    "graph_generation": 7,
+                    "aec": status["aec"],
+                    "invariants": invariants,
+                }
+                failures = hotplug.expectation_failures(
+                    sample,
+                    hotplug.Expectation(state="ACTIVE", selected_id="fifine-k054"),
+                )
+                self.assertTrue(failures)
 
     def test_active_requires_enabled_verified_owned_aec_without_direct_bypass(
         self,
