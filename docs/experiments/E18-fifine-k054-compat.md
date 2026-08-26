@@ -61,14 +61,24 @@ than 0.25 seconds. The host streams the sampler over SSH and writes the result u
 configuration, or mutate USB authorization on the Pi.
 
 For each prompted connector change, the operator prepares the connector, types the exact readiness
-phrase, and waits for the separate `NOW` prompt before physically acting. The harness captures a
-fresh service-restart snapshot before starting the transition timer and a second fresh snapshot at
-the result boundary. If the pre-action snapshot fails, `NOW` is withheld and the campaign aborts.
-The evidence provenance records the local commit/dirty state and hashes of every local
-decision-critical helper, plus the deployed release commit/archive hash and hashes of the installed
-snapshot, invariant, supervisor, resolver, and preserved configuration files. The deployed Pi tree
-is an archive without Git metadata, so its identity is taken from the validated
-`/etc/larkbridge/DEPLOYED.json` record rather than inferred from a nonexistent checkout.
+phrase, and waits for the separate `NOW` prompt before physically acting. Before `NOW`, the harness
+captures a fresh service-restart snapshot, discards the first sample after that synchronous query,
+and requires two fresh consecutive samples with the expected, identical raw USB sysfs topology. The
+transition timer starts at the first observed raw USB topology edge, not at the operator prompt; a
+second identical sample must confirm that edge, and the exact topology must persist through the
+completed or actionable-safe result. USB bounce, ambiguity, prechanged state, or identity/generation
+mismatch fails closed. Completed and safe-state results are structurally revalidated against the Pi
+monotonic clock, the 60-second limit, and at least 0.60 seconds of stable settled evidence. The
+harness captures a second fresh restart snapshot at the result boundary. If any pre-action check
+fails, `NOW` is withheld and the campaign aborts.
+
+The evidence provenance binds each local decision-critical helper to its Git blob at the declared
+local commit. It also binds each installed tracked helper to the blob at the deployed release commit,
+in addition to recording the release/archive and file hashes. The preserved local `bridge.toml` is
+explicitly recorded as untracked, hash-only configuration. Missing or shallow commits, missing
+paths, non-blob paths, source mismatches, or unrelated substituted helpers fail closed. The deployed
+Pi working tree itself may contain unrelated dirt; authoritative tracked sources are compared with
+the commit named by `/etc/larkbridge/DEPLOYED.json` rather than assumed clean.
 
 With the call left up, run this physical both/either/neither matrix in order:
 
@@ -99,7 +109,7 @@ Capture service restart counters before and after each transition and across eac
 | 4 | 2026-08-25 | Transactional deployment, one CALL_DOWN failover/promotion cycle, and warm boot | `docs/experiments/results/E18/live-integration-20260825.json` | PASS with deferred gates |
 | 5 | 2026-08-26 | Initial active-call harness attempt; rejected stale-status comparison between unsynchronized host and Pi wall clocks before any physical transition | `docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/` | FAIL — harness diagnostic only |
 | 6 | 2026-08-26 | Active-call promotion attempt; harness treated intentional break-before-make silence as missing-route H5 violations | `docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/` | INCONCLUSIVE — harness diagnostic only |
-| 7 | 2026-08-26 | Complete live active-call physical both/either/neither matrix with continuous link sampling | `docs/experiments/results/E18/field/hotplug-20260826T063853Z-e0089cc5cd0a/` | BEHAVIOR PASS / TIMING FAIL |
+| 7 | 2026-08-26 | Complete live active-call physical both/either/neither matrix with continuous link sampling | `docs/experiments/results/E18/field/hotplug-20260826T063853Z-e0089cc5cd0a/` | BEHAVIOR/SAFETY PASS / RUNTIME TIMING INCONCLUSIVE (recorded NOW-origin gate FAIL) |
 | 8 | pending | 20 promotion, 20 fallback, and 20 FIFINE-replug cycles; physical controls, reboot, acoustic/AEC, and endurance | `docs/experiments/results/E18/field/` | pending |
 
 ## Acceptance gates
@@ -150,21 +160,28 @@ diagnostics; they provide no admissible transition timing. Commit `dae8f3b` chan
 compare timestamps from the Pi, and commits `68a2245` and `e0089cc` allow transition silence while
 continuing to reject every nonempty route with incorrect ownership.
 
-The subsequent complete physical active-call matrix has evidence verdict `PASS` but qualification
-gate `FAIL`. All nine phases completed safely within 60 seconds. The one measured promotion took
-43.674202 seconds and the fallback took 30.082559 seconds, so neither satisfied the strict 30-second
-matrix gate; the same-name FIFINE replug completed in 25.505366 seconds and passed that gate. The
-inactive FIFINE removal and restoration held the selected Lark token, AEC owner, and graph generation
-14 unchanged. Removing both microphones reached `WAITING_MIC` at generation 15 with no AEC owner or
-uplink. Restoring FIFINE produced a new object/device/USB instance token and generation 16; restoring
-Lark promoted it at generation 17 with verified AEC.
+The subsequent complete physical active-call matrix has evidence verdict `PASS` but its emitted
+qualification gate is `FAIL`. All nine phases completed safely within 60 seconds. The recorded
+promotion, fallback, and same-name FIFINE replug figures were 43.674202, 30.082559, and 25.505366
+seconds respectively, but that harness version timed from `NOW`; those figures include the
+operator/chat/physical-action delay and therefore are not admissible device-edge-to-`ACTIVE`
+latencies. A post-hoc first-observed PipeWire-effect-to-`ACTIVE` calculation gave 13.949987 seconds
+for promotion and 14.699947 seconds for fallback, but the run did not sample the raw USB edge, so
+those values are diagnostic only. Product runtime timing for this matrix is consequently
+inconclusive rather than failed. The inactive FIFINE removal and restoration held the selected Lark
+token, AEC owner, and graph generation 14 unchanged. Removing both microphones reached
+`WAITING_MIC` at generation 15 with no AEC owner or uplink. Restoring FIFINE produced a new
+object/device/USB instance token and generation 16; restoring Lark promoted it at generation 17 with
+verified AEC.
 
 The admissible run contains 4,950 samples at a configured 0.15-second interval; its maximum remote
 sample-start gap was 0.153245 seconds. It recorded zero raw, inactive, duplicate, or AEC-bypassing
 links, zero supervisor/PipeWire/WirePlumber restarts, no new kernel or USB errors, and only
 `output.bridge.mic` feeding HFP. The evidence manifests, byte counts, and SHA-256 hashes verify. This
-is functional evidence for automatic Lark-first switching, not completion of the repeated timing
-gate.
+is functional evidence for automatic Lark-first switching, not completion of the runtime timing or
+repeated-cycle gates. Later campaigns use the raw USB-edge protocol above, including stable baseline
+and edge confirmation, identity/generation binding, a 0.60-second minimum settle, and structural
+revalidation of every claimed completion or actionable safe state.
 
 The lower-root wrapper could not return the lower filesystem to read-only immediately after each
 successful online install. Each install was followed immediately by a normal reboot, which restored
@@ -172,9 +189,10 @@ the designed read-only mount before qualification. This deployment observation r
 future release procedures.
 
 Hardware identity/format characterization remains confirmed only for the attached unit. One
-active-call matrix is now measured, including a zero-link-violation result, but its strict timing
-gate failed. The 20-cycle campaigns, physical controls, replacement-unit stability, physical reboot
-repetition, acoustic/AEC behavior, and endurance remain pending.
+active-call matrix is now measured, including a zero-link-violation result; its original NOW-origin
+gate failed, while product runtime timing remains inconclusive. The 20-cycle campaigns, physical
+controls, replacement-unit stability, physical reboot repetition, acoustic/AEC behavior, and
+endurance remain pending.
 
 ## Verdict
 

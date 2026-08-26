@@ -1141,7 +1141,9 @@ def _timing_evidence_error(item: dict[str, Any], kind: str) -> str | None:
             not _finite_number(reported_safe_latency)
             or abs(float(reported_safe_latency) - safe_state_latency) > 1e-5
         ):
-            return "reported safe-state latency disagrees with source monotonic evidence"
+            return (
+                "reported safe-state latency disagrees with source monotonic evidence"
+            )
         if safe_state_latency > QUALIFICATION_MAX_LIMIT_SECONDS + 1e-6:
             return "actionable safe state was reached after the 60-second deadline"
     return None
