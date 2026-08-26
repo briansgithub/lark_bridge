@@ -1,0 +1,6 @@
+{"elapsed_s": 2.07, "event": "reboot_requested"}
+{"elapsed_s": 3.306, "event": "ssh_down"}
+{"elapsed_s": 73.257, "event": "ssh_port_open"}
+{"elapsed_s": 74.384, "event": "new_boot_ssh"}
+{"elapsed_s": 74.389, "event": "idle_ready"}
+{"detail": "[boot-trial] no pending transaction", "elapsed_s": 74.867, "event": "trial_confirmed"}
