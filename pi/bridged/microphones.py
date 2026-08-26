@@ -95,12 +95,51 @@ class MicrophoneFormat:
     def __post_init__(self) -> None:
         if isinstance(self.rate, bool) or not isinstance(self.rate, int) or self.rate <= 0:
             raise ValueError("microphone format rate must be a positive integer")
-        if isinstance(self.channels, bool) or not isinstance(self.channels, int) or self.channels <= 0:
+        if (
+            isinstance(self.channels, bool)
+            or not isinstance(self.channels, int)
+            or self.channels <= 0
+        ):
             raise ValueError("microphone format channels must be a positive integer")
         object.__setattr__(self, "format", normalize_audio_format(self.format))
 
     def as_dict(self) -> dict[str, Any]:
         return {"rate": self.rate, "format": self.format, "channels": self.channels}
+
+
+@dataclass(frozen=True)
+class DynamicAvailability:
+    """Runtime eligibility evidence bound to one physical microphone generation."""
+
+    candidate_id: str
+    instance_token: str
+    state: str
+    reason: str
+
+    def __post_init__(self) -> None:
+        candidate_id = str(self.candidate_id).strip()
+        instance_token = str(self.instance_token).strip()
+        state = str(self.state).strip().lower()
+        reason = str(self.reason).strip()
+        if not candidate_id:
+            raise ValueError("dynamic microphone availability candidate_id cannot be blank")
+        if not instance_token:
+            raise ValueError("dynamic microphone availability instance_token cannot be blank")
+        if state not in {"active", "inactive", "unknown", "error"}:
+            raise ValueError(f"invalid dynamic microphone availability state: {self.state!r}")
+        if not reason:
+            raise ValueError("dynamic microphone availability reason cannot be blank")
+        object.__setattr__(self, "candidate_id", candidate_id)
+        object.__setattr__(self, "instance_token", instance_token)
+        object.__setattr__(self, "state", state)
+        object.__setattr__(self, "reason", reason)
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "state": self.state,
+            "reason": self.reason,
+            "instance_token": self.instance_token,
+        }
 
 
 @dataclass(frozen=True)
@@ -137,10 +176,14 @@ class MicrophoneCandidate:
         object.__setattr__(self, "usb_product", _optional_text(self.usb_product))
         object.__setattr__(self, "usb_serial", _optional_text(self.usb_serial))
         object.__setattr__(self, "usb_port_path", _optional_text(self.usb_port_path))
-        component = _optional_text(self.alsa_component) or f"USB{vendor.upper()}:{product_id.upper()}"
+        component = (
+            _optional_text(self.alsa_component) or f"USB{vendor.upper()}:{product_id.upper()}"
+        )
         object.__setattr__(self, "alsa_component", component.upper())
         if self.required_format is not None:
-            object.__setattr__(self, "required_format", normalize_audio_format(self.required_format))
+            object.__setattr__(
+                self, "required_format", normalize_audio_format(self.required_format)
+            )
         capability_fields = (
             self.required_rate,
             self.required_format,
@@ -289,6 +332,7 @@ class CandidateDiagnostic:
     state: str
     matched_sources: tuple[ObservedSource, ...]
     reason: str
+    liveness: DynamicAvailability | None = None
 
     @property
     def matched_nodes(self) -> tuple[str, ...]:
@@ -296,21 +340,15 @@ class CandidateDiagnostic:
 
     def as_dict(self) -> dict[str, Any]:
         preferred = tuple(
-            source
-            for source in self.matched_sources
-            if source.node == self.candidate.node_name
+            source for source in self.matched_sources if source.node == self.candidate.node_name
         )
         representative = (
             preferred[0]
             if len(preferred) == 1
-            else self.matched_sources[0]
-            if len(self.matched_sources) == 1
-            else None
+            else self.matched_sources[0] if len(self.matched_sources) == 1 else None
         )
-        selected_format = (
-            representative.matching_format(self.candidate) if representative else None
-        )
-        return {
+        selected_format = representative.matching_format(self.candidate) if representative else None
+        result = {
             "id": self.candidate.id,
             "label": self.candidate.label,
             "priority": self.priority,
@@ -318,12 +356,13 @@ class CandidateDiagnostic:
             "node": representative.node if representative else None,
             "matched_nodes": list(self.matched_nodes),
             "reason": self.reason,
-            "unavailable_reason": (
-                None if self.state in {"selected", "usable"} else self.reason
-            ),
+            "unavailable_reason": (None if self.state in {"selected", "usable"} else self.reason),
             "identity": representative.identity_dict() if representative else None,
             "format": selected_format.as_dict() if selected_format else None,
         }
+        if self.liveness is not None:
+            result["liveness"] = self.liveness.as_dict()
+        return result
 
 
 @dataclass(frozen=True)
@@ -331,6 +370,7 @@ class MicrophoneSelection:
     candidate: MicrophoneCandidate
     source: ObservedSource
     priority: int
+    liveness: DynamicAvailability | None = None
 
     @property
     def node(self) -> str:
@@ -353,7 +393,7 @@ class MicrophoneSelection:
 
     def as_dict(self) -> dict[str, Any]:
         selected_format = self.source.matching_format(self.candidate)
-        return {
+        result = {
             "id": self.candidate.id,
             "label": self.candidate.label,
             "priority": self.priority,
@@ -362,6 +402,9 @@ class MicrophoneSelection:
             "format": selected_format.as_dict() if selected_format else None,
             "instance_token": self.instance_token,
         }
+        if self.liveness is not None:
+            result["liveness"] = self.liveness.as_dict()
+        return result
 
 
 @dataclass(frozen=True)
@@ -646,11 +689,11 @@ def observations_from_pw_dump(
                 "format": node_props.get("audio.format"),
                 "channels": node_props.get("audio.channels"),
             }
-            supplied_formats = inferred if all(value is not None for value in inferred.values()) else None
+            supplied_formats = (
+                inferred if all(value is not None for value in inferred.values()) else None
+            )
 
-        port = _optional_text(
-            _first(enrichment, ("usb_port_path", "sysfs_path"))
-        )
+        port = _optional_text(_first(enrichment, ("usb_port_path", "sysfs_path")))
         generation = _optional_text(
             _first(enrichment, ("usb_instance_generation", "instance_generation"))
         )
@@ -669,12 +712,8 @@ def observations_from_pw_dump(
                 alsa_components=_component_tokens(node_props.get("alsa.components")),
                 usb_vendor_id=vendor,
                 usb_product_id=product_id,
-                usb_product=_optional_text(
-                    _first(enrichment, ("usb_product", "product"))
-                ),
-                usb_serial=_optional_text(
-                    _first(enrichment, ("usb_serial", "serial"))
-                ),
+                usb_product=_optional_text(_first(enrichment, ("usb_product", "product"))),
+                usb_serial=_optional_text(_first(enrichment, ("usb_serial", "serial"))),
                 usb_port_path=port,
                 usb_instance_generation=generation,
                 formats=_coerce_formats(supplied_formats),
@@ -727,12 +766,8 @@ def observations_from_node_map(
                 usb_product_id=_optional_usb_id(raw_product_id),
                 usb_product=_optional_text(_first(identity, ("usb_product", "product"))),
                 usb_serial=_optional_text(_first(identity, ("usb_serial", "serial"))),
-                usb_port_path=_optional_text(
-                    _first(identity, ("usb_port_path", "sysfs_path"))
-                ),
-                usb_instance_generation=_optional_text(
-                    identity.get("usb_instance_generation")
-                ),
+                usb_port_path=_optional_text(_first(identity, ("usb_port_path", "sysfs_path"))),
+                usb_instance_generation=_optional_text(identity.get("usb_instance_generation")),
                 formats=_coerce_formats(capabilities.get(node)),
                 device_has_playback=device_has_playback,
             )
@@ -819,6 +854,7 @@ def _choose_source(
 def resolve(
     candidates: Sequence[MicrophoneCandidate],
     observations: Sequence[ObservedSource],
+    dynamic_availability: Mapping[str, DynamicAvailability] | None = None,
 ) -> SelectionResult:
     """Resolve the highest-priority safe microphone without relying on enumeration order."""
     if not candidates:
@@ -854,7 +890,34 @@ def resolve(
             )
             continue
         state, matched, reason, choice = _choose_source(candidate, observations)
-        diagnostics.append(CandidateDiagnostic(candidate, priority, state, matched, reason))
+        liveness: DynamicAvailability | None = None
+        if choice is not None and dynamic_availability is not None:
+            supplied = dynamic_availability.get(candidate.id)
+            if supplied is not None:
+                provisional = MicrophoneSelection(candidate, choice, priority)
+                if supplied.candidate_id != candidate.id:
+                    liveness = DynamicAvailability(
+                        candidate.id,
+                        supplied.instance_token,
+                        "unknown",
+                        "dynamic availability belongs to a different microphone candidate",
+                    )
+                elif supplied.instance_token != provisional.instance_token:
+                    liveness = DynamicAvailability(
+                        candidate.id,
+                        supplied.instance_token,
+                        "unknown",
+                        "dynamic availability is stale for the current microphone instance",
+                    )
+                else:
+                    liveness = supplied
+                if liveness.state != "active":
+                    state = "capability_mismatch"
+                    reason = liveness.reason
+                    choice = None
+        diagnostics.append(
+            CandidateDiagnostic(candidate, priority, state, matched, reason, liveness)
+        )
         if choice is not None:
             choices[priority] = choice
 
@@ -868,7 +931,12 @@ def resolve(
             )
         if diagnostic.state != "usable":
             continue
-        selection = MicrophoneSelection(diagnostic.candidate, choices[priority], priority)
+        selection = MicrophoneSelection(
+            diagnostic.candidate,
+            choices[priority],
+            priority,
+            diagnostic.liveness,
+        )
         diagnostics[priority] = replace(
             diagnostic,
             state="selected",
@@ -878,13 +946,23 @@ def resolve(
             reason = f"using {diagnostic.candidate.id}"
         else:
             prior = "; ".join(
-                f"{item.candidate.id} {item.state}" for item in diagnostics[:priority]
+                (
+                    f"{item.candidate.id} {item.state}: {item.reason}"
+                    if item.liveness is not None
+                    else f"{item.candidate.id} {item.state}"
+                )
+                for item in diagnostics[:priority]
             )
             reason = f"{prior}; using {diagnostic.candidate.id}"
         return SelectionResult(selection, reason, tuple(diagnostics), blocked=False)
 
     summary = ", ".join(
-        f"{item.candidate.id} {item.state}" for item in diagnostics
+        (
+            f"{item.candidate.id} {item.state}: {item.reason}"
+            if item.liveness is not None
+            else f"{item.candidate.id} {item.state}"
+        )
+        for item in diagnostics
     )
     return SelectionResult(
         None,
@@ -898,6 +976,7 @@ __all__ = [
     "DEFAULT_LARK_COMPONENT",
     "DEFAULT_LARK_NODE",
     "CandidateDiagnostic",
+    "DynamicAvailability",
     "MicrophoneCandidate",
     "MicrophoneFormat",
     "MicrophoneSelection",

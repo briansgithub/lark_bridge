@@ -54,9 +54,7 @@ def source(
     component: str = "USB3547:0407",
     playback: bool | None = False,
 ) -> microphones.ObservedSource:
-    formats = (
-        microphones.MicrophoneFormat(rate, audio_format, channels),
-    )
+    formats = (microphones.MicrophoneFormat(rate, audio_format, channels),)
     return microphones.ObservedSource(
         node=node,
         pipewire_id=object_serial,
@@ -217,7 +215,13 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_explicit_candidates_require_identity_and_capabilities(self) -> None:
         entry = self.explicit_document()["devices"]["microphones"][0]
-        for missing in ("usb_vendor_id", "usb_product_id", "required_rate", "required_format", "required_channels"):
+        for missing in (
+            "usb_vendor_id",
+            "usb_product_id",
+            "required_rate",
+            "required_format",
+            "required_channels",
+        ):
             with self.subTest(missing=missing):
                 incomplete = dict(entry)
                 incomplete.pop(missing)
@@ -230,7 +234,7 @@ class ConfigurationTests(unittest.TestCase):
         entry = self.explicit_document()["devices"]["microphones"][0]
         with self.assertRaisesRegex(ValueError, "duplicate"):
             microphones.parse_microphone_candidates(
-                    {"devices": {"microphones": [entry, dict(entry)]}}, {}
+                {"devices": {"microphones": [entry, dict(entry)]}}, {}
             )
 
     def test_partial_manual_capability_constraint_is_rejected(self) -> None:
@@ -287,9 +291,7 @@ class ObservationTests(unittest.TestCase):
                     "usb_instance_generation": "1-1.2@14",
                 }
             },
-            capabilities_by_node={
-                FIFINE_NODE: {"rate": 48_000, "format": "S16_LE", "channels": 1}
-            },
+            capabilities_by_node={FIFINE_NODE: {"rate": 48_000, "format": "S16_LE", "channels": 1}},
         )
         self.assertEqual(len(observed), 1)
         item = observed[0]
@@ -301,7 +303,9 @@ class ObservationTests(unittest.TestCase):
         self.assertIsNone(item.usb_serial)
         self.assertEqual(item.usb_instance_generation, "1-1.2@14")
         self.assertFalse(item.device_has_playback)
-        self.assertEqual(item.formats[0].as_dict(), {"rate": 48_000, "format": "S16LE", "channels": 1})
+        self.assertEqual(
+            item.formats[0].as_dict(), {"rate": 48_000, "format": "S16LE", "channels": 1}
+        )
 
     def test_pipewire_device_properties_are_not_usb_identity_evidence(self) -> None:
         dump = [
@@ -346,12 +350,16 @@ class ObservationTests(unittest.TestCase):
             {
                 "id": 11,
                 "type": "PipeWire:Interface:Node",
-                "info": {"props": {"node.name": "source", "media.class": "Audio/Source", "device.id": 10}},
+                "info": {
+                    "props": {"node.name": "source", "media.class": "Audio/Source", "device.id": 10}
+                },
             },
             {
                 "id": 12,
                 "type": "PipeWire:Interface:Node",
-                "info": {"props": {"node.name": "sink", "media.class": "Audio/Sink", "device.id": 10}},
+                "info": {
+                    "props": {"node.name": "sink", "media.class": "Audio/Sink", "device.id": 10}
+                },
             },
         ]
         observed = microphones.observations_from_pw_dump(dump)
@@ -392,9 +400,7 @@ class ObservationTests(unittest.TestCase):
                     "usb_product": "USB PnP Audio Device",
                 }
             },
-            capabilities_by_node={
-                FIFINE_NODE: {"rate": 48_000, "format": "S16LE", "channels": 1}
-            },
+            capabilities_by_node={FIFINE_NODE: {"rate": 48_000, "format": "S16LE", "channels": 1}},
         )
         self.assertEqual(observed[0].pipewire_id, FIFINE_NODE)
         self.assertTrue(observed[0].device_has_playback)
@@ -406,6 +412,159 @@ class ResolutionTests(unittest.TestCase):
         self.fifine = fifine_candidate()
         self.lark_source = source()
         self.fifine_source = fifine_source()
+
+    def lark_availability(
+        self,
+        state: str,
+        reason: str,
+        *,
+        token: str | None = None,
+    ) -> dict[str, microphones.DynamicAvailability]:
+        physical = microphones.resolve(
+            [self.lark, self.fifine],
+            [self.lark_source, self.fifine_source],
+        )
+        assert physical.instance_token is not None
+        return {
+            "lark-a1": microphones.DynamicAvailability(
+                "lark-a1",
+                token or physical.instance_token,
+                state,
+                reason,
+            )
+        }
+
+    def test_matching_active_liveness_keeps_lark_selected_and_is_reported(self) -> None:
+        availability = self.lark_availability("active", "Lark transmitter audio is active")
+
+        result = microphones.resolve(
+            [self.lark, self.fifine],
+            [self.fifine_source, self.lark_source],
+            dynamic_availability=availability,
+        )
+
+        self.assertEqual(result.node, LARK_NODE)
+        self.assertEqual(result.reason, "using lark-a1")
+        self.assertEqual(result.diagnostics[0].state, "selected")
+        status = result.as_dict()
+        self.assertEqual(status["selected"]["liveness"], availability["lark-a1"].as_dict())
+        self.assertEqual(
+            status["candidates"][0]["liveness"],
+            availability["lark-a1"].as_dict(),
+        )
+
+    def test_ineligible_liveness_allows_actionable_fifine_fallback(self) -> None:
+        cases = {
+            "inactive": "Lark receiver has no active transmitter",
+            "unknown": "waiting for Lark transmitter audio",
+            "error": "Lark transmitter monitor exited unexpectedly",
+        }
+        for state, reason in cases.items():
+            with self.subTest(state=state):
+                availability = self.lark_availability(state, reason)
+                result = microphones.resolve(
+                    [self.lark, self.fifine],
+                    [self.lark_source, self.fifine_source],
+                    dynamic_availability=availability,
+                )
+
+                self.assertEqual(result.node, FIFINE_NODE)
+                self.assertFalse(result.blocked)
+                self.assertEqual(result.diagnostics[0].state, "capability_mismatch")
+                self.assertEqual(result.diagnostics[0].reason, reason)
+                self.assertIn(reason, result.reason)
+                self.assertTrue(result.reason.endswith("using fifine-k054"))
+                self.assertEqual(
+                    result.as_dict()["candidates"][0]["liveness"]["state"],
+                    state,
+                )
+
+    def test_stale_active_liveness_fails_closed_for_current_lark_instance(self) -> None:
+        result = microphones.resolve(
+            [self.lark, self.fifine],
+            [self.lark_source, self.fifine_source],
+            dynamic_availability=self.lark_availability(
+                "active",
+                "old receiver had transmitter audio",
+                token="stale-lark-instance",
+            ),
+        )
+
+        self.assertEqual(result.node, FIFINE_NODE)
+        self.assertFalse(result.blocked)
+        self.assertEqual(result.diagnostics[0].state, "capability_mismatch")
+        liveness = result.diagnostics[0].liveness
+        assert liveness is not None
+        self.assertEqual(liveness.state, "unknown")
+        self.assertIn("stale for the current microphone instance", result.reason)
+
+    def test_ineligible_lark_without_fallback_has_no_selection(self) -> None:
+        physical = microphones.resolve([self.lark], [self.lark_source])
+        assert physical.instance_token is not None
+        result = microphones.resolve(
+            [self.lark],
+            [self.lark_source],
+            dynamic_availability={
+                "lark-a1": microphones.DynamicAvailability(
+                    "lark-a1",
+                    physical.instance_token,
+                    "unknown",
+                    "waiting for Lark transmitter audio",
+                )
+            },
+        )
+
+        self.assertIsNone(result.selected)
+        self.assertFalse(result.blocked)
+        self.assertEqual(result.diagnostics[0].state, "capability_mismatch")
+        self.assertIn("waiting for Lark transmitter audio", result.reason)
+
+    def test_missing_dynamic_entry_preserves_physical_only_resolution(self) -> None:
+        baseline = microphones.resolve(
+            [self.lark, self.fifine],
+            [self.fifine_source, self.lark_source],
+        )
+        empty = microphones.resolve(
+            [self.lark, self.fifine],
+            [self.fifine_source, self.lark_source],
+            dynamic_availability={},
+        )
+        self.assertEqual(empty.as_dict(), baseline.as_dict())
+
+    def test_dynamic_availability_never_hides_ambiguity_or_conflict(self) -> None:
+        availability = {
+            "lark-a1": microphones.DynamicAvailability(
+                "lark-a1",
+                "untrusted-instance",
+                "inactive",
+                "Lark receiver has no active transmitter",
+            )
+        }
+        duplicate = source(
+            device_id="42",
+            device_serial="410",
+            object_serial="411",
+            port="1-1.3",
+            generation="1-1.3@12",
+        )
+        ambiguous = microphones.resolve(
+            [self.lark, self.fifine],
+            [self.lark_source, duplicate, self.fifine_source],
+            dynamic_availability=availability,
+        )
+        alias = candidate("lark-alias", node="another.profile")
+        conflicting = microphones.resolve(
+            [self.lark, alias, self.fifine],
+            [self.lark_source, self.fifine_source],
+            dynamic_availability=availability,
+        )
+
+        self.assertTrue(ambiguous.blocked)
+        self.assertIsNone(ambiguous.selected)
+        self.assertEqual(ambiguous.diagnostics[0].state, "ambiguous")
+        self.assertTrue(conflicting.blocked)
+        self.assertIsNone(conflicting.selected)
+        self.assertEqual(conflicting.diagnostics[0].state, "conflict")
 
     def test_both_present_selects_lark_and_reports_fifine_usable(self) -> None:
         result = microphones.resolve(
@@ -572,9 +731,7 @@ class ResolutionTests(unittest.TestCase):
         self.assertEqual(status["candidates"][0]["matched_nodes"], [FIFINE_NODE])
         self.assertEqual(status["candidates"][0]["node"], FIFINE_NODE)
         self.assertIsNone(status["candidates"][0]["unavailable_reason"])
-        self.assertEqual(
-            status["candidates"][0]["identity"]["usb_product_id"], "161e"
-        )
+        self.assertEqual(status["candidates"][0]["identity"]["usb_product_id"], "161e")
         self.assertEqual(
             status["candidates"][0]["format"],
             {"rate": 48_000, "format": "S16LE", "channels": 1},
