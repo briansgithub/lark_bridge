@@ -14,6 +14,13 @@ powerloss_verify = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(powerloss_verify)
 
 
+def test_required_units_match_bt500_wired_profile() -> None:
+    assert "bridge-btwatchdog@call.service" in powerloss_verify.SYSTEM_UNITS
+    assert "bridge-btfw.service" not in powerloss_verify.SYSTEM_UNITS
+    assert "bridge-btwatchdog.service" not in powerloss_verify.SYSTEM_UNITS
+    assert "bridge-output-remote.service" not in powerloss_verify.USER_UNITS
+
+
 def test_selected_microphone_prefers_generic_status() -> None:
     selected = {
         "id": "fifine-k054",

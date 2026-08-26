@@ -24,15 +24,13 @@ SYSTEM_UNITS = (
     "bluetooth.service",
     "bridge-storage-guard.service",
     "bridge-tuning.service",
-    "bridge-btfw.service",
-    "bridge-btwatchdog.service",
+    "bridge-btwatchdog@call.service",
     "bridge-pairing-seal.timer",
 )
 USER_UNITS = (
     "pipewire.service",
     "wireplumber.service",
     "bridge-supervisor.service",
-    "bridge-output-remote.service",
 )
 CRITICAL_LOG = re.compile(
     r"EXT4-fs (?:error|warning)|FAT-fs.*error|I/O error|Buffer I/O|"
