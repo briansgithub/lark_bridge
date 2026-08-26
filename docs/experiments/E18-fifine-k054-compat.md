@@ -53,9 +53,10 @@ the operator selected portable matching for this installation.
 | # | Date | Variant / conditions | Artifact dir | Verdict |
 |---|---|---|---|---|
 | 1 | 2026-08-25 | Passive USB/ALSA/PipeWire characterization | planning-session SSH transcript | CONFIRMED for the attached unit |
-| 2 | 2026-08-25 | Host resolver, graph, readiness, release, and qualification suites | commit `3b190d925aff73055aef6a825d8d02422d80df2b` | PASS: 227 + 99 tests, 2 hardware skips |
+| 2 | 2026-08-25 | Host resolver, graph, readiness, release, and qualification suites | commit `1ab27980c5dea31e56c8e8f87e20ead99788623a` | PASS: 227 + 101 tests, 2 hardware skips |
 | 3 | 2026-08-25 | Read-only live resolution with both microphones attached | `docs/experiments/results/E18/live-resolver-preflight-20260825.json` | PASS |
-| 4 | pending | Physical controls, hotplug/reboot, acoustic/AEC and endurance | `docs/experiments/results/E18/field/` | pending |
+| 4 | 2026-08-25 | Transactional deployment, one CALL_DOWN failover/promotion cycle, and warm boot | `docs/experiments/results/E18/live-integration-20260825.json` | PASS with deferred gates |
+| 5 | pending | Physical controls, repeated hotplug/reboot, active-call, acoustic/AEC and endurance | `docs/experiments/results/E18/field/` | pending |
 
 ## Acceptance gates
 
@@ -69,15 +70,28 @@ the operator selected portable matching for this installation.
 
 ## Result
 
-The implementation and automated graph-safety matrix pass. A read-only execution of the commit's
-resolver against the live Pi selected `lark-a1` at priority 0 and reported `fifine-k054` usable at
-priority 1. The FIFINE observation was capture-only mono S16LE/48 kHz at `1-1.2`, with USB serial
-correctly reported as null rather than the synthetic PipeWire `device.serial` label. The installed
-supervisor/configuration were not changed during this preflight.
+The implementation and automated graph-safety matrix pass. Release commit `1ab2798` is deployed
+with the ordered configuration in persistent slot B. The final power-loss verifier returned
+`ready=true`: the lower root and boot partition were read-only, the storage state was `READY`, the
+supervisor had zero restarts, `lark-a1` was selected at priority 0, and `fifine-k054` was usable at
+priority 1 as native mono S16LE/48 kHz with null USB serial.
+
+One CALL_DOWN USB-driver unbind/bind cycle passed. Removing and restoring the inactive FIFINE did
+not change the selected instance or graph generation. Removing Lark selected FIFINE with reason
+`lark-a1 absent; using fifine-k054`; restoring Lark promoted it with a new PipeWire instance token.
+Across 38 status samples there were no HFP endpoints, AEC owner, graph links, or service restarts.
+A final warm-boot qualification passed idle readiness in 74.389 seconds. Three BT500 startup lines
+matched the broad HCI-failure pattern, but the controller, required call watchdog, failed-unit scan,
+and readiness gate passed; the lines are retained in the evidence rather than silently discarded.
+
+The lower-root wrapper could not return the lower filesystem to read-only immediately after each
+successful online install. Each install was followed immediately by a normal reboot, which restored
+the designed read-only mount before qualification. This deployment observation remains relevant to
+future release procedures.
 
 Hardware identity/format characterization remains confirmed only for the attached unit. Physical
-controls, replacement-unit stability, reboot/hotplug repetition, and acoustic/AEC behavior remain
-unmeasured.
+controls, replacement-unit stability, physical reboot/hotplug repetition, active-call switching,
+and acoustic/AEC behavior remain unmeasured.
 
 ## Verdict
 

@@ -1,0 +1,135 @@
+{
+  "candidate": "fifine-compat-1ab2798",
+  "events": [
+    {
+      "elapsed_s": 2.07,
+      "event": "reboot_requested"
+    },
+    {
+      "elapsed_s": 3.306,
+      "event": "ssh_down"
+    },
+    {
+      "elapsed_s": 73.257,
+      "event": "ssh_port_open"
+    },
+    {
+      "elapsed_s": 74.384,
+      "event": "new_boot_ssh"
+    },
+    {
+      "elapsed_s": 74.389,
+      "event": "idle_ready"
+    },
+    {
+      "detail": "[boot-trial] no pending transaction",
+      "elapsed_s": 74.867,
+      "event": "trial_confirmed"
+    }
+  ],
+  "expected_microphone": "lark-a1",
+  "git": {
+    "branch": "codex/fifine-k054-compat",
+    "full_status": "",
+    "head": "1ab27980c5dea31e56c8e8f87e20ead99788623a",
+    "tracked_status": ""
+  },
+  "health_events": {
+    "filesystem": 0,
+    "hci_failure": 3,
+    "service_restart": 0,
+    "undervoltage": 0,
+    "xrun": 0
+  },
+  "microphone_evidence": {
+    "functional": null,
+    "idle": {
+      "error": null,
+      "expected_id": "lark-a1",
+      "matches": true,
+      "observed": {
+        "format": {
+          "channels": 2,
+          "format": "S16LE",
+          "rate": 48000
+        },
+        "id": "lark-a1",
+        "identity": {
+          "device_object_serial": "52",
+          "pipewire_object_serial": "61",
+          "usb_instance_generation": "1-1.3@5",
+          "usb_port_path": "1-1.3",
+          "usb_product": "Wireless Microphone",
+          "usb_product_id": "0407",
+          "usb_serial": "Wireless Microphone",
+          "usb_vendor_id": "3547"
+        },
+        "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"61\",\"52\",\"1-1.3@5\"]",
+        "label": "Hollyland Lark A1",
+        "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+        "priority": 0
+      },
+      "observed_id": "lark-a1"
+    },
+    "preboot": {
+      "error": null,
+      "expected_id": "lark-a1",
+      "matches": true,
+      "observed": {
+        "format": {
+          "channels": 2,
+          "format": "S16LE",
+          "rate": 48000
+        },
+        "id": "lark-a1",
+        "identity": {
+          "device_object_serial": "267",
+          "pipewire_object_serial": "268",
+          "usb_instance_generation": "1-1.3@5",
+          "usb_port_path": "1-1.3",
+          "usb_product": "Wireless Microphone",
+          "usb_product_id": "0407",
+          "usb_serial": "Wireless Microphone",
+          "usb_vendor_id": "3547"
+        },
+        "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"268\",\"267\",\"1-1.3@5\"]",
+        "label": "Hollyland Lark A1",
+        "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+        "priority": 0
+      },
+      "observed_id": "lark-a1"
+    }
+  },
+  "mode": "warm",
+  "observed_microphone": {
+    "format": {
+      "channels": 2,
+      "format": "S16LE",
+      "rate": 48000
+    },
+    "id": "lark-a1",
+    "identity": {
+      "device_object_serial": "52",
+      "pipewire_object_serial": "61",
+      "usb_instance_generation": "1-1.3@5",
+      "usb_port_path": "1-1.3",
+      "usb_product": "Wireless Microphone",
+      "usb_product_id": "0407",
+      "usb_serial": "Wireless Microphone",
+      "usb_vendor_id": "3547"
+    },
+    "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"61\",\"52\",\"1-1.3@5\"]",
+    "label": "Hollyland Lark A1",
+    "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+    "priority": 0
+  },
+  "readiness_level": "idle",
+  "run_id": "20260826T034802Z-fifine-compat-1ab2798-warm",
+  "timings_s": {
+    "idle_ready": 74.389,
+    "new_boot_ssh": 74.384,
+    "ssh_down": 3.306,
+    "ssh_port_open": 73.257
+  },
+  "verdict": "PASS"
+}

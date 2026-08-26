@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-25",
+  "result": "PASS_WITH_DEFERRED_FIELD_GATES",
+  "release": {
+    "commit": "1ab27980c5dea31e56c8e8f87e20ead99788623a",
+    "archive": "LarkBridge-bt500-aux-1ab27980c5de-20260826T034651Z.zip",
+    "archive_sha256": "ee4bb352cdd01fe93b638cc202ca7fe3645135f7d8aabd4403b1b48368e242b5",
+    "manifest_entries": 461
+  },
+  "deployment": {
+    "previous_commit": "c63c823ab9d6dfa1837b05517f903d25c6b5c96a",
+    "config_slot": "b",
+    "config_sha256": "ba7c00d533d778a3e1d8248e6952aa4a7eb0c64ea0ff973c3c6782b151aaeb5c",
+    "storage_state": "READY",
+    "root_lower_options": "ro,relatime",
+    "boot_mount_read_only": true,
+    "online_remount_observation": "overlayroot-chroot could not remount the lower filesystem read-only after each successful install; an immediate normal reboot restored the designed read-only mount before qualification"
+  },
+  "final_readiness": {
+    "boot_id": "e161d78a-187b-4cbc-b5b6-e3d4ea2e7c06",
+    "ready": true,
+    "failures": [],
+    "state": "CALL_DOWN",
+    "service_restarts": 0,
+    "graph": {
+      "expected_links": [],
+      "missing_links": [],
+      "unexpected_links": []
+    },
+    "selected": {
+      "id": "lark-a1",
+      "state": "selected",
+      "format": {
+        "rate": 48000,
+        "format": "S16LE",
+        "channels": 2
+      }
+    },
+    "fallback": {
+      "id": "fifine-k054",
+      "state": "usable",
+      "identity": {
+        "usb_vendor_id": "0c76",
+        "usb_product_id": "161e",
+        "usb_product": "USB PnP Audio Device",
+        "usb_serial": null,
+        "usb_port_path": "1-1.2"
+      },
+      "format": {
+        "rate": 48000,
+        "format": "S16LE",
+        "channels": 1
+      }
+    }
+  },
+  "call_down_transition_cycle": {
+    "method": "USB driver unbind/bind with supervisor status sampled at 4 Hz",
+    "sample_count": 38,
+    "baseline": {
+      "selected_id": "lark-a1",
+      "graph_generation": 1,
+      "pipewire_object_serial": "61",
+      "device_object_serial": "52"
+    },
+    "inactive_fifine_removed": {
+      "selected_id": "lark-a1",
+      "fifine_state": "absent",
+      "graph_generation": 1,
+      "selected_instance_unchanged": true
+    },
+    "inactive_fifine_restored": {
+      "selected_id": "lark-a1",
+      "fifine_state": "usable",
+      "graph_generation": 1,
+      "selected_instance_unchanged": true
+    },
+    "fallback": {
+      "selected_id": "fifine-k054",
+      "lark_state": "absent",
+      "selection_reason": "lark-a1 absent; using fifine-k054",
+      "graph_generation": 2,
+      "pipewire_object_serial": "259",
+      "device_object_serial": "258"
+    },
+    "promotion": {
+      "selected_id": "lark-a1",
+      "fifine_state": "usable",
+      "graph_generation": 3,
+      "pipewire_object_serial": "268",
+      "device_object_serial": "267",
+      "selected_instance_changed": true
+    },
+    "invariants": {
+      "hfp_endpoints_observed": 0,
+      "aec_owners_observed": 0,
+      "graph_links_observed": 0,
+      "service_restarts": 0
+    },
+    "limitation": "driver unbind/bind is not a physical USB replug; the USB instance-generation component remained constant while PipeWire object/device serials changed"
+  },
+  "warm_boot_qualification": {
+    "artifact": "docs/experiments/results/E18/boot/boot-run-20260826T034802Z-fifine-compat-1ab2798-warm",
+    "verdict": "PASS",
+    "readiness_level": "idle",
+    "expected_microphone": "lark-a1",
+    "observed_microphone": "lark-a1",
+    "timings_s": {
+      "ssh_down": 3.306,
+      "ssh_port_open": 73.257,
+      "new_boot_ssh": 74.384,
+      "idle_ready": 74.389
+    },
+    "health_events": {
+      "xrun": 0,
+      "undervoltage": 0,
+      "hci_failure_pattern": 3,
+      "service_restart": 0,
+      "filesystem": 0
+    },
+    "hci_pattern_lines": [
+      "Bluetooth: hci0: Failed to read codec capabilities (-22) (twice)",
+      "bluetoothd: Failed to set mode: Failed (0x03)"
+    ],
+    "hci_assessment": "recorded startup diagnostics; required BT500 controller/watchdog readiness and failed-unit checks passed"
+  },
+  "deferred": [
+    "active-call break-before-make link sampling",
+    "20-cycle physical replug/fallback/promotion matrices",
+    "both/either/neither cold-boot matrices and ten-boot gate",
+    "physical mute and gain characterization",
+    "replacement-unit identity",
+    "acoustic and AEC qualification",
+    "3600-second endurance"
+  ]
+}
