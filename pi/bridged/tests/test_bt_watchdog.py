@@ -290,6 +290,101 @@ class ReconnectTests(unittest.TestCase):
         connect.assert_not_called()
         self.assertEqual(state.last_action, "cancelled")
 
+    def test_failed_burst_enters_cooldown_without_an_immediate_fourth_attempt(self) -> None:
+        state = bt_watchdog.RecoveryState("call", reconnect_attempts=2)
+        with (
+            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
+            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect", return_value=(False, "timed out")
+            ) as connect,
+        ):
+            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=100.0))
+            self.assertFalse(
+                bt_watchdog.service_reconnect(
+                    roles(),
+                    "call",
+                    state,
+                    now=100.0 + bt_watchdog.CALL_RECONNECT_COOLDOWN - 1,
+                )
+            )
+
+        self.assertEqual(connect.call_count, 1)
+        self.assertEqual(state.reconnect_attempts, bt_watchdog.CALL_RECONNECT_ATTEMPTS)
+        self.assertEqual(state.reconnect_next, 100.0 + bt_watchdog.CALL_RECONNECT_COOLDOWN)
+
+    def test_cooldown_expiry_starts_a_new_exact_target_burst(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            reconnect_attempts=bt_watchdog.CALL_RECONNECT_ATTEMPTS,
+            reconnect_next=220.0,
+        )
+        with (
+            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
+            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect", return_value=(False, "timed out")
+            ) as connect,
+        ):
+            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=220.0))
+
+        connect.assert_called_once_with(PHONE_ADDRESS, BT500, cancelled=None)
+        self.assertEqual(state.reconnect_attempts, 1)
+        self.assertEqual(state.reconnect_next, 220.0 + bt_watchdog.RECONNECT_RETRY)
+
+    def test_observed_connection_resets_the_retry_burst(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            reconnect_attempts=bt_watchdog.CALL_RECONNECT_ATTEMPTS,
+            reconnect_next=500.0,
+            identity_error="stale identity error",
+            last_action="device-reconnect",
+            last_error="connection timed out",
+        )
+        with (
+            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=True),
+            mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
+            mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
+        ):
+            self.assertTrue(bt_watchdog.service_reconnect(roles(), "call", state, now=300.0))
+
+        self.assertEqual(state.reconnect_attempts, 0)
+        self.assertEqual(state.reconnect_next, 0.0)
+        self.assertIsNone(state.identity_error)
+        self.assertEqual(state.last_action, "device-connected")
+        self.assertIsNone(state.last_error)
+        power_on.assert_not_called()
+        connect.assert_not_called()
+
+    def test_wrong_controller_identity_never_reaches_connect(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            reconnect_attempts=bt_watchdog.CALL_RECONNECT_ATTEMPTS,
+            reconnect_next=100.0,
+        )
+        error = controller_roles.ControllerIdentityMismatchError(
+            "call", "expected USB 0b05:1bf6, observed 0b05:ffff"
+        )
+        with (
+            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(bt_watchdog, "resolve_role", side_effect=[BT500, error]),
+            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
+            mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
+            mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
+        ):
+            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=100.0))
+
+        self.assertIn("controller_identity_mismatch", state.identity_error or "")
+        self.assertEqual(state.reconnect_attempts, 0)
+        power_on.assert_not_called()
+        connect.assert_not_called()
+
 
 class ProbeAndUnitTests(unittest.TestCase):
     def test_probe_targets_only_current_resolved_hci(self) -> None:
