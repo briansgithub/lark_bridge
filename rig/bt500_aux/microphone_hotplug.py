@@ -66,6 +66,8 @@ TIMELINE_NAME = "samples.jsonl"
 PROVENANCE_NAME = "provenance.json"
 SUMMARY_NAME = "summary.json"
 MANIFEST_NAME = "evidence-manifest.json"
+RESUME_NAME = "resume.json"
+RESUME_SCHEMA = "larkbridge.e18.microphone-hotplug-resume.v1"
 QUALIFICATION_FAST_LIMIT_SECONDS = 30.0
 QUALIFICATION_MAX_LIMIT_SECONDS = 60.0
 ARTIFACT_NAMES = {
@@ -76,6 +78,7 @@ ARTIFACT_NAMES = {
     "provenance": PROVENANCE_NAME,
     "summary": SUMMARY_NAME,
     "manifest": MANIFEST_NAME,
+    "resume": RESUME_NAME,
 }
 LOCAL_DECISION_SOURCE_PATHS = {
     "host_harness": "rig/bt500_aux/microphone_hotplug.py",
@@ -133,6 +136,327 @@ def default_run_dir(repo: Path = REPO, *, commit: str | None = None) -> Path:
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _json_object(path: Path, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise EvidenceError(f"{label} is unreadable or malformed: {exc}") from exc
+    if not isinstance(value, dict):
+        raise EvidenceError(f"{label} is not a JSON object")
+    return value
+
+
+def _canonical_sha256(value: Any) -> str:
+    payload = json.dumps(
+        value, separators=(",", ":"), sort_keys=True, ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _verified_predecessor_manifest(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    manifest_path = root / MANIFEST_NAME
+    manifest = _json_object(manifest_path, "predecessor evidence manifest")
+    if manifest.get("schema_version") != 1 or not isinstance(
+        manifest.get("files"), list
+    ):
+        raise EvidenceError("predecessor evidence manifest has an unsupported schema")
+
+    records: dict[str, dict[str, Any]] = {}
+    for raw in manifest["files"]:
+        if not isinstance(raw, dict):
+            raise EvidenceError(
+                "predecessor evidence manifest contains a malformed entry"
+            )
+        name = raw.get("path")
+        if (
+            not isinstance(name, str)
+            or not name
+            or Path(name).is_absolute()
+            or "\\" in name
+            or Path(name).as_posix() != name
+        ):
+            raise EvidenceError(f"predecessor manifest path is unsafe: {name!r}")
+        path = root / name
+        try:
+            path.resolve(strict=True).relative_to(root)
+        except (OSError, ValueError) as exc:
+            raise EvidenceError(
+                f"predecessor manifest path escapes or is missing: {name!r}"
+            ) from exc
+        if name in records or not path.is_file():
+            raise EvidenceError(
+                f"predecessor manifest entry is duplicate or not a file: {name!r}"
+            )
+        expected_bytes = raw.get("bytes")
+        expected_sha = raw.get("sha256")
+        if (
+            not isinstance(expected_bytes, int)
+            or isinstance(expected_bytes, bool)
+            or expected_bytes < 0
+            or not isinstance(expected_sha, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected_sha) is None
+        ):
+            raise EvidenceError(f"predecessor manifest metadata is invalid: {name!r}")
+        if path.stat().st_size != expected_bytes or sha256_file(path) != expected_sha:
+            raise EvidenceError(
+                f"predecessor artifact does not match its manifest: {name!r}"
+            )
+        records[name] = dict(raw)
+
+    required = {
+        "checkpoint.json",
+        "closing.json",
+        "preflight.json",
+        PROVENANCE_NAME,
+        TIMELINE_NAME,
+        SUMMARY_NAME,
+    }
+    if not required.issubset(records):
+        missing = sorted(required - records.keys())
+        raise EvidenceError(f"predecessor manifest omits required artifacts: {missing}")
+    actual = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != MANIFEST_NAME
+    }
+    if actual != set(records):
+        raise EvidenceError(
+            "predecessor directory and evidence manifest file sets differ"
+        )
+    return manifest, records
+
+
+def _predecessor_recording_end(checkpoint: Mapping[str, Any]) -> float:
+    value = checkpoint.get("updated_timestamp")
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(float(value))
+    ):
+        raise EvidenceError("predecessor checkpoint lacks a finite end timestamp")
+    return float(value)
+
+
+def load_resume_evidence(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Verify a stopped direct-port predecessor and bind its completed cycles."""
+    try:
+        root = path.resolve(strict=True)
+    except OSError as exc:
+        raise EvidenceError(
+            f"resume predecessor directory is unavailable: {exc}"
+        ) from exc
+    if not root.is_dir():
+        raise EvidenceError("resume predecessor is not a directory")
+
+    manifest, records = _verified_predecessor_manifest(root)
+    summary = _json_object(root / SUMMARY_NAME, "predecessor summary")
+    checkpoint = _json_object(root / "checkpoint.json", "predecessor checkpoint")
+    provenance = _json_object(root / PROVENANCE_NAME, "predecessor provenance")
+    if (
+        summary.get("schema") != CHECKPOINT_SCHEMA
+        or summary.get("schema_version") != 1
+        or summary.get("campaign") != "promotion-fallback"
+        or summary.get("connection_plan") != core.CONNECTION_PLAN_DIRECT10_HUB10
+        or summary.get("requested_cycles") != core.QUALIFICATION_CYCLES
+    ):
+        raise EvidenceError(
+            "predecessor is not a canonical promotion-fallback direct10-hub10 run"
+        )
+    configured = (summary.get("qualification_configuration") or {}).get("configured")
+    if not isinstance(configured, dict) or configured != {
+        "cycles": core.QUALIFICATION_CYCLES,
+        "fast_limit_s": core.QUALIFICATION_FAST_LIMIT_SECONDS,
+        "max_limit_s": core.QUALIFICATION_MAX_LIMIT_SECONDS,
+        "connection_plan": core.CONNECTION_PLAN_DIRECT10_HUB10,
+    }:
+        raise EvidenceError("predecessor qualification settings are not canonical")
+    if summary.get("aborted") != "CampaignAbort: operator aborted the campaign":
+        raise EvidenceError("predecessor did not end with an explicit operator abort")
+    if (
+        summary.get("fatal_errors") != []
+        or summary.get("remote_stderr") != []
+        or summary.get("remote_returncode") not in (None, 0)
+        or (summary.get("sampling_gate") or {}).get("verdict") != "PASS"
+        or (summary.get("link_safety_gate") or {}).get("verdict") != "PASS"
+        or (summary.get("restart_gate") or {}).get("verdict") != "PASS"
+        or (summary.get("provenance_gate") or {}).get("verdict") != "PASS"
+    ):
+        raise EvidenceError("predecessor observed-segment evidence is not clean")
+    if provenance.get("status") != "PASS" or summary.get("provenance") != provenance:
+        raise EvidenceError(
+            "predecessor provenance is not PASS or is not summary-bound"
+        )
+    commit = summary.get("commit")
+    local_repository = provenance.get("local_repository")
+    if (
+        not isinstance(commit, str)
+        or re.fullmatch(r"[0-9a-f]{40}", commit) is None
+        or not isinstance(local_repository, dict)
+        or local_repository.get("head") != commit
+    ):
+        raise EvidenceError("predecessor commit and local provenance disagree")
+
+    transitions = summary.get("transitions")
+    if (
+        not isinstance(transitions, list)
+        or transitions != checkpoint.get("transitions")
+        or any(not isinstance(item, dict) for item in transitions)
+    ):
+        raise EvidenceError("predecessor summary and checkpoint transitions disagree")
+    handoffs = [
+        item
+        for item in transitions
+        if item.get("phase") == core.CONNECTION_LAYOUT_HANDOFF_PHASE
+    ]
+    if handoffs:
+        raise EvidenceError("minimal resume accepts only a pre-handoff predecessor")
+    baseline = [
+        item
+        for item in transitions
+        if item.get("phase") == "fifine_only_baseline"
+        and item.get("cycle") == 0
+        and item.get("outcome") == "completed"
+        and item.get("connection_layout") == core.CONNECTION_LAYOUT_DIRECT
+    ]
+    if len(baseline) != 1:
+        raise EvidenceError("predecessor lacks exactly one valid direct baseline")
+
+    gated = [item for item in transitions if item.get("gate_kind") is not None]
+    if len(transitions) != 1 + len(gated):
+        raise EvidenceError(
+            "predecessor contains unsupported recovery or non-gated transitions"
+        )
+    accepted: list[dict[str, Any]] = []
+    cycles_by_kind: dict[str, list[int]] = {"promotion": [], "fallback": []}
+    phase_by_kind = {"promotion": "lark_promotion", "fallback": "lark_fallback"}
+    for item in gated:
+        kind = item.get("gate_kind")
+        cycle = item.get("cycle")
+        if (
+            kind not in cycles_by_kind
+            or not isinstance(cycle, int)
+            or isinstance(cycle, bool)
+        ):
+            raise EvidenceError("predecessor contains an unsupported gated transition")
+        if (
+            item.get("phase") != phase_by_kind[kind]
+            or item.get("outcome") != "completed"
+            or item.get("connection_layout") != core.CONNECTION_LAYOUT_DIRECT
+            or item.get("safety_clean") is not True
+            or item.get("restart_clean") is not True
+        ):
+            raise EvidenceError(
+                f"predecessor {kind} cycle {cycle} is not a clean direct completion"
+            )
+        timing_error = core._timing_evidence_error(item, kind)
+        if timing_error:
+            raise EvidenceError(
+                f"predecessor {kind} cycle {cycle} timing evidence is invalid: {timing_error}"
+            )
+        for topology in core._transition_usb_topologies(item):
+            for candidate_id in core.USB_MICROPHONE_FINGERPRINTS:
+                devices, device_error = core._validated_usb_devices(
+                    topology, candidate_id
+                )
+                if device_error:
+                    raise EvidenceError(
+                        f"predecessor {kind} cycle {cycle} USB evidence is invalid: {device_error}"
+                    )
+                for device in devices or []:
+                    _ancestors, ancestry_error = core._validated_hub_ancestors(device)
+                    if ancestry_error:
+                        raise EvidenceError(
+                            f"predecessor {kind} cycle {cycle} USB ancestry is invalid: {ancestry_error}"
+                        )
+                    if core._external_hub_ancestor_generations(device):
+                        raise EvidenceError(
+                            f"predecessor {kind} cycle {cycle} used an external USB hub"
+                        )
+        cycles_by_kind[kind].append(cycle)
+        accepted.append(
+            {"cycle": cycle, "gate_kind": kind, "sha256": _canonical_sha256(item)}
+        )
+    if cycles_by_kind["promotion"] != cycles_by_kind["fallback"]:
+        raise EvidenceError("predecessor promotion and fallback cycles do not pair")
+    completed_cycles = cycles_by_kind["promotion"]
+    if not completed_cycles or completed_cycles != list(
+        range(1, len(completed_cycles) + 1)
+    ):
+        raise EvidenceError(
+            "predecessor completed cycles are not contiguous from cycle 1"
+        )
+    if len(completed_cycles) >= core.CONNECTION_LAYOUT_BOUNDARY_CYCLE:
+        raise EvidenceError(
+            "minimal resume requires a predecessor ending before cycle 10"
+        )
+
+    for kind in cycles_by_kind:
+        recomputed = core.summarize_timing_gate(
+            transitions,
+            kind=kind,
+            expected_cycles=core.QUALIFICATION_CYCLES,
+        )
+        if recomputed != (summary.get("timing_gates") or {}).get(kind):
+            raise EvidenceError(
+                f"predecessor {kind} timing summary is not reproducible"
+            )
+
+    binding = {
+        "schema": RESUME_SCHEMA,
+        "schema_version": 1,
+        "status": "PASS",
+        "predecessor_artifact_dir": str(root),
+        "predecessor_manifest": {
+            "path": MANIFEST_NAME,
+            "bytes": (root / MANIFEST_NAME).stat().st_size,
+            "sha256": sha256_file(root / MANIFEST_NAME),
+            "schema_version": manifest.get("schema_version"),
+            "files": list(manifest["files"]),
+        },
+        "predecessor_summary": {
+            **records[SUMMARY_NAME],
+            "campaign": summary["campaign"],
+            "connection_plan": summary["connection_plan"],
+            "commit": commit,
+            "remote_boot_id": summary.get("remote_boot_id"),
+            "aborted": summary["aborted"],
+        },
+        "predecessor_provenance": {
+            **records[PROVENANCE_NAME],
+            "status": provenance["status"],
+            "local_commit": commit,
+            "remote_deployed_commit": (
+                ((provenance.get("remote") or {}).get("deployed_release") or {})
+                .get("document", {})
+                .get("commit")
+            ),
+        },
+        "accepted_predecessor_evidence": {
+            "completed_cycle_count": len(completed_cycles),
+            "completed_cycles": completed_cycles,
+            "accepted_transition_count": len(accepted),
+            "transitions": sorted(
+                accepted, key=lambda item: (item["cycle"], item["gate_kind"])
+            ),
+            "next_cycle": len(completed_cycles) + 1,
+        },
+        "unmonitored_inter_segment_gap": {
+            "observation_kind": "unmonitored_inter_segment_gap",
+            "continuously_sampled": False,
+            "continuity_verdict": "INCONCLUSIVE",
+            "predecessor_recording_ended_timestamp": _predecessor_recording_end(
+                checkpoint
+            ),
+            "resumed_monitoring_started_timestamp": None,
+            "approximate_duration_s": None,
+            "predecessor_boot_id": summary.get("remote_boot_id"),
+            "resumed_boot_id": None,
+            "same_boot": None,
+        },
+    }
+    return binding, [dict(item) for item in transitions]
 
 
 def _git_blob_binding(
@@ -1654,6 +1978,7 @@ def build_summary(
     commit: str,
     provenance: Mapping[str, Any] | None = None,
     connection_plan: str | None = None,
+    resume: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     fatal_errors = list(getattr(stream, "fatal_errors", []))
     remote_stderr = list(getattr(stream, "remote_stderr", []))
@@ -1676,7 +2001,12 @@ def build_summary(
         and 0 < stream.interval <= configured_interval_limit
         and stream.max_remote_gap <= measured_gap_limit
     )
-    provenance_complete = bool(provenance and provenance.get("status") == "PASS")
+    resume_verified = bool(resume and resume.get("status") == "PASS")
+    provenance_complete = bool(
+        provenance
+        and provenance.get("status") == "PASS"
+        and (resume is None or resume_verified)
+    )
     safety_clean = not stream.violation_counts
     deltas: dict[str, Any] = {}
     snapshot_restart_clean = False
@@ -1750,7 +2080,7 @@ def build_summary(
             for item in transitions
         )
     )
-    evidence_verdict = (
+    segment_evidence_verdict = (
         "INCONCLUSIVE"
         if not sequence_complete or not interval_complete or not provenance_complete
         else (
@@ -1762,16 +2092,23 @@ def build_summary(
             else "FAIL"
         )
     )
-    qualification_gate = (
-        "PASS"
-        if configuration_eligible
+    evidence_verdict = (
+        "INCONCLUSIVE"
+        if resume_verified and segment_evidence_verdict == "PASS"
+        else segment_evidence_verdict
+    )
+    cycle_gates_passed = bool(
+        configuration_eligible
         and timing_gates
         and all(item["verdict"] == "PASS" for item in timing_gates.values())
-        and evidence_verdict == "PASS"
         and connection_layout_passed
+    )
+    qualification_gate = (
+        ("INCONCLUSIVE" if resume_verified else "PASS")
+        if cycle_gates_passed and segment_evidence_verdict == "PASS"
         else (
             "INCOMPLETE"
-            if evidence_verdict == "PASS"
+            if segment_evidence_verdict == "PASS"
             and connection_layout_passed
             and (
                 not configuration_eligible
@@ -1793,6 +2130,7 @@ def build_summary(
         "qualification_gate": qualification_gate,
         "campaign": campaign,
         "connection_plan": connection_plan,
+        "resume_from": dict(resume) if resume is not None else None,
         "requested_cycles": cycles,
         "commit": commit,
         "provenance": dict(provenance) if provenance is not None else None,
@@ -1822,6 +2160,25 @@ def build_summary(
         "provenance_gate": {
             "verdict": "PASS" if provenance_complete else "INCONCLUSIVE"
         },
+        "campaign_continuity_gate": {
+            "verdict": "INCONCLUSIVE"
+            if resume_verified
+            else (
+                "PASS" if interval_complete and sequence_complete else "INCONCLUSIVE"
+            ),
+            "continuously_sampled": not resume_verified,
+            "unmonitored_inter_segment_gaps": (
+                [dict(resume["unmonitored_inter_segment_gap"])]
+                if resume_verified
+                else []
+            ),
+            "note": (
+                "predecessor and resumed segments are individually sampled, but the "
+                "interval between them was not monitored"
+                if resume_verified
+                else "this campaign was sampled as one continuous segment"
+            ),
+        },
         "sampling_gate": {
             "verdict": (
                 "PASS" if interval_complete and sequence_complete else "INCONCLUSIVE"
@@ -1836,6 +2193,7 @@ def build_summary(
             "sequence_gaps": stream.sequence_gaps,
             "malformed_lines": stream.malformed_lines,
             "unexpected_eof": stream.unexpected_eof,
+            "scope": "resumed_segment" if resume_verified else "whole_campaign",
         },
         "link_safety_gate": {
             "verdict": "PASS" if safety_clean else "FAIL",
@@ -1897,6 +2255,14 @@ def build_parser() -> argparse.ArgumentParser:
             "observed handoff, then cycles 11-20 through an attested powered hub"
         ),
     )
+    parser.add_argument(
+        "--resume-from",
+        type=Path,
+        help=(
+            "verified predecessor evidence directory; supported only for a stopped "
+            "promotion-fallback direct10-hub10 campaign before its midpoint handoff"
+        ),
+    )
     parser.add_argument("--interval", type=float, default=core.DEFAULT_INTERVAL_SECONDS)
     parser.add_argument(
         "--timeout", type=float, default=core.DEFAULT_TRANSITION_TIMEOUT_SECONDS
@@ -1931,6 +2297,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                 f"exactly {core.QUALIFICATION_CYCLES} cycles"
             )
         args.cycles = core.QUALIFICATION_CYCLES
+    if args.resume_from is not None and (
+        args.campaign != "promotion-fallback"
+        or args.connection_plan != core.CONNECTION_PLAN_DIRECT10_HUB10
+    ):
+        parser.error(
+            "--resume-from requires --campaign promotion-fallback and "
+            f"--connection-plan {core.CONNECTION_PLAN_DIRECT10_HUB10}"
+        )
     if args.cycles <= 0:
         parser.error("--cycles must be positive")
     configured_interval_limit = float(
@@ -1995,6 +2369,9 @@ def main(
             "status": "starting",
             "campaign": args.campaign,
             "connection_plan": args.connection_plan,
+            "resume_from_requested": (
+                str(args.resume_from) if args.resume_from is not None else None
+            ),
             "target_cycles": args.cycles,
             "commit": commit,
             "host": args.host,
@@ -2019,6 +2396,7 @@ def main(
         checkpoint=checkpoint,
     )
     transitions: list[dict[str, Any]] = []
+    resume_binding: dict[str, Any] | None = None
     preflight: dict[str, Any] | None = None
     closing: dict[str, Any] | None = None
     provenance: dict[str, Any] | None = None
@@ -2039,6 +2417,20 @@ def main(
             add_abort(f"abort event archival failed: {type(exc).__name__}: {exc}")
 
     try:
+        if args.resume_from is not None:
+            resume_binding, transitions = load_resume_evidence(args.resume_from)
+            atomic_json(artifact_dir / RESUME_NAME, resume_binding)
+            checkpoint.update(
+                resume=RESUME_NAME,
+                resume_from_status="verified",
+                predecessor_completed_cycles=resume_binding[
+                    "accepted_predecessor_evidence"
+                ]["completed_cycles"],
+                next_cycle=resume_binding["accepted_predecessor_evidence"][
+                    "next_cycle"
+                ],
+                transitions=[dict(item) for item in transitions],
+            )
         provenance = collect_provenance(
             host=args.host,
             remote_repo=args.repo,
@@ -2050,6 +2442,38 @@ def main(
         if provenance.get("status") != "PASS":
             raise EvidenceError("local or remote provenance collection failed")
         stream.start()
+        if resume_binding is not None:
+            resumed_at = time.time()
+            gap = resume_binding["unmonitored_inter_segment_gap"]
+            predecessor_ended = float(gap["predecessor_recording_ended_timestamp"])
+            if resumed_at < predecessor_ended:
+                raise EvidenceError(
+                    "host wall clock moved backwards across the predecessor boundary"
+                )
+            gap.update(
+                resumed_monitoring_started_timestamp=resumed_at,
+                approximate_duration_s=round(resumed_at - predecessor_ended, 6),
+                resumed_boot_id=stream.remote_boot_id,
+                same_boot=(
+                    isinstance(gap.get("predecessor_boot_id"), str)
+                    and gap.get("predecessor_boot_id") == stream.remote_boot_id
+                ),
+            )
+            atomic_json(artifact_dir / RESUME_NAME, resume_binding)
+            checkpoint.update(resume_gap=gap)
+            stream.record_event(
+                "campaign_resume",
+                predecessor_manifest_sha256=resume_binding["predecessor_manifest"][
+                    "sha256"
+                ],
+                completed_predecessor_cycles=resume_binding[
+                    "accepted_predecessor_evidence"
+                ]["completed_cycles"],
+                next_cycle=resume_binding["accepted_predecessor_evidence"][
+                    "next_cycle"
+                ],
+                unmonitored_inter_segment_gap=gap,
+            )
         typed_prepare(
             args.campaign,
             connection_plan=args.connection_plan,
@@ -2081,6 +2505,11 @@ def main(
                 settle_s=args.settle,
                 input_fn=input_fn,
                 connection_plan=args.connection_plan,
+                start_cycle=(
+                    resume_binding["accepted_predecessor_evidence"]["next_cycle"]
+                    if resume_binding is not None
+                    else 1
+                ),
             )
         elif args.campaign == "fifine-replug":
             core.run_fifine_replug(
@@ -2143,6 +2572,7 @@ def main(
         commit=commit,
         provenance=provenance,
         connection_plan=args.connection_plan,
+        resume=resume_binding,
     )
     qualified = bool(
         summary["verdict"] == "PASS" and summary["qualification_gate"] == "PASS"

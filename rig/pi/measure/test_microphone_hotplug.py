@@ -1512,6 +1512,79 @@ class MicrophoneHotplugTests(unittest.TestCase):
         )
         self.assertEqual(fallback_call["expected"].generation_after, 1)
 
+    def test_promotion_fallback_resume_starts_next_cycle_and_keeps_midpoint_handoff(
+        self,
+    ) -> None:
+        transitions: list[dict] = []
+        calls: list[dict] = []
+        handoff_positions: list[int] = []
+
+        def fake_run_step(_sampler, recorded, **values):
+            calls.append(values)
+            generation = len(calls)
+            result = {
+                "phase": values["phase"],
+                "cycle": values["cycle"],
+                "gate_kind": values.get("gate_kind"),
+                "outcome": "completed",
+                "safety_clean": True,
+                "restart_clean": True,
+                "final_sample": {
+                    "microphone": {"instance_token": f"token-{generation}"},
+                    "graph_generation": generation,
+                },
+            }
+            recorded.append(result)
+            return result
+
+        def fake_handoff(_sampler, recorded, **_values):
+            handoff_positions.append(len(calls))
+            recorded.append(
+                {
+                    "phase": hotplug.CONNECTION_LAYOUT_HANDOFF_PHASE,
+                    "cycle": 10,
+                    "outcome": "completed",
+                }
+            )
+            return "hub-token", 100
+
+        with (
+            mock.patch.object(hotplug, "run_step", side_effect=fake_run_step),
+            mock.patch.object(
+                hotplug,
+                "run_connection_layout_handoff",
+                side_effect=fake_handoff,
+            ),
+        ):
+            hotplug.run_promotion_fallback(
+                object(),
+                transitions,
+                cycles=20,
+                start_cycle=5,
+                timeout_s=60.0,
+                settle_s=0.6,
+                connection_plan=hotplug.CONNECTION_PLAN_DIRECT10_HUB10,
+            )
+
+        self.assertEqual(calls[0]["phase"], "resume_fifine_only_baseline")
+        self.assertEqual(calls[0]["cycle"], 4)
+        gated_cycles = [item["cycle"] for item in calls if item.get("gate_kind")]
+        self.assertEqual(gated_cycles[::2], list(range(5, 21)))
+        self.assertEqual(gated_cycles[1::2], list(range(5, 21)))
+        self.assertEqual(len(handoff_positions), 1)
+        fallback_ten_position = next(
+            index
+            for index, item in enumerate(calls, 1)
+            if item["phase"] == "lark_fallback" and item["cycle"] == 10
+        )
+        promotion_eleven_position = next(
+            index
+            for index, item in enumerate(calls, 1)
+            if item["phase"] == "lark_promotion" and item["cycle"] == 11
+        )
+        self.assertGreaterEqual(handoff_positions[0], fallback_ten_position)
+        self.assertLess(handoff_positions[0], promotion_eleven_position)
+
     def test_matrix_recovers_after_each_gated_safe_state(self) -> None:
         transitions: list[dict] = []
         calls: list[dict] = []
