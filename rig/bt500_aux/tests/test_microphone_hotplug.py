@@ -300,6 +300,98 @@ def passing_provenance() -> dict:
     }
 
 
+def _raw_usb_devices_in(value):
+    if isinstance(value, dict):
+        if (
+            value.get("id") in hotplug.core.USB_MICROPHONE_FINGERPRINTS
+            and isinstance(value.get("usb_devnum"), int)
+            and isinstance(value.get("usb_instance_generation"), str)
+        ):
+            yield value
+        for child in value.values():
+            yield from _raw_usb_devices_in(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _raw_usb_devices_in(child)
+
+
+def _add_direct_hub_ancestry(transition: dict) -> None:
+    for device in _raw_usb_devices_in(transition):
+        device["usb_hub_ancestors"] = [
+            {
+                "usb_device_class": "09",
+                "usb_vendor_id": "0424",
+                "usb_product_id": "9514",
+                "usb_product": None,
+                "usb_port_path": "1-1",
+                "usb_devnum": 2,
+                "usb_instance_generation": "1-1@2",
+            }
+        ]
+
+
+def predecessor_transition(kind: str, cycle: int) -> dict:
+    transition = valid_timing_transition(kind)
+    transition.update(
+        phase="lark_promotion" if kind == "promotion" else "lark_fallback",
+        cycle=cycle,
+        connection_layout=hotplug.core.CONNECTION_LAYOUT_DIRECT,
+    )
+    _add_direct_hub_ancestry(transition)
+    return transition
+
+
+def write_predecessor(root: Path, *, cycles: int = 4) -> None:
+    provenance = passing_provenance()
+    transitions = [
+        {
+            "phase": "fifine_only_baseline",
+            "cycle": 0,
+            "gate_kind": None,
+            "outcome": "completed",
+            "connection_layout": hotplug.core.CONNECTION_LAYOUT_DIRECT,
+            "safety_clean": True,
+            "restart_clean": True,
+        }
+    ]
+    for cycle in range(1, cycles + 1):
+        transitions.extend(
+            (
+                predecessor_transition("promotion", cycle),
+                predecessor_transition("fallback", cycle),
+            )
+        )
+    summary = hotplug.build_summary(
+        campaign="promotion-fallback",
+        cycles=20,
+        transitions=transitions,
+        stream=FakeStream(interval=0.15),
+        preflight=snapshot(),
+        closing=snapshot(),
+        aborted="CampaignAbort: operator aborted the campaign",
+        fast_limit_s=30.0,
+        max_limit_s=60.0,
+        artifact_dir=root,
+        commit="a" * 40,
+        provenance=provenance,
+        connection_plan=hotplug.core.CONNECTION_PLAN_DIRECT10_HUB10,
+    )
+    hotplug.atomic_json(root / hotplug.PROVENANCE_NAME, provenance)
+    hotplug.atomic_json(root / hotplug.SUMMARY_NAME, summary)
+    hotplug.atomic_json(
+        root / "checkpoint.json",
+        {
+            "transitions": transitions,
+            "updated_timestamp": 1_000.0,
+            "aborted": summary["aborted"],
+        },
+    )
+    hotplug.atomic_json(root / "preflight.json", {})
+    hotplug.atomic_json(root / "closing.json", {})
+    (root / hotplug.TIMELINE_NAME).write_text("{}\n", encoding="utf-8")
+    hotplug.atomic_json(root / hotplug.MANIFEST_NAME, hotplug.evidence_manifest(root))
+
+
 def initialize_provenance_repository(
     root: Path,
     *,
@@ -588,6 +680,237 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                 self.assertRaises(SystemExit),
             ):
                 hotplug.parse_args(arguments)
+
+    def test_resume_cli_is_strictly_scoped(self) -> None:
+        predecessor = Path("predecessor")
+        args = hotplug.parse_args(
+            [
+                "--campaign",
+                "promotion-fallback",
+                "--connection-plan",
+                hotplug.core.CONNECTION_PLAN_DIRECT10_HUB10,
+                "--resume-from",
+                str(predecessor),
+            ]
+        )
+        self.assertEqual(args.resume_from, predecessor)
+        for arguments in (
+            ["--resume-from", str(predecessor)],
+            [
+                "--campaign",
+                "fifine-replug",
+                "--connection-plan",
+                hotplug.core.CONNECTION_PLAN_DIRECT10_HUB10,
+                "--resume-from",
+                str(predecessor),
+            ],
+        ):
+            with (
+                self.subTest(arguments=arguments),
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                hotplug.parse_args(arguments)
+
+    def test_resume_verifies_and_binds_four_completed_predecessor_cycles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_predecessor(root)
+            binding, transitions = hotplug.load_resume_evidence(root)
+
+        accepted = binding["accepted_predecessor_evidence"]
+        self.assertEqual(accepted["completed_cycles"], [1, 2, 3, 4])
+        self.assertEqual(accepted["next_cycle"], 5)
+        self.assertEqual(accepted["accepted_transition_count"], 8)
+        self.assertEqual(len(transitions), 9)
+        self.assertRegex(binding["predecessor_manifest"]["sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(binding["predecessor_provenance"]["status"], "PASS")
+        gap = binding["unmonitored_inter_segment_gap"]
+        self.assertFalse(gap["continuously_sampled"])
+        self.assertEqual(gap["continuity_verdict"], "INCONCLUSIVE")
+
+    def test_resume_rejects_manifest_tampering_and_external_hub_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_predecessor(root)
+            with (root / hotplug.SUMMARY_NAME).open("a", encoding="utf-8") as handle:
+                handle.write(" ")
+            with self.assertRaisesRegex(hotplug.EvidenceError, "does not match"):
+                hotplug.load_resume_evidence(root)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_predecessor(root)
+            summary = json.loads((root / hotplug.SUMMARY_NAME).read_text())
+            transition = next(
+                item for item in summary["transitions"] if item.get("gate_kind")
+            )
+            for device in _raw_usb_devices_in(transition):
+                device["usb_port_path"] = "1-1.2.1"
+                device["usb_instance_generation"] = f"1-1.2.1@{device['usb_devnum']}"
+                device["usb_hub_ancestors"] = [
+                    {
+                        "usb_device_class": "09",
+                        "usb_vendor_id": "0bda",
+                        "usb_product_id": "5411",
+                        "usb_product": "powered hub",
+                        "usb_port_path": "1-1.2",
+                        "usb_devnum": 8,
+                        "usb_instance_generation": "1-1.2@8",
+                    },
+                    {
+                        "usb_device_class": "09",
+                        "usb_vendor_id": "0424",
+                        "usb_product_id": "9514",
+                        "usb_product": None,
+                        "usb_port_path": "1-1",
+                        "usb_devnum": 2,
+                        "usb_instance_generation": "1-1@2",
+                    },
+                ]
+            checkpoint = json.loads((root / "checkpoint.json").read_text())
+            checkpoint["transitions"] = summary["transitions"]
+            hotplug.atomic_json(root / hotplug.SUMMARY_NAME, summary)
+            hotplug.atomic_json(root / "checkpoint.json", checkpoint)
+            hotplug.atomic_json(
+                root / hotplug.MANIFEST_NAME, hotplug.evidence_manifest(root)
+            )
+            with self.assertRaises(hotplug.EvidenceError):
+                hotplug.load_resume_evidence(root)
+
+    def test_resumed_summary_counts_cycles_but_keeps_continuity_inconclusive(
+        self,
+    ) -> None:
+        transitions = []
+        for cycle in range(1, 21):
+            for kind in ("promotion", "fallback"):
+                transition = valid_timing_transition(kind)
+                transition.update(
+                    cycle=cycle,
+                    phase=(
+                        "lark_promotion" if kind == "promotion" else "lark_fallback"
+                    ),
+                    connection_layout=(
+                        hotplug.core.CONNECTION_LAYOUT_DIRECT
+                        if cycle <= 10
+                        else hotplug.core.CONNECTION_LAYOUT_POWERED_HUB
+                    ),
+                )
+                transitions.append(transition)
+        resume = {
+            "status": "PASS",
+            "unmonitored_inter_segment_gap": {
+                "observation_kind": "unmonitored_inter_segment_gap",
+                "continuously_sampled": False,
+                "continuity_verdict": "INCONCLUSIVE",
+            },
+        }
+        with mock.patch.object(
+            hotplug.core,
+            "summarize_connection_layout_gate",
+            return_value={"verdict": "PASS"},
+        ):
+            summary = hotplug.build_summary(
+                campaign="promotion-fallback",
+                cycles=20,
+                transitions=transitions,
+                stream=FakeStream(interval=0.15),
+                preflight=snapshot(),
+                closing=snapshot(),
+                aborted=None,
+                fast_limit_s=30.0,
+                max_limit_s=60.0,
+                artifact_dir=Path("unused"),
+                commit="b" * 40,
+                provenance=passing_provenance(),
+                connection_plan=hotplug.core.CONNECTION_PLAN_DIRECT10_HUB10,
+                resume=resume,
+            )
+
+        self.assertEqual(summary["timing_gates"]["promotion"]["observed_cycles"], 20)
+        self.assertEqual(summary["timing_gates"]["fallback"]["observed_cycles"], 20)
+        self.assertEqual(summary["campaign_continuity_gate"]["verdict"], "INCONCLUSIVE")
+        self.assertEqual(summary["verdict"], "INCONCLUSIVE")
+        self.assertEqual(summary["qualification_gate"], "INCONCLUSIVE")
+
+    def test_resume_main_starts_cycle_five_and_archives_the_gap_binding(self) -> None:
+        observed: dict = {}
+
+        class ResumeFakeStream(FakeStream):
+            def __init__(self, **kwargs) -> None:
+                super().__init__(**kwargs)
+                self.checkpoint = kwargs["checkpoint"]
+
+            def record_event(self, event_type: str, **values) -> None:
+                super().record_event(event_type, **values)
+                result = values.get("result")
+                if event_type == "transition_result" and isinstance(result, dict):
+                    self.checkpoint.append_transition(result)
+
+        def fake_campaign(stream, transitions, **kwargs) -> None:
+            observed.update(kwargs)
+            result = {
+                "phase": "lark_promotion",
+                "cycle": kwargs["start_cycle"],
+                "gate_kind": "promotion",
+                "outcome": "completed",
+                "connection_layout": hotplug.core.CONNECTION_LAYOUT_DIRECT,
+                "safety_clean": True,
+                "restart_clean": True,
+            }
+            transitions.append(result)
+            stream.record_event("transition_result", result=result)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            predecessor = root / "predecessor"
+            predecessor.mkdir()
+            write_predecessor(predecessor)
+            run_dir = root / "resumed"
+            with (
+                mock.patch.object(hotplug, "SshSampleStream", ResumeFakeStream),
+                mock.patch.object(hotplug, "validate_hotplug_snapshot"),
+                mock.patch.object(hotplug, "git_commit", return_value="b" * 40),
+                mock.patch.object(
+                    hotplug, "collect_provenance", return_value=passing_provenance()
+                ),
+                mock.patch.object(
+                    hotplug.core,
+                    "run_promotion_fallback",
+                    side_effect=fake_campaign,
+                ),
+            ):
+                result = hotplug.main(
+                    [
+                        "--run-dir",
+                        str(run_dir),
+                        "--campaign",
+                        "promotion-fallback",
+                        "--connection-plan",
+                        hotplug.core.CONNECTION_PLAN_DIRECT10_HUB10,
+                        "--resume-from",
+                        str(predecessor),
+                    ],
+                    backend=FakeBackend(),
+                    input_fn=lambda: "PREPARE DIRECT FIFINE ONLY",
+                )
+
+            summary = json.loads((run_dir / hotplug.SUMMARY_NAME).read_text())
+            checkpoint = json.loads((run_dir / "checkpoint.json").read_text())
+            manifest = json.loads((run_dir / hotplug.MANIFEST_NAME).read_text())
+
+        self.assertEqual(result, 1)
+        self.assertEqual(observed["start_cycle"], 5)
+        self.assertEqual(len(summary["transitions"]), 10)
+        self.assertEqual(summary["transitions"], checkpoint["transitions"])
+        self.assertEqual(
+            summary["resume_from"]["accepted_predecessor_evidence"]["completed_cycles"],
+            [1, 2, 3, 4],
+        )
+        self.assertFalse(summary["campaign_continuity_gate"]["continuously_sampled"])
+        self.assertTrue(
+            any(item["path"] == hotplug.RESUME_NAME for item in manifest["files"])
+        )
 
     def test_snapshot_freshness_uses_pi_clock_not_host_clock(self) -> None:
         document = {

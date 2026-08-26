@@ -2974,12 +2974,22 @@ def run_promotion_fallback(
     settle_s: float,
     input_fn=input,
     connection_plan: str | None = None,
+    start_cycle: int = 1,
 ) -> None:
+    if not 1 <= start_cycle <= cycles:
+        raise ValueError(
+            f"start_cycle must be between 1 and {cycles}, got {start_cycle}"
+        )
+    opening_cycle = start_cycle - 1
     opening = run_step(
         sampler,
         transitions,
-        phase="fifine_only_baseline",
-        cycle=0,
+        phase=(
+            "fifine_only_baseline"
+            if start_cycle == 1
+            else "resume_fifine_only_baseline"
+        ),
+        cycle=opening_cycle,
         instruction="Begin the live call with only the FIFINE connected.",
         expected=Expectation(
             state="ACTIVE",
@@ -2989,10 +2999,10 @@ def run_promotion_fallback(
         timeout_s=timeout_s,
         settle_s=settle_s,
         input_fn=input_fn,
-        connection_layout=connection_layout_for_cycle(0, connection_plan),
+        connection_layout=connection_layout_for_cycle(opening_cycle, connection_plan),
     )
     previous_token, previous_generation = _sample_identity(opening)
-    for cycle in range(1, cycles + 1):
+    for cycle in range(start_cycle, cycles + 1):
         connection_layout = connection_layout_for_cycle(cycle, connection_plan)
         promotion_expected = Expectation(
             state="ACTIVE",
