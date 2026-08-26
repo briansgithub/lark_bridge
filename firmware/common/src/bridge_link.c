@@ -35,23 +35,45 @@ void bridge_sequence_tracker_init(bridge_sequence_tracker_t *tracker) {
     if (tracker != NULL) {
         tracker->initialized = false;
         tracker->newest = 0U;
+        tracker->seen = 0U;
     }
 }
 
-bool bridge_sequence_tracker_accept(bridge_sequence_tracker_t *tracker, uint16_t sequence) {
+bool bridge_sequence_tracker_would_accept(const bridge_sequence_tracker_t *tracker,
+                                          uint16_t sequence) {
     uint16_t distance;
     if (tracker == NULL) {
         return false;
     }
     if (!tracker->initialized) {
-        tracker->initialized = true;
-        tracker->newest = sequence;
         return true;
     }
     distance = (uint16_t)(sequence - tracker->newest);
-    if (distance == 0U || distance >= 0x8000U) {
+    if (distance != 0U && distance < 0x8000U) {
+        return true;
+    }
+    distance = (uint16_t)(tracker->newest - sequence);
+    return distance < 32U && (tracker->seen & (UINT32_C(1) << distance)) == 0U;
+}
+
+bool bridge_sequence_tracker_accept(bridge_sequence_tracker_t *tracker, uint16_t sequence) {
+    uint16_t distance;
+    if (!bridge_sequence_tracker_would_accept(tracker, sequence)) {
         return false;
     }
-    tracker->newest = sequence;
+    if (!tracker->initialized) {
+        tracker->initialized = true;
+        tracker->newest = sequence;
+        tracker->seen = 1U;
+        return true;
+    }
+    distance = (uint16_t)(sequence - tracker->newest);
+    if (distance != 0U && distance < 0x8000U) {
+        tracker->seen = distance >= 32U ? 1U : (tracker->seen << distance) | 1U;
+        tracker->newest = sequence;
+    } else {
+        distance = (uint16_t)(tracker->newest - sequence);
+        tracker->seen |= UINT32_C(1) << distance;
+    }
     return true;
 }

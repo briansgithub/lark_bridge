@@ -16,6 +16,7 @@ firmware/s31/sdkconfig.old
 firmware/output/sdkconfig
 firmware/output/sdkconfig.old
 firmware/**/managed_components/
+firmware/dist/
 *.uf2
 *.elf
 *.bin

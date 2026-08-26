@@ -21,6 +21,7 @@ typedef struct {
 bool bridge_byte_ring_init(bridge_byte_ring_t *ring, uint8_t *storage, size_t capacity);
 size_t bridge_byte_ring_capacity(const bridge_byte_ring_t *ring);
 size_t bridge_byte_ring_count(const bridge_byte_ring_t *ring);
+size_t bridge_byte_ring_space(const bridge_byte_ring_t *ring);
 size_t bridge_byte_ring_write(bridge_byte_ring_t *ring, const uint8_t *data, size_t length);
 size_t bridge_byte_ring_read(bridge_byte_ring_t *ring, uint8_t *data, size_t length);
 bool bridge_byte_ring_push(bridge_byte_ring_t *ring, uint8_t value);

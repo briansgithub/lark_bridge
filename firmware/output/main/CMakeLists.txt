@@ -1,0 +1,20 @@
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "output_audio.c"
+        "output_bluetooth.c"
+        "output_control.c"
+        "output_peer_store.c"
+        "output_policy.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        bt
+        common
+        esp_app_format
+        esp_driver_gpio
+        esp_driver_i2s
+        esp_driver_uart
+        esp_timer
+        heap
+        nvs_flash
+)

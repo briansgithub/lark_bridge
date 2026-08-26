@@ -8,7 +8,9 @@
     "esp_idf_commit": "44f0c59f7c81a72a5868a52d5f6dfbbf88829704",
     "components": {
       "espressif/usb_host_uac": "1.5.0",
-      "espressif/esp-sr": "2.5.1",
+      "espressif/esp-sr": "2.5.1"
+    },
+    "planned_components_not_integrated": {
       "espressif/esp_audio_codec": "2.6.2",
       "espressif/esp_audio_effects": "1.4.2"
     }

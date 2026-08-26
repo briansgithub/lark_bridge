@@ -7,6 +7,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 from typing import Sequence
@@ -14,7 +15,15 @@ from typing import Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIRMWARE_ROOT = REPO_ROOT / "firmware"
-ARTIFACT_NAMES = ("**/*.bin", "*.elf", "*.map", "flasher_args.json", "flash_args")
+ARTIFACT_NAMES = (
+    "*.bin",
+    "*.elf",
+    "*.map",
+    "bootloader/bootloader.bin",
+    "partition_table/partition-table.bin",
+    "flasher_args.json",
+    "flash_args",
+)
 
 
 def sha256(path: Path) -> str:
@@ -56,15 +65,25 @@ def create_manifest(target: str) -> Path:
     artifacts = artifact_records(project)
     if not artifacts:
         raise FileNotFoundError(f"no flash artifacts found under {project / 'build'}")
-    status = git_output("status", "--porcelain=v1", "--untracked-files=all", "--", ".")
+    environment_commit = os.environ.get("LARKBRIDGE_SOURCE_COMMIT")
+    environment_dirty = os.environ.get("LARKBRIDGE_SOURCE_DIRTY")
+    if environment_commit:
+        source_commit = environment_commit
+        source_dirty = environment_dirty == "1"
+        dirty_paths = ["host worktree was dirty"] if source_dirty else []
+    else:
+        status = git_output("status", "--porcelain=v1", "--untracked-files=all", "--", ".")
+        source_commit = git_output("rev-parse", "HEAD")
+        source_dirty = bool(status)
+        dirty_paths = status.splitlines()
     component_lock = project / "dependencies.lock"
     manifest = {
         "schema": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "target": target,
-        "source_commit": git_output("rev-parse", "HEAD"),
-        "source_dirty": bool(status),
-        "dirty_paths": status.splitlines(),
+        "source_commit": source_commit,
+        "source_dirty": source_dirty,
+        "dirty_paths": dirty_paths,
         "toolchain": lock[target],
         "toolchain_lock_sha256": sha256(lock_path),
         "component_lock_sha256": sha256(component_lock) if component_lock.is_file() else None,

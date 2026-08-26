@@ -17,7 +17,8 @@ ESP32-DevKitC-32UE <--------- A2DP + AVRCP ----------------> car / speaker
 Start with [`ESP32_PORT_PLAN.md`](ESP32_PORT_PLAN.md), the frozen
 [architecture decision](docs/architecture/decisions/ADR-0010-esp32-dual-radio-bridge.md), the
 [firmware guide](firmware/README.md), and the
-[first-hardware runbook](firmware/docs/arrival-runbook.md). The prior Raspberry Pi implementation
+[month-later resume card](firmware/docs/resume-here.md). The detailed
+[first-hardware runbook](firmware/docs/arrival-runbook.md) follows it. The prior Raspberry Pi implementation
 below remains as qualification evidence and a behavioral reference; it is not the active hardware
 architecture on this branch.
 

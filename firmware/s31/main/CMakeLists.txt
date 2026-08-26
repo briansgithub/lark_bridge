@@ -1,0 +1,24 @@
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "aec_gate.c"
+        "audio_convert.c"
+        "audio_router.c"
+        "bt_gateway.c"
+        "gateway_state.c"
+        "link_uart.c"
+        "s31_peer_store.c"
+        "uac_lark.c"
+    INCLUDE_DIRS "."
+    PRIV_REQUIRES
+        bt
+        common
+        esp_app_format
+        esp_driver_i2s
+        esp_driver_uart
+        esp-sr
+        heap
+        nvs_flash
+        usb
+        usb_host_uac
+)

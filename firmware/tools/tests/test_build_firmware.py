@@ -20,7 +20,7 @@ class BuildFirmwareTests(unittest.TestCase):
         self.assertEqual(command[:3], ["docker-test", "run", "--rm"])
         self.assertIn("espressif/idf:v6.0.2", command)
         self.assertIn("7101770dc6db2667b3c477cc31365dd1acd6db4e", rendered)
-        self.assertIn("idf.py set-target esp32", rendered)
+        self.assertIn("set-target esp32", rendered)
         self.assertNotIn("--preview set-target esp32", rendered)
 
     def test_s31_command_uses_preview_target(self) -> None:
@@ -30,7 +30,7 @@ class BuildFirmwareTests(unittest.TestCase):
         self.assertIn("--pull always", rendered)
         self.assertIn("espressif/idf:v6.1-rc1", command)
         self.assertIn("44f0c59f7c81a72a5868a52d5f6dfbbf88829704", rendered)
-        self.assertIn("idf.py --preview set-target esp32s31", rendered)
+        self.assertIn("--preview set-target esp32s31", rendered)
 
     def test_lock_schema_is_rejected(self) -> None:
         with self.assertRaises(ValueError):

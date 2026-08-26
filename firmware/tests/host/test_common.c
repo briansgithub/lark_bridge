@@ -2,7 +2,9 @@
 #include "bridge_link.h"
 #include "bridge_protocol.h"
 #include "bridge_rate.h"
+#include "bridge_resample.h"
 #include "bridge_ring.h"
+#include "bridge_route_fence.h"
 #include "bridge_session.h"
 
 #include <limits.h>
@@ -18,6 +20,12 @@
         }                                                                                        \
     } while (0)
 
+_Static_assert(BRIDGE_HELLO_SESSION_OFFSET + sizeof(uint32_t) == BRIDGE_HELLO_PAYLOAD_SIZE,
+               "HELLO session nonce must fit exactly");
+_Static_assert(BRIDGE_STATUS_RELIABLE_FAILURES_OFFSET + sizeof(uint32_t) ==
+                   BRIDGE_STATUS_PAYLOAD_SIZE,
+               "STATUS telemetry must fit exactly");
+
 static int test_byte_ring(void) {
     uint8_t storage[5];
     uint8_t input[] = {1U, 2U, 3U, 4U, 5U};
@@ -26,10 +34,13 @@ static int test_byte_ring(void) {
     CHECK(!bridge_byte_ring_init(&ring, storage, 1U));
     CHECK(bridge_byte_ring_init(&ring, storage, sizeof(storage)));
     CHECK(bridge_byte_ring_capacity(&ring) == 4U);
+    CHECK(bridge_byte_ring_space(&ring) == 4U);
     CHECK(bridge_byte_ring_write(&ring, input, sizeof(input)) == 4U);
     CHECK(bridge_byte_ring_count(&ring) == 4U);
+    CHECK(bridge_byte_ring_space(&ring) == 0U);
     CHECK(bridge_byte_ring_read(&ring, output, 2U) == 2U);
     CHECK(output[0] == 1U && output[1] == 2U);
+    CHECK(bridge_byte_ring_space(&ring) == 2U);
     CHECK(bridge_byte_ring_write(&ring, &input[4], 1U) == 1U);
     CHECK(bridge_byte_ring_read(&ring, output, sizeof(output)) == 3U);
     CHECK(output[0] == 3U && output[1] == 4U && output[2] == 5U);
@@ -106,6 +117,46 @@ static int feed_all(bridge_stream_decoder_t *decoder, const uint8_t *data, size_
     return packets;
 }
 
+static uint32_t deterministic_random(uint32_t *state) {
+    uint32_t value = *state;
+    value ^= value << 13U;
+    value ^= value >> 17U;
+    value ^= value << 5U;
+    *state = value;
+    return value;
+}
+
+static int test_protocol_random_stream(void) {
+    bridge_packet_t packet;
+    bridge_packet_t decoded;
+    bridge_stream_decoder_t decoder;
+    uint8_t wire[BRIDGE_PROTOCOL_MAX_ENCODED_SIZE];
+    size_t wire_length;
+    uint32_t random_state = UINT32_C(0x6c61726b);
+
+    bridge_stream_decoder_init(&decoder);
+    for (unsigned int trial = 0U; trial < 2000U; ++trial) {
+        (void)memset(&packet, 0, sizeof(packet));
+        packet.version = BRIDGE_PROTOCOL_VERSION;
+        packet.type = (uint8_t)(BRIDGE_MESSAGE_HELLO +
+                                deterministic_random(&random_state) % 7U);
+        packet.sequence = (uint16_t)deterministic_random(&random_state);
+        packet.payload_length =
+            (uint16_t)(deterministic_random(&random_state) %
+                       (BRIDGE_PROTOCOL_MAX_PAYLOAD + 1U));
+        for (size_t index = 0U; index < packet.payload_length; ++index) {
+            packet.payload[index] = (uint8_t)deterministic_random(&random_state);
+        }
+        CHECK(bridge_protocol_encode(&packet, wire, sizeof(wire), &wire_length) == 0);
+        CHECK(feed_all(&decoder, wire, wire_length, &decoded) == 1);
+        CHECK(decoded.version == packet.version && decoded.type == packet.type &&
+              decoded.sequence == packet.sequence &&
+              decoded.payload_length == packet.payload_length);
+        CHECK(memcmp(decoded.payload, packet.payload, packet.payload_length) == 0);
+    }
+    return 0;
+}
+
 static int test_protocol(void) {
     bridge_packet_t packet = sample_packet();
     bridge_packet_t decoded;
@@ -164,19 +215,36 @@ static int test_protocol(void) {
 }
 
 static int test_link_contract(void) {
-    uint8_t wire[4] = {0U};
+    uint8_t wire[BRIDGE_HELLO_PAYLOAD_SIZE] = {0U};
     bridge_sequence_tracker_t tracker;
     bridge_put_u16_le(wire, 0xa1b2U);
     CHECK(bridge_get_u16_le(wire) == 0xa1b2U);
-    bridge_put_u32_le(wire, 0x89abcdefU);
-    CHECK(bridge_get_u32_le(wire) == 0x89abcdefU);
+    bridge_put_u32_le(&wire[BRIDGE_HELLO_SESSION_OFFSET], 0x89abcdefU);
+    CHECK(bridge_get_u32_le(&wire[BRIDGE_HELLO_SESSION_OFFSET]) == 0x89abcdefU);
     bridge_sequence_tracker_init(&tracker);
+    CHECK(!bridge_sequence_tracker_would_accept(NULL, 1U));
     CHECK(!bridge_sequence_tracker_accept(NULL, 1U));
+    CHECK(bridge_sequence_tracker_would_accept(&tracker, 0xffffU));
     CHECK(bridge_sequence_tracker_accept(&tracker, 0xffffU));
+    CHECK(!bridge_sequence_tracker_would_accept(&tracker, 0xffffU));
     CHECK(!bridge_sequence_tracker_accept(&tracker, 0xffffU));
     CHECK(bridge_sequence_tracker_accept(&tracker, 0U));
     CHECK(bridge_sequence_tracker_accept(&tracker, 1U));
     CHECK(!bridge_sequence_tracker_accept(&tracker, 0U));
+
+    /* A command that was inspected but not committed remains retryable, even
+     * if a later command completes first. */
+    bridge_sequence_tracker_init(&tracker);
+    CHECK(bridge_sequence_tracker_accept(&tracker, 100U));
+    CHECK(bridge_sequence_tracker_would_accept(&tracker, 101U));
+    CHECK(bridge_sequence_tracker_accept(&tracker, 102U));
+    CHECK(bridge_sequence_tracker_would_accept(&tracker, 101U));
+    CHECK(bridge_sequence_tracker_accept(&tracker, 101U));
+    CHECK(!bridge_sequence_tracker_would_accept(&tracker, 101U));
+
+    /* Entries beyond the bounded replay window fail closed. */
+    CHECK(bridge_sequence_tracker_accept(&tracker, 140U));
+    CHECK(!bridge_sequence_tracker_would_accept(&tracker, 100U));
     return 0;
 }
 
@@ -225,10 +293,88 @@ static int test_rate_controller(void) {
     return 0;
 }
 
+static int test_elastic_resampler(void) {
+    const int16_t three_frames[] = {0, 100, 10, 110, 20, 120};
+    const int16_t five_frames[] = {0, 100, 10, 110, 20, 120, 30, 130, 40, 140};
+    int16_t expanded[10] = {0};
+    int16_t contracted[6] = {0};
+    int16_t copied[6] = {0};
+
+    CHECK(!bridge_resample_stereo_s16(NULL, 3U, expanded, 5U));
+    CHECK(!bridge_resample_stereo_s16(three_frames, 0U, expanded, 5U));
+    CHECK(bridge_resample_stereo_s16(three_frames, 3U, expanded, 5U));
+    CHECK(memcmp(expanded,
+                 (int16_t[]){0, 100, 5, 105, 10, 110, 15, 115, 20, 120},
+                 sizeof(expanded)) == 0);
+    CHECK(bridge_resample_stereo_s16(five_frames, 5U, contracted, 3U));
+    CHECK(memcmp(contracted, (int16_t[]){0, 100, 20, 120, 40, 140},
+                 sizeof(contracted)) == 0);
+    CHECK(bridge_resample_stereo_s16(three_frames, 3U, copied, 3U));
+    CHECK(memcmp(copied, three_frames, sizeof(copied)) == 0);
+    return 0;
+}
+
+static int test_route_fence(void) {
+    bridge_route_fence_t fence;
+    bridge_route_fence_reset(&fence);
+    CHECK(bridge_route_fence_set_desired(&fence, BRIDGE_ROUTE_A2DP) ==
+          BRIDGE_ROUTE_FENCE_ACTION_SEND_SILENCE);
+    CHECK(fence.phase == BRIDGE_ROUTE_FENCE_WAIT_SILENCE_ACK);
+    CHECK(bridge_route_fence_ack(&fence, BRIDGE_ROUTE_SILENCE, true) ==
+          BRIDGE_ROUTE_FENCE_ACTION_START_GUARD);
+    CHECK(bridge_route_fence_guard_elapsed(&fence) ==
+          BRIDGE_ROUTE_FENCE_ACTION_SEND_TARGET);
+    CHECK(bridge_route_fence_ack(&fence, BRIDGE_ROUTE_A2DP, true) ==
+          BRIDGE_ROUTE_FENCE_ACTION_AUTHORIZE);
+    CHECK(fence.phase == BRIDGE_ROUTE_FENCE_ACTIVE);
+
+    /* A call arriving mid-media forces a fresh SILENCE barrier. */
+    CHECK(bridge_route_fence_set_desired(&fence, BRIDGE_ROUTE_HFP) ==
+          BRIDGE_ROUTE_FENCE_ACTION_SEND_SILENCE);
+    CHECK(bridge_route_fence_ack(&fence, BRIDGE_ROUTE_A2DP, true) ==
+          BRIDGE_ROUTE_FENCE_ACTION_FAIL_CLOSED);
+    CHECK(fence.phase == BRIDGE_ROUTE_FENCE_UNSYNCED);
+    CHECK(bridge_route_fence_set_desired(&fence, BRIDGE_ROUTE_HFP) ==
+          BRIDGE_ROUTE_FENCE_ACTION_SEND_SILENCE);
+    CHECK(bridge_route_fence_ack(&fence, BRIDGE_ROUTE_SILENCE, false) ==
+          BRIDGE_ROUTE_FENCE_ACTION_FAIL_CLOSED);
+
+    /* A desired-route change at every intermediate phase restarts at SILENCE. */
+    CHECK(bridge_route_fence_set_desired(&fence, BRIDGE_ROUTE_A2DP) ==
+          BRIDGE_ROUTE_FENCE_ACTION_SEND_SILENCE);
+    CHECK(bridge_route_fence_set_desired(&fence, BRIDGE_ROUTE_HFP) ==
+          BRIDGE_ROUTE_FENCE_ACTION_SEND_SILENCE);
+    CHECK(fence.phase == BRIDGE_ROUTE_FENCE_WAIT_SILENCE_ACK);
+    CHECK(fence.target == BRIDGE_ROUTE_HFP);
+    CHECK(bridge_route_fence_ack(&fence, BRIDGE_ROUTE_SILENCE, true) ==
+          BRIDGE_ROUTE_FENCE_ACTION_START_GUARD);
+    CHECK(fence.phase == BRIDGE_ROUTE_FENCE_DRAINING);
+    CHECK(bridge_route_fence_set_desired(&fence, BRIDGE_ROUTE_A2DP) ==
+          BRIDGE_ROUTE_FENCE_ACTION_SEND_SILENCE);
+    CHECK(fence.phase == BRIDGE_ROUTE_FENCE_WAIT_SILENCE_ACK);
+    CHECK(bridge_route_fence_ack(&fence, BRIDGE_ROUTE_SILENCE, true) ==
+          BRIDGE_ROUTE_FENCE_ACTION_START_GUARD);
+    CHECK(bridge_route_fence_guard_elapsed(&fence) ==
+          BRIDGE_ROUTE_FENCE_ACTION_SEND_TARGET);
+    CHECK(fence.phase == BRIDGE_ROUTE_FENCE_WAIT_TARGET_ACK);
+    CHECK(bridge_route_fence_set_desired(&fence, BRIDGE_ROUTE_HFP) ==
+          BRIDGE_ROUTE_FENCE_ACTION_SEND_SILENCE);
+    CHECK(fence.phase == BRIDGE_ROUTE_FENCE_WAIT_SILENCE_ACK);
+
+    /* SILENCE itself still requires an acknowledged flush barrier. */
+    CHECK(bridge_route_fence_set_desired(&fence, BRIDGE_ROUTE_SILENCE) ==
+          BRIDGE_ROUTE_FENCE_ACTION_SEND_SILENCE);
+    CHECK(bridge_route_fence_ack(&fence, BRIDGE_ROUTE_SILENCE, true) ==
+          BRIDGE_ROUTE_FENCE_ACTION_AUTHORIZE);
+    return 0;
+}
+
 int main(void) {
     if (test_byte_ring() != 0 || test_frame_ring() != 0 || test_pcm() != 0 ||
-        test_protocol() != 0 || test_link_contract() != 0 || test_session() != 0 ||
-        test_rate_controller() != 0) {
+        test_protocol() != 0 || test_protocol_random_stream() != 0 ||
+        test_link_contract() != 0 || test_session() != 0 ||
+        test_rate_controller() != 0 || test_elastic_resampler() != 0 ||
+        test_route_fence() != 0) {
         return 1;
     }
     (void)puts("bridge common host tests passed");

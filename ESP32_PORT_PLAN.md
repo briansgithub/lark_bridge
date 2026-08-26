@@ -33,7 +33,8 @@ Before the ordered boards arrive, the repository shall contain:
 - Expose one Pixel-facing headset identity named `LarkBridge` with HFP-HF, A2DP Sink, and AVRCP
   Controller.
 - Maintain `CALL > MEDIA > SILENCE` focus.
-- Feed the exact downlink reference and LARK microphone to 16-kHz VOIP AEC before HFP uplink.
+- Feed the exact downlink reference and LARK microphone to ESP-SR's 16-kHz full-duplex low-cost
+  AEC before HFP uplink; keep publication disabled until the objective hardware gate passes.
 - Produce a continuous 48-kHz stereo I2S stream, including deterministic silence during changes.
 - Forward downstream AVRCP events to the Pixel only while the matching Pixel AVRCP session exists.
 - Own system readiness and publish reason-coded failures.

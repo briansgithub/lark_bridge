@@ -5,9 +5,11 @@
 #include <stdint.h>
 
 /*
- * Bounded PI controller for the inter-board elastic FIFO. A positive result
- * asks the S31 source clock/resampler to run faster; a negative result asks it
- * to run slower. Gains are signed Q16.16 ppm per frame/error accumulation.
+ * Bounded PI controller for the output board's elastic FIFO. A positive result
+ * means the FIFO is low, so the local consumer periodically uses one fewer
+ * input frame; a negative result means it is high, so it periodically consumes
+ * one extra input frame. Gains are signed Q16.16 ppm per frame/error
+ * accumulation.
  */
 typedef struct {
     int32_t target_frames;

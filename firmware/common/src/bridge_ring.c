@@ -35,6 +35,12 @@ size_t bridge_byte_ring_count(const bridge_byte_ring_t *ring) {
     return ring->capacity - read_index + write_index;
 }
 
+size_t bridge_byte_ring_space(const bridge_byte_ring_t *ring) {
+    size_t capacity = bridge_byte_ring_capacity(ring);
+    size_t count = bridge_byte_ring_count(ring);
+    return count <= capacity ? capacity - count : 0U;
+}
+
 bool bridge_byte_ring_push(bridge_byte_ring_t *ring, uint8_t value) {
     size_t next;
     if (ring == NULL || ring->storage == NULL || ring->capacity < 2U) {

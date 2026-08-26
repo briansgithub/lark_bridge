@@ -29,8 +29,10 @@ python firmware/tools/build_firmware.py all
 
 The equivalent Make targets are `test-esp-host`, `esp-output`, `esp-s31`, and `esp-build`.
 Flashing intentionally remains a native ESP-IDF action because Docker Desktop does not provide a
-portable serial-device path. Activate the matching pinned IDF environment, then run `idf.py -p
-<PORT> flash monitor` inside the relevant project directory.
+portable serial-device path. Activate the matching pinned IDF environment, then use the validated
+command emitted by `arrival.py flash-command` or the generated standalone ZIP. Do not let a native
+`idf.py` invocation reconfigure a clean scored image; [`docs/flashing.md`](docs/flashing.md) is the
+authoritative procedure.
 
 ## Audio and control links
 
@@ -39,8 +41,10 @@ portable serial-device path. Activate the matching pinned IDF environment, then 
 - Audio is never transported over UART.
 
 See [`ADR-0010`](../docs/architecture/decisions/ADR-0010-esp32-dual-radio-bridge.md),
-[`docs/wiring.md`](docs/wiring.md), and the [`arrival runbook`](docs/arrival-runbook.md) before
-connecting hardware.
+[`docs/wiring.md`](docs/wiring.md), [`docs/flashing.md`](docs/flashing.md), and the
+[`arrival runbook`](docs/arrival-runbook.md) before connecting hardware. A month-later operator can
+start at [`docs/resume-here.md`](docs/resume-here.md); the complete wire contract is in
+[`docs/protocol-v1.md`](docs/protocol-v1.md).
 
 ## Build status vocabulary
 

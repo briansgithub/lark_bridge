@@ -33,6 +33,18 @@ def target_config(lock: dict[str, object], target: str) -> dict[str, object]:
     return value
 
 
+def source_state() -> tuple[str, bool]:
+    commit = subprocess.check_output(
+        ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], text=True, encoding="utf-8"
+    ).strip()
+    status = subprocess.check_output(
+        ["git", "-C", str(REPO_ROOT), "status", "--porcelain=v1", "--untracked-files=all"],
+        text=True,
+        encoding="utf-8",
+    ).strip()
+    return commit, bool(status)
+
+
 def docker_command(
     target: str,
     lock: dict[str, object],
@@ -46,9 +58,13 @@ def docker_command(
     project = FIRMWARE_ROOT / target
     if not project.is_dir():
         raise FileNotFoundError(f"missing firmware project: {project}")
+    source_commit, source_dirty = source_state()
+    project_version = source_commit[:12] + ("-dirty" if source_dirty else "")
 
-    idf_target = f"idf.py --preview set-target {chip}" if config.get("preview_target") else (
-        f"idf.py set-target {chip}"
+    idf_target = (
+        f'idf.py -D PROJECT_VER="$PROJECT_VER" --preview set-target {chip}'
+        if config.get("preview_target")
+        else f'idf.py -D PROJECT_VER="$PROJECT_VER" set-target {chip}'
     )
     shell = (
         "set -euo pipefail; "
@@ -66,8 +82,14 @@ def docker_command(
         [
             "-e",
             f"IDF_TARGET={chip}",
+            "-e",
+            f"PROJECT_VER={project_version}",
+            "-e",
+            f"LARKBRIDGE_SOURCE_COMMIT={source_commit}",
+            "-e",
+            f"LARKBRIDGE_SOURCE_DIRTY={'1' if source_dirty else '0'}",
             "-v",
-            f"{REPO_ROOT}:/work",
+            f"{FIRMWARE_ROOT}:/work/firmware",
             "-w",
             f"/work/firmware/{target}",
             f"espressif/idf:{tag}",

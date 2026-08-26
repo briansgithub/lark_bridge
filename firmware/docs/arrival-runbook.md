@@ -18,7 +18,7 @@ Do not enable the output board's Bluetooth radio without its antenna connected.
 
 Leave the inter-board harness and LARK receiver disconnected.
 
-1. Build both images from their pinned containers:
+1. Follow [`flashing.md`](flashing.md). Build both images from their pinned containers:
 
    ```text
    python firmware/tools/build_firmware.py output
@@ -38,7 +38,8 @@ that reports ready at this stage fails the gate.
 ## 3. Wire the low-voltage link
 
 With both boards unpowered, connect the six signal/ground wires exactly as listed in
-[`wiring.md`](wiring.md). Check continuity and adjacent-pin shorts before reconnecting USB.
+[`wiring.md`](wiring.md). Check continuity and adjacent-pin shorts against that document's numeric
+meter gates before reconnecting USB.
 
 For bench work:
 
@@ -83,11 +84,14 @@ and 100 reconnects. A descriptor mismatch must remain fail-closed.
 
 ## 7. Add one Bluetooth side at a time
 
-1. Output side: pair the ESP32 output board to a bench speaker, then the car. Prove A2DP Source,
-   reconnect, and receipt of AVRCP play/pause/next/previous events.
+1. Output side: pair the ESP32 output board to a bench speaker and prove A2DP Source, reconnect,
+   and AVRCP play/pause/next/previous. Then use the one-time erase image in
+   [`flashing.md`](flashing.md), restore the normal image, and pair the car **last**. The firmware
+   deliberately saves only one output peer.
 2. S31 side: pair the Pixel to the S31. Prove A2DP Sink/AVRCP Controller first, then HFP-HF with
-   synthetic 16-kHz audio.
-3. Preserve the two peer addresses and bonds. Do not rely on device discovery order.
+   the normal AEC publication lock still enabled.
+3. Preserve one Pixel identity on S31 and one final car identity on the output board. Do not rely
+   on discovery order, and do not leave either erase-on-boot option enabled.
 
 ## 8. Integrate media, call, and controls
 
@@ -96,13 +100,30 @@ Run the qualification matrix in [`qualification-matrix.md`](qualification-matrix
 - media is Pixel → S31 → I2S → output ESP32 → car;
 - call downlink follows the same output path while LARK → AEC → HFP is the uplink;
 - `CALL > MEDIA > SILENCE` focus is deterministic;
-- car media buttons cross UART and are reissued to the Pixel once per press/release;
+- each car media-button press crosses UART as one reliable atomic tap and produces exactly one
+  Pixel press/release pair;
 - raw LARK audio is never sent during a call until AEC is initialized and qualified.
+
+Qualify AEC using [`aec-qualification.md`](aec-qualification.md) in two explicit steps. First leave
+`LARKBRIDGE_S31_EXPERIMENTAL_AEC_UPLINK` disabled and prove that a call receives only digital
+silence while the AEC worker reports stable frame timing, no starvation, and adequate minimum
+heap. Measure acoustic reference delay, set `LARKBRIDGE_S31_AEC_REFERENCE_DELAY_MS`, then enable
+the experimental uplink on a clearly labeled qualification image. Record far-end microphone and
+reference captures and apply H10's objective thresholds. If the engine restarts, starves, loses
+route/session eligibility, or overruns its processed queue, uplink must immediately return to
+silence; raw LARK samples are never an acceptable fallback.
 
 ## 9. Convert to one-cable power only after qualification
 
-Use a protected 5 V star harness sized for both boards and the S31's USB-host load. Validate polarity,
-idle/peak voltage, current, brownout margin, and power-cycle recovery with programming USB cables
-removed. The carrier must prevent either programming connector from back-feeding the shared rail.
+Use a protected 5 V star harness sized for both boards and the S31's USB-host load. Validate
+polarity, idle/peak voltage, current, brownout margin, and power-cycle recovery with programming USB
+cables removed. The carrier must prevent either programming connector from back-feeding the shared
+rail. Follow [`rf-power-matrix.md`](rf-power-matrix.md); vehicle gate H17 remains deferred until a
+specific automotive-rated supply is selected.
 
-The final release gate remains ten complete cycles plus a 3,600-second production-topology soak.
+During rapid iteration, use the resumable ten-cycle campaign followed by a 5–10 minute smoke soak.
+That abbreviated soak does **not** satisfy endurance. The final release gate remains ten complete
+cycles plus a separate 3,600-second production-topology soak.
+
+Create, attach, and finalize every gate with `firmware/tools/arrival.py`. Never replace a failed or
+interrupted result directory; resume it or create a new labeled attempt.

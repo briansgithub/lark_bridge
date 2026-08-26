@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://larkbridge.local/schemas/arrival-result-v1.json",
+  "title": "Larkbridge hardware-arrival gate result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "gate",
+    "label",
+    "operator",
+    "status",
+    "hard_failure",
+    "started_at",
+    "finished_at",
+    "source",
+    "host",
+    "evidence",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "gate": { "type": "string", "pattern": "^H(?:[0-9]|1[0-7])$" },
+    "label": { "type": "string", "minLength": 1 },
+    "operator": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": ["IN_PROGRESS", "PASS", "FAIL", "PENDING_HARDWARE"]
+    },
+    "hard_failure": { "type": "boolean" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "format": "date-time" }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "dirty", "dirty_paths"],
+      "properties": {
+        "commit": { "type": "string", "minLength": 1 },
+        "dirty": { "type": "boolean" },
+        "dirty_paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hostname", "platform", "python"],
+      "properties": {
+        "hostname": { "type": "string", "minLength": 1 },
+        "platform": { "type": "string", "minLength": 1 },
+        "python": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/note" }
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "original_path",
+        "stored_path",
+        "bytes",
+        "sha256",
+        "recorded_at",
+        "note"
+      ],
+      "properties": {
+        "kind": { "enum": ["artifact", "serial_log"] },
+        "original_path": { "type": "string", "minLength": 1 },
+        "stored_path": {
+          "type": "string",
+          "pattern": "^artifacts/[^/]+$"
+        },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "note": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        }
+      }
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recorded_at", "text"],
+      "properties": {
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "text": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

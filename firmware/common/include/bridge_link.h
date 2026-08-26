@@ -5,9 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define BRIDGE_HELLO_PAYLOAD_SIZE 3U
+#define BRIDGE_HELLO_PAYLOAD_SIZE 7U
 #define BRIDGE_HELLO_ROLE_OFFSET 0U
 #define BRIDGE_HELLO_CAPS_OFFSET 1U
+#define BRIDGE_HELLO_SESSION_OFFSET 3U
 #define BRIDGE_HEARTBEAT_PAYLOAD_SIZE 2U
 #define BRIDGE_HEARTBEAT_ROUTE_OFFSET 0U
 #define BRIDGE_HEARTBEAT_READY_OFFSET 1U
@@ -16,11 +17,20 @@
 #define BRIDGE_AVRCP_PAYLOAD_SIZE 2U
 #define BRIDGE_AVRCP_KEY_CODE_OFFSET 0U
 #define BRIDGE_AVRCP_KEY_STATE_OFFSET 1U
-#define BRIDGE_STATUS_PAYLOAD_SIZE 11U
+#define BRIDGE_STATUS_PAYLOAD_SIZE 41U
 #define BRIDGE_STATUS_READY_OFFSET 0U
 #define BRIDGE_STATUS_FIFO_FRAMES_OFFSET 1U
 #define BRIDGE_STATUS_UNDERRUNS_OFFSET 3U
 #define BRIDGE_STATUS_OVERRUNS_OFFSET 7U
+#define BRIDGE_STATUS_CORRECTION_PPM_OFFSET 11U
+#define BRIDGE_STATUS_ADAPTIVE_DELTA_OFFSET 13U
+#define BRIDGE_STATUS_MISSING_FRAMES_OFFSET 17U
+#define BRIDGE_STATUS_DROPPED_FRAMES_OFFSET 21U
+#define BRIDGE_STATUS_I2S_ERRORS_OFFSET 25U
+#define BRIDGE_STATUS_FIFO_MIN_OFFSET 29U
+#define BRIDGE_STATUS_FIFO_MAX_OFFSET 31U
+#define BRIDGE_STATUS_PROTOCOL_ERRORS_OFFSET 33U
+#define BRIDGE_STATUS_RELIABLE_FAILURES_OFFSET 37U
 #define BRIDGE_FAULT_PAYLOAD_SIZE 2U
 #define BRIDGE_FAULT_CODE_OFFSET 0U
 #define BRIDGE_ACK_PAYLOAD_SIZE 4U
@@ -57,7 +67,10 @@ typedef enum {
 
 typedef enum {
     BRIDGE_KEY_PRESSED = 0,
-    BRIDGE_KEY_RELEASED = 1
+    BRIDGE_KEY_RELEASED = 1,
+    /* One reliable inter-board transaction; S31 emits the paired AVRCP
+     * press/release locally so a link reset cannot strand a pressed key. */
+    BRIDGE_KEY_TAP = 2
 } bridge_key_state_t;
 
 typedef enum {
@@ -81,6 +94,7 @@ typedef enum {
 typedef struct {
     bool initialized;
     uint16_t newest;
+    uint32_t seen;
 } bridge_sequence_tracker_t;
 
 void bridge_put_u16_le(uint8_t *output, uint16_t value);
@@ -88,6 +102,8 @@ void bridge_put_u32_le(uint8_t *output, uint32_t value);
 uint16_t bridge_get_u16_le(const uint8_t *input);
 uint32_t bridge_get_u32_le(const uint8_t *input);
 void bridge_sequence_tracker_init(bridge_sequence_tracker_t *tracker);
+bool bridge_sequence_tracker_would_accept(const bridge_sequence_tracker_t *tracker,
+                                          uint16_t sequence);
 bool bridge_sequence_tracker_accept(bridge_sequence_tracker_t *tracker, uint16_t sequence);
 
 #endif

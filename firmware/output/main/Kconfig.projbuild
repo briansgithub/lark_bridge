@@ -1,0 +1,98 @@
+menu "LarkBridge output controller"
+
+    config LARKBRIDGE_OUTPUT_ERASE_BONDS_ON_BOOT
+        bool "Erase output settings and Bluetooth bonds on every boot"
+        default n
+        help
+            Recovery-image option. Enable, flash and boot once to forget the
+            selected car/speaker, then disable and flash the normal image.
+
+    config LARKBRIDGE_OUTPUT_DEVICE_NAME
+        string "Bluetooth source name"
+        default "LarkBridge Output"
+        help
+            Name shown by the ESP32-DevKitC output controller to a car or
+            Bluetooth speaker.
+
+    config LARKBRIDGE_OUTPUT_PEER_NAME
+        string "Automatic discovery target name"
+        default ""
+        help
+            Exact Bluetooth name to discover and connect when no peer address
+            is saved. Leave empty for passive pairing initiated by the car or
+            speaker. A saved peer address always takes priority.
+
+    config LARKBRIDGE_OUTPUT_LEGACY_PIN
+        string "Legacy pairing PIN"
+        default "0000"
+        help
+            Four-digit PIN used only when a downstream sink requests legacy
+            pairing. Secure Simple Pairing uses no-input/no-output mode.
+
+    config LARKBRIDGE_OUTPUT_I2S_BCLK_GPIO
+        int "I2S bit-clock GPIO"
+        range 0 39
+        default 26
+
+    config LARKBRIDGE_OUTPUT_I2S_WS_GPIO
+        int "I2S word-select GPIO"
+        range 0 39
+        default 25
+
+    config LARKBRIDGE_OUTPUT_I2S_DATA_GPIO
+        int "I2S data-input GPIO"
+        range 0 39
+        default 22
+
+    config LARKBRIDGE_OUTPUT_UART_RX_GPIO
+        int "Control UART RX GPIO"
+        range 0 39
+        default 16
+
+    config LARKBRIDGE_OUTPUT_UART_TX_GPIO
+        int "Control UART TX GPIO"
+        range 0 39
+        default 17
+
+    config LARKBRIDGE_OUTPUT_UART_BAUD
+        int "Control UART baud"
+        range 115200 2000000
+        default 115200
+
+    config LARKBRIDGE_OUTPUT_HEARTBEAT_TIMEOUT_MS
+        int "S31 heartbeat timeout (ms)"
+        range 250 5000
+        default 1500
+        help
+            The audio callback returns silence after this interval without a
+            valid S31 heartbeat.
+
+    config LARKBRIDGE_OUTPUT_AUDIO_RING_FRAMES
+        int "Elastic PCM ring capacity (stereo frames)"
+        range 1024 16384
+        default 8192
+        help
+            Bounded internal-RAM ring between I2S RX and the A2DP source.
+            Overrun drops oldest complete stereo frames.
+
+    config LARKBRIDGE_OUTPUT_AUDIO_PREFILL_FRAMES
+        int "Elastic PCM startup prefill (stereo frames)"
+        range 240 4096
+        default 1440
+        help
+            Return digital silence until this many fresh I2S frames have been
+            captured after each route opening. Runtime clamps the value to half
+            the configured ring capacity. Tune against measured latency and
+            underrun margin on the arrival hardware.
+
+    config LARKBRIDGE_OUTPUT_DISCOVERY_SECONDS
+        int "Bluetooth discovery duration (seconds)"
+        range 2 30
+        default 10
+
+    config LARKBRIDGE_OUTPUT_RECONNECT_MS
+        int "Reconnect interval (ms)"
+        range 1000 60000
+        default 5000
+
+endmenu

@@ -18,6 +18,12 @@ checked on the delivered revisions.
 Both boards use 3.3-V logic. Keep the I2S/UART harness short. Do not add level shifters unless the
 delivered board documentation contradicts the 3.3-V interface.
 
+Use keyed housings if the delivered headers permit them. Otherwise label both ends before assembly;
+the suggested prototype colors are black=GND, blue=BCLK, green=WS, yellow=DATA, orange=S31-TX,
+and white=S31-RX. Color is only an aid—the signal label and continuity result are authoritative.
+Record connector type, contact/pigtail part number, color, and finished length as harness revision
+`H1`. Start at 15 cm or shorter; shortening further is an H13 RF/electrical decision.
+
 ## Power
 
 - During bench programming and first integration, power each board through its own programming USB
@@ -45,3 +51,16 @@ delivered board documentation contradicts the 3.3-V interface.
 Before applying power, verify continuity for ground, absence of a 5-V-to-3.3-V short, UART
 cross-over, and that neither I2S line is connected to `EN`, `BOOT`, or a power pin. First power each
 board separately; join the signal harness only after both standalone firmware images boot.
+
+With both boards and USB cables disconnected, use these initial meter gates:
+
+- each intended end-to-end signal and ground connection is below 1 ohm after subtracting lead
+  resistance;
+- every signal-to-adjacent-signal, signal-to-5 V, and 5 V-to-3.3 V check is above 1 megaohm after
+  the reading settles;
+- UART is crossed TX-to-RX, while I2S is one-way S31-to-output;
+- no 5 V header connection exists during the two-USB bench topology.
+
+If board protection components prevent a resistance reading from meeting the open-circuit number,
+stop and reconcile the delivered schematic rather than waiving the check. Photograph both header
+orientations and mark pin 1; online product photos are not wiring evidence.

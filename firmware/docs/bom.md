@@ -35,12 +35,18 @@ is a later, separately verified assembly step.
 - Honda CR-V 2015 LX Bluetooth audio system or another A2DP/AVRCP sink.
 - One lead of the existing 2.4/5 GHz 2T2R antenna.
 
-## Useful bench equipment
+## Required-by-gate bench equipment
 
-- Eight-channel logic analyzer capable of decoding I2S and UART.
-- USB power meter and current-limited bench supply.
-- Headphones/speaker independent of the car for first pairing.
-- A second phone or PC capable of recording the far-end call for AEC measurement.
+- H2/H4/H5: logic analyzer capable of decoding 3.3-V UART and I2S.
+- H0/H4: multimeter, fine probes, and insulated labels for continuity/orientation evidence.
+- H1/H6/H17: USB power meter and current-limited bench supply.
+- H7: headphones/speaker independent of the car for first pairing.
+- H9/H10: second phone or PC capable of playing a retained stimulus and recording the far-end call.
+- H10: quiet, repeatable microphone/speaker fixture or marked positions that can be reconstructed.
+
+On arrival, replace generic inventory descriptions with exact manufacturer/part markings and board
+revisions. Do not predeclare the existing antenna connector, gain, or delivered header population
+as qualified merely because the parts appear to mate.
 
 No AUX output hardware is included in this build. Adding line-level AUX later requires a separate
 stereo I2S DAC; never connect the S31's amplified speaker output to a car AUX input.
