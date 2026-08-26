@@ -189,6 +189,43 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
                 document, expected_microphone="fifine-k054"
             )
 
+    def test_snapshot_freshness_rejects_nonfinite_and_future_timestamps(self) -> None:
+        document = {
+            "timestamp": 1_000.0,
+            "status": {
+                "timestamp": 999.0,
+                "microphone": {"candidates": []},
+            },
+            "pipewire_links": "",
+        }
+        with mock.patch.object(hotplug, "validate_snapshot"):
+            for value in (float("nan"), float("inf"), float("-inf")):
+                with (
+                    self.subTest(location="snapshot", value=value),
+                    self.assertRaisesRegex(hotplug.EvidenceError, "non-finite"),
+                ):
+                    document["timestamp"] = value
+                    hotplug.validate_hotplug_snapshot(
+                        document, expected_microphone="fifine-k054"
+                    )
+
+            document["timestamp"] = 1_000.0
+            for value in (float("nan"), float("inf"), float("-inf")):
+                with (
+                    self.subTest(location="status", value=value),
+                    self.assertRaisesRegex(hotplug.EvidenceError, "non-finite"),
+                ):
+                    document["status"]["timestamp"] = value
+                    hotplug.validate_hotplug_snapshot(
+                        document, expected_microphone="fifine-k054"
+                    )
+
+            document["status"]["timestamp"] = 1_001.0
+            with self.assertRaisesRegex(hotplug.EvidenceError, "in the future"):
+                hotplug.validate_hotplug_snapshot(
+                    document, expected_microphone="fifine-k054"
+                )
+
     def test_provenance_records_full_dirty_state_and_source_hashes(self) -> None:
         remote = {
             "status": "PASS",

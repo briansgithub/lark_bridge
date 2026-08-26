@@ -13,6 +13,7 @@ import argparse
 import base64
 import hashlib
 import json
+import math
 import os
 import re
 import shlex
@@ -494,9 +495,13 @@ def validate_hotplug_snapshot(
         snapshot_timestamp, bool
     ):
         raise EvidenceError("snapshot timestamp is absent or nonnumeric")
+    if not math.isfinite(float(snapshot_timestamp)):
+        raise EvidenceError("snapshot timestamp is non-finite")
     timestamp = status.get("timestamp")
     if not isinstance(timestamp, (int, float)) or isinstance(timestamp, bool):
         raise EvidenceError("bridge status timestamp is absent or nonnumeric")
+    if not math.isfinite(float(timestamp)):
+        raise EvidenceError("bridge status timestamp is non-finite")
     # Both values originate on the Pi. Comparing a Pi timestamp with the host clock
     # fails whenever the directly connected Pi has no NTP source.
     age = float(snapshot_timestamp) - float(timestamp)
