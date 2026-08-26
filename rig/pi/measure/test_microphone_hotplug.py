@@ -803,6 +803,37 @@ class MicrophoneHotplugTests(unittest.TestCase):
         self.assertEqual(state, "error")
         self.assertIn("ambiguous", error or "")
 
+    def test_fallback_edge_ignores_transient_descriptor_loss_for_same_instance(
+        self,
+    ) -> None:
+        baseline_topology = usb_topology(lark=("1-1.3@9",))
+        baseline_topology["lark-a1"][0]["usb_serial"] = "Wireless Microphone"
+        teardown_sample = usb_topology(lark=("1-1.3@9",))
+
+        state, error = hotplug.observe_expected_usb_edge(
+            "fallback",
+            usb_baseline(baseline_topology),
+            {"usb_microphones": teardown_sample, "usb_error": None},
+        )
+
+        self.assertEqual(state, "waiting")
+        self.assertIsNone(error)
+
+    def test_fallback_edge_rejects_new_generation_without_observed_removal(
+        self,
+    ) -> None:
+        state, error = hotplug.observe_expected_usb_edge(
+            "fallback",
+            usb_baseline(usb_topology(lark=("1-1.3@9",))),
+            {
+                "usb_microphones": usb_topology(lark=("1-1.3@10",)),
+                "usb_error": None,
+            },
+        )
+
+        self.assertEqual(state, "error")
+        self.assertIn("changed instance", error or "")
+
     def test_gated_latency_uses_usb_edge_source_monotonic(self) -> None:
         class Sampler:
             def __init__(self, samples):
