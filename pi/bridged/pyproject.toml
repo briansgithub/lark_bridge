@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dev = ["black", "mypy", "pytest", "ruff"]
 
 [tool.setuptools]
-py-modules = ["bridge_supervisor", "bt_watchdog"]
+py-modules = ["bridge_supervisor", "bt_watchdog", "microphones"]
 
 [tool.black]
 line-length = 100
