@@ -701,7 +701,11 @@ def observe_expected_usb_edge(
             "error",
             f"unexpected {candidate_id} USB topology count {len(devices)}",
         )
-    if expected_before == 1 and devices != baseline_devices:
+    if (
+        expected_before == 1
+        and devices[0]["usb_instance_generation"]
+        != baseline_devices[0]["usb_instance_generation"]
+    ):
         return (
             "error",
             f"{candidate_id} changed instance without the expected removal edge",
