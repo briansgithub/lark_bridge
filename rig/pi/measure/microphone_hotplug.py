@@ -66,6 +66,12 @@ USB_BASELINE_DISCARD_SAMPLES = 1
 USB_BASELINE_STABLE_SAMPLES = 2
 USB_EVENT_CONFIRMATION_SAMPLES = 2
 USB_SYSFS_ROOT = Path("/sys/bus/usb/devices")
+CONNECTION_PLAN_DIRECT10_HUB10 = "direct10-hub10"
+CONNECTION_PLAN_CAMPAIGNS = {"promotion-fallback", "fifine-replug"}
+CONNECTION_LAYOUT_DIRECT = "direct"
+CONNECTION_LAYOUT_POWERED_HUB = "powered_hub"
+CONNECTION_LAYOUT_HANDOFF_PHASE = "connection_layout_handoff"
+CONNECTION_LAYOUT_BOUNDARY_CYCLE = 10
 USB_MICROPHONE_FINGERPRINTS = {
     "lark-a1": ("3547", "0407"),
     "fifine-k054": ("0c76", "161e"),
@@ -160,6 +166,73 @@ def _optional_sysfs_text(path: Path) -> str | None:
     return value or None
 
 
+def _usb_port_ancestor_names(port_path: str) -> list[str]:
+    """Return nearest-first USB device ancestors encoded in a sysfs port name."""
+    bus_port, separator, route = port_path.partition("-")
+    if not separator or not bus_port or not route:
+        return []
+    route_parts = route.split(".")
+    if any(not part for part in route_parts):
+        return []
+    return [
+        f"{bus_port}-{'.'.join(route_parts[:depth])}"
+        for depth in range(len(route_parts) - 1, 0, -1)
+    ]
+
+
+def _read_usb_hub_ancestors(
+    sysfs_root: Path,
+    port_path: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Read physical hub ancestors without inferring whether they are externally powered."""
+    hubs: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for ancestor_name in _usb_port_ancestor_names(port_path):
+        ancestor = sysfs_root / ancestor_name
+        try:
+            device_class = (
+                (ancestor / "bDeviceClass").read_text(encoding="ascii").strip().lower()
+            )
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            errors.append(
+                f"{ancestor_name}: device class unreadable: {type(exc).__name__}: {exc}"
+            )
+            continue
+        if device_class.removeprefix("0x").zfill(2) != "09":
+            continue
+        try:
+            vendor_id = (
+                (ancestor / "idVendor").read_text(encoding="ascii").strip().lower()
+            )
+            product_id = (
+                (ancestor / "idProduct").read_text(encoding="ascii").strip().lower()
+            )
+            raw_devnum = (ancestor / "devnum").read_text(encoding="ascii").strip()
+        except (FileNotFoundError, OSError) as exc:
+            errors.append(
+                f"{ancestor_name}: hub identity unreadable: {type(exc).__name__}: {exc}"
+            )
+            continue
+        if not raw_devnum.isdigit():
+            errors.append(f"{ancestor_name}: hub devnum is not numeric: {raw_devnum!r}")
+            continue
+        devnum = int(raw_devnum)
+        hubs.append(
+            {
+                "usb_device_class": "09",
+                "usb_vendor_id": vendor_id,
+                "usb_product_id": product_id,
+                "usb_product": _optional_sysfs_text(ancestor / "product"),
+                "usb_port_path": ancestor_name,
+                "usb_devnum": devnum,
+                "usb_instance_generation": f"{ancestor_name}@{devnum}",
+            }
+        )
+    return hubs, errors
+
+
 def read_usb_microphones(
     sysfs_root: Path = USB_SYSFS_ROOT,
 ) -> tuple[dict[str, list[dict[str, Any]]], str | None]:
@@ -213,6 +286,8 @@ def read_usb_microphones(
             errors.append(f"{entry.name}: devnum is not numeric: {raw_devnum!r}")
             continue
         devnum = int(raw_devnum)
+        hub_ancestors, hub_errors = _read_usb_hub_ancestors(sysfs_root, entry.name)
+        errors.extend(hub_errors)
         observed[candidate_id].append(
             {
                 "id": candidate_id,
@@ -223,6 +298,7 @@ def read_usb_microphones(
                 "usb_port_path": entry.name,
                 "usb_devnum": devnum,
                 "usb_instance_generation": f"{entry.name}@{devnum}",
+                "usb_hub_ancestors": hub_ancestors,
             }
         )
     for devices in observed.values():
@@ -245,6 +321,7 @@ def usb_baseline_from_sample(sample: dict[str, Any] | None) -> dict[str, Any]:
             "usb_microphones": None,
             "usb_error": "no completed sample was available before NOW",
             "microphone": None,
+            "graph_generation": None,
             "sampling": None,
         }
     return {
@@ -254,6 +331,7 @@ def usb_baseline_from_sample(sample: dict[str, Any] | None) -> dict[str, Any]:
         "usb_microphones": copy.deepcopy(sample.get("usb_microphones")),
         "usb_error": sample.get("usb_error"),
         "microphone": copy.deepcopy(sample.get("microphone")),
+        "graph_generation": sample.get("graph_generation"),
         "sampling": copy.deepcopy(sample.get("sampling")),
     }
 
@@ -371,6 +449,56 @@ def _validated_usb_devices(
     if len(devices) > 1:
         return None, f"ambiguous {candidate_id} USB instances: {generations}"
     return devices, None
+
+
+def _validated_hub_ancestors(
+    device: dict[str, Any],
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    ancestors = device.get("usb_hub_ancestors")
+    if not isinstance(ancestors, list):
+        return None, "USB device omitted hub ancestry evidence"
+    generations: set[str] = set()
+    for ancestor in ancestors:
+        if not isinstance(ancestor, dict):
+            return None, "USB hub ancestry is malformed"
+        port = ancestor.get("usb_port_path")
+        devnum = ancestor.get("usb_devnum")
+        generation = ancestor.get("usb_instance_generation")
+        if (
+            ancestor.get("usb_device_class") != "09"
+            or not isinstance(ancestor.get("usb_vendor_id"), str)
+            or not ancestor["usb_vendor_id"]
+            or not isinstance(ancestor.get("usb_product_id"), str)
+            or not ancestor["usb_product_id"]
+            or not isinstance(port, str)
+            or not port
+            or not isinstance(devnum, int)
+            or isinstance(devnum, bool)
+            or devnum < 1
+            or generation != f"{port}@{devnum}"
+        ):
+            return None, "USB hub ancestry contains an invalid raw identity"
+        if generation in generations:
+            return None, "USB hub ancestry contains duplicate generations"
+        generations.add(generation)
+    return ancestors, None
+
+
+def _hub_ancestor_generations(device: dict[str, Any]) -> set[str]:
+    ancestors, error = _validated_hub_ancestors(device)
+    if error or ancestors is None:
+        return set()
+    return {str(item["usb_instance_generation"]) for item in ancestors}
+
+
+def connection_layout_for_cycle(cycle: int, connection_plan: str | None) -> str | None:
+    if connection_plan != CONNECTION_PLAN_DIRECT10_HUB10:
+        return None
+    return (
+        CONNECTION_LAYOUT_DIRECT
+        if cycle <= CONNECTION_LAYOUT_BOUNDARY_CYCLE
+        else CONNECTION_LAYOUT_POWERED_HUB
+    )
 
 
 USB_IDENTITY_FIELDS = (
@@ -1982,6 +2110,7 @@ def wait_for_expectation(
     result = {
         "phase": action["phase"],
         "cycle": action["cycle"],
+        "connection_layout": action.get("connection_layout"),
         "gate_kind": gate_kind,
         "action_id": action["action_id"],
         "action_timestamp": action["timestamp"],
@@ -2041,7 +2170,6 @@ def wait_for_expectation(
             else ["no samples"]
         ),
     }
-    sampler.record_event("transition_result", result=result)
     return result
 
 
@@ -2070,6 +2198,7 @@ def operator_action(
         "lark_fallback/recovery": "RECOVER FIFINE",
         "restore_fifine/recovery": "RECOVER FIFINE",
         "fifine_replug/restore/recovery": "RECOVER FIFINE",
+        CONNECTION_LAYOUT_HANDOFF_PHASE: "MOVE FIFINE TO HUB",
     }
     required = acknowledgements.get(phase, "READY")
     print(f"\n[{phase} cycle {cycle}] {instruction}", file=sys.stderr, flush=True)
@@ -2118,6 +2247,7 @@ def run_step(
     gate_kind: str | None = None,
     input_fn=input,
     require_completion: bool = True,
+    connection_layout: str | None = None,
 ) -> dict[str, Any]:
     action = operator_action(
         sampler,
@@ -2126,6 +2256,7 @@ def run_step(
         instruction=instruction,
         input_fn=input_fn,
     )
+    action["connection_layout"] = connection_layout
     result = wait_for_expectation(
         sampler,
         action,
@@ -2135,6 +2266,7 @@ def run_step(
         gate_kind=gate_kind,
     )
     transitions.append(result)
+    sampler.record_event("transition_result", result=result)
     latency = result.get("transition_latency_s")
     print(
         f"{phase}: {result['outcome']}"
@@ -2176,6 +2308,7 @@ def _identity_after_gate_or_recovery(
     timeout_s: float,
     settle_s: float,
     input_fn=input,
+    connection_layout: str | None = None,
 ) -> tuple[str, int]:
     """Return completed identity, recovering ACTIVE after an actionable safe result."""
     outcome = result.get("outcome")
@@ -2196,8 +2329,298 @@ def _identity_after_gate_or_recovery(
         timeout_s=timeout_s,
         settle_s=settle_s,
         input_fn=input_fn,
+        connection_layout=connection_layout,
     )
     return _sample_identity(recovery)
+
+
+def operator_powered_hub_attestation(
+    sampler: LiveSampler,
+    *,
+    input_fn=input,
+) -> dict[str, Any]:
+    """Record the operator's power-source claim separately from USB observations."""
+    required = "ATTEST POWERED HUB"
+    print(
+        "\nThe next ten cycles use the external hub. Confirm that its external "
+        f"power supply is connected. Type {required!r} (or type ABORT): ",
+        file=sys.stderr,
+        end="",
+        flush=True,
+    )
+    try:
+        response = input_fn()
+    except EOFError as exc:
+        raise CampaignAbort("operator input ended") from exc
+    if response.strip().lower() in {"q", "quit", "abort"}:
+        raise CampaignAbort("operator aborted the campaign")
+    if response.strip() != required:
+        raise CampaignAbort(
+            f"operator acknowledgement was {response.strip()!r}, expected {required!r}"
+        )
+    attestation = {
+        "claim": "external_hub_power_supply_connected",
+        "connection_layout": CONNECTION_LAYOUT_POWERED_HUB,
+        "required_acknowledgement": required,
+        "operator_acknowledged": True,
+        "timestamp": time.time(),
+        "observation_kind": "operator_attestation",
+    }
+    sampler.record_event("operator_attestation", attestation=attestation)
+    return attestation
+
+
+def _connection_handoff_evidence(
+    sampler: LiveSampler,
+    action: dict[str, Any],
+    result: dict[str, Any],
+    attestation: dict[str, Any],
+) -> dict[str, Any]:
+    errors: list[str] = []
+    baseline = action.get("usb_baseline")
+    structural_error = _validate_stable_baseline_structure(baseline)
+    if structural_error:
+        errors.append(f"direct baseline: {structural_error}")
+    baseline_samples = (
+        baseline.get("samples")
+        if isinstance(baseline, dict) and isinstance(baseline.get("samples"), list)
+        else []
+    )
+    direct_device: dict[str, Any] | None = None
+    direct_ancestors: list[dict[str, Any]] | None = None
+    for sample in baseline_samples:
+        topology = sample.get("usb_microphones") if isinstance(sample, dict) else None
+        fifine_devices, fifine_error = _validated_usb_devices(topology, "fifine-k054")
+        lark_devices, lark_error = _validated_usb_devices(topology, "lark-a1")
+        if fifine_error or fifine_devices is None or len(fifine_devices) != 1:
+            errors.append(
+                f"direct baseline FIFINE identity: {fifine_error or 'not unique'}"
+            )
+            continue
+        if lark_error or lark_devices is None or lark_devices:
+            errors.append(
+                f"direct baseline Lark absence: {lark_error or 'Lark present'}"
+            )
+        raw_device = fifine_devices[0]
+        ancestors, ancestry_error = _validated_hub_ancestors(raw_device)
+        if ancestry_error:
+            errors.append(f"direct baseline ancestry: {ancestry_error}")
+        binding_error = usb_identity_binding_error(
+            sample.get("microphone"), raw_device, "fifine-k054"
+        )
+        if binding_error:
+            errors.append(f"direct baseline binding: {binding_error}")
+        if direct_device is None:
+            direct_device = copy.deepcopy(raw_device)
+            direct_ancestors = copy.deepcopy(ancestors)
+        elif raw_device != direct_device:
+            errors.append("direct baseline USB identity changed between stable samples")
+
+    first_match = result.get("first_matching_sample")
+    final_sample = result.get("final_sample")
+    first_seq = _sample_sequence(first_match, "seq") if first_match else None
+    final_seq = _sample_sequence(final_sample, "seq") if final_sample else None
+    settle_samples: list[dict[str, Any]] = []
+    if first_seq is None or final_seq is None or final_seq < first_seq:
+        errors.append("powered-hub settled sample bounds are missing")
+    elif isinstance(baseline, dict):
+        baseline_seq = _sample_sequence(baseline, "seq")
+        if baseline_seq is None:
+            errors.append("direct baseline sequence is missing")
+        else:
+            settle_samples = [
+                sample
+                for sample in sampler.samples_after(baseline_seq)
+                if first_seq <= int(sample.get("seq", -1)) <= final_seq
+            ]
+    if len(settle_samples) < USB_EVENT_CONFIRMATION_SAMPLES:
+        errors.append("powered-hub state lacks two continuously sampled settle records")
+
+    powered_device: dict[str, Any] | None = None
+    powered_ancestors: list[dict[str, Any]] | None = None
+    for index, sample in enumerate(settle_samples):
+        if sample.get("usb_error"):
+            errors.append(
+                f"powered-hub settle sample {index + 1}: {sample['usb_error']}"
+            )
+            continue
+        topology = sample.get("usb_microphones")
+        fifine_devices, fifine_error = _validated_usb_devices(topology, "fifine-k054")
+        lark_devices, lark_error = _validated_usb_devices(topology, "lark-a1")
+        if fifine_error or fifine_devices is None or len(fifine_devices) != 1:
+            errors.append(
+                f"powered-hub settle FIFINE identity: {fifine_error or 'not unique'}"
+            )
+            continue
+        if lark_error or lark_devices is None or lark_devices:
+            errors.append(
+                f"powered-hub settle Lark absence: {lark_error or 'Lark present'}"
+            )
+        raw_device = fifine_devices[0]
+        ancestors, ancestry_error = _validated_hub_ancestors(raw_device)
+        if ancestry_error:
+            errors.append(f"powered-hub settle ancestry: {ancestry_error}")
+        binding_error = usb_identity_binding_error(
+            sample.get("microphone"), raw_device, "fifine-k054"
+        )
+        if binding_error:
+            errors.append(f"powered-hub settle binding: {binding_error}")
+        if powered_device is None:
+            powered_device = copy.deepcopy(raw_device)
+            powered_ancestors = copy.deepcopy(ancestors)
+        elif raw_device != powered_device:
+            errors.append("powered-hub USB identity changed during settled sampling")
+        if index:
+            sequence_error = _consecutive_source_samples(
+                settle_samples[index - 1], sample
+            )
+            if sequence_error:
+                errors.append(f"powered-hub settle sampling: {sequence_error}")
+
+    direct_generations = (
+        _hub_ancestor_generations(direct_device) if direct_device is not None else set()
+    )
+    powered_generations = (
+        _hub_ancestor_generations(powered_device)
+        if powered_device is not None
+        else set()
+    )
+    added_generations = sorted(powered_generations - direct_generations)
+    if not added_generations:
+        errors.append("no new observed USB hub ancestor appeared at the layout handoff")
+    if (
+        direct_device is not None
+        and powered_device is not None
+        and direct_device.get("usb_instance_generation")
+        == powered_device.get("usb_instance_generation")
+    ):
+        errors.append("FIFINE USB instance generation did not change at handoff")
+    if result.get("outcome") != "completed":
+        errors.append(f"layout handoff state outcome was {result.get('outcome')!r}")
+    if (
+        attestation.get("operator_acknowledged") is not True
+        or attestation.get("claim") != "external_hub_power_supply_connected"
+    ):
+        errors.append("powered-hub operator attestation is missing or malformed")
+
+    direct_selected = (
+        baseline_samples[-1].get("microphone") if baseline_samples else None
+    )
+    powered_selected = (
+        final_sample.get("microphone") if isinstance(final_sample, dict) else None
+    )
+    direct_token = (
+        direct_selected.get("instance_token")
+        if isinstance(direct_selected, dict)
+        else None
+    )
+    powered_token = (
+        powered_selected.get("instance_token")
+        if isinstance(powered_selected, dict)
+        else None
+    )
+    direct_generation = (
+        baseline_samples[-1].get("graph_generation") if baseline_samples else None
+    )
+    powered_generation = (
+        final_sample.get("graph_generation") if isinstance(final_sample, dict) else None
+    )
+    if not isinstance(direct_token, str) or not direct_token:
+        errors.append("direct runtime instance token is missing")
+    if not isinstance(powered_token, str) or not powered_token:
+        errors.append("powered-hub runtime instance token is missing")
+    if direct_token == powered_token:
+        errors.append("runtime instance token did not change at handoff")
+    if (
+        not isinstance(direct_generation, int)
+        or isinstance(direct_generation, bool)
+        or not isinstance(powered_generation, int)
+        or isinstance(powered_generation, bool)
+        or powered_generation <= direct_generation
+    ):
+        errors.append("graph generation did not advance at handoff")
+
+    return {
+        "validated": not errors,
+        "errors": errors,
+        "observation_kind": "usb_sysfs_ancestry_delta",
+        "candidate_id": "fifine-k054",
+        "direct_usb_device": direct_device,
+        "powered_hub_usb_device": powered_device,
+        "direct_hub_ancestors": direct_ancestors,
+        "powered_hub_ancestors": powered_ancestors,
+        "added_hub_ancestor_generations": added_generations,
+        "direct_instance_token": direct_token,
+        "powered_hub_instance_token": powered_token,
+        "direct_graph_generation": direct_generation,
+        "powered_hub_graph_generation": powered_generation,
+        "lark_absent": not any(
+            (sample.get("usb_microphones") or {}).get("lark-a1")
+            for sample in [*baseline_samples, *settle_samples]
+            if isinstance(sample, dict)
+        ),
+        "settled_sample_count": len(settle_samples),
+        "first_settled_seq": first_seq,
+        "final_settled_seq": final_seq,
+    }
+
+
+def run_connection_layout_handoff(
+    sampler: LiveSampler,
+    transitions: list[dict[str, Any]],
+    *,
+    previous_token: str,
+    previous_generation: int,
+    timeout_s: float,
+    settle_s: float,
+    input_fn=input,
+) -> tuple[str, int]:
+    """Observe the one non-gated direct-to-powered-hub midpoint handoff."""
+    attestation = operator_powered_hub_attestation(sampler, input_fn=input_fn)
+    action = operator_action(
+        sampler,
+        phase=CONNECTION_LAYOUT_HANDOFF_PHASE,
+        cycle=CONNECTION_LAYOUT_BOUNDARY_CYCLE,
+        instruction=(
+            "Move the FIFINE from its direct Pi port to the externally powered USB "
+            "hub; keep Lark unplugged and the live call connected."
+        ),
+        input_fn=input_fn,
+    )
+    action["connection_layout"] = "direct_to_powered_hub"
+    result = wait_for_expectation(
+        sampler,
+        action,
+        Expectation(
+            state="ACTIVE",
+            selected_id="fifine-k054",
+            different_instance_token=previous_token,
+            generation_after=previous_generation,
+            candidate_states={"lark-a1": frozenset({"absent"})},
+        ),
+        timeout_s=timeout_s,
+        settle_s=settle_s,
+        gate_kind=None,
+    )
+    state_outcome = result.get("outcome")
+    ancestry = _connection_handoff_evidence(sampler, action, result, attestation)
+    result["operator_attestation"] = attestation
+    result["observed_usb_ancestry"] = ancestry
+    result["layout_handoff_validated"] = ancestry["validated"]
+    if not ancestry["validated"]:
+        result["state_outcome"] = state_outcome
+        result["outcome"] = "layout_evidence_error"
+    transitions.append(result)
+    sampler.record_event("transition_result", result=result)
+    print(
+        f"{CONNECTION_LAYOUT_HANDOFF_PHASE}: {result['outcome']}",
+        file=sys.stderr,
+        flush=True,
+    )
+    if result["outcome"] != "completed":
+        detail = "; ".join(ancestry["errors"]) or str(state_outcome)
+        raise CampaignAbort(f"connection layout handoff failed: {detail}")
+    return _sample_identity(result)
 
 
 def run_matrix(
@@ -2426,6 +2849,7 @@ def run_promotion_fallback(
     timeout_s: float,
     settle_s: float,
     input_fn=input,
+    connection_plan: str | None = None,
 ) -> None:
     opening = run_step(
         sampler,
@@ -2441,9 +2865,11 @@ def run_promotion_fallback(
         timeout_s=timeout_s,
         settle_s=settle_s,
         input_fn=input_fn,
+        connection_layout=connection_layout_for_cycle(0, connection_plan),
     )
     previous_token, previous_generation = _sample_identity(opening)
     for cycle in range(1, cycles + 1):
+        connection_layout = connection_layout_for_cycle(cycle, connection_plan)
         promotion_expected = Expectation(
             state="ACTIVE",
             selected_id="lark-a1",
@@ -2462,6 +2888,7 @@ def run_promotion_fallback(
             settle_s=settle_s,
             gate_kind="promotion",
             input_fn=input_fn,
+            connection_layout=connection_layout,
         )
         previous_token, previous_generation = _identity_after_gate_or_recovery(
             sampler,
@@ -2477,6 +2904,7 @@ def run_promotion_fallback(
             timeout_s=timeout_s,
             settle_s=settle_s,
             input_fn=input_fn,
+            connection_layout=connection_layout,
         )
         fallback_expected = Expectation(
             state="ACTIVE",
@@ -2496,6 +2924,7 @@ def run_promotion_fallback(
             settle_s=settle_s,
             gate_kind="fallback",
             input_fn=input_fn,
+            connection_layout=connection_layout,
         )
         previous_token, previous_generation = _identity_after_gate_or_recovery(
             sampler,
@@ -2511,7 +2940,21 @@ def run_promotion_fallback(
             timeout_s=timeout_s,
             settle_s=settle_s,
             input_fn=input_fn,
+            connection_layout=connection_layout,
         )
+        if (
+            connection_plan == CONNECTION_PLAN_DIRECT10_HUB10
+            and cycle == CONNECTION_LAYOUT_BOUNDARY_CYCLE
+        ):
+            previous_token, previous_generation = run_connection_layout_handoff(
+                sampler,
+                transitions,
+                previous_token=previous_token,
+                previous_generation=previous_generation,
+                timeout_s=timeout_s,
+                settle_s=settle_s,
+                input_fn=input_fn,
+            )
 
 
 def run_fifine_replug(
@@ -2522,6 +2965,7 @@ def run_fifine_replug(
     timeout_s: float,
     settle_s: float,
     input_fn=input,
+    connection_plan: str | None = None,
 ) -> None:
     opening = run_step(
         sampler,
@@ -2537,9 +2981,11 @@ def run_fifine_replug(
         timeout_s=timeout_s,
         settle_s=settle_s,
         input_fn=input_fn,
+        connection_layout=connection_layout_for_cycle(0, connection_plan),
     )
     previous_token, previous_generation = _sample_identity(opening)
     for cycle in range(1, cycles + 1):
+        connection_layout = connection_layout_for_cycle(cycle, connection_plan)
         run_step(
             sampler,
             transitions,
@@ -2554,6 +3000,7 @@ def run_fifine_replug(
             timeout_s=timeout_s,
             settle_s=settle_s,
             input_fn=input_fn,
+            connection_layout=connection_layout,
         )
         restored_expected = Expectation(
             state="ACTIVE",
@@ -2573,6 +3020,7 @@ def run_fifine_replug(
             settle_s=settle_s,
             gate_kind="fifine_replug",
             input_fn=input_fn,
+            connection_layout=connection_layout,
         )
         previous_token, previous_generation = _identity_after_gate_or_recovery(
             sampler,
@@ -2587,7 +3035,21 @@ def run_fifine_replug(
             timeout_s=timeout_s,
             settle_s=settle_s,
             input_fn=input_fn,
+            connection_layout=connection_layout,
         )
+        if (
+            connection_plan == CONNECTION_PLAN_DIRECT10_HUB10
+            and cycle == CONNECTION_LAYOUT_BOUNDARY_CYCLE
+        ):
+            previous_token, previous_generation = run_connection_layout_handoff(
+                sampler,
+                transitions,
+                previous_token=previous_token,
+                previous_generation=previous_generation,
+                timeout_s=timeout_s,
+                settle_s=settle_s,
+                input_fn=input_fn,
+            )
 
 
 def run_inactive_fifine(
@@ -2662,6 +3124,306 @@ def required_gate_kinds(campaign: str) -> tuple[str, ...]:
     return ()
 
 
+def _transition_usb_topologies(transition: dict[str, Any]) -> list[dict[str, Any]]:
+    topologies: list[dict[str, Any]] = []
+    baseline = transition.get("usb_baseline")
+    if isinstance(baseline, dict):
+        samples = baseline.get("samples")
+        if isinstance(samples, list):
+            topologies.extend(
+                sample["usb_microphones"]
+                for sample in samples
+                if isinstance(sample, dict)
+                and isinstance(sample.get("usb_microphones"), dict)
+            )
+    event = transition.get("usb_event")
+    if isinstance(event, dict):
+        persistence = event.get("persistence_samples")
+        if isinstance(persistence, list):
+            topologies.extend(
+                sample["usb_microphones"]
+                for sample in persistence
+                if isinstance(sample, dict)
+                and isinstance(sample.get("usb_microphones"), dict)
+            )
+    final_sample = transition.get("final_sample")
+    if isinstance(final_sample, dict) and isinstance(
+        final_sample.get("usb_microphones"), dict
+    ):
+        topologies.append(final_sample["usb_microphones"])
+    return topologies
+
+
+def _recorded_layout_handoff_error(handoff: dict[str, Any]) -> str | None:
+    ancestry = handoff.get("observed_usb_ancestry")
+    attestation = handoff.get("operator_attestation")
+    if not isinstance(ancestry, dict) or not isinstance(attestation, dict):
+        return "handoff omitted separate ancestry or operator-attestation evidence"
+    if ancestry.get("observation_kind") != "usb_sysfs_ancestry_delta":
+        return "handoff ancestry observation kind is invalid"
+    direct_device = ancestry.get("direct_usb_device")
+    powered_device = ancestry.get("powered_hub_usb_device")
+    if not isinstance(direct_device, dict) or not isinstance(powered_device, dict):
+        return "handoff omitted direct or powered-hub raw USB identity"
+    direct_ancestors, direct_error = _validated_hub_ancestors(direct_device)
+    powered_ancestors, powered_error = _validated_hub_ancestors(powered_device)
+    if direct_error or direct_ancestors is None:
+        return f"direct handoff ancestry is invalid: {direct_error}"
+    if powered_error or powered_ancestors is None:
+        return f"powered-hub handoff ancestry is invalid: {powered_error}"
+    direct_generations = {
+        str(item["usb_instance_generation"]) for item in direct_ancestors
+    }
+    powered_generations = {
+        str(item["usb_instance_generation"]) for item in powered_ancestors
+    }
+    expected_added = sorted(powered_generations - direct_generations)
+    if (
+        not expected_added
+        or ancestry.get("added_hub_ancestor_generations") != expected_added
+    ):
+        return "handoff added-hub ancestry does not match its raw USB records"
+    if direct_device.get("usb_instance_generation") == powered_device.get(
+        "usb_instance_generation"
+    ):
+        return "handoff raw USB instance generation did not change"
+    direct_token = ancestry.get("direct_instance_token")
+    powered_token = ancestry.get("powered_hub_instance_token")
+    if (
+        not isinstance(direct_token, str)
+        or not direct_token
+        or not isinstance(powered_token, str)
+        or not powered_token
+        or direct_token == powered_token
+    ):
+        return "handoff runtime instance token evidence is invalid"
+    direct_generation = ancestry.get("direct_graph_generation")
+    powered_generation = ancestry.get("powered_hub_graph_generation")
+    if (
+        not isinstance(direct_generation, int)
+        or isinstance(direct_generation, bool)
+        or not isinstance(powered_generation, int)
+        or isinstance(powered_generation, bool)
+        or powered_generation <= direct_generation
+    ):
+        return "handoff graph-generation evidence is invalid"
+    if ancestry.get("lark_absent") is not True:
+        return "handoff did not prove Lark absent"
+    if (
+        not isinstance(ancestry.get("settled_sample_count"), int)
+        or ancestry["settled_sample_count"] < USB_EVENT_CONFIRMATION_SAMPLES
+    ):
+        return "handoff lacks continuously sampled settled evidence"
+    if (
+        attestation.get("observation_kind") != "operator_attestation"
+        or attestation.get("claim") != "external_hub_power_supply_connected"
+        or attestation.get("operator_acknowledged") is not True
+    ):
+        return "handoff powered-hub operator attestation is invalid"
+    if (
+        handoff.get("layout_handoff_validated") is not True
+        or ancestry.get("validated") is not True
+    ):
+        return "handoff is not marked validated"
+    return None
+
+
+def summarize_connection_layout_gate(
+    transitions: list[dict[str, Any]],
+    *,
+    campaign: str,
+    connection_plan: str | None,
+) -> dict[str, Any]:
+    """Require a bound 10-direct/10-powered-hub split without weakening timing gates."""
+    if connection_plan is None:
+        return {
+            "verdict": "NOT_REQUESTED",
+            "connection_plan": None,
+            "required": False,
+        }
+    errors: list[str] = []
+    if connection_plan != CONNECTION_PLAN_DIRECT10_HUB10:
+        errors.append(f"unsupported connection plan {connection_plan!r}")
+    if campaign not in CONNECTION_PLAN_CAMPAIGNS:
+        errors.append(f"connection plan is not valid for campaign {campaign!r}")
+
+    handoffs = [
+        item
+        for item in transitions
+        if item.get("phase") == CONNECTION_LAYOUT_HANDOFF_PHASE
+    ]
+    external_hub_generations: set[str] = set()
+    handoff_valid = False
+    if len(handoffs) != 1:
+        errors.append(f"expected one connection-layout handoff, found {len(handoffs)}")
+        handoff_index = None
+    else:
+        handoff = handoffs[0]
+        handoff_index = transitions.index(handoff)
+        ancestry = handoff.get("observed_usb_ancestry")
+        added = (
+            ancestry.get("added_hub_ancestor_generations")
+            if isinstance(ancestry, dict)
+            else None
+        )
+        if isinstance(added, list) and all(
+            isinstance(item, str) and item for item in added
+        ):
+            external_hub_generations.update(added)
+        handoff_valid = bool(
+            handoff.get("cycle") == CONNECTION_LAYOUT_BOUNDARY_CYCLE
+            and handoff.get("connection_layout") == "direct_to_powered_hub"
+            and handoff.get("outcome") == "completed"
+            and external_hub_generations
+            and _recorded_layout_handoff_error(handoff) is None
+        )
+        if not handoff_valid:
+            errors.append(
+                "connection-layout handoff evidence is invalid: "
+                + (_recorded_layout_handoff_error(handoff) or "placement is invalid")
+            )
+
+    for transition_index, transition in enumerate(transitions):
+        if transition.get("phase") == CONNECTION_LAYOUT_HANDOFF_PHASE:
+            continue
+        cycle = transition.get("cycle")
+        if (
+            not isinstance(cycle, int)
+            or isinstance(cycle, bool)
+            or not 0 <= cycle <= 20
+        ):
+            errors.append(
+                f"transition {transition.get('phase')!r} has invalid cycle {cycle!r}"
+            )
+            continue
+        expected_layout = connection_layout_for_cycle(cycle, connection_plan)
+        if transition.get("connection_layout") != expected_layout:
+            errors.append(
+                f"transition {transition.get('phase')!r} cycle {cycle} is labeled "
+                f"{transition.get('connection_layout')!r}, expected {expected_layout!r}"
+            )
+        if handoff_index is not None and transition.get("gate_kind") is not None:
+            if (
+                cycle <= CONNECTION_LAYOUT_BOUNDARY_CYCLE
+                and transition_index > handoff_index
+            ):
+                errors.append(
+                    f"transition {transition.get('phase')!r} cycle {cycle} appears "
+                    "after the layout handoff"
+                )
+            if (
+                cycle > CONNECTION_LAYOUT_BOUNDARY_CYCLE
+                and transition_index < handoff_index
+            ):
+                errors.append(
+                    f"transition {transition.get('phase')!r} cycle {cycle} appears "
+                    "before the layout handoff"
+                )
+
+    observed_cycles: dict[str, dict[str, list[int]]] = {}
+    for gate_kind in required_gate_kinds(campaign):
+        observed_cycles[gate_kind] = {
+            CONNECTION_LAYOUT_DIRECT: [],
+            CONNECTION_LAYOUT_POWERED_HUB: [],
+        }
+        for transition in transitions:
+            if transition.get("gate_kind") != gate_kind:
+                continue
+            cycle = transition.get("cycle")
+            layout = transition.get("connection_layout")
+            if layout in observed_cycles[gate_kind] and isinstance(cycle, int):
+                observed_cycles[gate_kind][layout].append(cycle)
+            topologies = _transition_usb_topologies(transition)
+            observed_devices = 0
+            shared_external_ancestor = False
+            for topology in topologies:
+                candidate_ancestors: dict[str, set[str]] = {}
+                for candidate_id in USB_MICROPHONE_FINGERPRINTS:
+                    devices, device_error = _validated_usb_devices(
+                        topology, candidate_id
+                    )
+                    if device_error or devices is None:
+                        errors.append(
+                            f"{gate_kind} cycle {cycle}: {device_error or 'USB topology invalid'}"
+                        )
+                        continue
+                    for device in devices:
+                        observed_devices += 1
+                        ancestors, ancestry_error = _validated_hub_ancestors(device)
+                        if ancestry_error or ancestors is None:
+                            errors.append(
+                                f"{gate_kind} cycle {cycle}: "
+                                f"{ancestry_error or 'hub ancestry missing'}"
+                            )
+                            continue
+                        generations = {
+                            str(item["usb_instance_generation"]) for item in ancestors
+                        }
+                        candidate_ancestors[candidate_id] = generations
+                        on_external_hub = bool(generations & external_hub_generations)
+                        if layout == CONNECTION_LAYOUT_DIRECT and on_external_hub:
+                            errors.append(
+                                f"{gate_kind} cycle {cycle}: direct evidence uses the "
+                                "handoff hub ancestry"
+                            )
+                        if (
+                            layout == CONNECTION_LAYOUT_POWERED_HUB
+                            and not on_external_hub
+                        ):
+                            errors.append(
+                                f"{gate_kind} cycle {cycle}: powered-hub evidence is "
+                                "not descended from the observed handoff hub"
+                            )
+                if all(
+                    candidate_ancestors.get(item)
+                    for item in USB_MICROPHONE_FINGERPRINTS
+                ):
+                    shared_external_ancestor = bool(
+                        candidate_ancestors["lark-a1"]
+                        & candidate_ancestors["fifine-k054"]
+                        & external_hub_generations
+                    )
+            if not observed_devices:
+                errors.append(
+                    f"{gate_kind} cycle {cycle}: no raw microphone was observed"
+                )
+            if (
+                campaign == "promotion-fallback"
+                and layout == CONNECTION_LAYOUT_POWERED_HUB
+                and not shared_external_ancestor
+            ):
+                errors.append(
+                    f"{gate_kind} cycle {cycle}: Lark and FIFINE lack a shared "
+                    "observed external-hub ancestor"
+                )
+        for layout, expected in (
+            (CONNECTION_LAYOUT_DIRECT, list(range(1, 11))),
+            (CONNECTION_LAYOUT_POWERED_HUB, list(range(11, 21))),
+        ):
+            actual = sorted(observed_cycles[gate_kind][layout])
+            if actual != expected:
+                errors.append(
+                    f"{gate_kind} {layout} cycles are {actual}, expected {expected}"
+                )
+
+    return {
+        "verdict": "PASS" if not errors else "FAIL",
+        "connection_plan": connection_plan,
+        "required": True,
+        "required_cycles": {
+            CONNECTION_LAYOUT_DIRECT: 10,
+            CONNECTION_LAYOUT_POWERED_HUB: 10,
+        },
+        "observed_cycles": observed_cycles,
+        "required_handoffs": 1,
+        "observed_handoffs": len(handoffs),
+        "handoff_validated": handoff_valid,
+        "observed_external_hub_ancestor_generations": sorted(external_hub_generations),
+        "operator_attestation_is_separate_from_usb_observation": True,
+        "errors": errors,
+    }
+
+
 def build_summary(
     *,
     sampler: LiveSampler,
@@ -2672,6 +3434,7 @@ def build_summary(
     fast_limit_s: float,
     max_limit_s: float,
     started_wall: float,
+    connection_plan: str | None = None,
 ) -> dict[str, Any]:
     initial_counts = sampler.initial_service_counts
     final_counts = sampler.final_service_counts or sampler.service_counts()
@@ -2706,6 +3469,15 @@ def build_summary(
         )
         for kind in required_gate_kinds(campaign)
     }
+    connection_layout_gate = summarize_connection_layout_gate(
+        transitions,
+        campaign=campaign,
+        connection_plan=connection_plan,
+    )
+    connection_layout_passed = connection_layout_gate["verdict"] in {
+        "PASS",
+        "NOT_REQUESTED",
+    }
     transitions_acceptable = all(
         item.get("outcome") == "completed"
         or (item.get("gate_kind") is not None and item.get("outcome") == "safe_state")
@@ -2723,6 +3495,7 @@ def build_summary(
         timing_gates
         and all(item["verdict"] == "PASS" for item in timing_gates.values())
         and evidence_gates_passed
+        and connection_layout_passed
     ):
         qualification_gate = "PASS"
     elif (
@@ -2730,6 +3503,7 @@ def build_summary(
         and all(item["verdict"] != "FAIL" for item in timing_gates.values())
         and any(item["verdict"] == "INCOMPLETE" for item in timing_gates.values())
         and evidence_gates_passed
+        and connection_layout_passed
     ):
         qualification_gate = "INCOMPLETE"
     else:
@@ -2739,6 +3513,7 @@ def build_summary(
         "verdict": qualification_gate,
         "qualification_gate": qualification_gate,
         "campaign": campaign,
+        "connection_plan": connection_plan,
         "requested_cycles": cycles,
         "started_timestamp": started_wall,
         "finished_timestamp": time.time(),
@@ -2787,6 +3562,7 @@ def build_summary(
             "evidence_complete": service_evidence_complete,
         },
         "timing_gates": timing_gates,
+        "connection_layout_gate": connection_layout_gate,
         "transitions": transitions,
     }
 
@@ -2970,6 +3746,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         help="physical cycles (default: 1 for matrix, otherwise 20)",
     )
+    parser.add_argument(
+        "--connection-plan",
+        choices=(CONNECTION_PLAN_DIRECT10_HUB10,),
+        help=(
+            "strict 20-cycle qualification split: cycles 1-10 direct, one "
+            "observed handoff, then cycles 11-20 through an attested powered hub"
+        ),
+    )
     parser.add_argument("--interval", type=float, default=DEFAULT_INTERVAL_SECONDS)
     parser.add_argument(
         "--timeout", type=float, default=DEFAULT_TRANSITION_TIMEOUT_SECONDS
@@ -2990,8 +3774,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=argparse.SUPPRESS,
     )
     args = parser.parse_args(argv)
+    configured_cycles = args.cycles
     if args.cycles is None:
         args.cycles = 1 if args.campaign == "matrix" else DEFAULT_REPEATED_CYCLES
+    if args.connection_plan is not None:
+        if args.campaign not in CONNECTION_PLAN_CAMPAIGNS:
+            parser.error(
+                "--connection-plan is accepted only for promotion-fallback or "
+                "fifine-replug"
+            )
+        if configured_cycles not in {None, QUALIFICATION_CYCLES}:
+            parser.error(
+                f"--connection-plan {CONNECTION_PLAN_DIRECT10_HUB10} requires "
+                f"exactly {QUALIFICATION_CYCLES} cycles"
+            )
+        args.cycles = QUALIFICATION_CYCLES
     if args.cycles <= 0:
         parser.error("--cycles must be positive")
     if not 0 < args.interval <= MAX_CONFIGURED_INTERVAL_SECONDS:
@@ -3024,12 +3821,14 @@ def _structured_failure(
     output_directory: Path,
     failure_type: str,
     message: str,
+    connection_plan: str | None = None,
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "verdict": "FAIL",
         "qualification_gate": "FAIL",
         "campaign": campaign,
+        "connection_plan": connection_plan,
         "requested_cycles": cycles,
         "finished_timestamp": time.time(),
         "failure": {"type": failure_type, "message": message},
@@ -3061,6 +3860,7 @@ def main(argv: list[str] | None = None) -> int:
             output_directory=args.out_dir,
             failure_type="OutputDirectoryExists",
             message="refusing to overwrite an existing evidence output directory",
+            connection_plan=args.connection_plan,
         )
         _print_json(failure)
         print(failure["failure"]["message"], file=sys.stderr, flush=True)
@@ -3072,6 +3872,7 @@ def main(argv: list[str] | None = None) -> int:
             output_directory=args.out_dir,
             failure_type=type(exc).__name__,
             message=str(exc),
+            connection_plan=args.connection_plan,
         )
         _print_json(failure)
         print(
@@ -3111,6 +3912,7 @@ def main(argv: list[str] | None = None) -> int:
                 cycles=args.cycles,
                 timeout_s=args.timeout,
                 settle_s=args.settle,
+                connection_plan=args.connection_plan,
             )
         elif args.campaign == "fifine-replug":
             run_fifine_replug(
@@ -3119,6 +3921,7 @@ def main(argv: list[str] | None = None) -> int:
                 cycles=args.cycles,
                 timeout_s=args.timeout,
                 settle_s=args.settle,
+                connection_plan=args.connection_plan,
             )
         else:
             run_inactive_fifine(
@@ -3173,6 +3976,7 @@ def main(argv: list[str] | None = None) -> int:
         fast_limit_s=args.fast_limit,
         max_limit_s=args.timeout,
         started_wall=started_wall,
+        connection_plan=args.connection_plan,
     )
     summary["artifacts"] = {"summary_json": str(summary_path)}
     if timeline_path.is_file():

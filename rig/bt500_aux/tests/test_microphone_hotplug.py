@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import io
 import json
 import subprocess
 import sys
@@ -558,6 +559,35 @@ class MicrophoneHotplugHostTests(unittest.TestCase):
         self.assertIsNone(hotplug.parse_args([]).status_path)
         with self.assertRaises(SystemExit):
             hotplug.parse_args(["--interval", "0.201"])
+
+    def test_split_connection_plan_is_strictly_scoped_and_forces_twenty(self) -> None:
+        for campaign in ("promotion-fallback", "fifine-replug"):
+            args = hotplug.parse_args(
+                [
+                    "--campaign",
+                    campaign,
+                    "--connection-plan",
+                    hotplug.core.CONNECTION_PLAN_DIRECT10_HUB10,
+                ]
+            )
+            self.assertEqual(args.cycles, 20)
+        for arguments in (
+            ["--connection-plan", hotplug.core.CONNECTION_PLAN_DIRECT10_HUB10],
+            [
+                "--campaign",
+                "fifine-replug",
+                "--connection-plan",
+                hotplug.core.CONNECTION_PLAN_DIRECT10_HUB10,
+                "--cycles",
+                "10",
+            ],
+        ):
+            with (
+                self.subTest(arguments=arguments),
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                hotplug.parse_args(arguments)
 
     def test_snapshot_freshness_uses_pi_clock_not_host_clock(self) -> None:
         document = {

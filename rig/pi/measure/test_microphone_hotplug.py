@@ -17,7 +17,25 @@ LARK = "alsa_input.usb-LARK.analog-stereo"
 FIFINE = "alsa_input.usb-FIFINE.mono-fallback"
 
 
-def usb_device(candidate_id: str, generation: str) -> dict:
+def usb_hub(generation: str) -> dict:
+    port, raw_devnum = generation.rsplit("@", 1)
+    return {
+        "usb_device_class": "09",
+        "usb_vendor_id": "0bda",
+        "usb_product_id": "5411",
+        "usb_product": "USB2.1 Hub",
+        "usb_port_path": port,
+        "usb_devnum": int(raw_devnum),
+        "usb_instance_generation": generation,
+    }
+
+
+def usb_device(
+    candidate_id: str,
+    generation: str,
+    *,
+    hubs: tuple[str, ...] = (),
+) -> dict:
     port, raw_devnum = generation.rsplit("@", 1)
     vendor_id, product_id = hotplug.USB_MICROPHONE_FINGERPRINTS[candidate_id]
     return {
@@ -33,6 +51,7 @@ def usb_device(candidate_id: str, generation: str) -> dict:
         "usb_port_path": port,
         "usb_devnum": int(raw_devnum),
         "usb_instance_generation": generation,
+        "usb_hub_ancestors": [usb_hub(value) for value in hubs],
     }
 
 
@@ -40,20 +59,19 @@ def usb_topology(
     *,
     lark: tuple[str, ...] = (),
     fifine: tuple[str, ...] = ("1-1.2@4",),
+    lark_hubs: tuple[str, ...] = (),
+    fifine_hubs: tuple[str, ...] = (),
 ) -> dict[str, list[dict]]:
     return {
-        "lark-a1": [usb_device("lark-a1", value) for value in lark],
-        "fifine-k054": [usb_device("fifine-k054", value) for value in fifine],
+        "lark-a1": [usb_device("lark-a1", value, hubs=lark_hubs) for value in lark],
+        "fifine-k054": [
+            usb_device("fifine-k054", value, hubs=fifine_hubs) for value in fifine
+        ],
     }
 
 
 def usb_baseline(topology: dict[str, list[dict]]) -> dict:
-    if topology["lark-a1"]:
-        microphone = active_status(selected_id="lark-a1")["microphone"]["selected"]
-    elif topology["fifine-k054"]:
-        microphone = active_status()["microphone"]["selected"]
-    else:
-        microphone = None
+    microphone = selected_for_topology(topology)
     samples = [
         {
             "seq": seq,
@@ -220,31 +238,47 @@ def sample_for(status: dict, links: list[tuple[str, str]] | None = None) -> dict
     }
 
 
-def valid_timing_transition(kind: str, *, outcome: str = "completed") -> dict:
+def valid_timing_transition(
+    kind: str,
+    *,
+    outcome: str = "completed",
+    connection_layout: str | None = None,
+    cycle: int | None = None,
+) -> dict:
+    hub_generations = (
+        ("1-1.2.1@8", "1-1.2@7")
+        if connection_layout == hotplug.CONNECTION_LAYOUT_POWERED_HUB
+        else ()
+    )
+    fifine_generation = "1-1.2.1.3@17" if hub_generations else "1-1.2@4"
+    lark_generation = "1-1.2.1.1@16" if hub_generations else "1-1.3@9"
+    fifine_only = usb_topology(fifine=(fifine_generation,), fifine_hubs=hub_generations)
+    both = usb_topology(
+        lark=(lark_generation,),
+        fifine=(fifine_generation,),
+        lark_hubs=hub_generations,
+        fifine_hubs=hub_generations,
+    )
     before, after, selected_id = {
-        "promotion": (
-            usb_topology(),
-            usb_topology(lark=("1-1.3@9",)),
-            "lark-a1",
-        ),
-        "fallback": (
-            usb_topology(lark=("1-1.3@9",)),
-            usb_topology(),
-            "fifine-k054",
-        ),
+        "promotion": (fifine_only, both, "lark-a1"),
+        "fallback": (both, fifine_only, "fifine-k054"),
         "fifine_replug": (
             usb_topology(fifine=()),
-            usb_topology(fifine=("1-1.2@12",)),
+            usb_topology(
+                fifine=("1-1.2.1.3@17" if hub_generations else "1-1.2@12",),
+                fifine_hubs=hub_generations,
+            ),
             "fifine-k054",
         ),
     }[kind]
     selected = active_status(selected_id=selected_id)["microphone"]["selected"]
     target_id = hotplug.USB_GATE_TARGET[kind][0]
     target_devices = after[target_id]
-    if target_devices and selected_id == target_id:
+    selected_devices = after[selected_id]
+    if selected_devices:
         selected = json.loads(json.dumps(selected))
         selected["identity"] = {
-            key: target_devices[0].get(key) for key in hotplug.USB_IDENTITY_FIELDS
+            key: selected_devices[0].get(key) for key in hotplug.USB_IDENTITY_FIELDS
         }
     first = {
         "seq": 2,
@@ -301,7 +335,14 @@ def valid_timing_transition(kind: str, *, outcome: str = "completed") -> dict:
     state_settle = (
         final["capture_started_monotonic"] - confirmation["capture_started_monotonic"]
     )
-    return {
+    result = {
+        "phase": {
+            "promotion": "lark_promotion",
+            "fallback": "lark_fallback",
+            "fifine_replug": "fifine_replug/restore",
+        }[kind],
+        "cycle": cycle,
+        "connection_layout": connection_layout,
         "gate_kind": kind,
         "outcome": outcome,
         "timing_evidence_version": hotplug.TIMING_EVIDENCE_VERSION,
@@ -329,6 +370,7 @@ def valid_timing_transition(kind: str, *, outcome: str = "completed") -> dict:
         "safety_clean": True,
         "restart_clean": True,
     }
+    return result
 
 
 def timing_transitions(kind: str) -> list[dict]:
@@ -337,6 +379,67 @@ def timing_transitions(kind: str) -> list[dict]:
         for _ in range(hotplug.QUALIFICATION_REQUIRED_FAST)
     ]
     transitions.append(valid_timing_transition(kind, outcome="safe_state"))
+    return transitions
+
+
+def valid_layout_handoff() -> dict:
+    direct_device = usb_device("fifine-k054", "1-1.2@4")
+    powered_device = usb_device(
+        "fifine-k054",
+        "1-1.2.1.3@17",
+        hubs=("1-1.2.1@8", "1-1.2@7"),
+    )
+    return {
+        "phase": hotplug.CONNECTION_LAYOUT_HANDOFF_PHASE,
+        "cycle": hotplug.CONNECTION_LAYOUT_BOUNDARY_CYCLE,
+        "connection_layout": "direct_to_powered_hub",
+        "gate_kind": None,
+        "outcome": "completed",
+        "layout_handoff_validated": True,
+        "operator_attestation": {
+            "observation_kind": "operator_attestation",
+            "claim": "external_hub_power_supply_connected",
+            "operator_acknowledged": True,
+        },
+        "observed_usb_ancestry": {
+            "validated": True,
+            "observation_kind": "usb_sysfs_ancestry_delta",
+            "direct_usb_device": direct_device,
+            "powered_hub_usb_device": powered_device,
+            "added_hub_ancestor_generations": ["1-1.2.1@8", "1-1.2@7"],
+            "direct_instance_token": "fifine:direct",
+            "powered_hub_instance_token": "fifine:hub",
+            "direct_graph_generation": 20,
+            "powered_hub_graph_generation": 21,
+            "lark_absent": True,
+            "settled_sample_count": 5,
+        },
+        "safety_clean": True,
+        "restart_clean": True,
+    }
+
+
+def split_layout_transitions(campaign: str) -> list[dict]:
+    kinds = (
+        ("promotion", "fallback")
+        if campaign == "promotion-fallback"
+        else ("fifine_replug",)
+    )
+    transitions: list[dict] = []
+    for cycle in range(1, 21):
+        if cycle == 11:
+            transitions.append(valid_layout_handoff())
+        layout = hotplug.connection_layout_for_cycle(
+            cycle, hotplug.CONNECTION_PLAN_DIRECT10_HUB10
+        )
+        transitions.extend(
+            valid_timing_transition(
+                kind,
+                connection_layout=layout,
+                cycle=cycle,
+            )
+            for kind in kinds
+        )
     return transitions
 
 
@@ -578,6 +681,39 @@ class MicrophoneHotplugTests(unittest.TestCase):
         self.assertEqual(topology["fifine-k054"], [])
         self.assertEqual(topology["lark-a1"][0]["usb_instance_generation"], "1-1.3@9")
         self.assertEqual(topology["lark-a1"][0]["usb_devnum"], 9)
+
+    def test_usb_sysfs_inventory_records_nested_hub_ancestry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, devnum in (("1-1.2", 7), ("1-1.2.1", 8)):
+                hub = root / name
+                hub.mkdir()
+                (hub / "bDeviceClass").write_text("09\n", encoding="ascii")
+                (hub / "idVendor").write_text("0bda\n", encoding="ascii")
+                (hub / "idProduct").write_text("5411\n", encoding="ascii")
+                (hub / "devnum").write_text(f"{devnum}\n", encoding="ascii")
+                (hub / "product").write_text("USB2.1 Hub\n", encoding="utf-8")
+            device = root / "1-1.2.1.3"
+            device.mkdir()
+            (device / "idVendor").write_text("0c76\n", encoding="ascii")
+            (device / "idProduct").write_text("161e\n", encoding="ascii")
+            (device / "devnum").write_text("17\n", encoding="ascii")
+            (device / "product").write_text("USB PnP Audio Device\n", encoding="utf-8")
+
+            topology, error = hotplug.read_usb_microphones(root)
+
+        self.assertIsNone(error)
+        self.assertEqual(
+            [
+                item["usb_instance_generation"]
+                for item in topology["fifine-k054"][0]["usb_hub_ancestors"]
+            ],
+            ["1-1.2.1@8", "1-1.2@7"],
+        )
+        self.assertEqual(
+            topology["fifine-k054"][0]["usb_hub_ancestors"][0]["usb_product"],
+            "USB2.1 Hub",
+        )
 
     def test_each_gated_kind_anchors_to_its_expected_usb_edge(self) -> None:
         cases = (
@@ -1508,6 +1644,67 @@ class MicrophoneHotplugTests(unittest.TestCase):
         self.assertEqual(failed["sampling"]["gate"], "FAIL")
         self.assertEqual(failed["qualification_gate"], "FAIL")
 
+    def test_split_connection_plan_requires_ten_plus_ten_and_valid_handoff(
+        self,
+    ) -> None:
+        for campaign in ("promotion-fallback", "fifine-replug"):
+            with self.subTest(campaign=campaign):
+                transitions = split_layout_transitions(campaign)
+                summary = hotplug.build_summary(
+                    sampler=summary_sampler(),
+                    campaign=campaign,
+                    cycles=20,
+                    transitions=transitions,
+                    aborted=None,
+                    fast_limit_s=30.0,
+                    max_limit_s=60.0,
+                    started_wall=100.0,
+                    connection_plan=hotplug.CONNECTION_PLAN_DIRECT10_HUB10,
+                )
+                self.assertEqual(summary["qualification_gate"], "PASS")
+                self.assertEqual(summary["connection_layout_gate"]["verdict"], "PASS")
+                self.assertEqual(
+                    summary["connection_layout_gate"]["observed_cycles"][
+                        hotplug.required_gate_kinds(campaign)[0]
+                    ]["direct"],
+                    list(range(1, 11)),
+                )
+
+                without_handoff = [
+                    item
+                    for item in transitions
+                    if item["phase"] != hotplug.CONNECTION_LAYOUT_HANDOFF_PHASE
+                ]
+                gate = hotplug.summarize_connection_layout_gate(
+                    without_handoff,
+                    campaign=campaign,
+                    connection_plan=hotplug.CONNECTION_PLAN_DIRECT10_HUB10,
+                )
+                self.assertEqual(gate["verdict"], "FAIL")
+
+    def test_split_layout_gate_rejects_label_or_attestation_tampering(self) -> None:
+        transitions = split_layout_transitions("promotion-fallback")
+        transitions[0]["connection_layout"] = "powered_hub"
+        handoff = next(
+            item
+            for item in transitions
+            if item["phase"] == hotplug.CONNECTION_LAYOUT_HANDOFF_PHASE
+        )
+        handoff["operator_attestation"] = {
+            "observation_kind": "usb_sysfs_ancestry_delta",
+            "claim": "external_hub_power_supply_connected",
+            "operator_acknowledged": True,
+        }
+        gate = hotplug.summarize_connection_layout_gate(
+            transitions,
+            campaign="promotion-fallback",
+            connection_plan=hotplug.CONNECTION_PLAN_DIRECT10_HUB10,
+        )
+        self.assertEqual(gate["verdict"], "FAIL")
+        self.assertTrue(
+            any("operator attestation" in error for error in gate["errors"])
+        )
+
     def test_nonqualifying_summary_status_is_incomplete_not_pass(self) -> None:
         summary = hotplug.build_summary(
             sampler=summary_sampler(),
@@ -1556,6 +1753,35 @@ class MicrophoneHotplugTests(unittest.TestCase):
 
     def test_cli_cannot_relax_fixed_qualification_deadlines(self) -> None:
         for arguments in (["--fast-limit", "30.001"], ["--timeout", "60.001"]):
+            with (
+                self.subTest(arguments=arguments),
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                hotplug.parse_args(arguments)
+
+    def test_split_connection_plan_is_strictly_scoped_and_forces_twenty(self) -> None:
+        for campaign in ("promotion-fallback", "fifine-replug"):
+            args = hotplug.parse_args(
+                [
+                    "--campaign",
+                    campaign,
+                    "--connection-plan",
+                    hotplug.CONNECTION_PLAN_DIRECT10_HUB10,
+                ]
+            )
+            self.assertEqual(args.cycles, 20)
+        for arguments in (
+            ["--connection-plan", hotplug.CONNECTION_PLAN_DIRECT10_HUB10],
+            [
+                "--campaign",
+                "promotion-fallback",
+                "--connection-plan",
+                hotplug.CONNECTION_PLAN_DIRECT10_HUB10,
+                "--cycles",
+                "10",
+            ],
+        ):
             with (
                 self.subTest(arguments=arguments),
                 contextlib.redirect_stderr(io.StringIO()),
