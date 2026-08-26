@@ -544,6 +544,19 @@ class MicrophoneHotplugTests(unittest.TestCase):
                 )
                 self.assertIsNotNone(error)
 
+    def test_latched_usb_edge_accepts_descriptor_enrichment_for_same_generation(
+        self,
+    ) -> None:
+        first_topology = usb_topology(lark=("1-1.3@9",))
+        later_topology = json.loads(json.dumps(first_topology))
+        later_topology["lark-a1"][0]["usb_serial"] = "Wireless Microphone"
+        first = direct_usb_sample(1, first_topology, source_monotonic=10.0)
+        later = direct_usb_sample(2, later_topology, source_monotonic=10.15)
+
+        error = hotplug._latched_usb_topology_error(first, first, later, "promotion")
+
+        self.assertIsNone(error)
+
     def test_full_runtime_usb_identity_binding_rejects_mismatches(self) -> None:
         raw = usb_device("fifine-k054", "1-1.2@12")
         selected = selected_for_topology(usb_topology(fifine=("1-1.2@12",)))
@@ -704,6 +717,72 @@ class MicrophoneHotplugTests(unittest.TestCase):
         self.assertEqual(topology["fifine-k054"], [])
         self.assertEqual(topology["lark-a1"][0]["usb_instance_generation"], "1-1.3@9")
         self.assertEqual(topology["lark-a1"][0]["usb_devnum"], 9)
+
+    def test_usb_sysfs_inventory_caches_descriptors_for_one_live_generation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            device = root / "1-1.3"
+            device.mkdir()
+            (device / "idVendor").write_text("3547\n", encoding="ascii")
+            (device / "idProduct").write_text("0407\n", encoding="ascii")
+            (device / "devnum").write_text("9\n", encoding="ascii")
+            (device / "product").write_text("Wireless Microphone\n", encoding="utf-8")
+            (device / "serial").write_text("Wireless Microphone\n", encoding="utf-8")
+            cache: dict[str, dict] = {}
+
+            first, first_error = hotplug.read_usb_microphones(
+                root, descriptor_cache=cache
+            )
+            (device / "product").unlink()
+            (device / "serial").unlink()
+            second, second_error = hotplug.read_usb_microphones(
+                root, descriptor_cache=cache
+            )
+
+            for name in ("idVendor", "idProduct", "devnum"):
+                (device / name).unlink()
+            device.rmdir()
+            absent, absent_error = hotplug.read_usb_microphones(
+                root, descriptor_cache=cache
+            )
+
+        self.assertIsNone(first_error)
+        self.assertIsNone(second_error)
+        self.assertEqual(first, second)
+        self.assertEqual(second["lark-a1"][0]["usb_serial"], "Wireless Microphone")
+        self.assertIsNone(absent_error)
+        self.assertEqual(absent["lark-a1"], [])
+        self.assertEqual(cache, {})
+
+    def test_usb_sysfs_inventory_retries_a_missing_descriptor_before_caching(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            device = root / "1-1.3"
+            device.mkdir()
+            (device / "idVendor").write_text("3547\n", encoding="ascii")
+            (device / "idProduct").write_text("0407\n", encoding="ascii")
+            (device / "devnum").write_text("9\n", encoding="ascii")
+            (device / "product").write_text("Wireless Microphone\n", encoding="utf-8")
+            cache: dict[str, dict] = {}
+
+            first, first_error = hotplug.read_usb_microphones(
+                root, descriptor_cache=cache
+            )
+            serial_cached_after_first = "usb_serial" in cache["1-1.3@9"]
+            (device / "serial").write_text("Wireless Microphone\n", encoding="utf-8")
+            second, second_error = hotplug.read_usb_microphones(
+                root, descriptor_cache=cache
+            )
+
+        self.assertIsNone(first_error)
+        self.assertIsNone(first["lark-a1"][0]["usb_serial"])
+        self.assertFalse(serial_cached_after_first)
+        self.assertIsNone(second_error)
+        self.assertEqual(second["lark-a1"][0]["usb_serial"], "Wireless Microphone")
 
     def test_usb_sysfs_inventory_records_nested_hub_ancestry(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
