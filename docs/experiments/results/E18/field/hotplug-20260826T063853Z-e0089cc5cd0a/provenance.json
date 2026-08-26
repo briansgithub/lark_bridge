@@ -1,0 +1,139 @@
+{
+  "captured_timestamp": 1787726337.1841948,
+  "local_repository": {
+    "dirty": true,
+    "head": "e0089cc5cd0a02c1e771501c9740566052cc71dc",
+    "path": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification",
+    "porcelain": [
+      "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/checkpoint.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/closing.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/evidence-manifest.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/preflight.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/provenance.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/samples.jsonl",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/summary.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/checkpoint.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/closing.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/evidence-manifest.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/preflight.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/provenance.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/samples.jsonl",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/summary.json",
+      "?? docs/experiments/results/E18/field/hotplug-20260826T063853Z-e0089cc5cd0a/checkpoint.json"
+    ]
+  },
+  "local_sources": {
+    "harness_library": {
+      "bytes": 51625,
+      "exists": true,
+      "path": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification\\rig\\bt500_aux\\harness.py",
+      "sha256": "1158a22d6586882ed8bb3fb5c3125b56e856d3161482ac6d5785ab0f2978a7d4"
+    },
+    "host_harness": {
+      "bytes": 59235,
+      "exists": true,
+      "path": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification\\rig\\bt500_aux\\microphone_hotplug.py",
+      "sha256": "0086ea63f946b11fb65560159649337cdc355743ac88921e6fb16297c898a1ba"
+    },
+    "local_invariants": {
+      "bytes": 17527,
+      "exists": true,
+      "path": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification\\rig\\pi\\measure\\invariants.py",
+      "sha256": "222071d08d2b9a976f1eb04e88d869f59115928a4dbb23e91d4a7dc077b453b1"
+    },
+    "streamed_sampler": {
+      "bytes": 76942,
+      "exists": true,
+      "path": "B:\\Desktop\\W\\Hardware_write\\rpi_lark_mic_bridge-hotplug-qualification\\rig\\pi\\measure\\microphone_hotplug.py",
+      "sha256": "e8665a9bf20cc1dc56a52b878061177f8c6b372bb03098096777bdc4d4017c74"
+    }
+  },
+  "read_only": true,
+  "remote": {
+    "deployed_release": {
+      "bytes": 380,
+      "document": {
+        "archive_schema": 1,
+        "archive_sha256": "ee4bb352cdd01fe93b638cc202ca7fe3645135f7d8aabd4403b1b48368e242b5",
+        "base_commit": "4dba442a95166a60630a7f68e0248f8cc4f488fa",
+        "branch": "codex/fifine-k054-compat",
+        "commit": "1ab27980c5dea31e56c8e8f87e20ead99788623a",
+        "created_utc": "2026-08-26T03:46:51.234473Z",
+        "manifest_entries": 461,
+        "profile": "pi3-usb-bt500-aux"
+      },
+      "exists": true,
+      "path": "/etc/larkbridge/DEPLOYED.json",
+      "sha256": "c7ce47f3caa00b2e9a8ce0c8fff160f3e4c8ffd8435aa4c02d2cc42cc5c1a91e"
+    },
+    "errors": [],
+    "installed_files": {
+      "bridge_config": {
+        "bytes": 1700,
+        "exists": true,
+        "path": "/home/admin/rpi-lark-bridge/config/bridge.toml",
+        "sha256": "ba7c00d533d778a3e1d8248e6952aa4a7eb0c64ea0ff973c3c6782b151aaeb5c"
+      },
+      "bridge_supervisor": {
+        "bytes": 90275,
+        "exists": true,
+        "path": "/home/admin/rpi-lark-bridge/pi/bridged/bridge_supervisor.py",
+        "sha256": "cf2f271bde2915b6d2c7802e2fd54817f2b6c87764fb8bcd7d8330da3e7e4c75"
+      },
+      "btadapters": {
+        "bytes": 52271,
+        "exists": true,
+        "path": "/home/admin/rpi-lark-bridge/pi/bridged/btadapters.py",
+        "sha256": "a53ac997255922bc502ff21834398be6ab1e3b662a9912c6e5937fb8e35c6029"
+      },
+      "controller_roles": {
+        "bytes": 16073,
+        "exists": true,
+        "path": "/home/admin/rpi-lark-bridge/pi/bridged/controller_roles.py",
+        "sha256": "c726db876691694a1668ad80261e819c7bf6ca190bbce0b18a8d839b2d577060"
+      },
+      "invariants": {
+        "bytes": 17527,
+        "exists": true,
+        "path": "/home/admin/rpi-lark-bridge/rig/pi/measure/invariants.py",
+        "sha256": "222071d08d2b9a976f1eb04e88d869f59115928a4dbb23e91d4a7dc077b453b1"
+      },
+      "microphone_resolver": {
+        "bytes": 36511,
+        "exists": true,
+        "path": "/home/admin/rpi-lark-bridge/pi/bridged/microphones.py",
+        "sha256": "278ccd31a57486c9d1fb050b8f8655fd2ad3104a73b520af158bb18a96f1a349"
+      },
+      "output_resolver": {
+        "bytes": 16661,
+        "exists": true,
+        "path": "/home/admin/rpi-lark-bridge/pi/bridged/outputs.py",
+        "sha256": "78e7f0cc07fcc6fd8a6df05a66a22b637528f36cb7eb89f104d85fde06462391"
+      },
+      "remote_harness": {
+        "bytes": 51625,
+        "exists": true,
+        "path": "/home/admin/rpi-lark-bridge/rig/bt500_aux/harness.py",
+        "sha256": "1158a22d6586882ed8bb3fb5c3125b56e856d3161482ac6d5785ab0f2978a7d4"
+      },
+      "remote_snapshot": {
+        "bytes": 28106,
+        "exists": true,
+        "path": "/home/admin/rpi-lark-bridge/rig/bt500_aux/remote.py",
+        "sha256": "a7f4b9ff5f48afa8ac7d50e66fa1a46b541fab7713fcfa705c627f81df125d59"
+      }
+    },
+    "repository": {
+      "dirty": null,
+      "git_available": false,
+      "git_checkout": false,
+      "head": "1ab27980c5dea31e56c8e8f87e20ead99788623a",
+      "identity_source": "deployed_release",
+      "path": "/home/admin/rpi-lark-bridge",
+      "porcelain": []
+    },
+    "status": "PASS"
+  },
+  "schema_version": 1,
+  "status": "PASS"
+}

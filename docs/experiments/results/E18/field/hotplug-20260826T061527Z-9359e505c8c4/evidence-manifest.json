@@ -1,0 +1,36 @@
+{
+  "created_utc": "20260826T061556Z",
+  "files": [
+    {
+      "bytes": 746,
+      "path": "checkpoint.json",
+      "sha256": "929e1989325ec894ca212f5ea11019a16c71278ff245df8d57b6ae32e3fb1519"
+    },
+    {
+      "bytes": 485326,
+      "path": "closing.json",
+      "sha256": "75a390c9d9c44d1a2a220fb21a003fdd13032e33368a7afa2882a83eb76a15a1"
+    },
+    {
+      "bytes": 484356,
+      "path": "preflight.json",
+      "sha256": "bf731333ffe66601b49b24c0d023d2a035b206bff08da6529a6ac31251458b58"
+    },
+    {
+      "bytes": 4913,
+      "path": "provenance.json",
+      "sha256": "9f0a121abc0037764f4ddfa741a95c6f5c252e07379d7be5927b86d7a0eb735a"
+    },
+    {
+      "bytes": 544225,
+      "path": "samples.jsonl",
+      "sha256": "fe920c3dc57978dc17fa1dc6eac0e25bc7731c44e2a600103a7e362d1bfe56f0"
+    },
+    {
+      "bytes": 9144,
+      "path": "summary.json",
+      "sha256": "cb70c85480b44fc6030ea142f1f83484869cc584bcc44230d22c26da4ab037c0"
+    }
+  ],
+  "schema_version": 1
+}

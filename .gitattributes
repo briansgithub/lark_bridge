@@ -37,3 +37,7 @@ CMakeLists.txt  text eol=lf
 
 # Generated but committed (see ADR-0008); keep diffs readable, mark in review.
 pico/i2s/*.pio.h linguist-generated=true
+
+# Generated experiment evidence is content-addressed; preserve exact bytes and
+# keep multi-megabyte timelines out of text diffs regardless of extension.
+docs/experiments/results/** binary
