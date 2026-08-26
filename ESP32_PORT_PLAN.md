@@ -4,6 +4,11 @@ This is the active implementation plan on `codex/esp32-dual-radio-port`. `PLAN.m
 experiment reports remain the evidence-bearing specification for the proven Raspberry Pi work;
 they are not silently rewritten as ESP results.
 
+**Pre-hardware status:** P0–P3 are complete at firmware source checkpoint
+`b608dc3a3cec883501c4ab55bdee87586e751128`. P4 and every physical H0–H17 gate remain
+`PENDING HARDWARE`; see `docs/experiments/E18-esp32-prehardware-port.md` for retained build and
+test evidence.
+
 ## Definition of the pre-hardware deliverable
 
 Before the ordered boards arrive, the repository shall contain:

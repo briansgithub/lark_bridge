@@ -4,8 +4,9 @@
 
 - Worktree: `B:\Desktop\W\Hardware_write\larkbridge-esp32`
 - Branch: `codex/esp32-dual-radio-port`
-- Source checkpoint: run `git rev-parse HEAD`; it must match the source commit recorded in the
-  retained pre-hardware manifests and bundle.
+- Firmware source checkpoint: `b608dc3a3cec883501c4ab55bdee87586e751128`. The branch may have a
+  documentation-only descendant, but `git merge-base --is-ancestor` for this checkpoint must
+  succeed and both retained manifests/bundles must name this exact source commit.
 - Original Raspberry Pi checkout/rollback reference:
   `B:\Desktop\W\Hardware_write\rpi_lark_mic_bridge`
 - Archived original objective: `H:\Downloads\bt600_plan.md`
@@ -18,6 +19,7 @@ named evidence is captured.
 ```powershell
 Set-Location B:\Desktop\W\Hardware_write\larkbridge-esp32
 git status --short --branch
+git merge-base --is-ancestor b608dc3a3cec883501c4ab55bdee87586e751128 HEAD
 py -3 firmware/tools/build_firmware.py host
 py -3 firmware/tools/arrival.py ports
 py -3 firmware/tools/arrival.py new-run --gate H0 --label inventory --operator USER
