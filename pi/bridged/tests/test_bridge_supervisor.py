@@ -381,6 +381,7 @@ class FakeMicrophoneResolution:
         selected_id: str = "lark-a1",
         blocked: bool = False,
         candidates: list[dict] | None = None,
+        reason: str = "test selection",
     ) -> None:
         self.node = node
         self.instance_token = token
@@ -399,7 +400,7 @@ class FakeMicrophoneResolution:
                 if node is not None
                 else None
             ),
-            "selection_reason": "test selection",
+            "selection_reason": reason,
             "blocked": blocked,
             "candidates": candidates or [],
         }
@@ -1383,14 +1384,670 @@ class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
 
 
 class MicrophonePriorityLifecycleTests(unittest.TestCase):
-    def nodes(self, graph: supervisor.CallGraph) -> dict[str, dict]:
-        return {
-            "lark": {},
-            "fifine": {},
+    def setUp(self) -> None:
+        self.events: list[str] = []
+        self.hosts: list[FakeHost] = []
+        test = self
+
+        class LifecycleHost(FakeHost):
+            def __init__(
+                self,
+                settings: object,
+                microphone: str,
+                output: str,
+                *,
+                latency_frames: int | None = None,
+                play_delay_frames: int | None = None,
+            ) -> None:
+                super().__init__(
+                    settings,
+                    microphone,
+                    output,
+                    latency_frames=latency_frames,
+                    play_delay_frames=play_delay_frames,
+                )
+                self.microphone = microphone
+                self.output = output
+                test.hosts.append(self)
+
+            def start(self) -> None:
+                test.events.append(f"start:aec:{self.microphone}")
+                super().start()
+
+            def stop(self, reason: str) -> None:
+                test.events.append(f"stop:aec:{self.microphone}")
+                super().stop(reason)
+
+        class LifecycleLoopback(FakeLoopback):
+            def start(self) -> None:
+                test.events.append(f"start:{self.name}")
+                super().start()
+
+            def stop(self, reason: str) -> None:
+                test.events.append(f"stop:{self.name}")
+                super().stop(reason)
+
+        self.host_type = LifecycleHost
+        self.loopback_type = LifecycleLoopback
+
+    def settings(self) -> supervisor.Settings:
+        return supervisor.Settings(
+            aec=supervisor.AecSettings(enabled=True),
+            mic_gain_db=-3.0,
+            mic_muted=False,
+        )
+
+    def nodes(
+        self,
+        graph: supervisor.CallGraph,
+        microphones: tuple[str, ...] = ("lark", "fifine"),
+        *,
+        aec_ready: bool = False,
+        control_ready: bool = False,
+    ) -> dict[str, dict]:
+        nodes = {
             graph.settings.wired_output: {},
             graph.settings.hfp_source: {},
             graph.settings.hfp_sink: {},
         }
+        nodes.update({microphone: {} for microphone in microphones})
+        if aec_ready:
+            nodes[supervisor.AEC_SOURCE] = {}
+            nodes[supervisor.AEC_SINK] = {}
+        if control_ready:
+            nodes["output.bridge.mic"] = {"object.id": 88}
+        return nodes
+
+    def record_aec_mute(self, muted: bool) -> bool:
+        self.events.append(f"aec-mute:{muted}")
+        return True
+
+    def record_control(
+        self,
+        _nodes: supervisor.NodeMap,
+        _node: str,
+        gain_db: float,
+        muted: bool,
+    ) -> tuple[bool, float, bool, None]:
+        self.events.append(f"control:{muted}")
+        return True, gain_db, muted, None
+
+    def record_link(self, source: str, target: str) -> bool:
+        self.events.append(f"link:{source}->{target}")
+        return True
+
+    def record_unlink(self, source: str, target: str) -> bool:
+        self.events.append(f"unlink:{source}->{target}")
+        return True
+
+    def active_links(
+        self,
+        graph: supervisor.CallGraph,
+        selected: str,
+    ) -> supervisor.LinkList:
+        assert graph.microphone is not None and graph.callout is not None
+        return [
+            (selected, supervisor.AEC_CAPTURE),
+            (supervisor.AEC_PLAYBACK, graph.settings.wired_output),
+            (graph.microphone.capture, graph.microphone.in_node),
+            (graph.microphone.out_node, graph.settings.hfp_sink),
+            (graph.callout.capture, graph.callout.in_node),
+            (graph.callout.out_node, graph.callout.playback),
+        ]
+
+    def finish_active_build(
+        self,
+        graph: supervisor.CallGraph,
+        resolution: FakeMicrophoneResolution,
+        present: tuple[str, ...],
+    ) -> tuple[supervisor.NodeMap, supervisor.LinkList]:
+        candidate_nodes = present
+        ready_nodes = self.nodes(
+            graph,
+            present,
+            aec_ready=True,
+            control_ready=True,
+        )
+        graph.tick(
+            ready_nodes,
+            [],
+            resolution,
+            candidate_nodes=candidate_nodes,
+        )
+        assert graph.microphone is not None and graph.callout is not None
+        self.assertTrue(graph.microphone.defer_playback)
+        graph.tick(
+            ready_nodes,
+            [],
+            resolution,
+            candidate_nodes=candidate_nodes,
+        )
+        graph.routes_started -= supervisor.ATTACH_GRACE_SECONDS + 1
+        links = self.active_links(graph, resolution.node or "")
+        graph.tick(
+            ready_nodes,
+            links,
+            resolution,
+            candidate_nodes=candidate_nodes,
+        )
+        self.assertEqual(graph.state, supervisor.State.ACTIVE)
+        self.assertTrue(graph.verified)
+        self.assertTrue(graph.mic_control_verified)
+        self.assertEqual(graph.mic_gain_observed_db, -3.0)
+        self.assertIs(graph.mic_mute_observed, False)
+        self.assertEqual(self.events[-1], "aec-mute:False")
+        status = graph.status(
+            ready_nodes,
+            links,
+            resolution,
+        )
+        self.assertEqual(
+            [
+                pair
+                for pair in status["graph"]["expected_links"]
+                if pair[1] == graph.settings.hfp_sink
+            ],
+            [(graph.microphone.out_node, graph.settings.hfp_sink)],
+        )
+        self.assertEqual(
+            [
+                pair
+                for pair in status["graph"]["expected_links"]
+                if pair[1] == supervisor.AEC_CAPTURE
+            ],
+            [(resolution.node, supervisor.AEC_CAPTURE)],
+        )
+        self.assertEqual(status["graph"]["missing_links"], [])
+        self.assertEqual(status["graph"]["unexpected_links"], [])
+        return ready_nodes, links
+
+    def build_active(
+        self,
+        graph: supervisor.CallGraph,
+        resolution: FakeMicrophoneResolution,
+        present: tuple[str, ...],
+    ) -> tuple[supervisor.NodeMap, supervisor.LinkList]:
+        graph.tick(
+            self.nodes(graph, present),
+            [],
+            resolution,
+            candidate_nodes=present,
+        )
+        self.assertEqual(graph.state, supervisor.State.BUILDING)
+        return self.finish_active_build(graph, resolution, present)
+
+    def assert_active_switch(
+        self,
+        *,
+        source: str,
+        source_id: str,
+        source_present: tuple[str, ...],
+        target: str,
+        target_id: str,
+        target_present: tuple[str, ...],
+    ) -> None:
+        graph = supervisor.CallGraph(self.settings())
+        before = FakeMicrophoneResolution(
+            source,
+            f"{source}-generation-1",
+            selected_id=source_id,
+        )
+        after = FakeMicrophoneResolution(
+            target,
+            f"{target}-generation-2",
+            selected_id=target_id,
+        )
+        with (
+            mock.patch.object(supervisor, "NativeAecHost", self.host_type),
+            mock.patch.object(supervisor, "Loopback", self.loopback_type),
+            mock.patch.object(
+                supervisor,
+                "set_and_verify_microphone_control",
+                side_effect=self.record_control,
+            ),
+            mock.patch.object(
+                supervisor,
+                "set_aec_mute",
+                side_effect=self.record_aec_mute,
+            ),
+            mock.patch.object(supervisor, "link", side_effect=self.record_link),
+            mock.patch.object(supervisor, "unlink", side_effect=self.record_unlink),
+        ):
+            _nodes, old_links = self.build_active(
+                graph,
+                before,
+                source_present,
+            )
+            old_generation = graph.generation
+            old_host = graph.aec_host
+            old_microphone = graph.microphone
+            old_callout = graph.callout
+            old_token = graph.selected_microphone_token
+            assert graph.microphone_report is not None
+            old_report_token = graph.microphone_report["selected"]["instance_token"]
+            self.events.clear()
+
+            graph.tick(
+                self.nodes(
+                    graph,
+                    target_present,
+                    aec_ready=True,
+                    control_ready=True,
+                ),
+                old_links,
+                after,
+                candidate_nodes=target_present,
+            )
+
+            self.assertEqual(graph.state, supervisor.State.DISCOVERING)
+            self.assertEqual(graph.generation, old_generation + 1)
+            self.assertIsNone(graph.aec_host)
+            self.assertIsNone(graph.microphone)
+            self.assertIsNone(graph.callout)
+            self.assertEqual(
+                self.events[:4],
+                [
+                    "stop:bridge.mic",
+                    "aec-mute:True",
+                    "stop:bridge.callout",
+                    f"stop:aec:{source}",
+                ],
+            )
+            self.assertIn(
+                f"unlink:output.bridge.mic->{graph.settings.hfp_sink}",
+                self.events,
+            )
+
+            self.events.clear()
+            graph.tick(
+                self.nodes(graph, target_present),
+                [],
+                after,
+                candidate_nodes=target_present,
+            )
+            self.assertEqual(graph.state, supervisor.State.BUILDING)
+            self.assertIsNot(graph.aec_host, old_host)
+            assert graph.aec_host is not None
+            self.assertEqual(graph.aec_host.microphone, target)
+            self.finish_active_build(
+                graph,
+                after,
+                target_present,
+            )
+
+        self.assertIsNot(graph.microphone, old_microphone)
+        self.assertIsNot(graph.callout, old_callout)
+        self.assertEqual(len(self.hosts), 2)
+        self.assertNotEqual(graph.selected_microphone_token, old_token)
+        self.assertEqual(graph.selected_microphone_token, after.instance_token)
+        assert graph.microphone_report is not None
+        self.assertNotEqual(
+            graph.microphone_report["selected"]["instance_token"],
+            old_report_token,
+        )
+        self.assertEqual(
+            graph.microphone_report["selected"]["instance_token"],
+            after.instance_token,
+        )
+        muted = self.events.index("control:True")
+        linked = self.events.index(
+            f"link:output.bridge.mic->{graph.settings.hfp_sink}"
+        )
+        unmuted = self.events.index("control:False")
+        self.assertLess(muted, linked)
+        self.assertLess(linked, unmuted)
+        self.assertEqual(
+            [
+                event
+                for event in self.events
+                if event == f"link:output.bridge.mic->{graph.settings.hfp_sink}"
+            ],
+            [f"link:output.bridge.mic->{graph.settings.hfp_sink}"],
+        )
+
+    def test_active_call_lark_to_fifine_fallback_rebuilds_once(self) -> None:
+        self.assert_active_switch(
+            source="lark",
+            source_id="lark-a1",
+            source_present=("lark", "fifine"),
+            target="fifine",
+            target_id="fifine-k054",
+            target_present=("fifine",),
+        )
+
+    def test_active_call_fifine_to_lark_promotion_rebuilds_once(self) -> None:
+        self.assert_active_switch(
+            source="fifine",
+            source_id="fifine-k054",
+            source_present=("fifine",),
+            target="lark",
+            target_id="lark-a1",
+            target_present=("lark", "fifine"),
+        )
+
+    def test_inactive_fifine_hotplug_does_not_churn_active_lark(self) -> None:
+        graph = supervisor.CallGraph(self.settings())
+        resolution = FakeMicrophoneResolution("lark", "lark-generation")
+        with (
+            mock.patch.object(supervisor, "NativeAecHost", self.host_type),
+            mock.patch.object(supervisor, "Loopback", self.loopback_type),
+            mock.patch.object(
+                supervisor,
+                "set_and_verify_microphone_control",
+                side_effect=self.record_control,
+            ),
+            mock.patch.object(
+                supervisor,
+                "set_aec_mute",
+                side_effect=self.record_aec_mute,
+            ),
+            mock.patch.object(supervisor, "link", side_effect=self.record_link),
+            mock.patch.object(supervisor, "unlink", side_effect=self.record_unlink),
+        ):
+            _nodes, links = self.build_active(
+                graph,
+                resolution,
+                ("lark", "fifine"),
+            )
+            generation = graph.generation
+            owners = (graph.aec_host, graph.microphone, graph.callout)
+            token = graph.selected_microphone_token
+            assert graph.microphone_report is not None
+            report_token = graph.microphone_report["selected"]["instance_token"]
+            self.events.clear()
+
+            graph.tick(
+                self.nodes(
+                    graph,
+                    ("lark",),
+                    aec_ready=True,
+                    control_ready=True,
+                ),
+                links,
+                resolution,
+                candidate_nodes=("lark",),
+            )
+            graph.tick(
+                self.nodes(
+                    graph,
+                    ("lark", "fifine"),
+                    aec_ready=True,
+                    control_ready=True,
+                ),
+                links,
+                resolution,
+                candidate_nodes=("lark", "fifine"),
+            )
+
+        self.assertEqual(graph.state, supervisor.State.ACTIVE)
+        self.assertEqual(graph.generation, generation)
+        self.assertEqual((graph.aec_host, graph.microphone, graph.callout), owners)
+        self.assertEqual(len(self.hosts), 1)
+        self.assertEqual(graph.selected_microphone_token, token)
+        assert graph.microphone_report is not None
+        self.assertEqual(
+            graph.microphone_report["selected"]["instance_token"],
+            report_token,
+        )
+        self.assertEqual(self.events, [])
+
+    def test_active_call_with_neither_microphone_waits_after_teardown(self) -> None:
+        graph = supervisor.CallGraph(self.settings())
+        selected = FakeMicrophoneResolution("lark", "lark-generation")
+        missing = FakeMicrophoneResolution(None, None)
+        with (
+            mock.patch.object(supervisor, "NativeAecHost", self.host_type),
+            mock.patch.object(supervisor, "Loopback", self.loopback_type),
+            mock.patch.object(
+                supervisor,
+                "set_and_verify_microphone_control",
+                side_effect=self.record_control,
+            ),
+            mock.patch.object(
+                supervisor,
+                "set_aec_mute",
+                side_effect=self.record_aec_mute,
+            ),
+            mock.patch.object(supervisor, "link", side_effect=self.record_link),
+            mock.patch.object(supervisor, "unlink", side_effect=self.record_unlink),
+        ):
+            _nodes, links = self.build_active(graph, selected, ("lark",))
+            generation = graph.generation
+            self.events.clear()
+            graph.tick(
+                self.nodes(
+                    graph,
+                    (),
+                    aec_ready=True,
+                    control_ready=True,
+                ),
+                links,
+                missing,
+                candidate_nodes=(),
+            )
+
+        self.assertEqual(graph.state, supervisor.State.WAITING_MIC)
+        self.assertEqual(graph.generation, generation + 1)
+        self.assertIsNone(graph.aec_host)
+        self.assertIsNone(graph.microphone)
+        self.assertIsNone(graph.callout)
+        self.assertEqual(self.events[0], "stop:bridge.mic")
+        self.assertIn(
+            f"unlink:output.bridge.mic->{graph.settings.hfp_sink}",
+            self.events,
+        )
+
+    def test_active_fifine_absence_then_same_name_recovery_rebuilds(self) -> None:
+        graph = supervisor.CallGraph(self.settings())
+        before = FakeMicrophoneResolution(
+            "fifine",
+            "fifine-generation-1",
+            selected_id="fifine-k054",
+        )
+        missing = FakeMicrophoneResolution(None, None)
+        recovered = FakeMicrophoneResolution(
+            "fifine",
+            "fifine-generation-2",
+            selected_id="fifine-k054",
+        )
+        with (
+            mock.patch.object(supervisor, "NativeAecHost", self.host_type),
+            mock.patch.object(supervisor, "Loopback", self.loopback_type),
+            mock.patch.object(
+                supervisor,
+                "set_and_verify_microphone_control",
+                side_effect=self.record_control,
+            ),
+            mock.patch.object(
+                supervisor,
+                "set_aec_mute",
+                side_effect=self.record_aec_mute,
+            ),
+            mock.patch.object(supervisor, "link", side_effect=self.record_link),
+            mock.patch.object(supervisor, "unlink", side_effect=self.record_unlink),
+        ):
+            _nodes, old_links = self.build_active(graph, before, ("fifine",))
+            active_generation = graph.generation
+            old_host = graph.aec_host
+            old_microphone = graph.microphone
+            old_callout = graph.callout
+            old_token = graph.selected_microphone_token
+            assert graph.microphone_report is not None
+            old_report_token = graph.microphone_report["selected"]["instance_token"]
+            self.events.clear()
+
+            graph.tick(
+                self.nodes(
+                    graph,
+                    (),
+                    aec_ready=True,
+                    control_ready=True,
+                ),
+                old_links,
+                missing,
+                candidate_nodes=(),
+            )
+
+            self.assertEqual(graph.state, supervisor.State.WAITING_MIC)
+            self.assertEqual(graph.generation, active_generation + 1)
+            self.assertTrue(graph.break_before_make)
+            self.assertIsNone(graph.aec_host)
+            self.assertIsNone(graph.microphone)
+            self.assertIsNone(graph.callout)
+            self.assertEqual(
+                self.events[:4],
+                [
+                    "stop:bridge.mic",
+                    "aec-mute:True",
+                    "stop:bridge.callout",
+                    "stop:aec:fifine",
+                ],
+            )
+            self.assertIn(
+                f"unlink:output.bridge.mic->{graph.settings.hfp_sink}",
+                self.events,
+            )
+            waiting_status = graph.status(
+                self.nodes(graph, ()),
+                [],
+                missing,
+            )
+            self.assertEqual(waiting_status["graph"]["expected_links"], [])
+            self.assertEqual(
+                [
+                    pair
+                    for pair in waiting_status["graph"]["expected_links"]
+                    if pair[1] == graph.settings.hfp_sink
+                ],
+                [],
+            )
+
+            self.events.clear()
+            graph.tick(
+                self.nodes(graph, ("fifine",)),
+                [],
+                recovered,
+                candidate_nodes=("fifine",),
+            )
+            self.assertEqual(graph.state, supervisor.State.BUILDING)
+            self.assertEqual(graph.generation, active_generation + 2)
+            self.assertEqual(
+                graph.selected_microphone_token,
+                "fifine-generation-2",
+            )
+            self.assertIsNot(graph.aec_host, old_host)
+            assert graph.aec_host is not None
+            self.assertEqual(graph.aec_host.microphone, "fifine")
+            self.finish_active_build(
+                graph,
+                recovered,
+                ("fifine",),
+            )
+
+        self.assertIsNot(graph.microphone, old_microphone)
+        self.assertIsNot(graph.callout, old_callout)
+        self.assertEqual(len(self.hosts), 2)
+        self.assertNotEqual(graph.selected_microphone_token, old_token)
+        self.assertEqual(graph.selected_microphone_token, recovered.instance_token)
+        assert graph.microphone_report is not None
+        self.assertNotEqual(
+            graph.microphone_report["selected"]["instance_token"],
+            old_report_token,
+        )
+        self.assertEqual(
+            graph.microphone_report["selected"]["instance_token"],
+            recovered.instance_token,
+        )
+        muted = self.events.index("control:True")
+        linked = self.events.index(
+            f"link:output.bridge.mic->{graph.settings.hfp_sink}"
+        )
+        unmuted = self.events.index("control:False")
+        self.assertLess(muted, linked)
+        self.assertLess(linked, unmuted)
+        self.assertEqual(
+            [
+                event
+                for event in self.events
+                if event == f"link:output.bridge.mic->{graph.settings.hfp_sink}"
+            ],
+            [f"link:output.bridge.mic->{graph.settings.hfp_sink}"],
+        )
+
+    def test_active_call_higher_priority_ambiguity_holds_safe(self) -> None:
+        graph = supervisor.CallGraph(self.settings())
+        selected = FakeMicrophoneResolution(
+            "fifine",
+            "fifine-generation",
+            selected_id="fifine-k054",
+        )
+        ambiguity_reason = (
+            "lark-a1 ambiguous: 2 physical devices match; "
+            "configure usb_serial or usb_port_path"
+        )
+        ambiguous = FakeMicrophoneResolution(
+            None,
+            None,
+            blocked=True,
+            candidates=[
+                {
+                    "id": "lark-a1",
+                    "state": "ambiguous",
+                    "matched_nodes": ["lark-a", "lark-b"],
+                    "reason": ambiguity_reason,
+                }
+            ],
+            reason=ambiguity_reason,
+        )
+        with (
+            mock.patch.object(supervisor, "NativeAecHost", self.host_type),
+            mock.patch.object(supervisor, "Loopback", self.loopback_type),
+            mock.patch.object(
+                supervisor,
+                "set_and_verify_microphone_control",
+                side_effect=self.record_control,
+            ),
+            mock.patch.object(
+                supervisor,
+                "set_aec_mute",
+                side_effect=self.record_aec_mute,
+            ),
+            mock.patch.object(supervisor, "link", side_effect=self.record_link),
+            mock.patch.object(supervisor, "unlink", side_effect=self.record_unlink),
+        ):
+            _nodes, links = self.build_active(graph, selected, ("fifine",))
+            generation = graph.generation
+            self.events.clear()
+            graph.tick(
+                self.nodes(
+                    graph,
+                    ("lark-a", "lark-b", "fifine"),
+                    aec_ready=True,
+                    control_ready=True,
+                ),
+                links,
+                ambiguous,
+                candidate_nodes=("lark-a", "lark-b", "fifine"),
+            )
+
+        self.assertEqual(graph.state, supervisor.State.SAFE)
+        self.assertEqual(graph.generation, generation + 1)
+        self.assertIsNone(graph.aec_host)
+        self.assertIsNone(graph.microphone)
+        self.assertIsNone(graph.callout)
+        self.assertEqual(self.events[0], "stop:bridge.mic")
+        self.assertEqual(graph.last_failure, ambiguity_reason)
+        assert graph.microphone_report is not None
+        self.assertEqual(
+            graph.microphone_report["selection_reason"],
+            ambiguity_reason,
+        )
+        status = graph.status(
+            self.nodes(graph, ("lark-a", "lark-b", "fifine")),
+            [],
+            ambiguous,
+        )
+        self.assertEqual(status["microphone"]["selection_reason"], ambiguity_reason)
 
     def test_live_call_without_a_candidate_waits_without_uplink(self) -> None:
         graph = supervisor.CallGraph(supervisor.Settings(aec=supervisor.AecSettings()))
@@ -1435,36 +2092,15 @@ class MicrophonePriorityLifecycleTests(unittest.TestCase):
             )
         self.assertIsNotNone(graph.aec_host)
 
-    def test_same_node_replug_breaks_before_rebuilding(self) -> None:
-        events: list[str] = []
-
-        class OrderedLoopback(FakeLoopback):
-            def start(self) -> None:
-                events.append(f"start:{self.name}")
-                super().start()
-
-            def stop(self, reason: str) -> None:
-                events.append(f"stop:{self.name}")
-                super().stop(reason)
-
-        graph = supervisor.CallGraph(supervisor.Settings(aec=supervisor.AecSettings()))
-        first = FakeMicrophoneResolution("fifine", "generation-1", selected_id="fifine-k054")
-        second = FakeMicrophoneResolution("fifine", "generation-2", selected_id="fifine-k054")
-        with (
-            mock.patch.object(supervisor, "Loopback", OrderedLoopback),
-            mock.patch.object(supervisor, "unlink", return_value=True),
-        ):
-            graph.tick(self.nodes(graph), [], first, candidate_nodes=("lark", "fifine"))
-            assert graph.microphone is not None
-            stale = [(graph.microphone.out_node, graph.settings.hfp_sink)]
-            events.clear()
-            graph.tick(self.nodes(graph), stale, second, candidate_nodes=("lark", "fifine"))
-            self.assertEqual(events[0], "stop:bridge.mic")
-            self.assertFalse(any(event.startswith("start:") for event in events))
-            self.assertTrue(graph.break_before_make)
-            graph.tick(self.nodes(graph), [], second, candidate_nodes=("lark", "fifine"))
-        self.assertEqual(graph.generation, 2)
-        self.assertIsNotNone(graph.microphone)
+    def test_same_node_replug_rebuilds_a_fresh_active_generation(self) -> None:
+        self.assert_active_switch(
+            source="fifine",
+            source_id="fifine-k054",
+            source_present=("fifine",),
+            target="fifine",
+            target_id="fifine-k054",
+            target_present=("fifine",),
+        )
 
     def test_status_keeps_actual_lark_separate_from_selected_fifine(self) -> None:
         candidates = [
