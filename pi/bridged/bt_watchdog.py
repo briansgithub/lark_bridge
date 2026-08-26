@@ -48,6 +48,7 @@ PROBE_TIMEOUT = float(os.environ.get("BRIDGE_WD_PROBE_TIMEOUT", "20"))
 RECONNECT_DELAY = float(os.environ.get("BRIDGE_WD_RECONNECT_DELAY", "20"))
 RECONNECT_RETRY = float(os.environ.get("BRIDGE_WD_RECONNECT_RETRY", "30"))
 CALL_RECONNECT_ATTEMPTS = int(os.environ.get("BRIDGE_WD_CALL_ATTEMPTS", "3"))
+CALL_RECONNECT_COOLDOWN = float(os.environ.get("BRIDGE_WD_CALL_COOLDOWN", "120"))
 BACKOFF_START = 60.0
 BACKOFF_MAX = 900.0
 
@@ -449,9 +450,19 @@ def service_reconnect(
     if btadapters.connected_on(adapter, address, tree):
         state.reconnect_attempts = 0
         state.reconnect_next = 0.0
+        state.identity_error = None
+        state.last_action = "device-connected"
+        state.last_error = None
         return True
-    if observed < state.reconnect_next or state.reconnect_attempts >= CALL_RECONNECT_ATTEMPTS:
+    if observed < state.reconnect_next:
         return False
+    # A reset phone may decline every connection attempt while its cellular call remains
+    # active.  A configured number of failures bounds one retry burst; they must not become a
+    # lifetime ceiling that leaves a healthy, re-enumerated controller permanently disconnected.
+    # Once the conservative cooldown has elapsed, begin a fresh burst.  Both controller
+    # resolutions below still run before the next exact-device mutation.
+    if state.reconnect_attempts >= CALL_RECONNECT_ATTEMPTS:
+        state.reconnect_attempts = 0
     try:
         _before_mutation(cancelled)
         adapter = resolve_role(roles, role)
@@ -465,7 +476,12 @@ def service_reconnect(
     try:
         _before_mutation(cancelled)
         state.reconnect_attempts += 1
-        state.reconnect_next = observed + RECONNECT_RETRY
+        retry_delay = (
+            CALL_RECONNECT_COOLDOWN
+            if state.reconnect_attempts >= CALL_RECONNECT_ATTEMPTS
+            else RECONNECT_RETRY
+        )
+        state.reconnect_next = observed + retry_delay
         powered, detail = btadapters.power_on(adapter, cancelled=cancelled)
         if not powered:
             state.last_error = detail
