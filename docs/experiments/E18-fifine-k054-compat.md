@@ -99,6 +99,16 @@ alternates connecting and disconnecting Lark while FIFINE remains connected. Eac
 cycle disconnects the only microphone into `WAITING_MIC` and reconnects that same FIFINE unit.
 Capture service restart counters before and after each transition and across each complete campaign.
 
+The repeated campaigns use the fixed `direct10-hub10` connection plan: during cycles 1–10, every
+connected test microphone uses a direct Pi USB port. After cycle 10, the continuously running
+sampler prompts for one non-timing-gated handoff that moves the FIFINE to the powered external hub
+while Lark remains absent. The handoff must recover FIFINE-only `ACTIVE` with a changed USB instance
+token, advanced graph generation, no unsafe link, and newly observed external-hub ancestry. The
+operator's claim that the external power supply is connected is recorded separately from the USB
+ancestry; software does not claim that USB descriptors prove external power. Cycles 11–20 then run
+through the hub. During the hub half, any simultaneous Lark/FIFINE samples must share the hub
+ancestry observed at the handoff.
+
 ## Runs
 
 | # | Date | Variant / conditions | Artifact dir | Verdict |
@@ -110,7 +120,7 @@ Capture service restart counters before and after each transition and across eac
 | 5 | 2026-08-26 | Initial active-call harness attempt; rejected stale-status comparison between unsynchronized host and Pi wall clocks before any physical transition | `docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/` | FAIL — harness diagnostic only |
 | 6 | 2026-08-26 | Active-call promotion attempt; harness treated intentional break-before-make silence as missing-route H5 violations | `docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/` | INCONCLUSIVE — harness diagnostic only |
 | 7 | 2026-08-26 | Complete live active-call physical both/either/neither matrix with continuous link sampling | `docs/experiments/results/E18/field/hotplug-20260826T063853Z-e0089cc5cd0a/` | BEHAVIOR/SAFETY PASS / RUNTIME TIMING INCONCLUSIVE (recorded NOW-origin gate FAIL) |
-| 8 | pending | 20 promotion, 20 fallback, and 20 FIFINE-replug cycles; physical controls, reboot, acoustic/AEC, and endurance | `docs/experiments/results/E18/field/` | pending |
+| 8 | pending | Each repeated gate split into 10 direct + 10 powered-hub cycles; physical controls, reboot, acoustic/AEC, and endurance | `docs/experiments/results/E18/field/` | pending |
 
 ## Acceptance gates
 
@@ -123,6 +133,10 @@ Capture service restart counters before and after each transition and across eac
   For each transition kind, at least 19 of 20 complete in the expected `ACTIVE` state within
   30 seconds. Every cycle completes within 60 seconds or reaches an actionable safe state by the
   60-second deadline; a safe-state outcome does not count among the required 19 fast completions.
+- For every repeated transition kind, cycles 1–10 are direct and cycles 11–20 are powered-hub
+  observations. Exactly one continuously sampled, validated direct-to-hub handoff occurs between
+  them. Direct evidence must contain no external-hub ancestor; hub evidence must descend from the
+  newly observed handoff hub, and Lark/FIFINE hub samples must share that ancestor.
 - An actionable safe state is `SAFE` or `WAITING_MIC` with no link-invariant violation, no HFP
   input, and a recorded selection reason suitable for diagnosis.
 - Across every sample and cycle there are zero raw, inactive, or duplicate HFP uplinks: only

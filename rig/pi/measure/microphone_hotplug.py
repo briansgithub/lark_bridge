@@ -11,11 +11,13 @@ Typical campaigns::
     # One complete both/either/neither matrix.
     python3 rig/pi/measure/microphone_hotplug.py --campaign matrix
 
-    # The E18 timing gates: 20 promotion and 20 fallback transitions.
-    python3 rig/pi/measure/microphone_hotplug.py --campaign promotion-fallback
+    # The E18 timing gates, split into 10 direct and 10 powered-hub cycles.
+    python3 rig/pi/measure/microphone_hotplug.py --campaign promotion-fallback \
+        --connection-plan direct10-hub10
 
     # Twenty physical replug cycles proving a new FIFINE instance token each time.
-    python3 rig/pi/measure/microphone_hotplug.py --campaign fifine-replug
+    python3 rig/pi/measure/microphone_hotplug.py --campaign fifine-replug \
+        --connection-plan direct10-hub10
 
 The default 0.15 second interval leaves scheduling margin below the 0.20 second evidence
 limit. Every sample is flushed immediately to ``timeline.jsonl``. ``summary.json`` carries
@@ -166,14 +168,23 @@ def _optional_sysfs_text(path: Path) -> str | None:
     return value or None
 
 
+def _usb_port_route_parts(port_path: str) -> tuple[str, list[str]] | None:
+    """Parse a Linux USB sysfs device route such as ``1-1.2.3``."""
+    bus_port, separator, route = port_path.partition("-")
+    if not separator or not bus_port.isdigit() or not route:
+        return None
+    route_parts = route.split(".")
+    if any(not part.isdigit() for part in route_parts):
+        return None
+    return bus_port, route_parts
+
+
 def _usb_port_ancestor_names(port_path: str) -> list[str]:
     """Return nearest-first USB device ancestors encoded in a sysfs port name."""
-    bus_port, separator, route = port_path.partition("-")
-    if not separator or not bus_port or not route:
+    parsed = _usb_port_route_parts(port_path)
+    if parsed is None:
         return []
-    route_parts = route.split(".")
-    if any(not part for part in route_parts):
-        return []
+    bus_port, route_parts = parsed
     return [
         f"{bus_port}-{'.'.join(route_parts[:depth])}"
         for depth in range(len(route_parts) - 1, 0, -1)
@@ -454,10 +465,16 @@ def _validated_usb_devices(
 def _validated_hub_ancestors(
     device: dict[str, Any],
 ) -> tuple[list[dict[str, Any]] | None, str | None]:
+    device_port = device.get("usb_port_path")
+    if not isinstance(device_port, str) or _usb_port_route_parts(device_port) is None:
+        return None, "USB device port path is malformed"
+    expected_paths = _usb_port_ancestor_names(device_port)
     ancestors = device.get("usb_hub_ancestors")
     if not isinstance(ancestors, list):
         return None, "USB device omitted hub ancestry evidence"
     generations: set[str] = set()
+    observed_paths: list[str] = []
+    last_position = -1
     for ancestor in ancestors:
         if not isinstance(ancestor, dict):
             return None, "USB hub ancestry is malformed"
@@ -478,17 +495,32 @@ def _validated_hub_ancestors(
             or generation != f"{port}@{devnum}"
         ):
             return None, "USB hub ancestry contains an invalid raw identity"
+        if port not in expected_paths:
+            return None, "USB hub ancestry contains a non-parent port path"
+        position = expected_paths.index(port)
+        if position <= last_position:
+            return None, "USB hub ancestry is not ordered nearest-first"
+        last_position = position
+        observed_paths.append(port)
         if generation in generations:
             return None, "USB hub ancestry contains duplicate generations"
         generations.add(generation)
+    if observed_paths != expected_paths:
+        return None, "USB hub ancestry is incomplete for the device port route"
     return ancestors, None
 
 
-def _hub_ancestor_generations(device: dict[str, Any]) -> set[str]:
+def _external_hub_ancestor_generations(device: dict[str, Any]) -> set[str]:
+    """Return non-root hub generations; on the Pi 3 these are external hubs."""
     ancestors, error = _validated_hub_ancestors(device)
     if error or ancestors is None:
         return set()
-    return {str(item["usb_instance_generation"]) for item in ancestors}
+    generations: set[str] = set()
+    for ancestor in ancestors:
+        parsed = _usb_port_route_parts(str(ancestor["usb_port_path"]))
+        if parsed is not None and len(parsed[1]) > 1:
+            generations.add(str(ancestor["usb_instance_generation"]))
+    return generations
 
 
 def connection_layout_for_cycle(cycle: int, connection_plan: str | None) -> str | None:
@@ -1378,6 +1410,7 @@ class LiveSampler:
         self._phase = "startup"
         self._cycle = 0
         self._action_id: str | None = None
+        self._connection_layout: str | None = None
         self._seq = 0
         self._started_monotonic = 0.0
         self._last_sample_monotonic: float | None = None
@@ -1503,6 +1536,7 @@ class LiveSampler:
                 "phase": self._phase,
                 "cycle": self._cycle,
                 "action_id": self._action_id,
+                "connection_layout": self._connection_layout,
                 "service_restart_counts": dict(self._service_counts),
                 "service_error": self._service_error,
                 "gap": gap,
@@ -1545,6 +1579,7 @@ class LiveSampler:
                 "phase": reservation["phase"],
                 "cycle": reservation["cycle"],
                 "action_id": reservation["action_id"],
+                "connection_layout": reservation["connection_layout"],
                 "state": status.get("state"),
                 "status_timestamp": status.get("timestamp"),
                 "status_error": status_error,
@@ -1623,7 +1658,13 @@ class LiveSampler:
                 )
             self._condition.wait(min(remaining, max(self.interval * 2.0, 0.05)))
 
-    def mark_action(self, phase: str, cycle: int, instruction: str) -> dict[str, Any]:
+    def mark_action(
+        self,
+        phase: str,
+        cycle: int,
+        instruction: str,
+        connection_layout: str | None = None,
+    ) -> dict[str, Any]:
         counts, error = self._query_service_counts()
         if error:
             raise CampaignAbort(f"restart-count evidence failed: {error}")
@@ -1636,6 +1677,7 @@ class LiveSampler:
             self._phase = phase
             self._cycle = cycle
             self._action_id = f"{phase}:{cycle}:{time.time_ns()}"
+            self._connection_layout = connection_layout
             event = {
                 "type": "operator_action",
                 "timestamp": time.time(),
@@ -1645,6 +1687,7 @@ class LiveSampler:
                 "phase": phase,
                 "cycle": cycle,
                 "action_id": self._action_id,
+                "connection_layout": connection_layout,
                 "instruction": instruction,
                 "usb_baseline": usb_baseline,
                 "usb_action_observation_timeout_s": (
@@ -2179,6 +2222,7 @@ def operator_action(
     phase: str,
     cycle: int,
     instruction: str,
+    connection_layout: str | None = None,
     input_fn=input,
 ) -> dict[str, Any]:
     acknowledgements = {
@@ -2219,7 +2263,12 @@ def operator_action(
         raise CampaignAbort(
             f"operator acknowledgement was {response.strip()!r}, expected {required!r}"
         )
-    action = sampler.mark_action(phase, cycle, instruction)
+    action = sampler.mark_action(
+        phase,
+        cycle,
+        instruction,
+        connection_layout=connection_layout,
+    )
     print(f"NOW: {instruction}", file=sys.stderr, flush=True)
     action["required_acknowledgement"] = required
     action["operator_acknowledged"] = True
@@ -2228,6 +2277,7 @@ def operator_action(
         phase=phase,
         cycle=cycle,
         action_id=action["action_id"],
+        connection_layout=connection_layout,
         required_acknowledgement=required,
         operator_acknowledged=True,
     )
@@ -2254,9 +2304,9 @@ def run_step(
         phase=phase,
         cycle=cycle,
         instruction=instruction,
+        connection_layout=connection_layout,
         input_fn=input_fn,
     )
-    action["connection_layout"] = connection_layout
     result = wait_for_expectation(
         sampler,
         action,
@@ -2477,15 +2527,21 @@ def _connection_handoff_evidence(
             if sequence_error:
                 errors.append(f"powered-hub settle sampling: {sequence_error}")
 
-    direct_generations = (
-        _hub_ancestor_generations(direct_device) if direct_device is not None else set()
+    direct_external_generations = (
+        _external_hub_ancestor_generations(direct_device)
+        if direct_device is not None
+        else set()
     )
-    powered_generations = (
-        _hub_ancestor_generations(powered_device)
+    powered_external_generations = (
+        _external_hub_ancestor_generations(powered_device)
         if powered_device is not None
         else set()
     )
-    added_generations = sorted(powered_generations - direct_generations)
+    if direct_external_generations:
+        errors.append("direct baseline is already descended from an external USB hub")
+    added_generations = sorted(
+        powered_external_generations - direct_external_generations
+    )
     if not added_generations:
         errors.append("no new observed USB hub ancestor appeared at the layout handoff")
     if (
@@ -2585,9 +2641,9 @@ def run_connection_layout_handoff(
             "Move the FIFINE from its direct Pi port to the externally powered USB "
             "hub; keep Lark unplugged and the live call connected."
         ),
+        connection_layout="direct_to_powered_hub",
         input_fn=input_fn,
     )
-    action["connection_layout"] = "direct_to_powered_hub"
     result = wait_for_expectation(
         sampler,
         action,
@@ -3171,13 +3227,11 @@ def _recorded_layout_handoff_error(handoff: dict[str, Any]) -> str | None:
         return f"direct handoff ancestry is invalid: {direct_error}"
     if powered_error or powered_ancestors is None:
         return f"powered-hub handoff ancestry is invalid: {powered_error}"
-    direct_generations = {
-        str(item["usb_instance_generation"]) for item in direct_ancestors
-    }
-    powered_generations = {
-        str(item["usb_instance_generation"]) for item in powered_ancestors
-    }
-    expected_added = sorted(powered_generations - direct_generations)
+    direct_external_generations = _external_hub_ancestor_generations(direct_device)
+    powered_external_generations = _external_hub_ancestor_generations(powered_device)
+    if direct_external_generations:
+        return "direct handoff baseline is already on an external USB hub"
+    expected_added = sorted(powered_external_generations - direct_external_generations)
     if (
         not expected_added
         or ancestry.get("added_hub_ancestor_generations") != expected_added
@@ -3359,12 +3413,18 @@ def summarize_connection_layout_gate(
                         generations = {
                             str(item["usb_instance_generation"]) for item in ancestors
                         }
+                        observed_external_generations = (
+                            _external_hub_ancestor_generations(device)
+                        )
                         candidate_ancestors[candidate_id] = generations
                         on_external_hub = bool(generations & external_hub_generations)
-                        if layout == CONNECTION_LAYOUT_DIRECT and on_external_hub:
+                        if (
+                            layout == CONNECTION_LAYOUT_DIRECT
+                            and observed_external_generations
+                        ):
                             errors.append(
-                                f"{gate_kind} cycle {cycle}: direct evidence uses the "
-                                "handoff hub ancestry"
+                                f"{gate_kind} cycle {cycle}: direct evidence is "
+                                "descended from an external USB hub"
                             )
                         if (
                             layout == CONNECTION_LAYOUT_POWERED_HUB
