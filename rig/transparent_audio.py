@@ -1995,6 +1995,9 @@ def verify_runtime(
 ) -> dict[str, Any]:
     started = time.monotonic()
     snapshot: dict[str, Any] = {}
+    expected_marker = f"LARKBRIDGE_DEV_CANDIDATE={expected_candidate_id}"
+    expected_root = f"/candidates/{expected_candidate_id}/bridge_supervisor.py"
+    schema_ready_process_mismatches = 0
     while time.monotonic() - started < 30:
         snapshot = capture_condition_snapshot(backend)
         services = snapshot.get("services")
@@ -2003,8 +2006,23 @@ def verify_runtime(
             if isinstance(services, dict)
             else 0
         )
-        if active >= 4 and isinstance(snapshot.get("status"), dict):
-            break
+        status = snapshot.get("status")
+        process = snapshot.get("supervisor_process")
+        process_output = (
+            str(process.get("stdout", "")) if isinstance(process, dict) else ""
+        )
+        phone = status.get("phone") if isinstance(status, dict) else None
+        if active >= 4 and isinstance(phone, dict):
+            if expected_marker in process_output and expected_root in process_output:
+                break
+            schema_ready_process_mismatches += 1
+            # A restart can briefly expose the previous candidate's final status and
+            # process. Give systemd two seconds of condition polls to converge, then
+            # leave the loop so the explicit identity check reports a stale process.
+            if schema_ready_process_mismatches >= 20:
+                break
+        else:
+            schema_ready_process_mismatches = 0
         backend.wait(0.1)
     else:
         raise RigFailure(
@@ -2013,7 +2031,6 @@ def verify_runtime(
     status = snapshot.get("status")
     if not isinstance(status, dict):
         raise RigFailure("supervisor status is unavailable after candidate restart")
-    expected_marker = f"LARKBRIDGE_DEV_CANDIDATE={expected_candidate_id}"
     process = snapshot.get("supervisor_process")
     process_output = str(process.get("stdout", "")) if isinstance(process, dict) else ""
     if not isinstance(process, dict) or process.get("returncode") != 0:
@@ -2023,7 +2040,6 @@ def verify_runtime(
             "running supervisor process does not expose the expected volatile candidate marker "
             f"{expected_marker!r}"
         )
-    expected_root = f"/candidates/{expected_candidate_id}/bridge_supervisor.py"
     if expected_root not in process_output:
         raise RigFailure(
             "running supervisor command line does not point to the expected staged package "
