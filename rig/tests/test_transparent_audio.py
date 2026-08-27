@@ -1627,7 +1627,88 @@ class ScoringAndRoutingTests(unittest.TestCase):
             result["echo_suppression"],
             "NOT_MEASURED_USE_SEPARATE_SPEAKER_MODE_FIXTURE",
         )
+        self.assertIsNone(result["echo_suppression_db"])
+        self.assertIn("near-end-only", result["acceptance_interpretation"])
+        self.assertEqual(result["capture_pcm"]["reference"]["rate_hz"], 48_000)
+        self.assertEqual(result["capture_pcm"]["raw"]["channels"], 1)
+        self.assertGreater(result["capture_pcm"]["clean"]["nonzero_samples"], 0)
         self.assertGreaterEqual(result["raw_correlation"], 0.3)
+
+    def test_call_score_rejects_wrong_capture_format(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stimulus = root / "stimulus.wav"
+            ta.generate_stimulus(stimulus, mode="speech", seconds=1, channels=1)
+            reference = root / "reference.wav"
+            raw = root / "raw.wav"
+            clean = root / "clean.wav"
+            reference.write_bytes(stimulus.read_bytes())
+            clean.write_bytes(stimulus.read_bytes())
+            with wave.open(str(raw), "wb") as handle:
+                handle.setnchannels(2)
+                handle.setsampwidth(2)
+                handle.setframerate(44_100)
+                handle.writeframes(b"\x01\x00\x02\x00" * 44_100)
+            with self.assertRaisesRegex(
+                ta.RigFailure, "raw capture is not 48 kHz mono S16 PCM"
+            ):
+                ta.score_call(
+                    stimulus=stimulus,
+                    reference=reference,
+                    raw=raw,
+                    clean=clean,
+                    thresholds=ta.Thresholds(),
+                )
+
+    def test_call_score_rejects_zero_filled_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stimulus = root / "stimulus.wav"
+            ta.generate_stimulus(stimulus, mode="speech", seconds=1, channels=1)
+            captures = {}
+            for role in ("reference", "raw", "clean"):
+                captures[role] = root / f"{role}.wav"
+                captures[role].write_bytes(stimulus.read_bytes())
+            with wave.open(str(stimulus), "rb") as handle:
+                stimulus_frames = handle.getnframes()
+            with wave.open(str(captures["raw"]), "wb") as handle:
+                handle.setnchannels(1)
+                handle.setsampwidth(2)
+                handle.setframerate(48_000)
+                handle.writeframes(b"\x00\x00" * stimulus_frames)
+            with self.assertRaisesRegex(
+                ta.RigFailure, "raw capture has no nontrivial audio content"
+            ):
+                ta.score_call(
+                    stimulus=stimulus,
+                    reference=captures["reference"],
+                    raw=captures["raw"],
+                    clean=captures["clean"],
+                    thresholds=ta.Thresholds(),
+                )
+
+    def test_call_score_records_but_allows_silent_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stimulus = root / "stimulus.wav"
+            ta.generate_stimulus(stimulus, mode="speech", seconds=1, channels=1)
+            reference = root / "reference.wav"
+            with wave.open(str(stimulus), "rb") as handle:
+                stimulus_frames = handle.getnframes()
+            with wave.open(str(reference), "wb") as handle:
+                handle.setnchannels(1)
+                handle.setsampwidth(2)
+                handle.setframerate(48_000)
+                handle.writeframes(b"\x00\x00" * stimulus_frames)
+            result = ta.score_call(
+                stimulus=stimulus,
+                reference=reference,
+                raw=stimulus,
+                clean=stimulus,
+                thresholds=ta.Thresholds(),
+            )
+            self.assertFalse(result["capture_pcm"]["reference"]["nontrivial_audio"])
+            self.assertFalse(result["capture_pcm"]["reference"]["content_required"])
 
     def test_route_gate_rejects_decoy_and_duplicate(self) -> None:
         state = snapshot()
@@ -1699,6 +1780,31 @@ class ScoringAndRoutingTests(unittest.TestCase):
                 for value in ta._route_failures("call", state, inventory)
             )
         )
+
+    def test_call_uplink_evidence_proves_one_post_aec_route(self) -> None:
+        state = snapshot("CALL", "ACTIVE")
+        evidence = ta._call_uplink_route_evidence(state)
+        self.assertTrue(evidence["verified"])
+        self.assertEqual(evidence["post_aec_link_count"], 1)
+        self.assertEqual(evidence["observed_sources"], ["output.bridge.mic"])
+        self.assertEqual(evidence["bypass_sources"], [])
+        self.assertEqual(evidence["failures"], [])
+
+    def test_call_uplink_evidence_rejects_duplicate_post_aec_link(self) -> None:
+        state = snapshot("CALL", "ACTIVE")
+        graph = json.loads(state["graph"]["stdout"])
+        graph.append(
+            {
+                "id": 4,
+                "type": "PipeWire:Interface:Link",
+                "info": {"props": {"link.output.node": 1, "link.input.node": 2}},
+            }
+        )
+        state["graph"]["stdout"] = json.dumps(graph)
+        evidence = ta._call_uplink_route_evidence(state)
+        self.assertFalse(evidence["verified"])
+        self.assertEqual(evidence["post_aec_link_count"], 2)
+        self.assertTrue(evidence["failures"])
 
 
 class CommandTests(unittest.TestCase):

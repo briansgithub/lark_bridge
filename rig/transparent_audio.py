@@ -22,6 +22,7 @@ three-stage qualification used for promotion; it is not an iteration-time blocke
 from __future__ import annotations
 
 import argparse
+import array
 import base64
 import contextlib
 import hashlib
@@ -38,6 +39,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import wave
 import xml.etree.ElementTree as ET
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -2496,11 +2498,36 @@ def score_call(
         sys.path.insert(0, str(REPO))
     from rig.analysis.aec_metrics import correlated_level, dbfs, load_energy_envelope
 
+    stimulus_pcm = _inspect_call_pcm(stimulus, role="stimulus", minimum_frames=4_800)
+    minimum_capture_frames = max(4_800, int(stimulus_pcm["frames"] * 0.8))
+    capture_pcm = {
+        "reference": _inspect_call_pcm(
+            reference,
+            role="reference",
+            minimum_frames=minimum_capture_frames,
+            require_content=False,
+        ),
+        "raw": _inspect_call_pcm(
+            raw, role="raw", minimum_frames=minimum_capture_frames
+        ),
+        "clean": _inspect_call_pcm(
+            clean, role="clean", minimum_frames=minimum_capture_frames
+        ),
+    }
+
     stimulus_envelope, rate = load_energy_envelope(stimulus)
+    reference_envelope, reference_rate = load_energy_envelope(reference)
     raw_envelope, raw_rate = load_energy_envelope(raw)
     clean_envelope, clean_rate = load_energy_envelope(clean)
-    if raw_rate != rate or clean_rate != rate:
-        raise RigFailure("near-end stimulus/raw/post-AEC envelope rates differ")
+    if reference_rate != rate or raw_rate != rate or clean_rate != rate:
+        raise RigFailure(
+            "near-end stimulus/reference/raw/post-AEC envelope rates differ"
+        )
+    # Loading the reference envelope is intentional even though a near-end-only
+    # stimulus cannot yield a valid echo-suppression score. It proves the AEC
+    # reference tap contains analyzable audio rather than an empty placeholder.
+    if not reference_envelope:
+        raise RigFailure("AEC reference capture has no analyzable energy envelope")
     raw_level, raw_lag, raw_correlation = correlated_level(
         stimulus_envelope, raw_envelope, rate, max_lag_s=5.0
     )
@@ -2542,7 +2569,14 @@ def score_call(
         "clean_lag_ms": round(clean_lag * 1000.0 / rate, 2),
         "near_end_preservation_loss_db": round(preservation_loss, 2),
         "clipped_pct": {"raw": raw_clipped, "clean": clean_clipped},
+        "capture_pcm": capture_pcm,
         "echo_suppression": "NOT_MEASURED_USE_SEPARATE_SPEAKER_MODE_FIXTURE",
+        "echo_suppression_db": None,
+        "acceptance_interpretation": (
+            "This near-end-only stimulus validates raw signal and post-AEC near-end "
+            "preservation. It cannot validly score the >=10 dB far-end echo-suppression "
+            "criterion; use the separate speaker-mode reference fixture."
+        ),
         "files": {
             "stimulus": {
                 "path": str(stimulus),
@@ -2556,6 +2590,86 @@ def score_call(
             "clean": {"path": str(clean), "sha256": sha256_bytes(clean.read_bytes())},
         },
         "failures": failures,
+    }
+
+
+def _inspect_call_pcm(
+    path: Path,
+    *,
+    role: str,
+    minimum_frames: int,
+    require_content: bool = True,
+) -> dict[str, Any]:
+    """Require a substantive 48 kHz mono S16 PCM WAV for every call tap."""
+
+    try:
+        with wave.open(str(path), "rb") as handle:
+            channels = handle.getnchannels()
+            sample_width = handle.getsampwidth()
+            rate = handle.getframerate()
+            frames = handle.getnframes()
+            compression = handle.getcomptype()
+            payload = handle.readframes(frames)
+    except (OSError, EOFError, wave.Error) as exc:
+        raise RigFailure(f"{role} capture is not a readable PCM WAV: {exc}") from exc
+
+    format_failures: list[str] = []
+    if compression != "NONE":
+        format_failures.append(f"compression={compression}")
+    if channels != 1:
+        format_failures.append(f"channels={channels}")
+    if sample_width != 2:
+        format_failures.append(f"sample_width_bytes={sample_width}")
+    if rate != 48_000:
+        format_failures.append(f"rate={rate}")
+    if frames < minimum_frames:
+        format_failures.append(f"frames={frames}<{minimum_frames}")
+    expected_payload_bytes = frames * channels * sample_width
+    if len(payload) != expected_payload_bytes:
+        format_failures.append(
+            f"payload_bytes={len(payload)}!={expected_payload_bytes}"
+        )
+    if format_failures:
+        raise RigFailure(
+            f"{role} capture is not 48 kHz mono S16 PCM with sufficient duration: "
+            + ", ".join(format_failures)
+        )
+
+    samples = array.array("h")
+    samples.frombytes(payload)
+    if sys.byteorder == "big":
+        samples.byteswap()
+    mean = statistics.fmean(samples)
+    ac_rms = math.sqrt(statistics.fmean((sample - mean) ** 2 for sample in samples))
+    peak = max(abs(sample) for sample in samples)
+    nonzero_samples = sum(sample != 0 for sample in samples)
+    # Reject zero-filled, DC-only, and effectively empty recorder output. The
+    # threshold is deliberately close to digital silence; signal quality is gated
+    # separately by the correlation and level checks below.
+    nontrivial_audio = (
+        ac_rms >= 1.0 and peak > 1 and nonzero_samples >= min(480, frames)
+    )
+    if require_content and not nontrivial_audio:
+        raise RigFailure(
+            f"{role} capture has no nontrivial audio content "
+            f"(ac_rms_counts={ac_rms:.3f}, peak_counts={peak}, "
+            f"nonzero_samples={nonzero_samples})"
+        )
+    return {
+        "encoding": "PCM_S16LE",
+        "rate_hz": rate,
+        "channels": channels,
+        "frames": frames,
+        "duration_s": round(frames / rate, 3),
+        "ac_rms_dbfs": (
+            round(20.0 * math.log10(ac_rms / 32768.0), 2) if ac_rms > 0 else None
+        ),
+        "peak_dbfs": (
+            round(20.0 * math.log10(peak / 32768.0), 2) if peak > 0 else None
+        ),
+        "nonzero_samples": nonzero_samples,
+        "nontrivial_audio": nontrivial_audio,
+        "content_required": require_content,
     }
 
 
@@ -3965,24 +4079,64 @@ def _route_failures(
             failures.append(f"phone transport is {phone.get('transport')!r}, not CALL")
         if phone.get("android_microphone_transport") is not True:
             failures.append("Android microphone transport is not verified open")
-        endpoints = status.get("endpoints")
-        endpoints = endpoints if isinstance(endpoints, dict) else {}
-        hfp_sink = endpoints.get("hfp_sink")
-        if not isinstance(hfp_sink, str) or hfp_sink not in nodes:
-            failures.append(
-                "verified HFP sink endpoint is absent from the PipeWire graph"
-            )
-        else:
-            uplink_sources = [source for source, target in links if target == hfp_sink]
-            if uplink_sources != ["output.bridge.mic"]:
-                failures.append(
-                    "HFP sink must have exactly one post-AEC output.bridge.mic uplink and "
-                    f"no physical-microphone bypass; observed {sorted(uplink_sources)}"
-                )
+        route_evidence = _call_uplink_route_evidence(snapshot)
+        failures.extend(str(item) for item in route_evidence["failures"])
         aec = status.get("aec")
         if not isinstance(aec, dict) or aec.get("verified") is not True:
             failures.append("AEC graph is not verified for the call uplink")
     return failures
+
+
+def _call_uplink_route_evidence(snapshot: Mapping[str, Any]) -> dict[str, Any]:
+    """Summarize the independently observed HFP uplink, preserving duplicate links."""
+
+    status = snapshot.get("status")
+    status = status if isinstance(status, dict) else {}
+    endpoints = status.get("endpoints")
+    endpoints = endpoints if isinstance(endpoints, dict) else {}
+    hfp_sink = endpoints.get("hfp_sink")
+    graph = snapshot.get("graph")
+    graph_stdout = str(graph.get("stdout", "")) if isinstance(graph, dict) else ""
+    evidence: dict[str, Any] = {
+        "expected_source": "output.bridge.mic",
+        "hfp_sink": hfp_sink,
+        "observed_sources": [],
+        "post_aec_link_count": 0,
+        "bypass_sources": [],
+        "graph_sha256": sha256_bytes(graph_stdout.encode()),
+        "verified": False,
+        "failures": [],
+    }
+    try:
+        nodes, links = pipewire_node_graph(snapshot)
+    except RigFailure as exc:
+        evidence["failures"] = [str(exc)]
+        return evidence
+    if not isinstance(hfp_sink, str) or hfp_sink not in nodes:
+        evidence["failures"] = [
+            "verified HFP sink endpoint is absent from the PipeWire graph"
+        ]
+        return evidence
+    observed_sources = sorted(source for source, target in links if target == hfp_sink)
+    post_aec_link_count = observed_sources.count("output.bridge.mic")
+    bypass_sources = sorted(
+        source for source in observed_sources if source != "output.bridge.mic"
+    )
+    evidence.update(
+        observed_sources=observed_sources,
+        post_aec_link_count=post_aec_link_count,
+        bypass_sources=bypass_sources,
+    )
+    if post_aec_link_count != 1 or bypass_sources:
+        evidence["failures"] = [
+            (
+                "HFP sink must have exactly one post-AEC output.bridge.mic uplink and "
+                f"no physical-microphone bypass; observed {observed_sources}"
+            )
+        ]
+        return evidence
+    evidence["verified"] = True
+    return evidence
 
 
 def _current_session_guard(
@@ -4459,6 +4613,8 @@ def command_iterate(
         after = capture_snapshot(backend, full=True)
         failures = required_snapshot_evidence_failures(after)
         failures.extend(_route_failures(arguments.mode, after, inventory))
+        if arguments.mode == "call":
+            smoke["uplink_route_evidence"] = _call_uplink_route_evidence(after)
         restarts, restart_failures = restart_counter_failures(before, after)
         failures.extend(restart_failures)
         recovery_delta = watchdog_recoveries(after) - watchdog_recoveries(before)
