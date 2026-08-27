@@ -257,6 +257,30 @@ class ExplicitDeviceOperationTests(unittest.TestCase):
             )
         spawn.assert_not_called()
 
+    def test_connect_classifies_in_progress_and_preserves_explicit_path(self) -> None:
+        cases = (
+            (
+                "Call failed: org.bluez.Error.InProgress: Operation already in progress",
+                True,
+            ),
+            ("Call failed: In Progress", True),
+            (
+                "Call failed: org.bluez.Error.Failed: Connection timed out",
+                False,
+            ),
+        )
+        for error, expected in cases:
+            with (
+                self.subTest(error=error),
+                mock.patch.object(btadapters, "_run", return_value=(1, "", error)) as run,
+            ):
+                ok, detail = btadapters.connect(SPEAKER, TARGET)
+
+            self.assertFalse(ok)
+            self.assertIs(btadapters.connect_in_progress(ok, detail), expected)
+            self.assertIn(btadapters.path_for(TARGET, SPEAKER), detail)
+            self.assertIn(btadapters.path_for(TARGET, SPEAKER), run.call_args.args[0])
+
     def test_a2dp_connect_profile_uses_only_explicit_device_path(self) -> None:
         with mock.patch.object(btadapters, "_run", return_value=(0, "", "")) as run:
             ok, detail = btadapters.connect_profile(SPEAKER, TARGET)
