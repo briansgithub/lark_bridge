@@ -1,6 +1,6 @@
 # E19 — Can the appliance carry Pixel media and microphone audio transparently, not only during calls?
 
-- **Status:** In progress — Steps 1–2 and 4 complete; Step 3 `BLOCKED_HARDWARE` (Pixel absent); contract approved, provisional
+- **Status:** In progress — Steps 1–2, 4–5 complete; Step 3 `BLOCKED_HARDWARE` (Pixel absent); contract approved, provisional
 - **Resolves risk:** phone audio is usable only inside a call; media playback is not deterministically routed to the selected output
 - **Gates milestone:** transparent phone audio release
 - **Owner / date:** Claude (runtime model `claude-opus-5`), 2026-08-26
@@ -120,7 +120,7 @@ appliance is preserved:
 | 2 | Static Bluetooth and audio architecture audit | **COMPLETE** |
 | 3 | Live Pixel and Pi capability characterization | **`BLOCKED_HARDWARE`** — deferred; predicted characterization recorded |
 | 4 | Feasibility verdict and approved contract | **COMPLETE** — contract approved (provisional), ADR-0009 |
-| 5 | Encode the routing contract as tests | Not started |
+| 5 | Encode the routing contract as tests | **COMPLETE** — 26 failing tests in `test_phone_transport.py` |
 | 6 | Implement deterministic idle media routing | Not started |
 | 7 | Implement safe A2DP/HFP transitions | Not started |
 | 8 | Integrate the approved idle microphone behavior | Not started |
@@ -777,3 +777,111 @@ Step 4 **COMPLETE** — contract approved by the operator. ADR-0009 moves to Acc
 every state and acceptance criterion above, using existing conventions and mocks in
 `pi/bridged/tests/`. Run the narrow selection and confirm failures are confined to the
 unimplemented contract.
+
+## Step 5 — The routing contract as tests
+
+New file `pi/bridged/tests/test_phone_transport.py`, 30 tests. No production code changed.
+
+```
+$ PYTHONPATH=pi/bridged python -m pytest pi/bridged/tests -q
+26 failed, 254 passed, 34 subtests passed in 2.30s
+```
+
+Baseline before the file was added was `250 passed, 32 subtests passed`. Every one of the 26
+failures is in `test_phone_transport.py`; no pre-existing test changed behaviour, and none was
+weakened to accommodate the new contract.
+
+### Honest note on the 4 that already pass
+
+`test_existing_link_is_not_duplicated`, `test_microphone_change_does_not_churn_the_media_graph`,
+`test_ambiguous_microphone_does_not_silence_media` and
+`test_no_physical_microphone_ever_reaches_the_phone` pass **vacuously**. Each asserts that
+something must *not* happen, and nothing happens yet because no media routing exists. They are
+guardrails that only become evidence once Steps 6–8 land. They are not counted as coverage
+achieved.
+
+### Coverage against the checkpoint's required list
+
+| Required case | Test |
+|---|---|
+| Phone disconnected | `test_phone_absent_when_no_phone_nodes`, `test_disconnected_status_is_not_confused_with_idle` |
+| Connected idle / media-ready | `test_connected_but_silent_is_media_ready_not_active` |
+| A2DP media active, routed only to the selected output | `test_media_is_routed_to_the_selected_output`, `test_media_never_reaches_an_output_we_did_not_select`, `test_media_active_only_while_the_stream_runs` |
+| Incoming call transition | `test_media_link_is_dropped_before_the_call_graph_is_built` |
+| Active HFP call with AEC microphone | `test_media_and_call_never_feed_the_output_together`, `test_call_status_reports_a_live_microphone_transport`, plus the existing `CallGraphLifecycleTests` |
+| Call teardown and A2DP restoration | `test_call_teardown_restores_the_media_route`, `test_restored_route_does_not_claim_playback_resumed`, `test_resumed_playback_leaves_the_paused_state` |
+| Bluetooth disconnect / reconnect | `test_disconnect_clears_the_media_route`, `test_reconnect_does_not_leave_a_duplicate_link` |
+| Lark/FIFINE change during idle media | `test_microphone_change_does_not_churn_the_media_graph` |
+| Lark/FIFINE change during a call | existing `MicrophonePriorityLifecycleTests`, unchanged |
+| Lark receiver with no live transmitter | `test_lark_present_without_a_live_transmitter_does_not_disturb_media` |
+| Missing output | `test_missing_output_is_actionable_not_silent` |
+| Ambiguous microphone | `test_ambiguous_microphone_does_not_silence_media` |
+| Unsupported idle-microphone state | `test_idle_status_says_android_has_no_microphone_transport`, `test_idle_status_still_reports_the_microphone_as_selected_and_ready` |
+| No duplicate playback or microphone links | `test_existing_link_is_not_duplicated`, `test_reconnect_does_not_leave_a_duplicate_link` |
+| No raw microphone-to-phone bypass | `test_no_physical_microphone_ever_reaches_the_phone` (both media states) |
+
+### Design decisions the tests pin
+
+These are choices, not discoveries, and Steps 6–8 are bound by them.
+
+1. **`PhoneTransport` is a new enum orthogonal to `State`.** `State` stays exactly what it is —
+   the call-graph machine — so no E18 behaviour or existing assertion moves. The phone link gets
+   its own dimension: `ABSENT`, `MEDIA_READY`, `MEDIA_ACTIVE`, `SWITCHING`, `CALL`,
+   `MEDIA_RESTORED_APP_PAUSED`. Folding these into `State` would have meant editing tests that
+   currently protect deployed behaviour, which is precisely what this checkpoint forbids.
+
+2. **The media node is found by MAC plus `api.bluez5.profile`, never by node index.** The
+   phone's HFP uplink and its A2DP media stream both arrive as `bluez_input.<MAC>.<N>`;
+   only the profile separates them. `outputs.find_a2dp_node` already carries this warning for
+   speakers, and `test_profile_index_suffix_is_not_hardcoded` makes it structural here.
+   `Settings.hfp_sink`/`hfp_source` keep their hardcoded `.1`/`.0` — changing them is outside
+   this contract.
+
+3. **`pw_snapshot()` must start carrying node state.** It currently copies `info.props` plus a
+   synthetic `object.id`; `info.state` is dropped. Without it, `MEDIA_ACTIVE`,
+   `MEDIA_READY` and `MEDIA_RESTORED_APP_PAUSED` cannot be distinguished and the contract's
+   promise not to claim playback resumed would be unimplementable fiction. Step 6 must inject
+   `node.state` the same way `object.id` is already injected.
+
+4. **A microphone problem must not silence media.** Ambiguous identity, a Lark with no live
+   transmitter, and a mid-stream selection change all leave the media route untouched. Fail-closed
+   exists to stop an unsafe *uplink*; there is no microphone anywhere in the media path, so there
+   is nothing to fail closed on, and silencing the user's audio would be a regression dressed as
+   safety.
+
+5. **Two WirePlumber files are part of the contract**, asserted directly:
+   `66-bridge-a2dp-source-no-autolink.conf` (new — the guard ADR-0009 requires) and the
+   `a2dp_sink` role restored in `50-bridge-bluez.conf`, with `a2dp_source`, `hfp_hf` and `hsp_hs`
+   required to survive the edit. The new rule deliberately lives in its own file so that
+   `test_wireplumber_policy.py`'s existing `assert "a2dp-sink" not in policy` guard stays true
+   and meaningful.
+
+### Known fragility
+
+`A2DP_SOURCE_PROFILE = "a2dp-source"` is **predicted**, not measured. It is the mirror of the
+measured `"a2dp-sink"` and `"headset-audio-gateway"` values, but no Pixel has yet presented it to
+this appliance. If the deferred Step 3 live matrix shows a different string, exactly one constant
+and the two profile literals in the tests change — the structure does not. This is called out
+here so Step 12 does not mistake a string mismatch for a design failure.
+
+### Commands and results
+
+| Command | Result |
+|---|---|
+| `PYTHONPATH=pi/bridged python -m pytest pi/bridged/tests -q` (before) | `250 passed, 32 subtests passed` |
+| `... -q` (after) | `26 failed, 254 passed, 34 subtests passed` — all failures in `test_phone_transport.py` |
+| `... --ignore=pi/bridged/tests/test_phone_transport.py -q` | `250 passed, 32 subtests passed` — no regression |
+| `python -m ruff check pi/bridged/tests --line-length 100` | `All checks passed!` |
+| `python -m black --check --line-length 100 --target-version py311 …` | unchanged |
+
+Run with the host Python 3.13 and pytest 9.1.1 rather than the Makefile's Linux `.venv`, which
+does not exist in this Windows worktree. `make test-py` remains the canonical invocation on the
+Pi and in CI.
+
+### Status
+
+Step 5 **COMPLETE**. 26 focused failing tests define the contract; no production code touched.
+
+**Next action — Step 6: implement deterministic idle media routing.** Restore the `a2dp_sink`
+role, add `66-bridge-a2dp-source-no-autolink.conf`, add `node.state` to the snapshot, and make
+the idle-media tests pass. Call-profile transitions stay out of Step 6.
