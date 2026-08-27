@@ -24,6 +24,56 @@ numid=4,iface=MIXER,name='Mic Capture Volume'
 """
 
 
+def youtube_music_ui(control: str = "Play video") -> str:
+    return (
+        "<?xml version='1.0' encoding='UTF-8'?>"
+        "<hierarchy>"
+        f"<node package='{ta.YOUTUBE_MUSIC_PACKAGE}' clickable='false' "
+        "enabled='true' bounds='[0,0][1080,2400]'>"
+        f"<node package='{ta.YOUTUBE_MUSIC_PACKAGE}' clickable='true' enabled='true' "
+        f"resource-id='{ta.YOUTUBE_MUSIC_PLAY_CONTROL_ID}' content-desc='{control}' "
+        "text='' bounds='[954,1995][1080,2121]' />"
+        f"<node package='{ta.YOUTUBE_MUSIC_PACKAGE}' clickable='true' enabled='true' "
+        "resource-id='' content-desc='Golden' text='' bounds='[374,591][705,922]' />"
+        f"<node package='{ta.YOUTUBE_MUSIC_PACKAGE}' clickable='true' enabled='true' "
+        "resource-id='pivot-home' content-desc='' text='' bounds='[0,2148][270,2274]'>"
+        f"<node package='{ta.YOUTUBE_MUSIC_PACKAGE}' clickable='false' enabled='true' "
+        "resource-id='text1' content-desc='' text='Home' bounds='[32,2227][238,2262]' />"
+        "</node></node></hierarchy>"
+    )
+
+
+def write_pw_top(
+    path: Path,
+    *,
+    media_node: str = "bluez_input.AA_BB_CC_DD_EE_FF.7",
+    aux_errors: tuple[int, ...] = (0, 0, 0),
+    media_errors: tuple[int, ...] = (0, 0, 0),
+    aux_states: tuple[str, ...] = ("R", "R", "R"),
+    media_states: tuple[str, ...] = ("R", "R", "R"),
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines: list[str] = []
+    for aux_error, media_error, aux_state, media_state in zip(
+        aux_errors, media_errors, aux_states, media_states, strict=True
+    ):
+        lines.extend(
+            (
+                "S   ID  QUANT   RATE    WAIT    BUSY   W/Q   B/Q  ERR FORMAT NAME",
+                (
+                    f"{aux_state}   48    512  48000  1.0us  1.0us  0.00  0.00 "
+                    f"{aux_error:4d} "
+                    f"S16LE 2 48000 {ta.FIXED_AUX_TARGET}"
+                ),
+                (
+                    f"{media_state}  103    512  44100  1.0us  1.0us  0.00  0.00 "
+                    f"{media_error:4d} S16LE 2 44100  + {media_node}"
+                ),
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def good_instrument() -> dict:
     return {
         "usb_id": ta.GENERALPLUS_USB_ID,
@@ -212,6 +262,9 @@ class FakeBackend:
         self.fetch_wav: Path | None = None
         self.clock = 0.0
         self.music_volume = 16
+        self.youtube_playing = False
+        self.youtube_position_ms = 0
+        self.capture_seconds = 8.0
         self.unit_query_counts: dict[str, int] = {}
 
     def local(self, command, *, cwd=None, timeout=60):
@@ -234,6 +287,10 @@ class FakeBackend:
 
     def pi(self, script, *, timeout=60, stdin=None):
         self.pi_calls.append((script, stdin))
+        if "larkbridge-e19-media-capture" in script and "/usr/bin/arecord" in script:
+            duration = re.search(r"\s-d\s+(\d+(?:\.\d+)?)", script)
+            if duration:
+                self.capture_seconds = float(duration.group(1))
         for unit in re.findall(r"--unit=([^\s]+)", script):
             name = unit if unit.endswith((".service", ".timer")) else unit + ".service"
             self.unit_query_counts[name] = 0
@@ -273,8 +330,22 @@ class FakeBackend:
         self.adb_calls.append(values)
         if values[:3] == ("shell", "pm", "path"):
             return ta.CommandResult(
-                0, "package:/data/app/org.videolan.vlc/base.apk\n", ""
+                0,
+                f"package:/data/app/{ta.YOUTUBE_MUSIC_PACKAGE}/base.apk\n",
+                "",
             )
+        if values == ("shell", "am", "force-stop", ta.YOUTUBE_MUSIC_PACKAGE):
+            self.youtube_playing = False
+            self.youtube_position_ms = 0
+            return ta.CommandResult(0, "", "")
+        if values == ("shell", "uiautomator", "dump", ta.YOUTUBE_MUSIC_UI_DUMP):
+            return ta.CommandResult(0, "UI hierarchy dumped\n", "")
+        if values == ("exec-out", "cat", ta.YOUTUBE_MUSIC_UI_DUMP):
+            control = "Pause video" if self.youtube_playing else "Play video"
+            return ta.CommandResult(0, youtube_music_ui(control), "")
+        if values[:3] == ("shell", "input", "tap"):
+            self.youtube_playing = True
+            return ta.CommandResult(0, "", "")
         if values == (
             "shell",
             "cmd",
@@ -302,6 +373,21 @@ class FakeBackend:
             return ta.CommandResult(0, "volume changed\n", "")
         if values == ("shell", "dumpsys", "audio"):
             return ta.CommandResult(0, "MODE_NORMAL", "")
+        if values == ("shell", "dumpsys", "media_session"):
+            if self.youtube_playing:
+                self.youtube_position_ms += 250
+            state = "PLAYING(3)" if self.youtube_playing else "PAUSED(2)"
+            return ta.CommandResult(
+                0,
+                "    YouTube playerlib "
+                f"{ta.YOUTUBE_MUSIC_PACKAGE}/YouTube playerlib (userId=0)\n"
+                f"      package={ta.YOUTUBE_MUSIC_PACKAGE}\n"
+                "      active=true\n"
+                f"      state=PlaybackState {{state={state}, "
+                f"position={self.youtube_position_ms}, buffered position=0}}\n"
+                "      metadata: size=9, description=Golden, Example Artist\n",
+                "",
+            )
         if values == ("devices",):
             return ta.CommandResult(0, "serial\tdevice\n", "")
         return ta.CommandResult(0, "ok\n", "")
@@ -318,10 +404,13 @@ class FakeBackend:
                 else:
                     write_sine(target)
             (local / "pw-top.txt").write_text("observer evidence\n", encoding="utf-8")
+        elif local.suffix == ".txt":
+            media_node = self.snapshot["status"]["phone"].get("media_node")
+            write_pw_top(local, media_node=media_node or "bluez_input.unknown")
         elif self.fetch_wav is not None:
             local.write_bytes(self.fetch_wav.read_bytes())
         else:
-            write_sine(local)
+            write_sine(local, seconds=self.capture_seconds)
 
     def wait(self, seconds):
         self.clock += seconds
@@ -1382,9 +1471,11 @@ class ScoringAndRoutingTests(unittest.TestCase):
             )
         self.assertEqual(result["verdict"], "PASS")
         self.assertGreaterEqual(result["steady_window"]["start_s"], 2.5)
-        self.assertEqual(
-            result["discontinuities"],
-            {"hp_burst": [], "step": [], "inactive_gaps": []},
+        self.assertEqual(result["discontinuities"]["hp_burst"], [])
+        self.assertEqual(result["discontinuities"]["step"], [])
+        self.assertEqual(result["discontinuities"]["inactive_gaps"], [])
+        self.assertTrue(
+            result["discontinuities"]["inactive_gaps_are_transport_failures"]
         )
 
     def test_media_gate_rejects_interior_dropout_instead_of_trimming_it(self) -> None:
@@ -1409,6 +1500,104 @@ class ScoringAndRoutingTests(unittest.TestCase):
             )
         self.assertEqual(result["verdict"], "FAIL")
         self.assertTrue(result["discontinuities"]["inactive_gaps"])
+
+    def test_catalog_music_allows_intentional_silence_and_uses_pw_top(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            capture = root / "music.wav"
+            rate = ta.GENERALPLUS_RATE
+            frames = bytearray()
+            for index in range(rate * 5):
+                value = int(
+                    8000
+                    * (
+                        math.sin(2 * math.pi * 440 * index / rate)
+                        + 0.4 * math.sin(2 * math.pi * 880 * index / rate)
+                    )
+                    / 1.4
+                )
+                if rate * 2 <= index < rate * 3:
+                    value = 0
+                frames.extend(struct.pack("<h", value))
+            with wave.open(str(capture), "wb") as handle:
+                handle.setnchannels(1)
+                handle.setsampwidth(2)
+                handle.setframerate(rate)
+                handle.writeframes(frames)
+            top = root / "pw-top.txt"
+            write_pw_top(top)
+            result = ta.score_media(
+                capture,
+                calibrated_noise_floor_dbfs=-65,
+                thresholds=ta.Thresholds(),
+                minimum_stable_s=3,
+                content_kind="catalog-music",
+                pw_top=top,
+                media_node="bluez_input.AA_BB_CC_DD_EE_FF.7",
+                expected_capture_s=5,
+            )
+        self.assertEqual(result["verdict"], "PASS")
+        self.assertTrue(result["discontinuities"]["inactive_gaps"])
+        self.assertFalse(
+            result["discontinuities"]["inactive_gaps_are_transport_failures"]
+        )
+        self.assertEqual(result["stimulus_signature"]["status"], "NOT_APPLICABLE")
+
+    def test_catalog_music_rejects_new_pipewire_errors_after_startup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            capture = root / "music.wav"
+            write_sine(capture, seconds=5, frequency=440)
+            top = root / "pw-top.txt"
+            write_pw_top(top, aux_errors=(2, 2, 3))
+            result = ta.score_media(
+                capture,
+                calibrated_noise_floor_dbfs=-65,
+                thresholds=ta.Thresholds(),
+                content_kind="catalog-music",
+                pw_top=top,
+                media_node="bluez_input.AA_BB_CC_DD_EE_FF.7",
+            )
+        self.assertEqual(result["verdict"], "FAIL")
+        self.assertTrue(any("new error" in item for item in result["failures"]))
+
+    def test_pw_top_rejects_route_loss_after_joint_start(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            top = Path(directory) / "pw-top.txt"
+            write_pw_top(top, media_states=("R", "S", "R"))
+            result = ta.score_pw_top_media_continuity(
+                top,
+                media_node="bluez_input.AA_BB_CC_DD_EE_FF.7",
+                aux_target=ta.FIXED_AUX_TARGET,
+            )
+        self.assertTrue(result["route_state_losses"])
+        self.assertTrue(any("route-state loss" in item for item in result["failures"]))
+
+    def test_pw_top_rejects_error_counter_reset_and_counts_new_epoch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            top = Path(directory) / "pw-top.txt"
+            write_pw_top(top, aux_errors=(5, 0, 1))
+            result = ta.score_pw_top_media_continuity(
+                top,
+                media_node="bluez_input.AA_BB_CC_DD_EE_FF.7",
+                aux_target=ta.FIXED_AUX_TARGET,
+            )
+        aux = result["nodes"][ta.FIXED_AUX_TARGET]
+        self.assertEqual(aux["counter_resets"], 1)
+        self.assertEqual(aux["new_errors_after_joint_start"], 1)
+        self.assertTrue(any("counter reset" in item for item in result["failures"]))
+
+    def test_pw_top_matches_node_name_exactly(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            top = Path(directory) / "pw-top.txt"
+            write_pw_top(top, media_node="bluez_input.AA_BB_CC_DD_EE_FF.20")
+            result = ta.score_pw_top_media_continuity(
+                top,
+                media_node="bluez_input.AA_BB_CC_DD_EE_FF.2",
+                aux_target=ta.FIXED_AUX_TARGET,
+            )
+        self.assertIsNone(result["first_joint_running_snapshot"])
+        self.assertTrue(result["failures"])
 
     def test_call_score_preserves_known_near_end_without_claiming_echo_suppression(
         self,
@@ -1568,7 +1757,32 @@ class CommandTests(unittest.TestCase):
         with self.assertRaisesRegex(ta.RigFailure, "Pi snapshot"):
             ta.capture_snapshot(backend)
 
-    def test_media_smoke_launches_installed_vlc_explicitly(self) -> None:
+    def test_named_ui_target_resolves_text_child_to_clickable_ancestor(self) -> None:
+        backend = FakeBackend()
+        action = ta.tap_named_youtube_music_element(
+            backend, youtube_music_ui(), ("Home",)
+        )
+        self.assertEqual(action["label"], "Home")
+        self.assertEqual(action["target_resource_id"], "pivot-home")
+        self.assertEqual(action["center_derived_from_bounds"], [135, 2211])
+
+    def test_named_ui_target_rejects_ambiguous_name(self) -> None:
+        duplicate = youtube_music_ui().replace(
+            "</node></hierarchy>",
+            f"<node package='{ta.YOUTUBE_MUSIC_PACKAGE}' clickable='true' "
+            "enabled='true' content-desc='Golden' text='' "
+            "bounds='[42,591][373,922]' /></node></hierarchy>",
+        )
+        with self.assertRaisesRegex(ta.RigFailure, "ambiguous"):
+            ta.tap_named_youtube_music_element(FakeBackend(), duplicate, ("Golden",))
+
+    def test_named_ui_target_rejects_malformed_xml(self) -> None:
+        with self.assertRaisesRegex(ta.RigFailure, "malformed XML"):
+            ta.named_youtube_music_targets("<hierarchy>")
+
+    def test_media_smoke_uses_named_youtube_music_control_without_screenshot(
+        self,
+    ) -> None:
         backend = FakeBackend()
         quick_calibration = {"metrics": {"noise_floor_dbfs": -65}}
         with tempfile.TemporaryDirectory() as directory:
@@ -1583,10 +1797,16 @@ class CommandTests(unittest.TestCase):
                 seconds=3,
                 quick_calibration=quick_calibration,
             )
-        launch = next(
-            call for call in backend.adb_calls if "android.intent.action.VIEW" in call
+        self.assertIn(
+            ("shell", "am", "start", "-n", ta.YOUTUBE_MUSIC_ACTIVITY),
+            backend.adb_calls,
         )
-        self.assertIn("org.videolan.vlc", launch)
+        self.assertTrue(any("uiautomator" in call for call in backend.adb_calls))
+        self.assertFalse(any("screencap" in call for call in backend.adb_calls))
+        self.assertFalse(any(call and call[0] == "push" for call in backend.adb_calls))
+        action = result["youtube_music_playback"]["semantic_actions"][0]
+        self.assertEqual(action["label"], "Play video")
+        self.assertEqual(action["center_derived_from_bounds"], [1017, 2058])
         self.assertTrue(any("pw-top -b" in script for script, _ in backend.pi_calls))
         volume_sets = [call for call in backend.adb_calls if "--set" in call]
         self.assertEqual(volume_sets, [])
@@ -1594,6 +1814,22 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(result["android_music_volume"]["during"]["value"], 16)
         self.assertFalse(result["android_music_volume"]["mutated_by_runner"])
         self.assertEqual(result["metrics"]["verdict"], "PASS")
+        self.assertEqual(result["metrics"]["content_kind"], "catalog-music")
+
+    def test_profile_renegotiation_stops_youtube_music_and_waits_for_media_ready(
+        self,
+    ) -> None:
+        backend = FakeBackend()
+        backend.snapshot = snapshot("MEDIA_READY", "CALL_DOWN")
+        result = ta.renegotiate_phone_profiles(backend, "AA:BB:CC:DD:EE:FF")
+        self.assertIn(
+            ("shell", "am", "force-stop", ta.YOUTUBE_MUSIC_PACKAGE),
+            backend.adb_calls,
+        )
+        script = backend.pi_calls[0][0]
+        self.assertIn("bluetoothctl disconnect AA:BB:CC:DD:EE:FF", script)
+        self.assertIn("bluetoothctl connect AA:BB:CC:DD:EE:FF", script)
+        self.assertEqual(result["phone"]["transport"], "MEDIA_READY")
 
     def test_failed_media_launch_stops_units_without_mutating_android_volume(
         self,
@@ -1603,7 +1839,7 @@ class CommandTests(unittest.TestCase):
 
         def adb(args, *, timeout=60):
             values = tuple(str(item) for item in args)
-            if "android.intent.action.VIEW" in values:
+            if values == ("shell", "am", "start", "-n", ta.YOUTUBE_MUSIC_ACTIVITY):
                 backend.adb_calls.append(values)
                 return ta.CommandResult(1, "", "launch failed")
             return normal_adb(args, timeout=timeout)
@@ -1613,7 +1849,7 @@ class CommandTests(unittest.TestCase):
             inventory_file = Path(directory) / "inventory.toml"
             write_inventory(inventory_file)
             inventory = ta.Inventory.load(inventory_file)
-            with self.assertRaisesRegex(ta.RigFailure, "launch the installed VLC"):
+            with self.assertRaisesRegex(ta.RigFailure, "launch YouTube Music"):
                 ta.media_smoke(
                     backend,
                     inventory,

@@ -38,9 +38,11 @@ import sys
 import tarfile
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from itertools import pairwise
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
@@ -63,7 +65,14 @@ OVERRIDE_PATH = f"{OVERRIDE_DIR}/90-larkbridge-dev.conf"
 STATUS_PATH = "/run/user/1000/bridge-status.json"
 CONFIG_PATH = "/home/admin/rpi-lark-bridge/config/bridge.toml"
 WP_DEPLOYED_DIR = "/home/admin/.config/wireplumber/wireplumber.conf.d"
-PHONE_MEDIA_REMOTE = "/sdcard/Download/larkbridge-transparent-audio.wav"
+YOUTUBE_MUSIC_PACKAGE = "com.google.android.apps.youtube.music"
+YOUTUBE_MUSIC_ACTIVITY = (
+    "com.google.android.apps.youtube.music/.activities.MusicActivity"
+)
+YOUTUBE_MUSIC_UI_DUMP = "/sdcard/larkbridge-youtube-music-ui.xml"
+YOUTUBE_MUSIC_PLAY_CONTROL_ID = (
+    "com.google.android.apps.youtube.music:id/mini_player_play_pause_replay_button"
+)
 
 GENERALPLUS_USB_ID = "1b3f:2008"
 GENERALPLUS_PORT = "1-1.5"
@@ -2159,13 +2168,129 @@ def _load_analysis_modules() -> tuple[Any, Any]:
     return wav_level, glitch_detect
 
 
+def score_pw_top_media_continuity(
+    path: Path,
+    *,
+    media_node: str,
+    aux_target: str,
+    minimum_joint_observations: int = 2,
+) -> dict[str, Any]:
+    """Use PipeWire's error counters for content-independent music continuity."""
+
+    snapshots: list[dict[str, dict[str, Any]]] = []
+    current: dict[str, dict[str, Any]] = {}
+    targets = (media_node, aux_target)
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if re.match(r"^\s*S\s+ID\s+QUANT\s+RATE\b", line):
+            if current:
+                snapshots.append(current)
+                current = {}
+            continue
+        parts = line.split()
+        if len(parts) < 9 or not parts[1].isdigit() or not parts[8].isdigit():
+            continue
+        node_name = parts[-1]
+        for target in targets:
+            if node_name == target:
+                current[target] = {
+                    "state": parts[0],
+                    "errors": int(parts[8]),
+                }
+    if current:
+        snapshots.append(current)
+
+    first_joint = next(
+        (
+            index
+            for index, item in enumerate(snapshots)
+            if all(item.get(target, {}).get("state") == "R" for target in targets)
+        ),
+        None,
+    )
+    failures: list[str] = []
+    nodes: dict[str, Any] = {}
+    route_state_losses: list[dict[str, Any]] = []
+    joint_running_observations = 0
+    if first_joint is None:
+        failures.append(
+            "pw-top never observed the phone stream and AUX running together"
+        )
+    else:
+        observed = snapshots[first_joint:]
+        for offset, item in enumerate(observed):
+            not_running = [
+                target for target in targets if item.get(target, {}).get("state") != "R"
+            ]
+            if not_running:
+                route_state_losses.append(
+                    {
+                        "snapshot": first_joint + offset,
+                        "not_running": not_running,
+                    }
+                )
+            else:
+                joint_running_observations += 1
+        if route_state_losses:
+            failures.append(
+                f"pw-top observed {len(route_state_losses)} route-state loss snapshot(s) "
+                "after media startup"
+            )
+        if joint_running_observations < minimum_joint_observations:
+            failures.append(
+                f"pw-top has {joint_running_observations} joint running observations, "
+                f"below required {minimum_joint_observations}"
+            )
+        for target in targets:
+            active = [item[target]["errors"] for item in observed if target in item]
+            resets = sum(
+                current_error < previous_error
+                for previous_error, current_error in pairwise(active)
+            )
+            new_errors = sum(
+                max(current_error - previous_error, 0)
+                for previous_error, current_error in pairwise(active)
+            )
+            nodes[target] = {
+                "running_observations": len(active),
+                "baseline_errors": active[0] if active else None,
+                "maximum_errors": max(active) if active else None,
+                "new_errors_after_joint_start": new_errors,
+                "counter_resets": resets,
+            }
+            if resets:
+                failures.append(
+                    f"pw-top error counter reset {resets} time(s) for {target}"
+                )
+            if new_errors:
+                failures.append(
+                    f"pw-top recorded {new_errors} new error(s) for {target} after startup"
+                )
+    return {
+        "path": str(path),
+        "sha256": sha256_bytes(path.read_bytes()),
+        "snapshot_count": len(snapshots),
+        "first_joint_running_snapshot": first_joint,
+        "joint_running_observations": joint_running_observations,
+        "minimum_joint_observations": minimum_joint_observations,
+        "route_state_losses": route_state_losses,
+        "nodes": nodes,
+        "failures": failures,
+    }
+
+
 def score_media(
     capture: Path,
     *,
     calibrated_noise_floor_dbfs: float,
     thresholds: Thresholds,
     minimum_stable_s: float = 1.0,
+    content_kind: str = "reference-tone",
+    pw_top: Path | None = None,
+    media_node: str | None = None,
+    expected_capture_s: float | None = None,
 ) -> dict[str, Any]:
+    if content_kind not in {"reference-tone", "catalog-music"}:
+        raise RigFailure(f"unsupported media content kind: {content_kind}")
     _wav_level, glitch_detect = _load_analysis_modules()
     channels, rate = glitch_detect.read_wav(str(capture))
     if rate != GENERALPLUS_RATE or len(channels) != GENERALPLUS_CAPTURE_CHANNELS:
@@ -2173,6 +2298,7 @@ def score_media(
             f"capture format is {rate} Hz/{len(channels)}ch; expected 48000 Hz/1ch"
         )
     all_samples = channels[0]
+    capture_duration_s = len(all_samples) / rate
     window = max(int(rate * 0.1), 1)
     threshold_dbfs = max(calibrated_noise_floor_dbfs + 15.0, -55.0)
     active: list[bool] = []
@@ -2186,12 +2312,8 @@ def score_media(
         first_active = active.index(True)
         last_active = len(active) - 1 - active[::-1].index(True)
     except ValueError as exc:
-        raise RigFailure("media capture has no detected steady-tone window") from exc
+        raise RigFailure("media capture has no detected program audio") from exc
 
-    # Lead/trail silence is intentional, but silence after the first detected onset and
-    # before the final detected tone is a real transport discontinuity. Analysing only
-    # the longest active run would hide an interior dropout by relabelling the later
-    # audio as trailing silence.
     inactive_gaps: list[dict[str, float]] = []
     gap_start: int | None = None
     for index in range(first_active, last_active + 2):
@@ -2206,17 +2328,18 @@ def score_media(
                 }
             )
             gap_start = None
-    trim = int(rate * 0.2)
+
+    trim = int(rate * 0.2) if content_kind == "reference-tone" else 0
     start = first_active * window + trim
     end = min((last_active + 1) * window - trim, len(all_samples))
-    stable_s = max(0.0, (end - start) / rate)
+    program_span_s = max(0.0, (end - start) / rate)
     samples = all_samples[start:end]
     if not samples:
-        raise RigFailure("media capture has no detected steady-tone window")
-    bursts, _floor = glitch_detect.hp_burst(
-        samples, rate, MEDIA_STIMULUS_FREQUENCY_HZ, 25.0, 5.0
+        raise RigFailure("media capture has no measurable program window")
+    active_program_s = sum(active[first_active : last_active + 1]) * window / rate
+    active_fraction = active_program_s / max(
+        (last_active - first_active + 1) * window / rate, 1e-12
     )
-    steps = glitch_detect.step(samples, rate, MEDIA_STIMULUS_FREQUENCY_HZ, 5.0)
     mean = sum(samples) / len(samples)
     rms = math.sqrt(sum((sample - mean) ** 2 for sample in samples) / len(samples))
     signal_rms_dbfs = -200.0 if rms <= 0 else 20.0 * math.log10(rms)
@@ -2224,81 +2347,135 @@ def score_media(
         100.0 * sum(abs(sample) >= 32767 / 32768 for sample in samples) / len(samples)
     )
     signal_margin = signal_rms_dbfs - calibrated_noise_floor_dbfs
-    signature_block = max(rate // 2, 1)
-    basis_cos = [
-        math.cos(2.0 * math.pi * MEDIA_STIMULUS_FREQUENCY_HZ * i / rate)
-        for i in range(signature_block)
-    ]
-    basis_sin = [
-        math.sin(2.0 * math.pi * MEDIA_STIMULUS_FREQUENCY_HZ * i / rate)
-        for i in range(signature_block)
-    ]
-    signature_ratios: list[float] = []
-    for offset in range(0, len(samples) - signature_block + 1, signature_block):
-        block = samples[offset : offset + signature_block]
-        block_mean = sum(block) / len(block)
-        centered = [value - block_mean for value in block]
-        total_power = sum(value * value for value in centered) / len(centered)
-        in_phase = sum(
-            value * basis for value, basis in zip(centered, basis_cos, strict=True)
-        ) / len(centered)
-        quadrature = sum(
-            value * basis for value, basis in zip(centered, basis_sin, strict=True)
-        ) / len(centered)
-        tone_power = 2.0 * (in_phase * in_phase + quadrature * quadrature)
-        residual_power = max(total_power - tone_power, 1e-12)
-        signature_ratios.append(
-            10.0 * math.log10(max(tone_power, 1e-12) / residual_power)
-        )
-    tone_to_residual_db = (
-        statistics.median(signature_ratios) if signature_ratios else -math.inf
-    )
     failures: list[str] = []
-    if stable_s < minimum_stable_s:
+    if active_program_s < minimum_stable_s:
         failures.append(
-            f"steady media window is {stable_s:.2f}s, below required {minimum_stable_s:.2f}s"
+            f"active program audio is {active_program_s:.2f}s, below required "
+            f"{minimum_stable_s:.2f}s"
+        )
+    if content_kind == "catalog-music" and active_fraction < 0.8:
+        failures.append(
+            f"program audio is active for only {active_fraction:.1%} of its measured span"
+        )
+    if (
+        expected_capture_s is not None
+        and capture_duration_s + 0.05 < expected_capture_s
+    ):
+        failures.append(
+            f"capture is {capture_duration_s:.3f}s, shorter than expected "
+            f"{expected_capture_s:.3f}s"
         )
     if signal_margin < thresholds.aux_above_floor_db:
         failures.append(
             f"signal margin {signal_margin:.2f} dB is below {thresholds.aux_above_floor_db:.2f} dB"
         )
-    if tone_to_residual_db < MIN_MEDIA_TONE_TO_RESIDUAL_DB:
-        failures.append(
-            f"captured signal does not match the {MEDIA_STIMULUS_FREQUENCY_HZ:.0f} Hz "
-            f"media stimulus ({tone_to_residual_db:.2f} dB tone/residual)"
-        )
     if clipped_pct > thresholds.clipping_pct:
         failures.append("capture clipped")
-    if bursts or steps:
-        failures.append(
-            f"detected discontinuities after startup (hp={len(bursts)}, step={len(steps)})"
+
+    bursts: list[Any] = []
+    steps: list[Any] = []
+    signature: dict[str, Any]
+    continuity: dict[str, Any] | None = None
+    if content_kind == "reference-tone":
+        bursts, _floor = glitch_detect.hp_burst(
+            samples, rate, MEDIA_STIMULUS_FREQUENCY_HZ, 25.0, 5.0
         )
-    if inactive_gaps:
-        failures.append(
-            f"detected {len(inactive_gaps)} inactive media gap(s) after startup"
+        steps = glitch_detect.step(samples, rate, MEDIA_STIMULUS_FREQUENCY_HZ, 5.0)
+        signature_block = max(rate // 2, 1)
+        basis_cos = [
+            math.cos(2.0 * math.pi * MEDIA_STIMULUS_FREQUENCY_HZ * i / rate)
+            for i in range(signature_block)
+        ]
+        basis_sin = [
+            math.sin(2.0 * math.pi * MEDIA_STIMULUS_FREQUENCY_HZ * i / rate)
+            for i in range(signature_block)
+        ]
+        signature_ratios: list[float] = []
+        for offset in range(0, len(samples) - signature_block + 1, signature_block):
+            block = samples[offset : offset + signature_block]
+            block_mean = sum(block) / len(block)
+            centered = [value - block_mean for value in block]
+            total_power = sum(value * value for value in centered) / len(centered)
+            in_phase = sum(
+                value * basis for value, basis in zip(centered, basis_cos, strict=True)
+            ) / len(centered)
+            quadrature = sum(
+                value * basis for value, basis in zip(centered, basis_sin, strict=True)
+            ) / len(centered)
+            tone_power = 2.0 * (in_phase * in_phase + quadrature * quadrature)
+            residual_power = max(total_power - tone_power, 1e-12)
+            signature_ratios.append(
+                10.0 * math.log10(max(tone_power, 1e-12) / residual_power)
+            )
+        tone_to_residual_db = (
+            statistics.median(signature_ratios) if signature_ratios else -math.inf
         )
+        signature = {
+            "kind": content_kind,
+            "frequency_hz": MEDIA_STIMULUS_FREQUENCY_HZ,
+            "tone_to_residual_db": round(tone_to_residual_db, 2),
+            "minimum_db": MIN_MEDIA_TONE_TO_RESIDUAL_DB,
+        }
+        if tone_to_residual_db < MIN_MEDIA_TONE_TO_RESIDUAL_DB:
+            failures.append(
+                f"captured signal does not match the {MEDIA_STIMULUS_FREQUENCY_HZ:.0f} Hz "
+                f"media stimulus ({tone_to_residual_db:.2f} dB tone/residual)"
+            )
+        if bursts or steps:
+            failures.append(
+                f"detected discontinuities after startup (hp={len(bursts)}, step={len(steps)})"
+            )
+        if inactive_gaps:
+            failures.append(
+                f"detected {len(inactive_gaps)} inactive media gap(s) after startup"
+            )
+    else:
+        if pw_top is None or not media_node:
+            raise RigFailure(
+                "catalog-music scoring requires pw-top evidence and the verified phone media node"
+            )
+        continuity = score_pw_top_media_continuity(
+            pw_top,
+            media_node=media_node,
+            aux_target=FIXED_AUX_TARGET,
+            minimum_joint_observations=max(2, math.ceil(minimum_stable_s)),
+        )
+        failures.extend(str(item) for item in continuity["failures"])
+        signature = {
+            "kind": content_kind,
+            "status": "NOT_APPLICABLE",
+            "reason": "catalog music is level-scored; PipeWire counters cover scheduling continuity only",
+        }
+
     return {
         "verdict": "PASS" if not failures else "FAIL",
+        "content_kind": content_kind,
         "capture": str(capture),
         "capture_sha256": sha256_bytes(capture.read_bytes()),
+        "capture_duration_s": round(capture_duration_s, 3),
         "steady_window": {
             "start_s": round(start / rate, 3),
             "end_s": round(end / rate, 3),
-            "duration_s": round(stable_s, 3),
+            "duration_s": round(program_span_s, 3),
+            "active_program_s": round(active_program_s, 3),
+            "active_fraction": round(active_fraction, 4),
             "detection_threshold_dbfs": round(threshold_dbfs, 2),
             "clipped_pct": round(clipped_pct, 6),
         },
         "signal_ac_rms_dbfs": round(signal_rms_dbfs, 2),
         "signal_above_calibrated_floor_db": round(signal_margin, 2),
-        "stimulus_signature": {
-            "frequency_hz": MEDIA_STIMULUS_FREQUENCY_HZ,
-            "tone_to_residual_db": round(tone_to_residual_db, 2),
-            "minimum_db": MIN_MEDIA_TONE_TO_RESIDUAL_DB,
-        },
+        "stimulus_signature": signature,
+        "audible_dropout_verdict": (
+            "NOT_MEASURED_UNREFERENCED_SOURCE"
+            if content_kind == "catalog-music"
+            else "MEASURED_WITH_REFERENCE_TONE"
+        ),
         "discontinuities": {
             "hp_burst": bursts,
             "step": steps,
             "inactive_gaps": inactive_gaps,
+            "inactive_gaps_are_transport_failures": content_kind == "reference-tone",
+            "pw_top": continuity,
         },
         "thresholds": asdict(thresholds),
         "failures": failures,
@@ -2524,6 +2701,414 @@ def set_android_music_volume(backend: Backend, value: int) -> dict[str, Any]:
     return {"requested": value, "set_evidence": asdict(result), "observed": observed}
 
 
+def renegotiate_phone_profiles(backend: Backend, phone_mac: str) -> dict[str, Any]:
+    """Reconnect once after role-policy startup so Android discovers the A2DP sink."""
+
+    stopped = backend.adb(
+        ("shell", "am", "force-stop", YOUTUBE_MUSIC_PACKAGE), timeout=20
+    )
+    stopped.require(
+        "stop stale YouTube Music playback before Bluetooth profile negotiation"
+    )
+    quoted_mac = shlex.quote(phone_mac)
+    script = f"""set -euo pipefail
+bluetoothctl show | grep -q 'Audio Sink'
+if bluetoothctl info {quoted_mac} | grep -q 'Connected: yes'; then
+  bluetoothctl disconnect {quoted_mac}
+  for i in $(seq 1 50); do
+    bluetoothctl info {quoted_mac} | grep -q 'Connected: no' && break
+    sleep 0.1
+  done
+fi
+if ! bluetoothctl info {quoted_mac} | grep -q 'Connected: yes'; then
+  bluetoothctl connect {quoted_mac}
+fi
+for i in $(seq 1 120); do
+  bluetoothctl info {quoted_mac} | grep -q 'Connected: yes' && exit 0
+  sleep 0.1
+done
+echo 'Pixel did not reconnect after role negotiation' >&2
+exit 1
+"""
+    reconnect = backend.pi(script, timeout=30)
+    reconnect.require("renegotiate Pixel Bluetooth media roles")
+    phone, elapsed = wait_phone_transport(backend, "MEDIA_READY", timeout=12.0)
+    return {
+        "media_app_force_stop": asdict(stopped),
+        "bluetooth_reconnect": asdict(reconnect),
+        "media_ready_after_reconnect_s": round(elapsed, 3),
+        "phone": phone,
+    }
+
+
+def parse_youtube_music_session(output: str) -> dict[str, Any] | None:
+    blocks = re.split(r"(?m)(?=^\s{4}\S.*\(userId=\d+\)\s*$)", output)
+    package_line = re.compile(
+        rf"(?m)^\s+package={re.escape(YOUTUBE_MUSIC_PACKAGE)}\s*$"
+    )
+    matches = [block for block in blocks if package_line.search(block)]
+    if not matches:
+        return None
+    parsed: list[dict[str, Any]] = []
+    for block in matches:
+        state = re.search(
+            r"state=PlaybackState \{state=([A-Z_]+)\(\d+\), position=(\d+)",
+            block,
+        )
+        active = re.search(r"(?m)^\s+active=(true|false)\s*$", block)
+        metadata = re.search(r"(?m)^\s+metadata:.*?description=(.+)$", block)
+        if state is None or active is None:
+            raise RigFailure("YouTube Music media-session evidence is incomplete")
+        parsed.append(
+            {
+                "package": YOUTUBE_MUSIC_PACKAGE,
+                "active": active.group(1) == "true",
+                "state": state.group(1),
+                "position_ms": int(state.group(2)),
+                "metadata_description": (
+                    metadata.group(1).strip() if metadata else None
+                ),
+            }
+        )
+    active_sessions = [item for item in parsed if item["active"]]
+    if len(active_sessions) == 1:
+        return active_sessions[0]
+    if len(active_sessions) > 1:
+        raise RigFailure(
+            f"expected one active YouTube Music media session, found "
+            f"{len(active_sessions)}"
+        )
+    if len(parsed) == 1:
+        return parsed[0]
+    raise RigFailure(
+        f"expected one YouTube Music media session, found {len(parsed)} inactive sessions"
+    )
+
+
+def read_youtube_music_session(
+    backend: Backend,
+) -> tuple[dict[str, Any] | None, CommandResult]:
+    result = backend.adb(("shell", "dumpsys", "media_session"), timeout=20)
+    result.require("read YouTube Music media session")
+    return parse_youtube_music_session(result.stdout), result
+
+
+def wait_youtube_music_playing(
+    backend: Backend, *, timeout: float = 6.0
+) -> dict[str, Any]:
+    foreground = backend.adb(
+        ("shell", "am", "start", "-n", YOUTUBE_MUSIC_ACTIVITY), timeout=30
+    )
+    foreground.require("bring YouTube Music forward for named playback verification")
+    started = time.monotonic()
+    last_session: dict[str, Any] | None = None
+    last_result: CommandResult | None = None
+    while time.monotonic() - started < timeout:
+        last_session, last_result = read_youtube_music_session(backend)
+        if (
+            last_session is not None
+            and last_session["active"]
+            and last_session["state"] == "PLAYING"
+        ):
+            xml_text, hierarchy = dump_youtube_music_ui(backend)
+            pause_controls = [
+                item
+                for item in named_youtube_music_targets(xml_text)
+                if item["label"] in {"Pause", "Pause video"}
+                and item["target_resource_id"] == YOUTUBE_MUSIC_PLAY_CONTROL_ID
+            ]
+            if len(pause_controls) == 1:
+                return {
+                    "session": last_session,
+                    "named_pause_control": pause_controls[0],
+                    "hierarchy": hierarchy,
+                    "foreground": asdict(foreground),
+                    "playing_verified_after_s": round(time.monotonic() - started, 3),
+                    "evidence_sha256": sha256_bytes(last_result.stdout.encode()),
+                }
+        backend.wait(0.1)
+    detail = last_session or (
+        last_result.stdout[-2000:] if last_result is not None else "no evidence"
+    )
+    raise RigFailure(
+        f"YouTube Music did not expose both a PLAYING session and named Pause control "
+        f"within {timeout:g}s: {detail}"
+    )
+
+
+def _ui_bounds(value: str) -> tuple[int, int, int, int]:
+    match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", value)
+    if match is None:
+        raise RigFailure(f"Android UI element has malformed bounds: {value!r}")
+    left, top, right, bottom = (int(item) for item in match.groups())
+    if right <= left or bottom <= top:
+        raise RigFailure(f"Android UI element has empty bounds: {value!r}")
+    return left, top, right, bottom
+
+
+def named_youtube_music_targets(xml_text: str) -> list[dict[str, Any]]:
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as exc:
+        raise RigFailure(f"Android UI hierarchy is malformed XML: {exc}") from exc
+    targets: list[dict[str, Any]] = []
+
+    def visit(element: ET.Element, clickable: ET.Element | None) -> None:
+        if element.tag != "node":
+            for child in element:
+                visit(child, clickable)
+            return
+        own_clickable = (
+            element
+            if element.attrib.get("clickable") == "true"
+            and element.attrib.get("enabled") == "true"
+            else clickable
+        )
+        if element.attrib.get("package") == YOUTUBE_MUSIC_PACKAGE:
+            for attribute in ("content-desc", "text"):
+                label = element.attrib.get(attribute, "").strip()
+                if label and own_clickable is not None:
+                    target_bounds = own_clickable.attrib.get("bounds", "")
+                    _ui_bounds(target_bounds)
+                    targets.append(
+                        {
+                            "label": label,
+                            "matched_by": attribute,
+                            "matched_resource_id": element.attrib.get(
+                                "resource-id", ""
+                            ),
+                            "target_resource_id": own_clickable.attrib.get(
+                                "resource-id", ""
+                            ),
+                            "bounds": target_bounds,
+                        }
+                    )
+        for child in element:
+            visit(child, own_clickable)
+
+    visit(root, None)
+    unique: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for item in targets:
+        key = (str(item["label"]), str(item["bounds"]), str(item["target_resource_id"]))
+        unique[key] = item
+    return list(unique.values())
+
+
+def dump_youtube_music_ui(backend: Backend) -> tuple[str, dict[str, Any]]:
+    dumped = backend.adb(
+        ("shell", "uiautomator", "dump", YOUTUBE_MUSIC_UI_DUMP), timeout=20
+    )
+    dumped.require("dump the YouTube Music UI hierarchy")
+    read = backend.adb(("exec-out", "cat", YOUTUBE_MUSIC_UI_DUMP), timeout=20)
+    read.require("read the YouTube Music UI hierarchy")
+    named_youtube_music_targets(read.stdout)
+    return read.stdout, {
+        "dump": asdict(dumped),
+        "xml_sha256": sha256_bytes(read.stdout.encode()),
+    }
+
+
+def tap_named_youtube_music_element(
+    backend: Backend,
+    xml_text: str,
+    exact_names: Sequence[str],
+    *,
+    required_target_resource_id: str | None = None,
+) -> dict[str, Any]:
+    targets = named_youtube_music_targets(xml_text)
+    for name in exact_names:
+        matching = [
+            item
+            for item in targets
+            if item["label"] == name
+            and (
+                required_target_resource_id is None
+                or item["target_resource_id"] == required_target_resource_id
+            )
+        ]
+        if len(matching) > 1:
+            raise RigFailure(
+                f"YouTube Music UI element {name!r} is ambiguous ({len(matching)} matches)"
+            )
+        if not matching:
+            continue
+        selected = matching[0]
+        left, top, right, bottom = _ui_bounds(str(selected["bounds"]))
+        center = ((left + right) // 2, (top + bottom) // 2)
+        tapped = backend.adb(
+            ("shell", "input", "tap", str(center[0]), str(center[1])), timeout=20
+        )
+        tapped.require(f"tap named YouTube Music element {name!r}")
+        return {
+            **selected,
+            "center_derived_from_bounds": list(center),
+            "tap": asdict(tapped),
+        }
+    available = sorted({str(item["label"]) for item in targets})
+    raise RigFailure(
+        f"none of the named YouTube Music elements {list(exact_names)!r} is visible; "
+        f"available={available[:30]}"
+    )
+
+
+def _arbitrary_youtube_music_title(xml_text: str) -> str:
+    excluded = {
+        "account",
+        "activity feed",
+        "cast. disconnected",
+        "home",
+        "library",
+        "samples",
+        "search",
+    }
+    candidates = [
+        item
+        for item in named_youtube_music_targets(xml_text)
+        if item["matched_by"] == "content-desc"
+        and str(item["label"]).casefold() not in excluded
+        and not str(item["label"]).casefold().startswith("page indicator")
+        and "play" not in str(item["target_resource_id"])
+    ]
+    if not candidates:
+        raise HardwareRequired(
+            "YouTube Music has no named playable recommendation or retained mini-player; "
+            "open any song once on the Pixel"
+        )
+    return str(candidates[0]["label"])
+
+
+def wait_youtube_music_playback_ui(
+    backend: Backend, *, timeout: float = 12.0
+) -> tuple[str, dict[str, Any]]:
+    started = time.monotonic()
+    last_labels: list[str] = []
+    while time.monotonic() - started < timeout:
+        xml_text, hierarchy = dump_youtube_music_ui(backend)
+        targets = named_youtube_music_targets(xml_text)
+        last_labels = sorted({str(item["label"]) for item in targets})
+        has_control = any(
+            item["target_resource_id"] == YOUTUBE_MUSIC_PLAY_CONTROL_ID
+            for item in targets
+        )
+        try:
+            _arbitrary_youtube_music_title(xml_text)
+            has_recommendation = True
+        except HardwareRequired:
+            has_recommendation = False
+        if has_control or has_recommendation:
+            return xml_text, hierarchy
+        backend.wait(0.1)
+    raise RigFailure(
+        f"YouTube Music did not expose a named playback choice within {timeout:g}s; "
+        f"last labels={last_labels[:30]}"
+    )
+
+
+def wait_youtube_music_control(
+    backend: Backend, labels: set[str], *, timeout: float = 6.0
+) -> tuple[str, dict[str, Any]]:
+    started = time.monotonic()
+    last_labels: list[str] = []
+    while time.monotonic() - started < timeout:
+        xml_text, hierarchy = dump_youtube_music_ui(backend)
+        targets = named_youtube_music_targets(xml_text)
+        controls = [
+            item
+            for item in targets
+            if item["target_resource_id"] == YOUTUBE_MUSIC_PLAY_CONTROL_ID
+        ]
+        last_labels = [str(item["label"]) for item in controls]
+        if any(item["label"] in labels for item in controls):
+            return xml_text, hierarchy
+        backend.wait(0.1)
+    raise RigFailure(
+        f"YouTube Music did not expose named control {sorted(labels)!r} within "
+        f"{timeout:g}s; last controls={last_labels}"
+    )
+
+
+def start_youtube_music_playback(backend: Backend) -> dict[str, Any]:
+    package = backend.adb(("shell", "pm", "path", YOUTUBE_MUSIC_PACKAGE), timeout=20)
+    if package.returncode or "package:" not in package.stdout:
+        raise HardwareRequired(
+            f"YouTube Music ({YOUTUBE_MUSIC_PACKAGE}) is not installed"
+        )
+    launched = backend.adb(
+        ("shell", "am", "start", "-n", YOUTUBE_MUSIC_ACTIVITY), timeout=30
+    )
+    launched.require("launch YouTube Music")
+    session, session_result = read_youtube_music_session(backend)
+    if session is not None and session["active"] and session["state"] == "PLAYING":
+        return {
+            "launch": asdict(launched),
+            "semantic_actions": [],
+            "already_playing": True,
+            "initial_session": session,
+            "session_evidence_sha256": sha256_bytes(session_result.stdout.encode()),
+        }
+
+    xml_text, hierarchy = wait_youtube_music_playback_ui(backend)
+    targets = named_youtube_music_targets(xml_text)
+    pause_visible = any(
+        item["target_resource_id"] == YOUTUBE_MUSIC_PLAY_CONTROL_ID
+        and item["label"] in {"Pause", "Pause video"}
+        for item in targets
+    )
+    if pause_visible:
+        for _probe in range(5):
+            session, session_result = read_youtube_music_session(backend)
+            if (
+                session is not None
+                and session["active"]
+                and session["state"] == "PLAYING"
+            ):
+                return {
+                    "launch": asdict(launched),
+                    "hierarchy": hierarchy,
+                    "semantic_actions": [],
+                    "already_playing": True,
+                    "initial_session": session,
+                    "session_evidence_sha256": sha256_bytes(
+                        session_result.stdout.encode()
+                    ),
+                }
+            backend.wait(0.1)
+        normalized = tap_named_youtube_music_element(
+            backend,
+            xml_text,
+            ("Pause video", "Pause"),
+            required_target_resource_id=YOUTUBE_MUSIC_PLAY_CONTROL_ID,
+        )
+        normalized["purpose"] = "normalize stale UI/session disagreement"
+        xml_text, hierarchy = wait_youtube_music_control(
+            backend, {"Play", "Play video", "Replay", "Replay video"}
+        )
+    else:
+        normalized = None
+    play_names = ("Play video", "Play", "Replay video", "Replay")
+    try:
+        action = tap_named_youtube_music_element(
+            backend,
+            xml_text,
+            play_names,
+            required_target_resource_id=YOUTUBE_MUSIC_PLAY_CONTROL_ID,
+        )
+    except RigFailure as no_play_control:
+        if "none of the named" not in str(no_play_control):
+            raise
+        title = _arbitrary_youtube_music_title(xml_text)
+        action = tap_named_youtube_music_element(backend, xml_text, (title,))
+        action["selection"] = "first named playable recommendation"
+    return {
+        "launch": asdict(launched),
+        "hierarchy": hierarchy,
+        "semantic_actions": [item for item in (normalized, action) if item is not None],
+        "already_playing": False,
+        "initial_session": session,
+        "session_evidence_sha256": sha256_bytes(session_result.stdout.encode()),
+    }
+
+
 def _raise_primary_and_cleanup(
     primary: BaseException | None, cleanup_failures: Sequence[BaseException]
 ) -> None:
@@ -2550,13 +3135,6 @@ def media_smoke(
     quick_calibration: Mapping[str, Any],
 ) -> dict[str, Any]:
     artifact.mkdir(parents=True, exist_ok=True)
-    stimulus_path = artifact / "stimulus.wav"
-    stimulus = generate_stimulus(stimulus_path, mode="sine", seconds=seconds)
-    package = backend.adb(("shell", "pm", "path", "org.videolan.vlc"), timeout=20)
-    if package.returncode or "package:" not in package.stdout:
-        raise HardwareRequired("VLC (org.videolan.vlc) is not installed on the Pixel")
-    pushed = backend.adb(("push", str(stimulus_path), PHONE_MEDIA_REMOTE), timeout=90)
-    pushed.require("push hashed media stimulus to Pixel")
     remote_root = f"{RUNTIME_ROOT}/media-{stamp()}"
     remote_capture = remote_root + "/capture.wav"
     remote_pw_top = remote_root + "/pw-top.txt"
@@ -2585,26 +3163,11 @@ def media_smoke(
         start.require("start GeneralPlus AUX capture and pw-top observation")
         wait_unit_active(backend, unit + ".service")
         wait_unit_active(backend, top_unit + ".service")
-        launched = backend.adb(
-            (
-                "shell",
-                "am",
-                "start",
-                "-a",
-                "android.intent.action.VIEW",
-                "-d",
-                "file://" + PHONE_MEDIA_REMOTE,
-                "-t",
-                "audio/wav",
-                "-p",
-                "org.videolan.vlc",
-            ),
-            timeout=30,
-        )
-        launched.require("launch the installed VLC explicitly")
+        playback = start_youtube_music_playback(backend)
         active_status, active_elapsed = wait_phone_transport(
             backend, "MEDIA_ACTIVE", timeout=3.0
         )
+        youtube_music_session = wait_youtube_music_playing(backend, timeout=6.0)
         # Android applies safe-media and per-device volume policy. A pre-playback
         # `--set` addresses the speaker device and can be silently capped, so do not
         # mutate it. Record the active A2DP value; the fixed Pi AUX 0.95 gate is the
@@ -2616,6 +3179,11 @@ def media_smoke(
         pw_top = artifact / "pw-top.txt"
         backend.fetch(remote_capture, capture)
         backend.fetch(remote_pw_top, pw_top)
+        media_node = active_status.get("media_node")
+        if not isinstance(media_node, str) or not media_node:
+            raise RigFailure(
+                "MEDIA_ACTIVE status did not identify the phone media node"
+            )
         metrics = score_media(
             capture,
             calibrated_noise_floor_dbfs=float(
@@ -2623,11 +3191,21 @@ def media_smoke(
             ),
             thresholds=inventory.thresholds,
             minimum_stable_s=min(20.0, max(seconds - 2.0, 1.0)),
+            content_kind="catalog-music",
+            pw_top=pw_top,
+            media_node=media_node,
+            expected_capture_s=capture_seconds,
         )
         smoke = {
-            "stimulus": stimulus,
-            "vlc_launch": asdict(launched),
-            "media_active_after_launch_s": round(active_elapsed, 3),
+            "source": {
+                "application": "YouTube Music",
+                "package": YOUTUBE_MUSIC_PACKAGE,
+                "content": "arbitrary catalog song",
+                "continuity_scope": "PipeWire counters; unreferenced music silence is not waveform-scored",
+            },
+            "youtube_music_playback": playback,
+            "youtube_music_session": youtube_music_session,
+            "media_active_after_playback_request_s": round(active_elapsed, 3),
             "active_phone_status": active_status,
             "pw_top": {
                 "path": str(pw_top),
@@ -3572,6 +4150,11 @@ def command_session_start(
             inventory.aux_target,
             candidate.candidate_id,
         )
+        phone_negotiation: dict[str, Any] | None = None
+        if restart_class == "audio-stack":
+            phone_negotiation = renegotiate_phone_profiles(
+                backend, inventory.pixel_bt_mac
+            )
         # Rebuilding PipeWire may restore an old ALSA hardware value. Prepare and
         # read back the measurement fixture only after the final session-start
         # restart so every later code-only iteration inherits the calibrated state.
@@ -3584,6 +4167,7 @@ def command_session_start(
         session["instrument"] = prepared
         session["start_restart_class"] = restart_class
         session["start_snapshot"] = verified
+        session["phone_negotiation"] = phone_negotiation
         session["status"] = "active"
         atomic_json(active, session)
     except BaseException as primary_failure:  # noqa: BLE001 - restore on interruption
