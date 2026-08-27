@@ -1,6 +1,6 @@
 # E19 — Can the appliance carry Pixel media and microphone audio transparently, not only during calls?
 
-- **Status:** In progress — Steps 1–2 complete; Step 3 `BLOCKED_HARDWARE` (Pixel absent), predicted characterization recorded
+- **Status:** In progress — Steps 1–2 and 4 complete; Step 3 `BLOCKED_HARDWARE` (Pixel absent); contract approved, provisional
 - **Resolves risk:** phone audio is usable only inside a call; media playback is not deterministically routed to the selected output
 - **Gates milestone:** transparent phone audio release
 - **Owner / date:** Claude (runtime model `claude-opus-5`), 2026-08-26
@@ -119,7 +119,7 @@ appliance is preserved:
 | 1 | Establish the isolated workspace | **COMPLETE** |
 | 2 | Static Bluetooth and audio architecture audit | **COMPLETE** |
 | 3 | Live Pixel and Pi capability characterization | **`BLOCKED_HARDWARE`** — deferred; predicted characterization recorded |
-| 4 | Feasibility verdict and approved contract | Not started — expected `DECISION_REQUIRED` |
+| 4 | Feasibility verdict and approved contract | **COMPLETE** — contract approved (provisional), ADR-0009 |
 | 5 | Encode the routing contract as tests | Not started |
 | 6 | Implement deterministic idle media routing | Not started |
 | 7 | Implement safe A2DP/HFP transitions | Not started |
@@ -643,3 +643,137 @@ above is complete and is explicitly not a substitute for it.
 operator with the transport options, now including LE Audio, and stop at `DECISION_REQUIRED`.
 Any contract approved on predicted evidence must be marked provisional and must carry live
 confirmation of matrix rows 3, 4, 7 and 8 as a gate before Step 11.
+
+## Step 4 — Feasibility verdict and approved contract
+
+### Verdict on the request as asked
+
+**The universal idle-state microphone is not achievable over classic Bluetooth.** Android opens a
+SCO transport only for a communication use case; the appliance cannot manufacture one from its
+side. This is a property of the handset's audio policy, not a defect in the appliance.
+
+**Transparent full duplex — media and microphone at the same time — is not achievable either**,
+for two independent reasons: Android's framework refuses a concurrent A2DP patch while SCO is up,
+and PipeWire models a BlueZ device as a card with a single active profile.
+
+The six capabilities were assessed separately, because treating them as one question is the main
+way this project could have shipped a false success:
+
+| Capability | Verdict | Evidence class |
+|---|---|---|
+| A2DP media from phone to the selected output | **Achievable, absent today** | Predicted (high); needs `a2dp_sink` restored |
+| Microphone during a cellular call | **Works today** | Deployed and proven |
+| Microphone during an app-created communication session | **Works today** | **Measured** — E01, `com.discord` owning `MODE_IN_COMMUNICATION`, `active comm device: bt_sco_hs larkbridge` |
+| Persistent SCO/HFP outside any session | **Rejected** | Contradicted by AOSP; never demonstrated; would displace media and cap it at 16 kHz |
+| Ordinary recorder / camera / plain-app microphone | **Not achievable over classic HFP** | AOSP primary documentation, plus the E01 mechanism |
+| USB Audio Class | **Not achievable on this hardware** | Pi 3B `dwc_otg` is host-only; ADR-0005 / E05 route UAC through a separate Pico |
+| LE Audio (BAP) ordinary-app microphone | **Unknown; hardware capable** | `cis-central`/`iso-broadcaster` measured in current settings; Pixel advertises TMAP `0x1855`; BlueZ/PipeWire maturity unproven |
+
+**The appliance already owns a truthful detector of Android's microphone transport.** E01
+concluded that "the HFP card materialises only once an SCO transport exists". The presence of the
+two HFP nodes is therefore not a proxy for Android consuming our microphone — it *is* that fact.
+The supervisor's existing `call_up` test already reports it, so Step 8's requirement to say
+plainly when Android has not opened a transport needs no new inference.
+
+### Decision
+
+Recorded as
+[`ADR-0009`](../architecture/decisions/ADR-0009-phone-transport-media-plus-communication-mic.md).
+The operator was presented with the full option set — the recommended contract, a phone-app
+microphone trigger, an LE Audio probe first, and stopping for USB Audio Class — and selected the
+recommended contract on 2026-08-26. The operator additionally directed that Steps 5–10 proceed on
+the provisional contract, with live confirmation gated before deployment.
+
+LE Audio is neither adopted nor foreclosed. It is the only documented Bluetooth route to an
+ordinary-application microphone and the controller is capable, so it belongs in its own
+experiment rather than inside this one.
+
+### `approved_contract`
+
+**Approved 2026-08-26. Provisional** — see the confirmation gate below.
+
+#### Supported behavior
+
+1. **Media.** When the Pixel is connected and presents an A2DP stream, the appliance routes it to
+   the configured output — currently `wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback`
+   (aux) at volume 0.85 — deterministically, under supervisor ownership, never through
+   default-device state or PipeWire enumeration order.
+2. **Microphone.** Whenever any application on the phone opens a communication audio transport —
+   cellular call, VoIP, or Assistant voice recognition — the appliance presents the
+   operator-selected microphone as the uplink, AEC-protected, exactly as the deployed call path
+   does today.
+3. **Transition into a session.** Stop or isolate the A2DP-owned playback path, remove stale or
+   duplicate links, establish HFP playback and microphone ownership, build or verify fresh AEC
+   ownership, validate exact graph ownership, and unmute only after validation.
+4. **Transition out.** Stop the uplink and call-specific loopbacks, remove the old AEC owner,
+   restore A2DP media routing, and report **media-ready**.
+5. **Preserved unchanged.** Lark transmitter-liveness eligibility; Lark-first then FIFINE
+   ordering; same-name replug generation changes; break-before-make switching; post-AEC
+   `bridge.mic` ownership; verified software gain and mute; fail-closed ambiguity handling; no
+   physical-microphone-to-phone bypass.
+6. **Honest reporting.** With the phone connected and no communication session, status must state
+   that the microphone is selected and ready **and that Android has not opened a microphone
+   transport**. It must never describe such a microphone as live.
+7. **Guards required by the role change.** A no-autolink rule covering the phone's `a2dp-sink`
+   profile, and continued exclusion of the phone from the output candidate list.
+
+#### Exclusions — these are not defects and must be documented as Android behavior
+
+- No microphone for ordinary recording, camera, or any application that does not open a
+  communication session.
+- No simultaneous media playback and microphone uplink.
+- No persistent SCO outside a session.
+- No guarantee that Android resumes paused media after a call. The appliance restores the
+  **route**; the application is Android's to resume.
+- No control over where ringtones, notifications, or Assistant audio are routed.
+- No control over the per-device "Phone calls" and "Media audio" toggles in Android's Bluetooth
+  settings, either of which the user can switch off.
+- Media is interrupted by calls, by Android's own refusal of a concurrent patch.
+
+#### Expected states
+
+| State | Meaning |
+|---|---|
+| `PHONE_ABSENT` | No connected bond for the configured phone |
+| `MEDIA_READY` | Phone connected, A2DP available, no stream flowing |
+| `MEDIA_ACTIVE` | A2DP stream flowing to the selected output |
+| `TRANSPORT_SWITCHING` | Transition in progress, either direction |
+| `CALL_ACTIVE` | Both HFP nodes present, AEC verified, exactly one uplink |
+| `MEDIA_RESTORED_APP_PAUSED` | Session ended, A2DP route restored, no stream — Android has not resumed |
+| `WAITING_MIC` / `SAFE` / `DEGRADED` / `FAILED` | Existing supervisor states, unchanged |
+
+#### Acceptance criteria
+
+1. With the phone connected and idle, media started on the phone is audible on aux, and the
+   supervisor reports `MEDIA_ACTIVE` with exactly one playback link to the selected output.
+2. No duplicate phone playback links, and no simultaneous stale A2DP and HFP feed to the output,
+   at any point including mid-transition.
+3. A call or VoIP session produces `CALL_ACTIVE` with exactly one AEC-protected uplink and no
+   inactive microphone linked to AEC.
+4. Ending the session restores the A2DP route and reports `MEDIA_READY` or
+   `MEDIA_RESTORED_APP_PAUSED` — never a claim that playback resumed.
+5. No physical-microphone-to-phone bypass exists in any state.
+6. Microphone selection changes — Lark promotion, FIFINE fallback, transmitter liveness loss —
+   do not churn the active media output graph.
+7. No profile oscillation, no supervisor restart loop, and no silent loss hidden behind a READY
+   state.
+8. Every existing E18 hotplug and transmitter-liveness behavior still passes.
+9. Status distinguishes every state in the table above, and reports whether Android holds a
+   microphone transport.
+
+#### Confirmation gate — binding
+
+This contract rests on **measured** evidence for the microphone mechanism (E01, this handset) and
+on **documented but unmeasured** evidence for A2DP sink behavior. Before the Step 11 deployment,
+E19 Step 3 matrix rows **3, 4, 7 and 8** must be confirmed live on the Pixel 7a. Step 12 cannot
+pass and Step 13 cannot return `PASS` until they are. If row 3 or 4 is refuted, this contract is
+void and Step 4 must be reopened rather than patched.
+
+### Status
+
+Step 4 **COMPLETE** — contract approved by the operator. ADR-0009 moves to Accepted (provisional).
+
+**Next action — Step 5: encode the routing contract as tests.** Add focused failing tests for
+every state and acceptance criterion above, using existing conventions and mocks in
+`pi/bridged/tests/`. Run the narrow selection and confirm failures are confined to the
+unimplemented contract.
