@@ -2550,12 +2550,11 @@ def media_smoke(
     capture_seconds = math.ceil(seconds + 5)
     volume_before = get_android_music_volume(backend)
     volume_during: dict[str, Any] | None = None
-    volume_restore: dict[str, Any] | None = None
+    volume_after: dict[str, Any] | None = None
     smoke: dict[str, Any] | None = None
     primary_failure: BaseException | None = None
     cleanup_failures: list[BaseException] = []
     try:
-        volume_during = set_android_music_volume(backend, 25)
         start = backend.pi(
             f"set -euo pipefail\nmkdir -p {shlex.quote(remote_root)}\n"
             f"systemctl --user reset-failed {unit}.service {top_unit}.service 2>/dev/null || true\n"
@@ -2590,6 +2589,11 @@ def media_smoke(
         active_status, active_elapsed = wait_phone_transport(
             backend, "MEDIA_ACTIVE", timeout=3.0
         )
+        # Android applies safe-media and per-device volume policy. A pre-playback
+        # `--set` addresses the speaker device and can be silently capped, so do not
+        # mutate it. Record the active A2DP value; the fixed Pi AUX 0.95 gate is the
+        # deterministic electrical level owned by this rig.
+        volume_during = get_android_music_volume(backend)
         wait_unit_inactive(backend, unit + ".service", timeout=capture_seconds + 20)
         wait_unit_inactive(backend, top_unit + ".service", timeout=capture_seconds + 20)
         capture = artifact / "aux-capture.wav"
@@ -2627,17 +2631,16 @@ def media_smoke(
     except BaseException as exc:  # noqa: BLE001 - preserve alongside primary failure
         cleanup_failures.append(exc)
     try:
-        volume_restore = set_android_music_volume(backend, int(volume_before["value"]))
+        volume_after = get_android_music_volume(backend)
     except BaseException as exc:  # noqa: BLE001 - preserve alongside primary failure
         cleanup_failures.append(exc)
     _raise_primary_and_cleanup(primary_failure, cleanup_failures)
-    assert (
-        smoke is not None and volume_during is not None and volume_restore is not None
-    )
+    assert smoke is not None and volume_during is not None and volume_after is not None
     smoke["android_music_volume"] = {
         "before": volume_before,
         "during": volume_during,
-        "restored": volume_restore,
+        "after": volume_after,
+        "mutated_by_runner": False,
     }
     return smoke
 

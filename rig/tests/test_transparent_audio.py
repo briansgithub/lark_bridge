@@ -1569,15 +1569,15 @@ class CommandTests(unittest.TestCase):
         self.assertIn("org.videolan.vlc", launch)
         self.assertTrue(any("pw-top -b" in script for script, _ in backend.pi_calls))
         volume_sets = [call for call in backend.adb_calls if "--set" in call]
-        self.assertEqual(volume_sets[0][-1], "25")
-        self.assertEqual(volume_sets[-1][-1], "16")
+        self.assertEqual(volume_sets, [])
         self.assertEqual(backend.music_volume, 16)
-        self.assertEqual(
-            result["android_music_volume"]["during"]["observed"]["value"], 25
-        )
+        self.assertEqual(result["android_music_volume"]["during"]["value"], 16)
+        self.assertFalse(result["android_music_volume"]["mutated_by_runner"])
         self.assertEqual(result["metrics"]["verdict"], "PASS")
 
-    def test_failed_media_launch_stops_units_and_restores_android_volume(self) -> None:
+    def test_failed_media_launch_stops_units_without_mutating_android_volume(
+        self,
+    ) -> None:
         backend = FakeBackend()
         normal_adb = backend.adb
 
