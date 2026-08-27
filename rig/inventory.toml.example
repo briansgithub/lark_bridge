@@ -53,8 +53,9 @@ dongle_a_port_path = ""      # DUT output  - Mode 1W wired call audio
 dongle_b_port_path = ""      # INSTRUMENT  - out drives the speaker, in captures the BT receiver
 
 # E19 transparent-audio instrument. It is resolved afresh through USB sysfs on every
-# run; the current ALSA card number is evidence, never identity. Moving the instrument,
-# cable, or speaker invalidates its three-stage calibration.
+# run; the current ALSA card number is evidence, never identity. Run quick-calibrate
+# once whenever the AUX wiring/instrument/port/cable changes; its gate is reused by the
+# rapid loop. The separate three-stage calibration is required only for promotion.
 generalplus_usb_id                 = "1b3f:2008"
 generalplus_port_path              = "1-1.5"
 generalplus_rate                   = 48000
@@ -64,8 +65,8 @@ generalplus_agc_control            = "Auto Gain Control"
 generalplus_sidetone_control       = "Mic Playback Switch"
 generalplus_capture_switch_control = "Mic Capture Switch"
 generalplus_capture_volume_control = "Mic Capture Volume"
-generalplus_cable_id               = "" # label the physical AUX/loopback cable
-generalplus_speaker_position_id    = "" # label/tape the fixed speaker position
+generalplus_cable_id               = "REPLACE_WITH_CABLE_LABEL" # required before quick/AUX calibration
+generalplus_speaker_position_id    = "REPLACE_WITH_SPEAKER_POSITION_LABEL" # required before acoustic/promotion calibration
 
 # Optional, explicit host-side capture hook for a consenting Discord far-end milestone.
 # Tokens are executed directly (never through a shell); {seconds} and {out} are replaced.
@@ -93,10 +94,12 @@ cal_loopback_latency_ms = ""
 cal_acoustic_snr_db     = ""
 
 # Transparent-audio gates. Keep these explicit so evidence is reproducible.
+e19_aux_target                 = "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
 e19_aux_volume                 = 0.95
 e19_max_noise_floor_dbfs       = -60.0
 e19_max_linearity_error_db     = 1.5
 e19_min_dynamic_range_db       = 50.0
+e19_min_quick_aux_above_floor_db = 20.0 # wiring continuity only; never promotion
 e19_min_aux_above_floor_db     = 40.0
 e19_min_acoustic_snr_db        = 20.0
 e19_max_clipping_pct           = 0.01
