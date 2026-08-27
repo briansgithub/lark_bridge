@@ -929,6 +929,8 @@ class TransactionTests(unittest.TestCase):
         self.assertIn("'mixer':mixer", script)
         self.assertNotIn("alsactl", script)
         self.assertNotIn("restart wireplumber.service\n", script)
+        self.assertNotIn("PY || true", script)
+        self.assertIn("\nset +e\npython3 - <<'PY'", script)
 
     def test_staging_is_volatile_and_override_points_at_complete_package(self) -> None:
         backend = FakeBackend()
@@ -950,6 +952,14 @@ class TransactionTests(unittest.TestCase):
             "/run/user/1000/larkbridge-dev/session/candidates/candidate", joined
         )
         self.assertIn("90-larkbridge-dev.conf", joined)
+        override_match = re.search(
+            r"echo ([A-Za-z0-9+/=]+) \| base64 -d > .*90-larkbridge-dev\.conf",
+            joined,
+        )
+        self.assertIsNotNone(override_match)
+        assert override_match is not None
+        override = ta.base64.b64decode(override_match.group(1)).decode()
+        self.assertIn(f"Environment=BRIDGE_CONFIG={ta.CONFIG_PATH}", override)
         self.assertIn("restart bridge-supervisor.service", joined)
         self.assertNotIn("restart wireplumber.service", joined)
         apply_script = backend.pi_calls[-1][0]
