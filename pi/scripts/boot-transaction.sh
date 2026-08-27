@@ -16,7 +16,9 @@ safe_target() {
         /usr/local/lib/rpi-lark-bridge/*|\
         /home/admin/.config/pipewire/pipewire.conf.d/20-bridge-endpoints.conf|\
         /home/admin/.config/pipewire/pipewire.conf.d/20-bridge-endpoints.notes.txt|\
+        /home/admin/.config/wireplumber/wireplumber.conf.d/50-bridge-bluez.conf|\
         /home/admin/.config/wireplumber/wireplumber.conf.d/65-bridge-hfp-no-autolink.conf|\
+        /home/admin/.config/wireplumber/wireplumber.conf.d/66-bridge-a2dp-source-target.conf|\
         /boot/firmware/config.txt|\
         /etc/cloud/cloud-init.disabled|\
         /etc/NetworkManager/system-connections/*.nmconnection)

@@ -130,6 +130,71 @@ class StatusParsingTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             bridgectl.main(["microphone", "set"])
 
+    def test_missing_phone_status_explains_the_likely_cause(self) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            bridgectl.phone_of({"state": "CALL_DOWN"})
+        self.assertIn("transparent phone audio", str(caught.exception))
+
+    def test_phone_status_reports_transport_truth_without_calling_it_live(self) -> None:
+        status = {
+            "phone": {
+                "connected": True,
+                "transport": "MEDIA_READY",
+                "media_routed": False,
+                "android_microphone_transport": False,
+                "microphone_transport_reason": ("Android has not opened a microphone transport"),
+            }
+        }
+        output = StringIO()
+        with (
+            mock.patch.object(bridgectl, "read_status", return_value=status),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(bridgectl.do_phone_status(Namespace(json=False)), 0)
+        report = output.getvalue()
+        self.assertIn("MEDIA_READY", report)
+        self.assertIn("phone connected", report)
+        self.assertIn("microphone transport closed", report)
+        self.assertIn("Android has not opened", report)
+        self.assertNotIn("microphone live", report.lower())
+
+    def test_phone_cli_is_read_only_and_supports_json(self) -> None:
+        block = {
+            "connected": True,
+            "transport": "CALL",
+            "media_routed": False,
+            "android_microphone_transport": True,
+            "microphone_transport_reason": None,
+        }
+        output = StringIO()
+        with (
+            mock.patch.object(bridgectl, "read_status", return_value={"phone": block}),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(bridgectl.main(["phone", "status", "--json"]), 0)
+        self.assertEqual(json.loads(output.getvalue()), block)
+        with self.assertRaises(SystemExit):
+            bridgectl.main(["phone", "set"])
+
+    def test_degraded_phone_status_prints_the_actionable_failure(self) -> None:
+        status = {
+            "phone": {
+                "connected": True,
+                "transport": "DEGRADED",
+                "media_routed": False,
+                "android_microphone_transport": False,
+                "microphone_transport_reason": "Android has not opened a transport",
+                "failure_reason": "configured media target is unavailable: aux",
+            }
+        }
+        output = StringIO()
+        with (
+            mock.patch.object(bridgectl, "read_status", return_value=status),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(bridgectl.do_phone_status(Namespace(json=False)), 0)
+        self.assertIn("failure: configured media target is unavailable: aux", output.getvalue())
+
 
 class SelectionSafetyTests(unittest.TestCase):
     def test_target_adapter_prefers_permanent_address_over_stale_hci(self) -> None:
