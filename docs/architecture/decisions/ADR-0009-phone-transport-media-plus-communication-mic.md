@@ -16,9 +16,9 @@ only during a call.
 E19 Steps 1–3 established that this request contains two separable asks with very different
 answers, and that conflating them is the main way this project could ship a false success.
 
-### The appliance today
+### Baseline before this decision
 
-One radio (`hci0`, ASUS USB-BT500). The Pi is the **hands-free unit** and an **A2DP source**; it
+One radio (`hci0`, ASUS USB-BT500). The Pi was the **hands-free unit** and an **A2DP source**; it
 advertises Audio Source, Headset, Handsfree and AVRCP, and deliberately **not** Audio Sink —
 `bluez5.roles = [ a2dp_source hfp_hf hsp_hs ]`, with a comment stating that omitting `a2dp_sink`
 "stops Android from pushing media at us". Confirmed live: no `0000110b` on the adapter.
@@ -29,18 +29,12 @@ There is no media concept to extend; everything needed here is additive.
 
 ### What decides the question
 
-Android, not the appliance. AOSP's *Audio Managed SCO rearchitecture* conditions a SCO session on
-"an active stream is patched to a SCO device. The audio mode is set, and a patch to a SCO device
-exists", and enumerates the initiators as telecom calls, VoIP via
-`startScoUsingVirtualVoiceCall`, and voice recognition via `setCommunicationDevice`. Every one is
-an explicit communication use case. `startBluetoothSco()` is deprecated in favour of
-`setCommunicationDevice(AudioDeviceInfo)`, which Android documents as selecting the device "used
-for communication use cases". A microphone transport is something an application **asks for**; it
-is not a property of being connected.
-
-The same page states that "the audio framework prevents an A2DP device from having a concurrent
-patch" once those criteria are met — so the phone itself will not hold A2DP and SCO at once,
-independently of PipeWire modelling a BlueZ device as a card with one active profile.
+Android, not the appliance. The Pixel 7a is running Android 14, and live E01/E19 evidence shows
+that a microphone transport is something a communication application **asks for**, not a
+property of being connected. Connected-idle sampling showed no SCO transport and no phone audio
+nodes; Discord produced `MODE_IN_COMMUNICATION`, an active SCO device, and the HFP nodes.
+Android also removes the A2DP media stream when communication owns SCO, so the implementation
+must alternate transports rather than promise concurrent media and microphone audio.
 
 E01 measured the mechanism on this exact handset:
 
@@ -50,17 +44,16 @@ active comm device : bt_sco_hs  larkbridge
 audio mode         : MODE_IN_COMMUNICATION  (owner: com.discord)
 ```
 
-and concluded that "the HFP card materialises only once an SCO transport exists." That last
-sentence is load-bearing for this ADR: the appliance's own graph is a **truthful detector** of
-whether Android has opened a microphone transport. No HFP nodes means no transport means Android
-is not consuming our microphone, and the supervisor's existing `call_up` test already reports
-exactly that fact.
+and concluded that "the HFP card materialises only once an SCO transport exists." Raw presence of
+the configured phone's HFP/SCO nodes is therefore the appliance's transport truth. The
+implementation deliberately reports that separately from accepted controller binding and from a
+verified AEC/uplink graph: transport presence does not by itself prove safe call ownership.
 
 ### Capability verdicts
 
 | Capability | Verdict | Evidence class |
 |---|---|---|
-| A2DP media from phone to the selected output | **Achievable, absent today** | Predicted (high). Needs the `a2dp_sink` role restored |
+| A2DP media from phone to fixed AUX | **Measured; implementation under promotion validation** | E19 live `a2dp-source` stream and decoy-sink `target.object` trial |
 | Microphone during a cellular call | **Works today** | Deployed and proven |
 | Microphone during an app-created communication session | **Works today** | **Measured** — E01, `com.discord` owning `MODE_IN_COMMUNICATION` |
 | Persistent SCO/HFP outside any session | **Rejected** | Contradicted by AOSP; never demonstrated; would displace media entirely and cap it at 16 kHz |
@@ -70,26 +63,33 @@ exactly that fact.
 
 **The requested universal idle-state microphone is not possible over classic Bluetooth**, and the
 reason is Android's audio policy, not a defect in the appliance. **Transparent full duplex —
-media and microphone simultaneously — is not possible either**, for two independent reasons.
+media and microphone simultaneously — is not possible either** because the measured handset
+withdraws its A2DP stream when SCO owns the communication transport.
 
-That is a smaller answer than the request, but it is not a small capability: every real
-microphone use on this phone is a communication session. Cellular calls, Discord, WhatsApp,
-Signal, Meet and Assistant voice recognition all qualify, and all of them already work.
+That is a smaller answer than the request, but it is still useful: cellular calls and the measured
+Discord path open communication transport. Other applications are supported only when Android
+actually opens HFP/SCO for them; WhatsApp, Signal, Meet, and Assistant have not been qualified by
+this experiment.
 
 ## Decision
 
 Adopt **A2DP media output with a microphone that is present exactly when Android opens a
 communication transport**, and state the exclusions as plainly as the inclusions.
 
+The supervisor reports this as an orthogonal `PhoneTransport`: `ABSENT`, `MEDIA_READY`,
+`MEDIA_ACTIVE`, `SWITCHING`, `CALL`, `MEDIA_RESTORED_APP_PAUSED`, or `DEGRADED`. `DEGRADED` is
+never presented as media-ready.
+
 1. Restore `a2dp_sink` to the WirePlumber role set so the Pixel can present media to the
    appliance.
 2. Route that media deterministically to the configured output — currently the aux jack — under
    supervisor ownership, never via default-device state.
-3. On a communication session opening, switch the phone transport to HFP: tear down the
-   A2DP-owned playback path, build and verify AEC, then unmute. This is the existing call path,
-   entered from a new predecessor state.
-4. On the session ending, restore A2DP media routing and report *media-ready* — **not** "playback
-   resumed", which Android alone controls.
+3. On a communication session opening, enter `SWITCHING`, remove and verify removal of the
+   A2DP-owned playback path, then build and verify AEC before unmuting. Do not switch the BlueZ
+   card profile: measurement found one combined `audio-gateway` profile.
+4. On the session ending, destroy the call graph, enter `MEDIA_RESTORED_APP_PAUSED`, and wait for
+   Android to create a new A2DP stream. Route it on arrival — **not** "playback resumed", which
+   Android alone controls.
 5. Preserve every existing microphone guarantee unchanged: Lark transmitter liveness, Lark-first
    then FIFINE, same-name replug generations, break-before-make, post-AEC `bridge.mic` ownership,
    verified gain and mute, fail-closed ambiguity handling, and no physical-microphone-to-phone
@@ -102,23 +102,24 @@ Because `a2dp_sink` re-opens what the current role set was written to prevent, t
 part of this decision rather than implementation detail:
 
 - A rule pinning the phone's `a2dp-source` stream to the configured output via
-  `target.object`. The existing rule is scoped to `headset-audio-gateway` only and explicitly
-  leaves "A2DP and non-Bluetooth nodes" to WirePlumber's default policy, which routes the
-  phone's media to whichever sink is default. **Note the mechanism: `node.autoconnect = false`
-  was measured to break the feature outright and must not be used — see the Amendment.**
+  `target.object`. The pre-E19 `65-bridge-hfp-no-autolink.conf` rule is scoped to
+  `headset-audio-gateway` only. Commit `9ec30d7` installs the separate
+  `66-bridge-a2dp-source-target.conf` through both installer paths. **Note the mechanism:
+  `node.autoconnect = false` was measured to break media outright and must not be applied to the
+  A2DP stream — see the Amendment.**
 - The phone must remain excluded from the **output** candidate list. `outputs.py` distinguishes
   speakers from the phone by the remote's A2DP Sink UUID; enabling our own sink role does not
   change the Pixel's advertised UUIDs, but Step 10 must confirm it.
 
 ## Consequences
 
-- The operator gets media through the aux speaker, which they do not have today, and keeps the
-  call microphone exactly as it behaves now.
+- Relative to the pre-E19 baseline, the operator gains media through the aux speaker while keeping
+  the existing communication microphone behavior.
 - The operator does **not** get a microphone for ordinary recording apps, and does not get media
   and microphone at the same time. Both exclusions must appear in operator documentation in
   plain language, attributed to Android rather than to the appliance.
-- Media will be interrupted by calls. Android suspends the A2DP patch; the appliance restores the
-  route afterwards but cannot resume the application.
+- Media will be interrupted by calls. Android removes the A2DP stream; after teardown the
+  appliance waits for and routes a newly arriving Android stream but cannot resume the application.
 - E03's radio-contention risk is **reduced**, not incurred. Android refuses the concurrent patch
   before SCO and A2DP ever compete for slots on the one radio.
 - The 48 kHz internal graph (ADR-0007) is retained. A2DP negotiation may land at 44.1 kHz under
@@ -127,9 +128,9 @@ part of this decision rather than implementation detail:
 - LE Audio is **not** adopted here and **not** foreclosed. It is the only documented Bluetooth
   route to an ordinary-application microphone, the controller is capable, and it deserves its own
   experiment rather than being smuggled into this one.
-- This ADR is **provisional**. It rests on measured evidence for the microphone mechanism and on
-  documented-but-unmeasured evidence for A2DP sink behaviour. Live confirmation of E19 Step 3
-  matrix rows 3, 4, 7 and 8 is a gate before deployment.
+- This ADR is **provisional**. The microphone mechanism, A2DP sink behavior, combined profile,
+  pause behavior, and deterministic AUX pin are measured. E19 row 3 is confirmed; live
+  confirmation of rows 4, 7 and 8 remains a gate before promotion.
 
 
 ## Amendment — 2026-08-27, after measuring on the hardware
@@ -169,3 +170,14 @@ Also corrected: the handset is on **Android 14** (SDK 34), not 16 or 17, so the 
 Managed SCO rearchitecture* page cited in the Context describes a model that does not apply here.
 The microphone conclusion now rests on E01's measurement and on the Step 3 matrix rather than on
 that page.
+
+### Rapid-loop implementation note
+
+E19's electrical AUX loop exposed an intermittent underrun on the fixed 48 kHz analog sink while
+the 44.1 kHz A2DP source and AUX sink ran at a 512-frame graph quantum. The accepted correction is
+an AUX-only WirePlumber rule setting `api.alsa.headroom = 960`, one additional 480-frame ALSA
+period. It deliberately leaves period size, Bluetooth latency, and graph quantum unchanged. Two
+consecutive YouTube Music captures on immutable candidate `be38d43349-787d0cd69f2a` then passed
+with more than 40 dB margin over the calibrated electrical floor, zero clipping, zero route loss,
+and zero new AUX or BlueZ errors. This closes the rapid media checkpoint, not the ADR's remaining
+Discord communication-session and post-call restoration gate.

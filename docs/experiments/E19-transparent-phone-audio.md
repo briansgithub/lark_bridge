@@ -1,6 +1,7 @@
 # E19 — Can the appliance carry Pixel media and microphone audio transparently, not only during calls?
 
-- **Status:** In progress — Steps 1–2, 4–5 complete; Step 3 measured (rows 4/7/8 still open); contract provisional and amended
+- **Status:** In progress — transport/policy implementation and rapid live media acceptance are
+  complete; Step 3 rows 4/7/8 and all call/promotion gates remain open
 - **Resolves risk:** phone audio is usable only inside a call; media playback is not deterministically routed to the selected output
 - **Gates milestone:** transparent phone audio release
 - **Owner / date:** Claude (runtime model `claude-opus-5`), 2026-08-26
@@ -47,6 +48,12 @@ ideally at all times, not only when a call is in progress.
 
 `03df47e` is an ancestor of the baseline, and the baseline carries the image-retention record, so
 the working tree is a strict superset of what is deployed.
+
+Current implementation branch `codex/transparent-phone-audio` inherits the BT500 relocation fix
+`7fbde86`, adds guarded capture support in `551c04c`/`a9ab9b3`, the first rapid runner checkpoint in
+`7e8c649`, policy/CLI/installer integration in `9ec30d7`, and the reviewed phone transport state
+machine in `b9e1b4f`. The rapid-runner follow-up and live candidate IDs are recorded below when
+accepted; none of these commits changes `/etc/larkbridge/DEPLOYED.json` during volatile staging.
 
 ## Protected existing behavior
 
@@ -99,8 +106,16 @@ If exact transparent full-duplex Bluetooth proves impossible, Step 4 must presen
 
 ## Image-preservation requirement
 
-Step 11 is the only checkpoint authorized to mutate the Pi, and it may not deploy until the current
-appliance is preserved:
+The original gate allowed only Step 11 to mutate the Pi after preservation. On 2026-08-27 the
+full card was captured and hashed, and the source Pi's mount/services were restored, as recorded in
+[`docs/image-retention-2026-08-26.md`](../image-retention-2026-08-26.md). The operator then
+explicitly designated this Pi a disposable rapid-development target and waived the spare-card
+restore/boot test as a development gate. Volatile live candidates are therefore authorized before
+promotion. A reachable unit is reconciled with `session-stop`; a unit wedged after a persistent
+policy trial is reflashed. Reboot alone is not claimed to restore a coherent baseline because a
+policy file can survive while the volatile supervisor override does not.
+
+The preservation procedure was:
 
 - Capture a **consistent full-card raw image** — quiesce audio, Bluetooth, watchdog and persistence
   writers, `sync`, remount `LARKDATA` read-only, stream the whole card, and restore read-write and
@@ -110,7 +125,8 @@ appliance is preserved:
 - Store the image **outside Git** (~15 GiB, contains device secrets) and update
   [`docs/image-retention-2026-08-26.md`](../image-retention-2026-08-26.md).
 - **Delete no older image.** In particular the `c63c823` image may not be retired until the new
-  image has been captured, hashed, restored, and booted.
+  image is eventually restored to a spare card and booted, even though that test no longer blocks
+  development.
 
 ## Checkpoints
 
@@ -120,14 +136,14 @@ appliance is preserved:
 | 2 | Static Bluetooth and audio architecture audit | **COMPLETE** |
 | 3 | Live Pixel and Pi capability characterization | **MEASURED 2026-08-27** — row 3 confirmed; rows 4, 7, 8 still open |
 | 4 | Feasibility verdict and approved contract | **COMPLETE** — contract approved (provisional), ADR-0009 |
-| 5 | Encode the routing contract as tests | **COMPLETE** — 26 failing tests in `test_phone_transport.py` |
-| 6 | Implement deterministic idle media routing | Not started |
-| 7 | Implement safe A2DP/HFP transitions | Not started |
-| 8 | Integrate the approved idle microphone behavior | Not started |
-| 9 | Status, CLI, policy, installer, and documentation | Not started |
-| 10 | Independent local regression and safety review | Not started |
-| 11 | Preserve the baseline image and deploy | Not started |
-| 12 | Abbreviated live acceptance test | Not started |
+| 5 | Encode the routing contract as tests | **COMPLETE** — historical red contract, now green |
+| 6 | Implement deterministic idle media routing | **IMPLEMENTED LOCALLY** — `b9e1b4f` |
+| 7 | Implement safe A2DP/HFP transitions | **IMPLEMENTED LOCALLY** — `b9e1b4f` |
+| 8 | Integrate the approved idle microphone behavior | **IMPLEMENTED LOCALLY** — honest idle status; idle route remains unsupported |
+| 9 | Status, CLI, policy, installer, and documentation | **IMPLEMENTED LOCALLY** — `9ec30d7`, docs in progress |
+| 10 | Independent local regression and safety review | **IN PROGRESS** — transport clean; rapid runner under review |
+| 11 | Preserve the baseline image and deploy | **PRESERVATION COMPLETE; PRODUCTION DEPLOYMENT NOT STARTED** |
+| 12 | Abbreviated live acceptance test | **NOT STARTED** — wiring continuity only |
 | 13 | Final audit and release verdict | Not started |
 
 ## Step 1 — Establish the isolated workspace
@@ -428,7 +444,7 @@ The two measurements that decide the project are (a) whether `a2dp-sink` and
 Android application opens a microphone transport. Transient profile changes are permitted and
 must be reverted; no code deployment and no persistent configuration edits.
 
-## Step 3 — DEFERRED (`BLOCKED_HARDWARE`), with a predicted characterization
+## Step 3 — Historical pre-handset state: `BLOCKED_HARDWARE`, with a prediction
 
 > ### This section is PREDICTION, not measurement.
 >
@@ -634,7 +650,7 @@ Platform documentation, retrieved 2026-08-26:
 Everything in 3a is read-only measurement on `larkbridge` recorded above. No Pi state was
 changed; no profile was switched; no configuration was edited.
 
-### Status
+### Historical status (superseded by the resumed measurement below)
 
 Step 3 **`BLOCKED_HARDWARE`** — deferred pending the Pixel 7a. The predicted characterization
 above is complete and is explicitly not a substitute for it.
@@ -652,16 +668,17 @@ confirmation of matrix rows 3, 4, 7 and 8 as a gate before Step 11.
 SCO transport only for a communication use case; the appliance cannot manufacture one from its
 side. This is a property of the handset's audio policy, not a defect in the appliance.
 
-**Transparent full duplex — media and microphone at the same time — is not achievable either**,
-for two independent reasons: Android's framework refuses a concurrent A2DP patch while SCO is up,
-and PipeWire models a BlueZ device as a card with a single active profile.
+**Transparent full duplex — media and microphone at the same time — is not achievable either.**
+The surviving reason is measured Android behavior: the Pixel withdraws its A2DP stream while SCO
+owns communication audio. The earlier PipeWire-profile argument was refuted by the combined
+`audio-gateway` profile measured below.
 
 The six capabilities were assessed separately, because treating them as one question is the main
 way this project could have shipped a false success:
 
 | Capability | Verdict | Evidence class |
 |---|---|---|
-| A2DP media from phone to the selected output | **Achievable, absent today** | Predicted (high); needs `a2dp_sink` restored |
+| A2DP media from phone to fixed AUX | **Measured; implementation validation in progress** | E19 `a2dp-source` and decoy-target trial |
 | Microphone during a cellular call | **Works today** | Deployed and proven |
 | Microphone during an app-created communication session | **Works today** | **Measured** — E01, `com.discord` owning `MODE_IN_COMMUNICATION`, `active comm device: bt_sco_hs larkbridge` |
 | Persistent SCO/HFP outside any session | **Rejected** | Contradicted by AOSP; never demonstrated; would displace media and cap it at 16 kHz |
@@ -669,11 +686,11 @@ way this project could have shipped a false success:
 | USB Audio Class | **Not achievable on this hardware** | Pi 3B `dwc_otg` is host-only; ADR-0005 / E05 route UAC through a separate Pico |
 | LE Audio (BAP) ordinary-app microphone | **Unknown; hardware capable** | `cis-central`/`iso-broadcaster` measured in current settings; Pixel advertises TMAP `0x1855`; BlueZ/PipeWire maturity unproven |
 
-**The appliance already owns a truthful detector of Android's microphone transport.** E01
-concluded that "the HFP card materialises only once an SCO transport exists". The presence of the
-two HFP nodes is therefore not a proxy for Android consuming our microphone — it *is* that fact.
-The supervisor's existing `call_up` test already reports it, so Step 8's requirement to say
-plainly when Android has not opened a transport needs no new inference.
+**The appliance already owns transport evidence.** E01 concluded that "the HFP card materialises
+only once an SCO transport exists". Raw presence of the configured phone's HFP nodes is therefore
+reported as Android microphone-transport truth. Accepted controller binding and a verified
+AEC/uplink graph are separate facts; the implementation does not collapse all three into the old
+`call_up` boolean.
 
 ### Decision
 
@@ -690,7 +707,9 @@ experiment rather than inside this one.
 
 ### `approved_contract`
 
-**Approved 2026-08-26. Provisional** — see the confirmation gate below.
+**Approved 2026-08-26; corrected from live measurements 2026-08-27. Provisional** — see the
+confirmation gate below. This section is the current contract; superseded predictions later in
+the experiment history are retained only as a record of what the hardware disproved.
 
 #### Supported behavior
 
@@ -702,11 +721,13 @@ experiment rather than inside this one.
    cellular call, VoIP, or Assistant voice recognition — the appliance presents the
    operator-selected microphone as the uplink, AEC-protected, exactly as the deployed call path
    does today.
-3. **Transition into a session.** Stop or isolate the A2DP-owned playback path, remove stale or
-   duplicate links, establish HFP playback and microphone ownership, build or verify fresh AEC
-   ownership, validate exact graph ownership, and unmute only after validation.
-4. **Transition out.** Stop the uplink and call-specific loopbacks, remove the old AEC owner,
-   restore A2DP media routing, and report **media-ready**.
+3. **Transition into a session.** Remove every A2DP media route and verify the removal from a fresh
+   graph snapshot before constructing HFP playback, microphone ownership, and fresh AEC ownership.
+   Validate exact graph ownership and unmute only after validation.
+4. **Transition out.** Destroy the call graph first, report
+   `MEDIA_RESTORED_APP_PAUSED`, and wait for Android to create a new A2DP stream node. Route and
+   verify that node when it arrives; do not create a route to an absent stream or imply that the
+   application resumed playback.
 5. **Preserved unchanged.** Lark transmitter-liveness eligibility; Lark-first then FIFINE
    ordering; same-name replug generation changes; break-before-make switching; post-AEC
    `bridge.mic` ownership; verified software gain and mute; fail-closed ambiguity handling; no
@@ -714,8 +735,10 @@ experiment rather than inside this one.
 6. **Honest reporting.** With the phone connected and no communication session, status must state
    that the microphone is selected and ready **and that Android has not opened a microphone
    transport**. It must never describe such a microphone as live.
-7. **Guards required by the role change.** A no-autolink rule covering the phone's `a2dp-sink`
-   profile, and continued exclusion of the phone from the output candidate list.
+7. **Guards required by the role change.** A WirePlumber rule covering the incoming phone
+   `a2dp-source` stream sets `target.object` to AUX while leaving autoconnect enabled, and the
+   phone remains excluded from the output candidate list. The supervisor reconciles that
+   arrival-time bootstrap to exactly one unique target.
 
 #### Exclusions — these are not defects and must be documented as Android behavior
 
@@ -734,13 +757,16 @@ experiment rather than inside this one.
 
 | State | Meaning |
 |---|---|
-| `PHONE_ABSENT` | No connected bond for the configured phone |
-| `MEDIA_READY` | Phone connected, A2DP available, no stream flowing |
-| `MEDIA_ACTIVE` | A2DP stream flowing to the selected output |
-| `TRANSPORT_SWITCHING` | Transition in progress, either direction |
-| `CALL_ACTIVE` | Both HFP nodes present, AEC verified, exactly one uplink |
-| `MEDIA_RESTORED_APP_PAUSED` | Session ended, A2DP route restored, no stream — Android has not resumed |
-| `WAITING_MIC` / `SAFE` / `DEGRADED` / `FAILED` | Existing supervisor states, unchanged |
+| `ABSENT` | The configured phone is not connected |
+| `MEDIA_READY` | Phone connected and controller binding accepted; AUX and volume verified; no media stream; no post-call wait history |
+| `MEDIA_ACTIVE` | One qualified A2DP stream exists, its only unique target is AUX, and fixed AUX volume is verified |
+| `SWITCHING` | Transition in progress, either direction |
+| `CALL` | Both HFP nodes are present, AEC is verified, and exactly one uplink exists |
+| `MEDIA_RESTORED_APP_PAUSED` | Session ended; no new media node has arrived from Android |
+| `DEGRADED` | Binding, AUX/volume, media identity/routing, stale cleanup, foreign-source containment, or call convergence failed verification |
+
+These `PhoneTransport` values are orthogonal to the existing call-graph `State` values
+(`CALL_DOWN`, `WAITING_MIC`, `SAFE`, and so on).
 
 #### Acceptance criteria
 
@@ -748,10 +774,10 @@ experiment rather than inside this one.
    supervisor reports `MEDIA_ACTIVE` with exactly one playback link to the selected output.
 2. No duplicate phone playback links, and no simultaneous stale A2DP and HFP feed to the output,
    at any point including mid-transition.
-3. A call or VoIP session produces `CALL_ACTIVE` with exactly one AEC-protected uplink and no
+3. A call or VoIP session produces `CALL` with exactly one AEC-protected uplink and no
    inactive microphone linked to AEC.
-4. Ending the session restores the A2DP route and reports `MEDIA_READY` or
-   `MEDIA_RESTORED_APP_PAUSED` — never a claim that playback resumed.
+4. Ending the session tears down the call graph and reports `MEDIA_RESTORED_APP_PAUSED` until a
+   newly arriving A2DP node is routed and verified — never a claim that playback resumed.
 5. No physical-microphone-to-phone bypass exists in any state.
 6. Microphone selection changes — Lark promotion, FIFINE fallback, transmitter liveness loss —
    do not churn the active media output graph.
@@ -763,11 +789,11 @@ experiment rather than inside this one.
 
 #### Confirmation gate — binding
 
-This contract rests on **measured** evidence for the microphone mechanism (E01, this handset) and
-on **documented but unmeasured** evidence for A2DP sink behavior. Before the Step 11 deployment,
-E19 Step 3 matrix rows **3, 4, 7 and 8** must be confirmed live on the Pixel 7a. Step 12 cannot
-pass and Step 13 cannot return `PASS` until they are. If row 3 or 4 is refuted, this contract is
-void and Step 4 must be reopened rather than patched.
+The A2DP transport, combined BlueZ profile, `a2dp-source` node identity, node-on-pause behavior,
+and `target.object` routing have now been measured on the Pixel 7a. Matrix row 3 is confirmed.
+Rows **4, 7 and 8** remain binding before promotion: second-app/notification behavior, an
+ordinary-recorder negative control, and a Discord positive communication control. Step 12 cannot
+pass and Step 13 cannot return `PASS` until they do.
 
 ### Status
 
@@ -778,7 +804,7 @@ every state and acceptance criterion above, using existing conventions and mocks
 `pi/bridged/tests/`. Run the narrow selection and confirm failures are confined to the
 unimplemented contract.
 
-## Step 5 — The routing contract as tests
+## Step 5 — The routing contract as tests (historical red checkpoint)
 
 New file `pi/bridged/tests/test_phone_transport.py`, 30 tests. No production code changed.
 
@@ -827,7 +853,7 @@ These are choices, not discoveries, and Steps 6–8 are bound by them.
 1. **`PhoneTransport` is a new enum orthogonal to `State`.** `State` stays exactly what it is —
    the call-graph machine — so no E18 behaviour or existing assertion moves. The phone link gets
    its own dimension: `ABSENT`, `MEDIA_READY`, `MEDIA_ACTIVE`, `SWITCHING`, `CALL`,
-   `MEDIA_RESTORED_APP_PAUSED`. Folding these into `State` would have meant editing tests that
+   `MEDIA_RESTORED_APP_PAUSED`, `DEGRADED`. Folding these into `State` would have meant editing tests that
    currently protect deployed behaviour, which is precisely what this checkpoint forbids.
 
 2. **The media node is found by MAC plus `api.bluez5.profile`, never by node index.** The
@@ -837,11 +863,10 @@ These are choices, not discoveries, and Steps 6–8 are bound by them.
    `Settings.hfp_sink`/`hfp_source` keep their hardcoded `.1`/`.0` — changing them is outside
    this contract.
 
-3. **`pw_snapshot()` must start carrying node state.** It currently copies `info.props` plus a
-   synthetic `object.id`; `info.state` is dropped. Without it, `MEDIA_ACTIVE`,
-   `MEDIA_READY` and `MEDIA_RESTORED_APP_PAUSED` cannot be distinguished and the contract's
-   promise not to claim playback resumed would be unimplementable fiction. Step 6 must inject
-   `node.state` the same way `object.id` is already injected.
+3. **Do not add `node.state` to `pw_snapshot()`.** Measurement showed that Android destroys the
+   A2DP stream on pause. Node presence means active media; node absence means there is nothing to
+   route. `MEDIA_READY` and `MEDIA_RESTORED_APP_PAUSED` are separated by supervisor history, and
+   post-call restoration waits for a newly arriving node.
 
 4. **A microphone problem must not silence media.** Ambiguous identity, a Lark with no live
    transmitter, and a mid-stream selection change all leave the media route untouched. Fail-closed
@@ -850,19 +875,17 @@ These are choices, not discoveries, and Steps 6–8 are bound by them.
    safety.
 
 5. **Two WirePlumber files are part of the contract**, asserted directly:
-   `66-bridge-a2dp-source-no-autolink.conf` (new — the guard ADR-0009 requires) and the
+   `66-bridge-a2dp-source-target.conf` (new — the measured `target.object` bootstrap) and the
    `a2dp_sink` role restored in `50-bridge-bluez.conf`, with `a2dp_source`, `hfp_hf` and `hsp_hs`
-   required to survive the edit. The new rule deliberately lives in its own file so that
-   `test_wireplumber_policy.py`'s existing `assert "a2dp-sink" not in policy` guard stays true
-   and meaningful.
+   required to survive the edit. The new rule deliberately lives in its own file; policy tests
+   prove that the HFP-only `node.autoconnect = false` rule never covers `a2dp-source` and that no
+   media rule disables acquisition.
 
-### Known fragility
+### Measured identity correction
 
-`A2DP_SOURCE_PROFILE = "a2dp-source"` is **predicted**, not measured. It is the mirror of the
-measured `"a2dp-sink"` and `"headset-audio-gateway"` values, but no Pixel has yet presented it to
-this appliance. If the deferred Step 3 live matrix shows a different string, exactly one constant
-and the two profile literals in the tests change — the structure does not. This is called out
-here so Step 12 does not mistake a string mismatch for a design failure.
+`A2DP_SOURCE_PROFILE = "a2dp-source"` is measured on the Pixel, together with
+`media.class = "Stream/Output/Audio"`. Discovery uses configured phone MAC plus those two
+properties and never the observed `.2` suffix or enumeration order.
 
 ### Commands and results
 
@@ -880,11 +903,16 @@ Pi and in CI.
 
 ### Status
 
-Step 5 **COMPLETE**. 26 focused failing tests define the contract; no production code touched.
+Step 5 **COMPLETE**. At this historical checkpoint, 26 focused failures defined the unimplemented
+contract and no production code had changed. After `b9e1b4f`, the same transport contract is green:
+`python -m pytest tests/test_phone_transport.py -q` reports **58 passed, 2 subtests passed**, and
+`python -m pytest tests -q` reports **328 passed, 39 subtests passed** from `pi/bridged`; Ruff,
+Black check, and `git diff --check` also pass. The old failure count is retained only as red-contract
+history.
 
-**Next action — Step 6: implement deterministic idle media routing.** Restore the `a2dp_sink`
-role, add `66-bridge-a2dp-source-no-autolink.conf`, add `node.state` to the snapshot, and make
-the idle-media tests pass. Call-profile transitions stay out of Step 6.
+**Superseded next action.** The original Step 6 prescription used the wrong no-autolink and
+`node.state` mechanisms. The measured implementation instead uses `target.object`, arrival-driven
+reconciliation, and supervisor-side post-call history as specified above.
 
 ## Step 3 (resumed, 2026-08-27) — MEASURED, with the Pixel present
 
@@ -892,9 +920,11 @@ The predicted characterization above is left intact rather than edited, so the r
 was believed before the hardware arrived and what survived contact with it. **Where the two
 disagree, this section wins.**
 
-Harness: `rig/e19_transport_matrix.py` (active driver) and `rig/pi/measure/transport_trace.py`
-(change-only graph tracer), both added by this checkpoint. Raw evidence under
-`docs/experiments/results/E19/`.
+Historical characterization harness: `rig/e19_transport_matrix.py` and
+`rig/pi/measure/transport_trace.py` (change-only graph tracer). Its compact evidence remains under
+`docs/experiments/results/E19/`. The current quick-iteration command family is
+`rig transparent-audio`; its raw WAVs, snapshots, and manifests belong under ignored
+`artifacts/e19-dev/`.
 
 ### Scorecard against the predictions
 
@@ -960,8 +990,8 @@ wrong, and Step 7 is simpler for it — no profile switching is required.
 
 So `MEDIA_ACTIVE` is simply *node present*; there is no paused node whose `info.state` could be
 read. `MEDIA_READY` and `MEDIA_RESTORED_APP_PAUSED` are **graph-indistinguishable** and separable
-only by supervisor-side history. Step 5's design decision #3 — inject `node.state` into
-`pw_snapshot()` — is unnecessary and is withdrawn.
+only by supervisor-side history. The original premeasurement proposal to inject `node.state` into
+`pw_snapshot()` is unnecessary and withdrawn.
 
 ### The autolink race, and why the guard has to change
 
@@ -1052,12 +1082,14 @@ The code fallback in `bridge_supervisor.py` stays at 0.85 deliberately, so a uni
 configuration keeps the measured-safe value rather than inheriting a level that spends headroom.
 E09's warning is recorded next to the new value.
 
-### Appliance state
+### Post-characterization deployed-baseline state
 
-Every change was reverted and verified: config sha256 back to
+At the end of characterization, every change was reverted and verified: config sha256 back to
 `9024a5ac8e3c463bdf7316d8f46c5251882432fc8c7a8703871e5bfdf1467b34`, `Audio Sink` absent, the four
 original files in `wireplumber.conf.d`, the decoy sink unloaded, supervisor `CALL_DOWN` with
-volume verified. The only intended persistent change is the 0.95 volume.
+volume verified. The only intended persistent change was the 0.95 volume. Later volatile staging
+does not change `/etc/larkbridge/DEPLOYED.json`, which continues to identify production baseline
+`03df47e`; runtime candidate state must be read from the rapid-runner evidence instead.
 
 ### Gate status
 
@@ -1069,3 +1101,55 @@ volume verified. The only intended persistent change is the 0.95 volume.
 | 8 | App communication session opens one | **OPEN** — needs the Discord call |
 
 Rows 3, 4, 7 and 8 are the binding pre-deployment gate. Row 3 is met; 4, 7 and 8 are not.
+
+## Rapid closed-loop media checkpoint — 2026-08-27
+
+The fast loop now uses the GeneralPlus `1b3f:2008` input as a rig-only electrical instrument,
+with the Pi AUX output looped back into it. Calibration
+`20260827T225235Z-quick-aux` passed at minimum capture gain with a measured floor of approximately
+`-77.94 dBFS`. The formal capture is armed only after one-second probes observe program audio at
+least 40 dB above that floor; this keeps YouTube Music launch and network buffering outside the
+30-second scored window.
+
+The Pixel source is YouTube Music, controlled only through named accessibility elements. The
+runner resolved the exact mini-player control
+`com.google.android.apps.youtube.music:id/mini_player_play_pause_replay_button`, verified the
+named `Pause video` state plus the exact-package media session, and took no screenshots. Android
+Bluetooth Media audio permission was enabled by the operator. On this bench, A2DP volume had to
+be 25/25: the media-session volume API was ignored under Bluetooth absolute volume, while named
+playback plus volume key events produced the intended level.
+
+### Measured AUX underrun correction
+
+The clean A2DP source ran at 44.1 kHz and the fixed AUX sink at 48 kHz with a 512-frame graph
+quantum. The AUX sink's existing ALSA period and headroom were both 480 frames. A global forced
+1024-frame quantum was rejected because it caused thousands of BlueZ errors and silence. An
+AUX-only runtime trial with additional headroom eliminated the AUX underrun, so commit `be38d43`
+adds a narrowly matched WirePlumber rule setting `api.alsa.headroom = 960`: exactly one extra
+480-frame period. It does not change period size, Bluetooth latency, or graph quantum, and both
+legacy and transactional installers carry and roll back the policy.
+
+The first committed-policy run carried 30 seconds of program audio with zero AUX errors, but the
+strict scorer rejected two BlueZ source errors in its first measured second. They then stayed
+flat. After a clean development-session restart, the same immutable candidate
+`be38d43349-787d0cd69f2a` passed twice consecutively:
+
+| Artifact | Elapsed | Signal above floor | Active program | Clipping | AUX / BlueZ new errors | Route loss |
+|---|---:|---:|---:|---:|---:|---:|
+| `20260827T234155Z-media-be38d43349-787d0cd69f2a` | 85.84 s | 41.23 dB | 30.0 s | 0.000% | 0 / 0 | 0 |
+| `20260827T234344Z-media-be38d43349-787d0cd69f2a` | 52.73 s | 40.99 dB | 29.4 s | 0.000% | 0 / 0 | 0 |
+
+Raw evidence remains ignored under `artifacts/e19-dev/iterations/`. The corresponding capture
+SHA-256 values are
+`fad4eea66f5239a9723e8bb3e54bec485537963d33e38d45b7a37bd8cd652f90` and
+`92b2acb182b3e3a4c907eb6deefd0856c45dd7c232f173678a2922c17ff4313e`;
+the `pw-top` evidence hashes are
+`007e286530469f783894a02ec6e23887f8158504bc40948d661406b659788b16` and
+`db69385fb7333516e0f2ce28879460643036801fa680ae7a6e68f5712330b39b`.
+
+This arbitrary-song loop proves electrical level, clipping, deterministic routing, and PipeWire
+scheduling continuity. It deliberately reports audible-dropout detection as
+`NOT_MEASURED_UNREFERENCED_SOURCE`: legitimate silence in catalog music cannot be distinguished
+from a dropout without a known reference waveform. A synthetic reference remains required for
+promotion-grade discontinuity scoring. Discord transition, post-AEC uplink, and true far-end
+validation remain open.
