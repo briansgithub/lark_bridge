@@ -52,6 +52,26 @@ fifine_port_path    = ""
 dongle_a_port_path = ""      # DUT output  - Mode 1W wired call audio
 dongle_b_port_path = ""      # INSTRUMENT  - out drives the speaker, in captures the BT receiver
 
+# E19 transparent-audio instrument. It is resolved afresh through USB sysfs on every
+# run; the current ALSA card number is evidence, never identity. Moving the instrument,
+# cable, or speaker invalidates its three-stage calibration.
+generalplus_usb_id                 = "1b3f:2008"
+generalplus_port_path              = "1-1.5"
+generalplus_rate                   = 48000
+generalplus_capture_channels       = 1
+generalplus_playback_channels      = 2
+generalplus_agc_control            = "Auto Gain Control"
+generalplus_sidetone_control       = "Mic Playback Switch"
+generalplus_capture_switch_control = "Mic Capture Switch"
+generalplus_capture_volume_control = "Mic Capture Volume"
+generalplus_cable_id               = "" # label the physical AUX/loopback cable
+generalplus_speaker_position_id    = "" # label/tape the fixed speaker position
+
+# Optional, explicit host-side capture hook for a consenting Discord far-end milestone.
+# Tokens are executed directly (never through a shell); {seconds} and {out} are replaced.
+# Example only -- choose the ffmpeg input supported by this Windows bench.
+discord_far_end_capture_command = []
+
 # ---------------------------------------------------------------- bluetooth
 
 bt_receiver_mac = ""         # A2DP sink: both the "headphones" under test AND the capture tap
@@ -71,3 +91,14 @@ pico_vbus_sense_gpio = 23    # tells "unplugged from phone" apart from "firmware
 cal_noise_floor_dbfs   = ""
 cal_loopback_latency_ms = ""
 cal_acoustic_snr_db     = ""
+
+# Transparent-audio gates. Keep these explicit so evidence is reproducible.
+e19_aux_volume                 = 0.95
+e19_max_noise_floor_dbfs       = -60.0
+e19_max_linearity_error_db     = 1.5
+e19_min_dynamic_range_db       = 50.0
+e19_min_aux_above_floor_db     = 40.0
+e19_min_acoustic_snr_db        = 20.0
+e19_max_clipping_pct           = 0.01
+e19_min_call_raw_dbfs          = -55.0
+e19_min_aec_suppression_db     = 10.0

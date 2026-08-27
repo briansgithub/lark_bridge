@@ -23,6 +23,7 @@ CONTROL
   rig powerloss <command>    manual abrupt-power-loss campaign
   rig setup-adb              download + extract platform-tools on this PC
   rig wired-aec <command>    baseline/test/fault-test/soak/collect
+  rig transparent-audio <command>  guarded E19 baseline/session/iterate/accept loop
   rig speaker-preflight      verify selected speaker playback reaches the Lark
 
 HARDWARE LADDER
@@ -72,6 +73,11 @@ case "$cmd" in
     PY="$(command -v py 2>/dev/null || command -v python3 2>/dev/null || true)"
     [ -n "$PY" ] || die "Python 3.11+ is required on the control PC"
     exec "$PY" "$RIG_ROOT/powerloss/powerlossctl.py" "$@"
+    ;;
+  transparent-audio)
+    PY="$(command -v py 2>/dev/null || command -v python3 2>/dev/null || true)"
+    [ -n "$PY" ] || die "Python 3.11+ is required on the control PC"
+    exec "$PY" "$RIG_ROOT/transparent_audio.py" "$@"
     ;;
 
   setup-adb)   exec "$RIG_ROOT/adb/setup.sh" "$@" ;;
