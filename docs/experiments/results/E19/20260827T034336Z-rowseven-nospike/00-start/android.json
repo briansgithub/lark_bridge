@@ -1,0 +1,90 @@
+{
+  "audio_mode_requested": "MODE_NORMAL",
+  "audio_mode_actual": "MODE_NORMAL",
+  "audio_mode_owner": null,
+  "sco_audio_state": "SCO_STATE_INACTIVE",
+  "sco_audio_mode": "SCO_MODE_VIRTUAL_CALL",
+  "active_communication_device": {
+    "role": "output",
+    "type": "bt_a2dp",
+    "addr": "A0:AD:9F:73:6C:24",
+    "name": "LarkBridge BT500"
+  },
+  "computed_preferred_communication_device": null,
+  "applied_preferred_communication_device": null,
+  "connected_devices": [
+    {
+      "raw": "[DeviceInfo: type:0x20 (bt_sco_hs) name:LarkBridge BT500 addr:A0:AD:9F:73:6C:24 codec: 0 sensorUuid: null disabled modes: {}]",
+      "group": "connected"
+    },
+    {
+      "raw": "[DeviceInfo: type:0x80000008 (bt_sco_hs) name:LarkBridge BT500 addr:A0:AD:9F:73:6C:24 codec: 0 sensorUuid: null disabled modes: {}]",
+      "group": "connected"
+    }
+  ],
+  "recent_mode_changes": [
+    {
+      "ts": "08-26 13:02:42:288",
+      "mode": "MODE_IN_COMMUNICATION",
+      "pkg": "com.discord"
+    },
+    {
+      "ts": "08-26 13:57:32:458",
+      "mode": "MODE_NORMAL",
+      "pkg": "com.discord"
+    },
+    {
+      "ts": "08-26 14:01:31:239",
+      "mode": "MODE_RINGTONE",
+      "pkg": "com.android.server.telecom"
+    },
+    {
+      "ts": "08-26 14:01:36:153",
+      "mode": "MODE_IN_CALL",
+      "pkg": "com.android.server.telecom"
+    },
+    {
+      "ts": "08-26 15:11:50:407",
+      "mode": "MODE_NORMAL",
+      "pkg": "com.android.server.telecom"
+    },
+    {
+      "ts": "08-26 15:12:13:225",
+      "mode": "MODE_RINGTONE",
+      "pkg": "com.android.server.telecom"
+    },
+    {
+      "ts": "08-26 15:12:38:138",
+      "mode": "MODE_IN_CALL",
+      "pkg": "com.android.server.telecom"
+    },
+    {
+      "ts": "08-26 16:03:07:654",
+      "mode": "MODE_NORMAL",
+      "pkg": "com.android.server.telecom"
+    },
+    {
+      "ts": "08-26 16:15:40:707",
+      "mode": "MODE_IN_CALL",
+      "pkg": "com.android.server.telecom"
+    },
+    {
+      "ts": "08-26 16:18:01:384",
+      "mode": "MODE_NORMAL",
+      "pkg": "com.android.server.telecom"
+    }
+  ],
+  "bluetooth_events": [
+    "08-26 17:45:58:370 BlutoothActiveDeviceChanged for A2DP, device update XX:XX:XX:XX:19:DA -> null",
+    "08-26 18:43:54:341 BlutoothActiveDeviceChanged for A2DP, device update null -> XX:XX:XX:XX:19:DA",
+    "08-26 18:43:54:415 A2DP device addr=XX:XX:XX:XX:46:91 now available",
+    "08-26 19:08:53:581 BlutoothActiveDeviceChanged for A2DP, device update XX:XX:XX:XX:19:DA -> null",
+    "08-26 22:20:36:472 BlutoothActiveDeviceChanged for A2DP, device update null -> XX:XX:XX:XX:19:DA",
+    "08-26 22:20:36:585 A2DP device addr=XX:XX:XX:XX:46:91 now available",
+    "08-26 22:38:35:615 BlutoothActiveDeviceChanged for A2DP, device update XX:XX:XX:XX:19:DA -> null",
+    "08-26 23:20:35:973 BlutoothActiveDeviceChanged for A2DP, device update null -> XX:XX:XX:XX:6C:24",
+    "08-26 23:20:36:094 A2DP device addr=A0:AD:9F:73:6C:24 now available",
+    "08-26 23:39:58:787 BlutoothActiveDeviceChanged for A2DP, device update XX:XX:XX:XX:6C:24 -> null"
+  ],
+  "raw_lines_matched": 46
+}

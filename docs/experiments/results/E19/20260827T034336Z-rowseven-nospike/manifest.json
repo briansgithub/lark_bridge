@@ -1,0 +1,136 @@
+{
+  "started": "2026-08-27T03:43:39.990393+00:00",
+  "phone_mac": "5C:33:7B:CB:BF:C5",
+  "pi_host": "larkbridge",
+  "spike_applied": false,
+  "baseline_sha_expected": "9024a5ac8e3c463bdf7316d8f46c5251882432fc8c7a8703871e5bfdf1467b34",
+  "states": [
+    {
+      "label": "00-start",
+      "t": "2026-08-27T03:43:42.371766+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "role": "output",
+        "type": "bt_a2dp",
+        "addr": "A0:AD:9F:73:6C:24",
+        "name": "LarkBridge BT500"
+      }
+    },
+    {
+      "label": "01-phone-disconnected",
+      "t": "2026-08-27T03:43:54.693023+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      }
+    },
+    {
+      "label": "02-connected-idle",
+      "t": "2026-08-27T03:44:09.857131+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      }
+    },
+    {
+      "label": "05-mic-trigger-voice-assist-key",
+      "t": "2026-08-27T03:44:21.633738+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      },
+      "trigger_opened_transport": false
+    },
+    {
+      "label": "05-mic-trigger-recognize-speech-intent",
+      "t": "2026-08-27T03:44:37.100884+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      },
+      "trigger_opened_transport": false
+    },
+    {
+      "label": "05-mic-trigger-pi-transport-acquire",
+      "t": "2026-08-27T03:44:52.682381+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      },
+      "trigger_opened_transport": false
+    },
+    {
+      "label": "08-bt-disconnected",
+      "t": "2026-08-27T03:45:08.759660+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      }
+    },
+    {
+      "label": "09-bt-reconnected",
+      "t": "2026-08-27T03:45:24.637660+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      }
+    }
+  ],
+  "finished": "2026-08-27T03:45:25.087094+00:00"
+}

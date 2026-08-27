@@ -1,6 +1,6 @@
 # E19 — Can the appliance carry Pixel media and microphone audio transparently, not only during calls?
 
-- **Status:** In progress — Steps 1–2, 4–5 complete; Step 3 `BLOCKED_HARDWARE` (Pixel absent); contract approved, provisional
+- **Status:** In progress — Steps 1–2, 4–5 complete; Step 3 measured (rows 4/7/8 still open); contract provisional and amended
 - **Resolves risk:** phone audio is usable only inside a call; media playback is not deterministically routed to the selected output
 - **Gates milestone:** transparent phone audio release
 - **Owner / date:** Claude (runtime model `claude-opus-5`), 2026-08-26
@@ -118,7 +118,7 @@ appliance is preserved:
 |---|---|---|
 | 1 | Establish the isolated workspace | **COMPLETE** |
 | 2 | Static Bluetooth and audio architecture audit | **COMPLETE** |
-| 3 | Live Pixel and Pi capability characterization | **`BLOCKED_HARDWARE`** — deferred; predicted characterization recorded |
+| 3 | Live Pixel and Pi capability characterization | **MEASURED 2026-08-27** — row 3 confirmed; rows 4, 7, 8 still open |
 | 4 | Feasibility verdict and approved contract | **COMPLETE** — contract approved (provisional), ADR-0009 |
 | 5 | Encode the routing contract as tests | **COMPLETE** — 26 failing tests in `test_phone_transport.py` |
 | 6 | Implement deterministic idle media routing | Not started |
@@ -696,7 +696,7 @@ experiment rather than inside this one.
 
 1. **Media.** When the Pixel is connected and presents an A2DP stream, the appliance routes it to
    the configured output — currently `wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback`
-   (aux) at volume 0.85 — deterministically, under supervisor ownership, never through
+   (aux) at volume 0.95 — deterministically, under supervisor ownership, never through
    default-device state or PipeWire enumeration order.
 2. **Microphone.** Whenever any application on the phone opens a communication audio transport —
    cellular call, VoIP, or Assistant voice recognition — the appliance presents the
@@ -885,3 +885,187 @@ Step 5 **COMPLETE**. 26 focused failing tests define the contract; no production
 **Next action — Step 6: implement deterministic idle media routing.** Restore the `a2dp_sink`
 role, add `66-bridge-a2dp-source-no-autolink.conf`, add `node.state` to the snapshot, and make
 the idle-media tests pass. Call-profile transitions stay out of Step 6.
+
+## Step 3 (resumed, 2026-08-27) — MEASURED, with the Pixel present
+
+The predicted characterization above is left intact rather than edited, so the record shows what
+was believed before the hardware arrived and what survived contact with it. **Where the two
+disagree, this section wins.**
+
+Harness: `rig/e19_transport_matrix.py` (active driver) and `rig/pi/measure/transport_trace.py`
+(change-only graph tracer), both added by this checkpoint. Raw evidence under
+`docs/experiments/results/E19/`.
+
+### Scorecard against the predictions
+
+| Prediction | Outcome |
+|---|---|
+| Profile string is `a2dp-source` | **CORRECT** — no test change needed |
+| Enabling `a2dp_sink` makes the Pixel offer and stream media | **CORRECT** |
+| Phone stays out of the output candidate list | **CORRECT** |
+| Idle phone opens no microphone transport | **Supported, with caveats** — see below |
+| Pixel is on Android 16 or 17 | **WRONG — Android 14** (SDK 34, `UQ1A.240105.004.A1`, patch 2024-01-05) |
+| `a2dp-sink` and HFP are mutually exclusive card profiles | **WRONG — one combined profile** |
+| `info.state` distinguishes playing from paused | **WRONG — the node is destroyed on pause** |
+| `node.autoconnect = false` is the guard we need | **WRONG — it breaks the feature outright** |
+
+The Android version error matters for sourcing: the AOSP *Audio Managed SCO rearchitecture* page
+cited earlier describes the **Android 17** model and **does not apply to this handset**. The
+conclusion it was cited for still holds, but it now rests on the measurements below rather than
+on that page.
+
+### What the phone and appliance actually do
+
+**Connected and idle** — measured over 231 consecutive one-second samples: BlueZ reports
+`Connected: yes` with every UUID present including `Audio Source`, and the Pi has **zero**
+audio nodes. Android: `MODE_NORMAL`, no owner, `SCO_STATE_INACTIVE`. This confirms E01's "the HFP
+card materialises only once an SCO transport exists" and extends it to media.
+
+**With `a2dp_sink` enabled** the adapter advertises `Audio Sink 0000110b`, class moves
+`0x680408 → 0x6c0408`, and Service Classes gain **Rendering**. Android then connects A2DP and
+makes LarkBridge `mActiveDevice` in `A2dpService`, with `HeadsetService.mActiveDevice` also
+LarkBridge and `mAudioRouteAllowed: true`.
+
+**The media stream:**
+
+```
+node.name            = bluez_input.5C_33_7B_CB_BF_C5.2
+media.class          = Stream/Output/Audio          <- a client STREAM, not a source node
+api.bluez5.profile   = a2dp-source
+api.bluez5.codec     = sbc
+info.state           = running
+```
+
+The `.2` suffix confirms the decision never to hardcode the node index: HFP source is `.0`,
+HFP sink `.1`, media `.2`, all sharing the `bluez_input.<MAC>.<N>` shape.
+
+**The card exposes ONE combined profile**, not two exclusive ones:
+
+```
+ACTIVE Profile = 65536 audio-gateway | "Audio Gateway (A2DP Source & HSP/HFP AG)"
+EnumProfile:  0 off  |  65536 audio-gateway
+```
+
+There is nothing to switch between. Step 2's exclusivity claim and the reasoning in ADR-0009 were
+wrong, and Step 7 is simpler for it — no profile switching is required.
+
+**The node is destroyed on pause, not suspended.** Play/pause/play, sampled continuously:
+
+```
+ 1 sample  node absent,  0 links
+25 samples node present, 4 links
+20 samples node absent,  0 links     <- PAUSED: node and links gone
+27 samples node present, 4 links
+```
+
+So `MEDIA_ACTIVE` is simply *node present*; there is no paused node whose `info.state` could be
+read. `MEDIA_READY` and `MEDIA_RESTORED_APP_PAUSED` are **graph-indistinguishable** and separable
+only by supervisor-side history. Step 5's design decision #3 — inject `node.state` into
+`pw_snapshot()` — is unnecessary and is withdrawn.
+
+### The autolink race, and why the guard has to change
+
+Sampling as fast as `pw-dump` allows, the node and its four links appear in the **same sample**:
+
+```
+56 samples  node=0 link=0
+91 samples  node=1 link=4
+```
+
+WirePlumber links the arriving stream within one sample period. The supervisor polls every 2 s,
+so it cannot win that race, and the node reappears on **every unpause**, not just at connection.
+Some guard is mandatory.
+
+**But the guard ADR-0009 specified does not work.** Controlled A/B, identical ordering, playback
+verified running on the phone in both arms (`dumpsys audio` `state:started`):
+
+| Rule in force | BlueZ transport | PipeWire nodes | Links |
+|---|---|---|---|
+| none | `active` | 1 | 4 |
+| `node.autoconnect = false` on `a2dp-source` | **`idle`** | **0** | **0** |
+
+Because the phone's media is a `Stream/Output/Audio` **client stream**, transport acquisition is
+driven *by* the session manager linking it. With autoconnect disabled nothing links it, the
+transport is never acquired, and the node is never created — no node for the supervisor to own,
+and no audio at all. The guard as designed would have silently broken the feature.
+
+**`target.object` is the mechanism that works.** Proved against a decoy sink so that "configured
+output" and "default sink" were different objects:
+
+| Rule | Default sink | Media landed on |
+|---|---|---|
+| `target.object = <aux>` | **E19Decoy** | **aux** — the configured output |
+| none | **E19Decoy** | **E19Decoy** — the default, i.e. wrong |
+
+The second row proves the default-device dependence is real and not hypothetical; the first
+proves the pin overrides it while keeping acquisition working. Step 6 must pin the target, not
+disable autoconnect.
+
+### The idle microphone — supported, and where it is still soft
+
+Three programmatic triggers were attempted with the screen awake and unlocked. None opened a
+transport; Android stayed `MODE_NORMAL` / `SCO_STATE_INACTIVE` with zero nodes throughout, and
+`HeadsetService` reported `mVoiceRecognitionStarted: false`.
+
+| Trigger | Fired? | Transport |
+|---|---|---|
+| `input keyevent 231` (VOICE_ASSIST) | Google app came foreground, but later than the 6 s window | none |
+| `am start -a android.speech.action.RECOGNIZE_SPEECH` | `Starting: Intent {...}`, Google app foreground | none |
+| `busctl … MediaTransport1 Acquire` | returned `hqq 5 1021 1024` — succeeded | none |
+
+Two honesty notes that keep this short of proof:
+
+- The third trigger acquired the **A2DP** transport. No HFP transport object existed to acquire,
+  so it is a **null result, not a negative** — it says nothing about SCO.
+- Launching the Assistant UI is not the same as the recognizer actively listening. This is
+  consistent with the AOSP model and with E01, but it is weaker than a recorder app genuinely
+  capturing.
+
+**No positive control was obtained in this session**: SCO was never observed opening, so
+"no transport" cannot yet be fully distinguished from "SCO is broken in this arrangement".
+`HeadsetService` reporting LarkBridge as `mActiveDevice` with `mAudioRouteAllowed: true` argues
+against the latter, but a Discord call remains outstanding and is the one thing that would settle
+it. **Matrix rows 7 and 8 stay open.**
+
+### Robustness defects found in passing
+
+Both are E19-relevant because Step 7 deliberately churns the graph.
+
+1. **Reconnecting too soon after a WirePlumber restart leaves no card at all.** `bluetoothctl`
+   reports `Connected: yes`, the phone plays happily, and there is no `bluez_card` — so audio
+   silently goes to the phone's own speaker. A healthy-looking state with no audio is exactly
+   what the contract forbids.
+2. **A WirePlumber-only restart can strand the aux sink node at volume 1.0**, and it is then
+   unrecoverable: the supervisor detects `volume mismatch: desired 0.850, observed 1.000` every
+   tick and cannot fix it, and `wpctl set-volume`, `pactl set-sink-volume` and `pw-cli set-param`
+   all report success while the node stays at 1.0. Only a **full `pipewire` restart** rebuilds
+   the node and restores the configured value. On an output feeding a car aux input, an
+   unnoticed jump to 1.0 is a loud surprise, and E09 measured 1.0 as roughly +4 dB and clipping.
+
+### Configuration change
+
+At the operator's request, `wired_output_volume` moved **0.85 → 0.95** in
+`config/bridge.toml.example` and on the deployed unit; the supervisor now reports
+`desired 0.95, observed 0.95, verified True`. There is only one such knob and it governs both
+call audio and media, since both leave the same sink; `output_gain_db` remains call-only at 0.0.
+The code fallback in `bridge_supervisor.py` stays at 0.85 deliberately, so a unit with no
+configuration keeps the measured-safe value rather than inheriting a level that spends headroom.
+E09's warning is recorded next to the new value.
+
+### Appliance state
+
+Every change was reverted and verified: config sha256 back to
+`9024a5ac8e3c463bdf7316d8f46c5251882432fc8c7a8703871e5bfdf1467b34`, `Audio Sink` absent, the four
+original files in `wireplumber.conf.d`, the decoy sink unloaded, supervisor `CALL_DOWN` with
+volume verified. The only intended persistent change is the 0.95 volume.
+
+### Gate status
+
+| Row | State | Verdict |
+|---|---|---|
+| 3 | A2DP media active, routed to the selected output | **CONFIRMED** |
+| 4 | Notification / second-app audio | not exercised |
+| 7 | Ordinary app opens no microphone transport | **supported, not proven** — no positive control |
+| 8 | App communication session opens one | **OPEN** — needs the Discord call |
+
+Rows 3, 4, 7 and 8 are the binding pre-deployment gate. Row 3 is met; 4, 7 and 8 are not.

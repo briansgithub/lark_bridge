@@ -1,6 +1,7 @@
 # ADR-0009 — A2DP media out, HFP microphone only during a communication session
 
-- **Status:** Accepted (provisional) — approved by the operator 2026-08-26; live confirmation gated before deployment
+- **Status:** Accepted (provisional), **amended 2026-08-27** — the decision stands; two parts of
+  its justification and one implementation guard were refuted by measurement. See *Amendment*.
 - **Date:** 2026-08-26
 - **Relates to:** `docs/experiments/E19-transparent-phone-audio.md`, E01, E03, E15, E16;
   ADR-0007 (48 kHz internal graph)
@@ -100,10 +101,11 @@ communication transport**, and state the exclusions as plainly as the inclusions
 Because `a2dp_sink` re-opens what the current role set was written to prevent, two guards are
 part of this decision rather than implementation detail:
 
-- A no-autolink rule covering the phone's `a2dp-sink` profile. The existing rule is scoped to
-  `headset-audio-gateway` only and explicitly leaves "A2DP and non-Bluetooth nodes" to
-  WirePlumber's default policy, which would autoconnect the phone's media node to the default
-  sink outside supervisor ownership.
+- A rule pinning the phone's `a2dp-source` stream to the configured output via
+  `target.object`. The existing rule is scoped to `headset-audio-gateway` only and explicitly
+  leaves "A2DP and non-Bluetooth nodes" to WirePlumber's default policy, which routes the
+  phone's media to whichever sink is default. **Note the mechanism: `node.autoconnect = false`
+  was measured to break the feature outright and must not be used — see the Amendment.**
 - The phone must remain excluded from the **output** candidate list. `outputs.py` distinguishes
   speakers from the phone by the remote's A2DP Sink UUID; enabling our own sink role does not
   change the Pixel's advertised UUIDs, but Step 10 must confirm it.
@@ -128,3 +130,42 @@ part of this decision rather than implementation detail:
 - This ADR is **provisional**. It rests on measured evidence for the microphone mechanism and on
   documented-but-unmeasured evidence for A2DP sink behaviour. Live confirmation of E19 Step 3
   matrix rows 3, 4, 7 and 8 is a gate before deployment.
+
+
+## Amendment — 2026-08-27, after measuring on the hardware
+
+The decision is unchanged: A2DP media out, microphone only during a communication session. Three
+things behind it were wrong, and two of them would have produced broken code.
+
+**1. Profiles are not mutually exclusive.** The Context above argued from PipeWire's
+`device.profile` semantics that `a2dp-sink` and `headset-audio-gateway` could not be active
+together. Measured, the Pixel's card exposes a *single combined* profile —
+`65536 audio-gateway | "Audio Gateway (A2DP Source & HSP/HFP AG)"` — with only `off` beside it.
+There is nothing to switch between. The conclusion that survives is Android's, not PipeWire's:
+the phone still refuses a concurrent A2DP patch while SCO is up.
+
+**2. The guard mechanism was wrong and would have shipped a dead feature.** This ADR called for
+`node.autoconnect = false` on the phone's media node. Controlled A/B with playback verified
+running:
+
+| Rule | BlueZ transport | Nodes | Links |
+|---|---|---|---|
+| none | `active` | 1 | 4 |
+| `node.autoconnect = false` | `idle` | 0 | 0 |
+
+The phone's media arrives as a `Stream/Output/Audio` **client stream**, so transport acquisition
+is driven *by* the session manager linking it. Disable autoconnect and nothing links it, the
+transport is never acquired, the node never exists, and no audio flows. The correct mechanism is
+`target.object`, which pins the stream to the configured sink while leaving acquisition intact —
+measured to route to aux even with a decoy sink installed as the default, where the unpinned
+control followed the decoy.
+
+**3. The media node does not persist across pause.** It is destroyed on pause and recreated on
+resume, so `MEDIA_READY` and `MEDIA_RESTORED_APP_PAUSED` are indistinguishable from the graph and
+separable only by supervisor-side history. Routing must therefore be arrival-driven
+reconciliation, re-asserted every time the node reappears, not a link established once.
+
+Also corrected: the handset is on **Android 14** (SDK 34), not 16 or 17, so the AOSP *Audio
+Managed SCO rearchitecture* page cited in the Context describes a model that does not apply here.
+The microphone conclusion now rests on E01's measurement and on the Step 3 matrix rather than on
+that page.

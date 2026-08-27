@@ -1,0 +1,223 @@
+{
+  "started": "2026-08-27T03:52:02.100114+00:00",
+  "phone_mac": "5C:33:7B:CB:BF:C5",
+  "pi_host": "larkbridge",
+  "spike_applied": true,
+  "baseline_sha_expected": "9024a5ac8e3c463bdf7316d8f46c5251882432fc8c7a8703871e5bfdf1467b34",
+  "states": [
+    {
+      "label": "00-start",
+      "t": "2026-08-27T03:52:16.691185+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      }
+    },
+    {
+      "label": "01-phone-disconnected",
+      "t": "2026-08-27T03:52:29.808876+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      }
+    },
+    {
+      "label": "02-connected-idle",
+      "t": "2026-08-27T03:52:44.743115+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": "audio-gateway",
+      "nodes": {},
+      "transports": {
+        "/org/bluez/hci0/dev_5C_33_7B_CB_BF_C5/sep1/fd1": "idle"
+      },
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      }
+    },
+    {
+      "label": "03-media-playing",
+      "t": "2026-08-27T03:52:56.553941+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": "audio-gateway",
+      "nodes": {
+        "bluez_input.5C_33_7B_CB_BF_C5.2": "a2dp-source/running"
+      },
+      "transports": {
+        "/org/bluez/hci0/dev_5C_33_7B_CB_BF_C5/sep1/fd1": "active"
+      },
+      "phone_link_count": 4,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      }
+    },
+    {
+      "label": "04-media-paused",
+      "t": "2026-08-27T03:53:08.328543+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": "audio-gateway",
+      "nodes": {},
+      "transports": {
+        "/org/bluez/hci0/dev_5C_33_7B_CB_BF_C5/sep1/fd1": "idle"
+      },
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      }
+    },
+    {
+      "label": "04b-media-resumed",
+      "t": "2026-08-27T03:53:20.223473+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": "audio-gateway",
+      "nodes": {
+        "bluez_input.5C_33_7B_CB_BF_C5.2": "a2dp-source/running"
+      },
+      "transports": {
+        "/org/bluez/hci0/dev_5C_33_7B_CB_BF_C5/sep1/fd1": "active"
+      },
+      "phone_link_count": 4,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      }
+    },
+    {
+      "label": "05-mic-trigger-voice-assist-key",
+      "t": "2026-08-27T03:53:35.132401+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": "audio-gateway",
+      "nodes": {},
+      "transports": {
+        "/org/bluez/hci0/dev_5C_33_7B_CB_BF_C5/sep1/fd1": "idle"
+      },
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      },
+      "trigger_output": "",
+      "foreground_before": "topResumedActivity=ActivityRecord{4ae9fc1 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t91808}",
+      "foreground_after": "topResumedActivity=ActivityRecord{4ae9fc1 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t91808}",
+      "trigger_changed_foreground": false,
+      "trigger_opened_transport": false
+    },
+    {
+      "label": "05-mic-trigger-recognize-speech-intent",
+      "t": "2026-08-27T03:53:50.983483+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": "audio-gateway",
+      "nodes": {},
+      "transports": {
+        "/org/bluez/hci0/dev_5C_33_7B_CB_BF_C5/sep1/fd1": "idle"
+      },
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      },
+      "trigger_output": "Starting: Intent { act=android.speech.action.RECOGNIZE_SPEECH }",
+      "foreground_before": "topResumedActivity=ActivityRecord{cb82fea u0 com.google.android.googlequicksearchbox/com.google.android.apps.gsa.staticplugins.opa.OpaActivity t92634}",
+      "foreground_after": "topResumedActivity=ActivityRecord{cb82fea u0 com.google.android.googlequicksearchbox/com.google.android.apps.gsa.staticplugins.opa.OpaActivity t92634}",
+      "trigger_changed_foreground": false,
+      "trigger_opened_transport": false
+    },
+    {
+      "label": "05-mic-trigger-pi-transport-acquire",
+      "t": "2026-08-27T03:54:09.962311+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": "audio-gateway",
+      "nodes": {},
+      "transports": {
+        "/org/bluez/hci0/dev_5C_33_7B_CB_BF_C5/sep1/fd1": "idle"
+      },
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+      },
+      "trigger_output": "hqq 5 1021 1024",
+      "foreground_before": "topResumedActivity=ActivityRecord{4ae9fc1 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t91808}",
+      "foreground_after": "topResumedActivity=ActivityRecord{4ae9fc1 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t91808}",
+      "trigger_changed_foreground": false,
+      "trigger_opened_transport": false
+    },
+    {
+      "label": "08-bt-disconnected",
+      "t": "2026-08-27T03:54:26.759428+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": null,
+      "nodes": {},
+      "transports": {},
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "role": "output",
+        "type": "bt_a2dp",
+        "addr": "A0:AD:9F:73:6C:24",
+        "name": "LarkBridge BT500"
+      }
+    },
+    {
+      "label": "09-bt-reconnected",
+      "t": "2026-08-27T03:54:44.627183+00:00",
+      "supervisor_state": "CALL_DOWN",
+      "card_profile": "audio-gateway",
+      "nodes": {},
+      "transports": {
+        "/org/bluez/hci0/dev_5C_33_7B_CB_BF_C5/sep1/fd2": "idle"
+      },
+      "phone_link_count": 0,
+      "android_mode": "MODE_NORMAL",
+      "android_mode_owner": null,
+      "android_sco_state": "SCO_STATE_INACTIVE",
+      "android_comm_device": {
+        "role": "output",
+        "type": "bt_a2dp",
+        "addr": "A0:AD:9F:73:6C:24",
+        "name": "LarkBridge BT500"
+      }
+    }
+  ],
+  "revert": {
+    "sha256": "9024a5ac8e3c463bdf7316d8f46c5251882432fc8c7a8703871e5bfdf1467b34",
+    "sha256_matches_baseline": true,
+    "audio_sink_absent": true,
+    "roles_line": "bluez5.roles = [ a2dp_source hfp_hf hsp_hs ]",
+    "supervisor_state": "CALL_DOWN"
+  },
+  "finished": "2026-08-27T03:54:56.955972+00:00"
+}

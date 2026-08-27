@@ -1,0 +1,20 @@
+=== NODES ===
+node.name            = bluez_input.5C_33_7B_CB_BF_C5.2
+  media.class        = Stream/Output/Audio
+  api.bluez5.profile = a2dp-source
+  api.bluez5.address = 5C:33:7B:CB:BF:C5
+  api.bluez5.codec   = sbc
+  info.state         = running
+  node.description   = Pixel 7a
+  object.id          = 96
+
+=== DEVICES (cards) ===
+device.name          = bluez_card.5C_33_7B_CB_BF_C5
+  device.description = Pixel 7a
+  api.bluez5.address = 5C:33:7B:CB:BF:C5
+  ACTIVE Profile     = 65536 audio-gateway | Audio Gateway (A2DP Source & HSP/HFP AG)
+  EnumProfile:
+    - 0 off | avail: yes | Off
+    - 65536 audio-gateway | avail: yes | Audio Gateway (A2DP Source & HSP/HFP AG)
+
+=== TRANSPORT / ENDPOINT hints from props ===

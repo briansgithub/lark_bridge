@@ -1,0 +1,111 @@
+### bluetoothctl info
+Device 5C:33:7B:CB:BF:C5 (public)
+	Name: Pixel 7a
+	Alias: Pixel 7a
+	Class: 0x005a420c (5915148)
+	Icon: phone
+	Paired: yes
+	Bonded: yes
+	Trusted: yes
+	Blocked: no
+	Connected: yes
+	LegacyPairing: no
+	UUID: OBEX Object Push          (00001105-0000-1000-8000-00805f9b34fb)
+	UUID: Audio Source              (0000110a-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control Target (0000110c-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control        (0000110e-0000-1000-8000-00805f9b34fb)
+	UUID: Headset AG                (00001112-0000-1000-8000-00805f9b34fb)
+	UUID: PANU                      (00001115-0000-1000-8000-00805f9b34fb)
+	UUID: NAP                       (00001116-0000-1000-8000-00805f9b34fb)
+	UUID: Handsfree Audio Gateway   (0000111f-0000-1000-8000-00805f9b34fb)
+	UUID: SIM Access                (0000112d-0000-1000-8000-00805f9b34fb)
+	UUID: Phonebook Access Server   (0000112f-0000-1000-8000-00805f9b34fb)
+	UUID: Message Access Server     (00001132-0000-1000-8000-00805f9b34fb)
+	UUID: PnP Information           (00001200-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Access Profile    (00001800-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)
+	UUID: Telephony and Media Audio (00001855-0000-1000-8000-00805f9b34fb)
+	UUID: Unknown                   (0000fcf1-0000-1000-8000-00805f9b34fb)
+	UUID: Google                    (0000fef3-0000-1000-8000-00805f9b34fb)
+	UUID: Vendor specific           (16bcfd00-253f-c348-e831-0db3e334d580)
+	UUID: Vendor specific           (abbafc00-e56a-484c-b832-8b17cf6cbfe8)
+	Modalias: bluetooth:v00E0p1200d1436
+	Battery Percentage: 0x50 (80)
+
+### hciconfig
+hci0:	Type: Primary  Bus: USB
+	BD Address: A0:AD:9F:73:6C:24  ACL MTU: 1021:6  SCO MTU: 255:12
+	UP RUNNING PSCAN ISCAN 
+	RX bytes:4723 acl:34 sco:0 events:295 errors:0
+	TX bytes:4791 acl:28 sco:0 commands:251 errors:0
+	Features: 0xff 0xff 0xff 0xfe 0xdb 0xfd 0x7b 0x87
+	Packet type: DM1 DM3 DM5 DH1 DH3 DH5 HV1 HV2 HV3 
+	Link policy: RSWITCH HOLD SNIFF PARK 
+	Link mode: PERIPHERAL ACCEPT 
+	Name: 'LarkBridge BT500'
+	Class: 0x680408
+	Service Classes: Capturing, Audio, Telephony
+	Device Class: Audio/Video, Hands-free
+	HCI Version: 5.4 (0xd)  Revision: 0xe
+	LMP Version: 5.4 (0xd)  Subversion: 0x8761
+	Manufacturer: Realtek Semiconductor Corporation (93)
+
+
+### pw-link -l
+
+### wpctl status
+PipeWire 'pipewire-0' [1.4.2, admin@larkbridge, cookie:1270270032]
+ └─ Clients:
+        33. WirePlumber                         [1.4.2, admin@larkbridge, pid:601]
+        34. pipewire                            [1.4.2, admin@larkbridge, pid:603]
+        46. wpctl                               [1.4.2, admin@larkbridge, pid:3433]
+        47. WirePlumber [export]                [1.4.2, admin@larkbridge, pid:601]
+
+Audio
+ ├─ Devices:
+ │      49. Built-in Audio                      [alsa]
+ │      50. Built-in Audio                      [alsa]
+ │      51. Wireless Microphone                 [alsa]
+ │      52. USB PnP Audio Device                [alsa]
+ │  
+ ├─ Sinks:
+ │  *   48. Built-in Audio Stereo               [vol: 0.85]
+ │  
+ ├─ Sources:
+ │  *   35. Wireless Microphone Analog Stereo   [vol: 1.00]
+ │      69. USB PnP Audio Device Mono           [vol: 1.00]
+ │  
+ ├─ Filters:
+ │  
+ └─ Streams:
+
+Video
+ ├─ Devices:
+ │      43. bcm2835-codec-isp                   [v4l2]
+ │      44. bcm2835-codec-decode                [v4l2]
+ │      45. bcm2835-codec-encode                [v4l2]
+ │      59. bcm2835-codec-image_fx              [v4l2]
+ │      60. bcm2835-codec-encode_image          [v4l2]
+ │      61. bcm2835-isp                         [v4l2]
+ │      62. bcm2835-isp                         [v4l2]
+ │      63. bcm2835-isp                         [v4l2]
+ │      64. bcm2835-isp                         [v4l2]
+ │      65. bcm2835-isp                         [v4l2]
+ │      66. bcm2835-isp                         [v4l2]
+ │      67. bcm2835-isp                         [v4l2]
+ │      68. bcm2835-isp                         [v4l2]
+ │  
+ ├─ Sinks:
+ │  
+ ├─ Sources:
+ │  *   82. bcm2835-isp (V4L2)                 
+ │      86. bcm2835-isp (V4L2)                 
+ │      88. bcm2835-isp (V4L2)                 
+ │      90. bcm2835-isp (V4L2)                 
+ │  
+ ├─ Filters:
+ │  
+ └─ Streams:
+
+Settings
+ └─ Default Configured Devices:

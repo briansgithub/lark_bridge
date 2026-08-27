@@ -19,6 +19,10 @@ apart by `api.bluez5.profile`, never by the suffix.
 mirror of `a2dp-sink`, which is what a speaker we play to presents. Enabling our own `a2dp_sink`
 role is what makes the former appear at all; it does not change what the Pixel advertises, so
 `outputs.py` keeps working unchanged.
+
+All of the above was confirmed live on 2026-08-27 except where a test says otherwise; the
+media node is `bluez_input.<MAC>.2`, `media.class = Stream/Output/Audio`, codec `sbc`, and
+it exists only while audio is actually flowing.
 """
 
 from __future__ import annotations
@@ -45,21 +49,33 @@ SPEAKER_NODE = f"bluez_output.{SPEAKER_MAC.replace(':', '_')}.1"
 FIFINE_NODE = "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
 
 
-def media_props(state: str = "running") -> dict:
-    return {"api.bluez5.profile": "a2dp-source", "node.state": state}
+def media_props() -> dict:
+    """The phone's media stream, exactly as measured on 2026-08-27.
+
+    It is a client STREAM, not a source node, and it exists ONLY while audio is flowing --
+    pausing destroys it and resuming recreates it. So there is no "paused node" to inspect and
+    no node.state to branch on: presence is the signal.
+    """
+    return {
+        "api.bluez5.profile": "a2dp-source",
+        "media.class": "Stream/Output/Audio",
+        "node.state": "running",
+    }
 
 
 def call_settings() -> supervisor.Settings:
     return supervisor.Settings(aec=supervisor.AecSettings(enabled=True))
 
 
-def idle_nodes(settings: supervisor.Settings, *, media_state: str = "running") -> dict:
-    """Phone connected and presenting media; no call."""
-    return {
+def idle_nodes(settings: supervisor.Settings, *, media: bool = True) -> dict:
+    """Phone connected, no call. `media` controls whether audio is currently flowing."""
+    nodes = {
         settings.lark_node: {},
         settings.wired_output: {},
-        PHONE_MEDIA: media_props(media_state),
     }
+    if media:
+        nodes[PHONE_MEDIA] = media_props()
+    return nodes
 
 
 def call_nodes(settings: supervisor.Settings) -> dict:
@@ -131,7 +147,12 @@ class PhoneTransportStateTests(unittest.TestCase):
     def test_phone_absent_when_no_phone_nodes(self) -> None:
         settings = call_settings()
         graph = supervisor.CallGraph(settings)
-        graph.tick({settings.lark_node: {}, settings.wired_output: {}}, [], settings.lark_node)
+        graph.tick(
+            {settings.lark_node: {}, settings.wired_output: {}},
+            [],
+            settings.lark_node,
+            phone_connected=False,
+        )
         self.assertEqual(graph.phone_transport, supervisor.PhoneTransport.ABSENT)
         self.assertIsNone(graph.media_node)
 
@@ -154,19 +175,23 @@ class PhoneTransportStateTests(unittest.TestCase):
         targets = {call.args[1] for call in linker.call_args_list}
         self.assertEqual(targets, {settings.wired_output})
 
-    def test_media_active_only_while_the_stream_runs(self) -> None:
+    def test_media_active_while_the_stream_node_exists(self) -> None:
         settings = call_settings()
         graph = supervisor.CallGraph(settings)
         links = [(PHONE_MEDIA, settings.wired_output)]
-        graph.tick(idle_nodes(settings, media_state="running"), links, settings.lark_node)
+        graph.tick(idle_nodes(settings), links, settings.lark_node, phone_connected=True)
         self.assertEqual(graph.phone_transport, supervisor.PhoneTransport.MEDIA_ACTIVE)
 
     def test_connected_but_silent_is_media_ready_not_active(self) -> None:
-        """Nothing is playing. Saying ACTIVE here would be the first false claim."""
+        """Nothing is playing, so the node does not exist. ACTIVE here would be a false claim.
+
+        Connectedness cannot come from the node map -- when nothing plays there are no phone
+        nodes at all -- so it is passed explicitly, the way raw_hfp_sink_present already is.
+        BlueZ is the authority, via the same path call_role_acceptance already uses.
+        """
         settings = call_settings()
         graph = supervisor.CallGraph(settings)
-        links = [(PHONE_MEDIA, settings.wired_output)]
-        graph.tick(idle_nodes(settings, media_state="suspended"), links, settings.lark_node)
+        graph.tick(idle_nodes(settings, media=False), [], settings.lark_node, phone_connected=True)
         self.assertEqual(graph.phone_transport, supervisor.PhoneTransport.MEDIA_READY)
 
     def test_existing_link_is_not_duplicated(self) -> None:
@@ -231,7 +256,9 @@ class TransportTransitionTests(unittest.TestCase):
         ):
             build_call(graph, settings)
             with mock.patch.object(supervisor, "link", return_value=True) as linker:
-                graph.tick(idle_nodes(settings, media_state="suspended"), [], settings.lark_node)
+                graph.tick(
+                    idle_nodes(settings, media=False), [], settings.lark_node, phone_connected=True
+                )
         linker.assert_any_call(PHONE_MEDIA, settings.wired_output)
 
     def test_restored_route_does_not_claim_playback_resumed(self) -> None:
@@ -245,9 +272,10 @@ class TransportTransitionTests(unittest.TestCase):
         ):
             build_call(graph, settings)
             graph.tick(
-                idle_nodes(settings, media_state="suspended"),
-                [(PHONE_MEDIA, settings.wired_output)],
+                idle_nodes(settings, media=False),
+                [],
                 settings.lark_node,
+                phone_connected=True,
             )
         self.assertEqual(
             graph.phone_transport,
@@ -264,8 +292,10 @@ class TransportTransitionTests(unittest.TestCase):
             mock.patch.object(supervisor, "set_aec_mute", return_value=True),
         ):
             build_call(graph, settings)
-            graph.tick(idle_nodes(settings, media_state="suspended"), links, settings.lark_node)
-            graph.tick(idle_nodes(settings, media_state="running"), links, settings.lark_node)
+            graph.tick(
+                idle_nodes(settings, media=False), [], settings.lark_node, phone_connected=True
+            )
+            graph.tick(idle_nodes(settings), links, settings.lark_node, phone_connected=True)
         self.assertEqual(graph.phone_transport, supervisor.PhoneTransport.MEDIA_ACTIVE)
 
 
@@ -274,7 +304,12 @@ class ReconnectTests(unittest.TestCase):
         settings = call_settings()
         graph = supervisor.CallGraph(settings)
         graph.tick(idle_nodes(settings), [(PHONE_MEDIA, settings.wired_output)], settings.lark_node)
-        graph.tick({settings.lark_node: {}, settings.wired_output: {}}, [], settings.lark_node)
+        graph.tick(
+            {settings.lark_node: {}, settings.wired_output: {}},
+            [],
+            settings.lark_node,
+            phone_connected=False,
+        )
         self.assertEqual(graph.phone_transport, supervisor.PhoneTransport.ABSENT)
         self.assertIsNone(graph.media_node)
 
@@ -347,12 +382,15 @@ class MicrophoneInteractionTests(unittest.TestCase):
             (settings.lark_node, settings.hfp_sink),
             (FIFINE_NODE, settings.hfp_sink),
         }
-        for media_state in ("running", "suspended"):
-            with self.subTest(media_state=media_state):
+        for media in (True, False):
+            with self.subTest(media_playing=media):
                 graph = supervisor.CallGraph(settings)
                 with mock.patch.object(supervisor, "link", return_value=True) as linker:
                     graph.tick(
-                        idle_nodes(settings, media_state=media_state), [], settings.lark_node
+                        idle_nodes(settings, media=media),
+                        [],
+                        settings.lark_node,
+                        phone_connected=True,
                     )
                 self.assertFalse(forbidden & {call.args for call in linker.call_args_list})
 
@@ -414,7 +452,7 @@ class StatusHonestyTests(unittest.TestCase):
         settings = call_settings()
         graph = supervisor.CallGraph(settings)
         nodes = {settings.lark_node: {}, settings.wired_output: {}}
-        graph.tick(nodes, [], settings.lark_node)
+        graph.tick(nodes, [], settings.lark_node, phone_connected=False)
         status = graph.status(nodes, [], settings.lark_node)
         self.assertFalse(status["phone"]["connected"])
         self.assertEqual(
@@ -423,23 +461,28 @@ class StatusHonestyTests(unittest.TestCase):
         )
 
 
-def test_phone_media_nodes_are_not_autoconnected() -> None:
+def test_phone_media_stream_is_pinned_to_the_configured_output() -> None:
     """The guard ADR-0009 makes part of the decision rather than implementation detail.
 
     65-bridge-hfp-no-autolink.conf covers `headset-audio-gateway` only, and says in as many
     words that A2DP nodes keep WirePlumber's default policy. Restoring the a2dp_sink role
-    without this file hands the phone's media node to whatever the default sink happens to be.
+    without a rule here hands the phone's media to whatever sink happens to be default --
+    measured 2026-08-27 against a decoy default sink, the unpinned stream followed the decoy.
+
+    The mechanism is `target.object`, NOT `node.autoconnect = false`. That was ADR-0009's
+    original instruction and it was measured to break the feature outright: the phone's media
+    is a Stream/Output/Audio client stream whose transport is acquired *because* the session
+    manager links it, so disabling autoconnect means nothing links it, the transport is never
+    acquired, and no node ever appears. Transport idle, zero nodes, zero links, no audio.
     """
     policy = (
-        ROOT
-        / "pi"
-        / "wireplumber"
-        / "wireplumber.conf.d"
-        / "66-bridge-a2dp-source-no-autolink.conf"
+        ROOT / "pi" / "wireplumber" / "wireplumber.conf.d" / "66-bridge-a2dp-source-target.conf"
     ).read_text(encoding="utf-8")
 
     assert 'api.bluez5.profile = "a2dp-source"' in policy
-    assert "node.autoconnect = false" in policy
+    assert "target.object" in policy
+    # The mechanism that was measured to kill the stream must never come back.
+    assert "node.autoconnect" not in policy
     # The speaker path must keep its normal policy; this rule is about the phone only.
     assert '"a2dp-sink"' not in policy
 

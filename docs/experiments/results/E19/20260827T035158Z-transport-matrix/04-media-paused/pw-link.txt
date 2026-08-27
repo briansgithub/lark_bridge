@@ -1,0 +1,8 @@
+alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo:capture_FL
+  |-> bridge.lark.liveness:input_FL
+alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo:capture_FR
+  |-> bridge.lark.liveness:input_FR
+bridge.lark.liveness:input_FL
+  |<- alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo:capture_FL
+bridge.lark.liveness:input_FR
+  |<- alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo:capture_FR

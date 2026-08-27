@@ -1,0 +1,18 @@
+{
+  "label": "08-bt-disconnected",
+  "t": "2026-08-27T03:54:26.759428+00:00",
+  "supervisor_state": "CALL_DOWN",
+  "card_profile": null,
+  "nodes": {},
+  "transports": {},
+  "phone_link_count": 0,
+  "android_mode": "MODE_NORMAL",
+  "android_mode_owner": null,
+  "android_sco_state": "SCO_STATE_INACTIVE",
+  "android_comm_device": {
+    "role": "output",
+    "type": "bt_a2dp",
+    "addr": "A0:AD:9F:73:6C:24",
+    "name": "LarkBridge BT500"
+  }
+}

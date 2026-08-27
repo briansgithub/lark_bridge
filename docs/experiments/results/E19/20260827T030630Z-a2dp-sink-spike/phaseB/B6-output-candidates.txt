@@ -1,0 +1,8 @@
+  mode: bluetooth-wired    state: CALL_DOWN
+
+   #  output                     status
+ -> 1  Built-in Audio Stereo      PLAYING, chosen
+    2  Boombox                    off or out of range
+    3  iWorld                     off or out of range
+    4  Soundcore Space A40        off or out of range
+

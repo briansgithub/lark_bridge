@@ -95,9 +95,16 @@ mic_gain_db = 0.0
 mic_muted = false
 # Call audio volume in dB at the bridge.callout loopback.
 output_gain_db = 0.0
-# E09 measured 0.85 as approximately 0 dB at the Pi jack.  1.00 maps to about
-# +4 dB and clips/compresses the PWM output, so the supervisor enforces this value.
-wired_output_volume = 0.85
+# Sink volume for the aux output. This is the ONE knob that governs everything leaving that
+# sink -- call audio, and phone media once E19 lands -- because both are routed to the same
+# sink. output_gain_db above is call-only.
+#
+# E09 measured 0.85 as approximately 0 dB at the Pi jack, and 1.00 as about +4 dB, which
+# clips/compresses the PWM output. 0.95 is an operator choice made 2026-08-27 for in-car
+# level: it sits between those two points and deliberately spends some of that headroom.
+# If the far end reports distortion on loud passages, this is the first value to move back
+# toward 0.85 -- see E09 and E10 for why the Pi 3B analog out is the weak link.
+wired_output_volume = 0.95
 
 
 [audio.sidetone]
