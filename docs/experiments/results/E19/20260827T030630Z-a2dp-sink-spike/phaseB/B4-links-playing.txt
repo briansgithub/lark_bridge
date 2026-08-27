@@ -1,0 +1,16 @@
+alsa_output.platform-3f00b840.mailbox.stereo-fallback:playback_FL
+  |<- bluez_input.5C_33_7B_CB_BF_C5.2:output_FL
+alsa_output.platform-3f00b840.mailbox.stereo-fallback:playback_FR
+  |<- bluez_input.5C_33_7B_CB_BF_C5.2:output_FR
+alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo:capture_FL
+  |-> bridge.lark.liveness:input_FL
+alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo:capture_FR
+  |-> bridge.lark.liveness:input_FR
+bridge.lark.liveness:input_FL
+  |<- alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo:capture_FL
+bridge.lark.liveness:input_FR
+  |<- alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo:capture_FR
+bluez_input.5C_33_7B_CB_BF_C5.2:output_FL
+  |-> alsa_output.platform-3f00b840.mailbox.stereo-fallback:playback_FL
+bluez_input.5C_33_7B_CB_BF_C5.2:output_FR
+  |-> alsa_output.platform-3f00b840.mailbox.stereo-fallback:playback_FR

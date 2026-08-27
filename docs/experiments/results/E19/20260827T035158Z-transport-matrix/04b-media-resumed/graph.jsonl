@@ -1,0 +1,2 @@
+{"supervisor_state": "CALL_DOWN", "card_profile": "audio-gateway", "nodes": {"bluez_input.5C_33_7B_CB_BF_C5.2": "a2dp-source/running"}, "links": ["bluez_input.5C_33_7B_CB_BF_C5.2:output_FL", "bluez_input.5C_33_7B_CB_BF_C5.2:output_FR", "|<- bluez_input.5C_33_7B_CB_BF_C5.2:output_FL", "|<- bluez_input.5C_33_7B_CB_BF_C5.2:output_FR"], "transports": {"/org/bluez/hci0/dev_5C_33_7B_CB_BF_C5/sep1/fd1": "active"}, "t": "2026-08-27T03:53:18Z"}
+{"t": "END", "note": "trace window closed"}

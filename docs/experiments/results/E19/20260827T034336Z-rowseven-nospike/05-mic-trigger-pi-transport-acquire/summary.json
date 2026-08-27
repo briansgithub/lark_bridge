@@ -1,0 +1,15 @@
+{
+  "label": "05-mic-trigger-pi-transport-acquire",
+  "t": "2026-08-27T03:44:52.682381+00:00",
+  "supervisor_state": "CALL_DOWN",
+  "card_profile": null,
+  "nodes": {},
+  "transports": {},
+  "phone_link_count": 0,
+  "android_mode": "MODE_NORMAL",
+  "android_mode_owner": null,
+  "android_sco_state": "SCO_STATE_INACTIVE",
+  "android_comm_device": {
+    "raw": "AudioDeviceAttributes: role:output type:earpiece addr: name:Pixel 7a profiles:[] descriptors:[]"
+  }
+}

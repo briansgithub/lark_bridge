@@ -1,0 +1,279 @@
+{
+  "timestamp": 1787802813.0782018,
+  "state": "CALL_DOWN",
+  "generation": 6,
+  "call": {
+    "hfp_nodes_present": false,
+    "raw_hfp_nodes_present": false,
+    "controller_binding_accepted": true,
+    "controller_binding_error": null
+  },
+  "microphone": {
+    "selected": {
+      "id": "fifine-k054",
+      "label": "FIFINE K054",
+      "priority": 1,
+      "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+      "identity": {
+        "usb_vendor_id": "0c76",
+        "usb_product_id": "161e",
+        "usb_product": "USB PnP Audio Device",
+        "usb_serial": null,
+        "usb_port_path": "1-1.3",
+        "pipewire_object_serial": "5259",
+        "device_object_serial": "5235",
+        "usb_instance_generation": "1-1.3@5"
+      },
+      "format": {
+        "rate": 48000,
+        "format": "S16LE",
+        "channels": 1
+      },
+      "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"5259\",\"5235\",\"1-1.3@5\"]"
+    },
+    "selection_reason": "lark-a1 capability_mismatch: Lark receiver is present, but no transmitter audio is detected; using fifine-k054",
+    "blocked": false,
+    "candidates": [
+      {
+        "id": "lark-a1",
+        "label": "Hollyland Lark A1",
+        "priority": 0,
+        "state": "capability_mismatch",
+        "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+        "matched_nodes": [
+          "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+        ],
+        "reason": "Lark receiver is present, but no transmitter audio is detected",
+        "unavailable_reason": "Lark receiver is present, but no transmitter audio is detected",
+        "identity": {
+          "usb_vendor_id": "3547",
+          "usb_product_id": "0407",
+          "usb_product": "Wireless Microphone",
+          "usb_serial": "Wireless Microphone",
+          "usb_port_path": "1-1.2",
+          "pipewire_object_serial": "5245",
+          "device_object_serial": "5234",
+          "usb_instance_generation": "1-1.2@4"
+        },
+        "format": {
+          "rate": 48000,
+          "format": "S16LE",
+          "channels": 2
+        },
+        "liveness": {
+          "state": "inactive",
+          "reason": "Lark receiver is present, but no transmitter audio is detected",
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"5245\",\"5234\",\"1-1.2@4\"]"
+        }
+      },
+      {
+        "id": "fifine-k054",
+        "label": "FIFINE K054",
+        "priority": 1,
+        "state": "selected",
+        "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+        "matched_nodes": [
+          "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+        ],
+        "reason": "highest-priority usable microphone",
+        "unavailable_reason": null,
+        "identity": {
+          "usb_vendor_id": "0c76",
+          "usb_product_id": "161e",
+          "usb_product": "USB PnP Audio Device",
+          "usb_serial": null,
+          "usb_port_path": "1-1.3",
+          "pipewire_object_serial": "5259",
+          "device_object_serial": "5235",
+          "usb_instance_generation": "1-1.3@5"
+        },
+        "format": {
+          "rate": 48000,
+          "format": "S16LE",
+          "channels": 1
+        }
+      }
+    ],
+    "lark_transmitter": {
+      "enabled": true,
+      "detector": "pcm_exact_zero",
+      "state": "inactive",
+      "active": false,
+      "reason": "Lark receiver is present, but no transmitter audio is detected",
+      "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+      "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"5245\",\"5234\",\"1-1.2@4\"]",
+      "link_verified": true,
+      "owner_pid": 17451,
+      "active_after_ms": 360,
+      "inactive_after_ms": 1760
+    }
+  },
+  "endpoints": {
+    "microphone": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+    "lark": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+    "hfp_source": null,
+    "hfp_sink": null,
+    "wired_output": "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+  },
+  "aec": {
+    "enabled": true,
+    "method": "webrtc",
+    "rate": 48000,
+    "channels": 1,
+    "node_latency_frames": 1920,
+    "play_delay_frames": null,
+    "verified": false,
+    "module_backend": "native-pw-cli",
+    "owner_pid": null
+  },
+  "wired_output_volume": {
+    "required": true,
+    "target": "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+    "desired": 0.85,
+    "observed": 0.85,
+    "verified": true,
+    "error": null
+  },
+  "microphone_control": {
+    "target": null,
+    "desired_gain_db": 0.0,
+    "observed_gain_db": null,
+    "desired_muted": false,
+    "observed_muted": null,
+    "verified": false,
+    "error": null
+  },
+  "graph": {
+    "expected_links": [],
+    "missing_links": [],
+    "unexpected_links": []
+  },
+  "attempts": 0,
+  "last_failure": null,
+  "config_path": "/home/admin/rpi-lark-bridge/config/bridge.toml",
+  "controllers": {
+    "policy": "transitional",
+    "transitional_uart_call": false,
+    "ready": true,
+    "call": {
+      "required": true,
+      "configured": true,
+      "configured_address": "A0:AD:9F:73:6C:24",
+      "expected_bus": "USB",
+      "expected_usb_id": "0b05:1bf6",
+      "expected_product": "ASUS USB-BT500",
+      "observed_address": "A0:AD:9F:73:6C:24",
+      "observed_bus": "USB",
+      "observed_usb_id": "0b05:1bf6",
+      "hci": "hci0",
+      "bluez_path": "/org/bluez/hci0",
+      "sysfs_path": "1-1.5",
+      "usb_parent": "1-1.5",
+      "usb_interface": "1-1.5:1.0",
+      "driver": "btusb",
+      "product": "Bluetooth Controller",
+      "manufacturer": "Realtek",
+      "rfkill_index": 0,
+      "ready": true,
+      "reason": null,
+      "error": null
+    },
+    "output": {
+      "required": false,
+      "configured": false,
+      "configured_address": null,
+      "expected_bus": null,
+      "expected_usb_id": null,
+      "expected_product": null,
+      "observed_address": null,
+      "observed_bus": null,
+      "observed_usb_id": null,
+      "hci": null,
+      "bluez_path": null,
+      "sysfs_path": null,
+      "usb_parent": null,
+      "usb_interface": null,
+      "driver": null,
+      "product": null,
+      "manufacturer": null,
+      "rfkill_index": null,
+      "ready": true,
+      "reason": "wired-output",
+      "error": null
+    }
+  },
+  "system": {
+    "temperature_c": 51.54,
+    "mem_available_kib": 720692,
+    "throttled": "throttled=0x0",
+    "arm_clock": "frequency(48)=1200000000"
+  },
+  "output": {
+    "candidates": [
+      {
+        "id": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+        "kind": "wired",
+        "label": "Built-in Audio Stereo",
+        "node": "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+        "present": true,
+        "connected": true,
+        "adapter": null,
+        "adapter_address": null,
+        "address": null,
+        "setup_state": "ready"
+      },
+      {
+        "id": "a2dp:C9:5C:FD:6E:28:46",
+        "kind": "a2dp",
+        "label": "Boombox",
+        "node": null,
+        "present": false,
+        "connected": false,
+        "adapter": "hci0",
+        "adapter_address": "A0:AD:9F:73:6C:24",
+        "address": "C9:5C:FD:6E:28:46",
+        "setup_state": "needs_setup"
+      },
+      {
+        "id": "a2dp:50:D7:1B:74:34:D6",
+        "kind": "a2dp",
+        "label": "iWorld",
+        "node": null,
+        "present": false,
+        "connected": false,
+        "adapter": "hci0",
+        "adapter_address": "A0:AD:9F:73:6C:24",
+        "address": "50:D7:1B:74:34:D6",
+        "setup_state": "needs_setup"
+      },
+      {
+        "id": "a2dp:98:47:44:CD:73:DE",
+        "kind": "a2dp",
+        "label": "Soundcore Space A40",
+        "node": null,
+        "present": false,
+        "connected": false,
+        "adapter": "hci0",
+        "adapter_address": "A0:AD:9F:73:6C:24",
+        "address": "98:47:44:CD:73:DE",
+        "setup_state": "needs_setup"
+      }
+    ],
+    "chosen": {
+      "id": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+      "kind": "wired",
+      "label": "Built-in Audio Stereo",
+      "node": "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+      "present": true,
+      "connected": true,
+      "adapter": null,
+      "adapter_address": null,
+      "address": null,
+      "setup_state": "ready"
+    },
+    "reason": "desired output is available",
+    "desired_id": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+    "desired_available": true
+  },
+  "mode": "bluetooth-wired"
+}

@@ -1,0 +1,168 @@
+# dumpsys bluetooth_manager -- TRIMMED to the LarkBridge-relevant lines.
+#
+# The full dump was 10,193 lines, of which 49 mentioned LarkBridge. The remainder was the
+# operator's entire Bluetooth history -- bonded personal devices, their MAC addresses,
+# names, Fast Pair metadata and connection timestamps -- none of which E19 measures or
+# needs. Committing it would have put unrelated personal data in the repository forever.
+#
+# Retained: every line mentioning LarkBridge or its MAC suffix 6C:24, every 'Profile:'
+# service header, the enabled-profile-service list and A2dpOffloadEnabled, each with three
+# lines of surrounding context. Android already redacts MACs here to XX:XX:XX:XX:6C:24.
+#
+# The claims this file supports -- A2DP CONNECTED with LarkBridge as mActiveDevice, and
+# HeadsetService mActiveDevice with mAudioRouteAllowed -- are all in the retained lines.
+
+  ConnectionState: STATE_CONNECTED
+  State: ON
+  MaxConnectedAudioDevices: 5
+  A2dpOffloadEnabled: true
+  Discovering: false
+  DiscoveryEndMs: 1787779792710
+  Bonded devices:
+    XX:XX:XX:XX:4F:28 [ DUAL ] Audi_MMI_8481
+    XX:XX:XX:XX:27:5C [BR/EDR] TOYOTA 4Runner
+    XX:XX:XX:XX:C6:01 [BR/EDR] S8
+    A0:AD:9F:73:6C:24 [ DUAL ] LarkBridge BT500
+    XX:XX:XX:XX:72:19 => XX:XX:XX:XX:C3:33 [  LE  ] Charge 6
+
+  Scan Mode Changes:
+sSnoopLogSettingAtEnable = EMPTY
+sDefaultSnoopLogSettingAtEnable = null
+
+Enabled Profile Services:
+  A2dpService
+  AvrcpTargetService
+  BatteryService
+
+SilenceDeviceManager:
+  Address            | Is silenced?
+  XX:XX:XX:XX:6C:24  | false
+
+BluetoothDatabase:
+  Metadata Changes:
+    XX:XX:XX:XX:6D:44 last_active_time=0 {profile connection policy(A2DP=-1|A2DP_SINK=-1|CSIP_SET_COORDINATOR=-1|HEADSET=-1|HEADSET_CLIENT=-1|HID_HOST=-1|PAN=-1|PBAP=-1|PBAP_CLIENT=-1|MAP=-1|MAP_CLIENT=-1|SAP=-1|HAP=-1|HEARING_AID=-1|LE_AUDIO=-1|VOLUME_CONTROL=-1|LE_CALL_CONTROL=-1|LE_BROADCAST_ASSISTANT=-1|BATTERY=-1), optional codec(support=-1|enabled=-1), custom metadata(manufacturer_name=null|model_name=null|software_version=null|hardware_version=null|companion_app=null|main_icon=null|is_untethered_headset=null|untethered_left_icon=null|untethered_right_icon=null|untethered_case_icon=null|untethered_left_battery=null|untethered_right_battery=null|untethered_case_battery=null|untethered_left_charging=null|untethered_right_charging=null|untethered_case_charging=null|enhanced_settings_ui_uri=null|device_type=null|main_battery=null|main_charging=null|main_low_battery_threshold=null|untethered_left_low_battery_threshold=null|untethered_right_low_battery_threshold=null|untethered_case_low_battery_threshold=null|spatial_audio=null|fastpair_customized=null|le_audio=null|gmcs_cccd=null|gtbs_cccd=null), hfp client audio policy(callEstablishAudioPolicy=0|connectingTimeAudioPolicy=0|inBandRingtoneAudioPolicy=0)}
+    XX:XX:XX:XX:33:FA last_active_time=0 {profile connection policy(A2DP=-1|A2DP_SINK=-1|CSIP_SET_COORDINATOR=-1|HEADSET=-1|HEADSET_CLIENT=-1|HID_HOST=100|PAN=-1|PBAP=-1|PBAP_CLIENT=-1|MAP=-1|MAP_CLIENT=-1|SAP=-1|HAP=-1|HEARING_AID=-1|LE_AUDIO=-1|VOLUME_CONTROL=-1|LE_CALL_CONTROL=-1|LE_BROADCAST_ASSISTANT=-1|BATTERY=100), optional codec(support=-1|enabled=-1), custom metadata(manufacturer_name=null|model_name=null|software_version=null|hardware_version=null|companion_app=null|main_icon=null|is_untethered_headset=null|untethered_left_icon=null|untethered_right_icon=null|untethered_case_icon=null|untethered_left_battery=null|untethered_right_battery=null|untethered_case_battery=null|untethered_left_charging=null|untethered_right_charging=null|untethered_case_charging=null|enhanced_settings_ui_uri=null|device_type=null|main_battery=null|main_charging=null|main_low_battery_threshold=null|untethered_left_low_battery_threshold=null|untethered_right_low_battery_threshold=null|untethered_case_low_battery_threshold=null|spatial_audio=null|fastpair_customized=null|le_audio=null|gmcs_cccd=null|gtbs_cccd=null), hfp client audio policy(callEstablishAudioPolicy=0|connectingTimeAudioPolicy=0|inBandRingtoneAudioPolicy=0)}
+    XX:XX:XX:XX:C8:A6 last_active_time=0 {profile connection policy(A2DP=100|A2DP_SINK=-1|CSIP_SET_COORDINATOR=-1|HEADSET=0|HEADSET_CLIENT=-1|HID_HOST=-1|PAN=-1|PBAP=-1|PBAP_CLIENT=-1|MAP=-1|MAP_CLIENT=-1|SAP=-1|HAP=-1|HEARING_AID=-1|LE_AUDIO=-1|VOLUME_CONTROL=-1|LE_CALL_CONTROL=-1|LE_BROADCAST_ASSISTANT=-1|BATTERY=-1), optional codec(support=1|enabled=1), custom metadata(manufacturer_name=null|model_name=null|software_version=null|hardware_version=null|companion_app=null|main_icon=null|is_untethered_headset=null|untethered_left_icon=null|untethered_right_icon=null|untethered_case_icon=null|untethered_left_battery=null|untethered_right_battery=null|untethered_case_battery=null|untethered_left_charging=null|untethered_right_charging=null|untethered_case_charging=null|enhanced_settings_ui_uri=null|device_type=null|main_battery=null|main_charging=null|main_low_battery_threshold=null|untethered_left_low_battery_threshold=null|untethered_right_low_battery_threshold=null|untethered_case_low_battery_threshold=null|spatial_audio=null|fastpair_customized=null|le_audio=null|gmcs_cccd=null|gtbs_cccd=null), hfp client audio policy(callEstablishAudioPolicy=0|connectingTimeAudioPolicy=0|inBandRingtoneAudioPolicy=0)}
+    XX:XX:XX:XX:6C:24 last_active_time=23 {profile connection policy(A2DP=-1|A2DP_SINK=-1|CSIP_SET_COORDINATOR=-1|HEADSET=100|HEADSET_CLIENT=-1|HID_HOST=-1|PAN=-1|PBAP=-1|PBAP_CLIENT=-1|MAP=-1|MAP_CLIENT=-1|SAP=100|HAP=-1|HEARING_AID=-1|LE_AUDIO=-1|VOLUME_CONTROL=-1|LE_CALL_CONTROL=-1|LE_BROADCAST_ASSISTANT=-1|BATTERY=-1), optional codec(support=-1|enabled=-1), custom metadata(manufacturer_name=null|model_name=null|software_version=null|hardware_version=null|companion_app=null|main_icon=null|is_untethered_headset=null|untethered_left_icon=null|untethered_right_icon=null|untethered_case_icon=null|untethered_left_battery=null|untethered_right_battery=null|untethered_case_battery=null|untethered_left_charging=null|untethered_right_charging=null|untethered_case_charging=null|enhanced_settings_ui_uri=null|device_type=null|main_battery=null|main_charging=null|main_low_battery_threshold=null|untethered_left_low_battery_threshold=null|untethered_right_low_battery_threshold=null|untethered_case_low_battery_threshold=null|spatial_audio=null|fastpair_customized=null|le_audio=null|gmcs_cccd=null|gtbs_cccd=null), hfp client audio policy(callEstablishAudioPolicy=0|connectingTimeAudioPolicy=0|inBandRingtoneAudioPolicy=0)}
+    XX:XX:XX:XX:5A:35 last_active_time=0 {profile connection policy(A2DP=-1|A2DP_SINK=-1|CSIP_SET_COORDINATOR=-1|HEADSET=-1|HEADSET_CLIENT=-1|HID_HOST=100|PAN=-1|PBAP=-1|PBAP_CLIENT=-1|MAP=-1|MAP_CLIENT=-1|SAP=-1|HAP=-1|HEARING_AID=-1|LE_AUDIO=-1|VOLUME_CONTROL=-1|LE_CALL_CONTROL=-1|LE_BROADCAST_ASSISTANT=-1|BATTERY=-1), optional codec(support=-1|enabled=-1), custom metadata(manufacturer_name=null|model_name=null|software_version=null|hardware_version=null|companion_app=null|main_icon=null|is_untethered_headset=null|untethered_left_icon=null|untethered_right_icon=null|untethered_case_icon=null|untethered_left_battery=null|untethered_right_battery=null|untethered_case_battery=null|untethered_left_charging=null|untethered_right_charging=null|untethered_case_charging=null|enhanced_settings_ui_uri=null|device_type=null|main_battery=null|main_charging=null|main_low_battery_threshold=null|untethered_left_low_battery_threshold=null|untethered_right_low_battery_threshold=null|untethered_case_low_battery_threshold=null|spatial_audio=null|fastpair_customized=null|le_audio=null|gmcs_cccd=null|gtbs_cccd=null), hfp client audio policy(callEstablishAudioPolicy=0|connectingTimeAudioPolicy=0|inBandRingtoneAudioPolicy=0)}
+    XX:XX:XX:XX:FB:77 last_active_time=0 {profile connection policy(A2DP=100|A2DP_SINK=-1|CSIP_SET_COORDINATOR=-1|HEADSET=0|HEADSET_CLIENT=-1|HID_HOST=0|PAN=-1|PBAP=-1|PBAP_CLIENT=-1|MAP=-1|MAP_CLIENT=-1|SAP=-1|HAP=-1|HEARING_AID=-1|LE_AUDIO=-1|VOLUME_CONTROL=-1|LE_CALL_CONTROL=-1|LE_BROADCAST_ASSISTANT=-1|BATTERY=-1), optional codec(support=1|enabled=1), custom metadata(manufacturer_name=null|model_name=null|software_version=null|hardware_version=null|companion_app=null|main_icon=null|is_untethered_headset=null|untethered_left_icon=null|untethered_right_icon=null|untethered_case_icon=null|untethered_left_battery=null|untethered_right_battery=null|untethered_case_battery=null|untethered_left_charging=null|untethered_right_charging=null|untethered_case_charging=null|enhanced_settings_ui_uri=null|device_type=null|main_battery=null|main_charging=null|main_low_battery_threshold=null|untethered_left_low_battery_threshold=null|untethered_right_low_battery_threshold=null|untethered_case_low_battery_threshold=null|spatial_audio=null|fastpair_customized=null|le_audio=null|gmcs_cccd=null|gtbs_cccd=null), hfp client audio policy(callEstablishAudioPolicy=0|connectingTimeAudioPolicy=0|inBandRingtoneAudioPolicy=0)}
+    XX:XX:XX:XX:BE:04 last_active_time=0 {profile connection policy(A2DP=100|A2DP_SINK=-1|CSIP_SET_COORDINATOR=-1|HEADSET=100|HEADSET_CLIENT=-1|HID_HOST=-1|PAN=-1|PBAP=100|PBAP_CLIENT=-1|MAP=0|MAP_CLIENT=-1|SAP=-1|HAP=-1|HEARING_AID=-1|LE_AUDIO=-1|VOLUME_CONTROL=-1|LE_CALL_CONTROL=-1|LE_BROADCAST_ASSISTANT=-1|BATTERY=-1), optional codec(support=1|enabled=1), custom metadata(manufacturer_name=null|model_name=null|software_version=null|hardware_version=null|companion_app=null|main_icon=null|is_untethered_headset=null|untethered_left_icon=null|untethered_right_icon=null|untethered_case_icon=null|untethered_left_battery=null|untethered_right_battery=null|untethered_case_battery=null|untethered_left_charging=null|untethered_right_charging=null|untethered_case_charging=null|enhanced_settings_ui_uri=null|device_type=Carkit|main_battery=null|main_charging=null|main_low_battery_threshold=null|untethered_left_low_battery_threshold=null|untethered_right_low_battery_threshold=null|untethered_case_low_battery_threshold=null|spatial_audio=null|fastpair_customized=null|le_audio=null|gmcs_cccd=null|gtbs_cccd=null), hfp client audio policy(callEstablishAudioPolicy=0|connectingTimeAudioPolicy=0|inBandRingtoneAudioPolicy=0)}
+    XX:XX:XX:XX:30:27 last_active_time=21 {profile connection policy(A2DP=-1|A2DP_SINK=-1|CSIP_SET_COORDINATOR=-1|HEADSET=-1|HEADSET_CLIENT=-1|HID_HOST=-1|PAN=-1|PBAP=0|PBAP_CLIENT=-1|MAP=-1|MAP_CLIENT=-1|SAP=-1|HAP=-1|HEARING_AID=-1|LE_AUDIO=-1|VOLUME_CONTROL=-1|LE_CALL_CONTROL=-1|LE_BROADCAST_ASSISTANT=-1|BATTERY=-1), optional codec(support=-1|enabled=-1), custom metadata(manufacturer_name=null|model_name=null|software_version=null|hardware_version=null|companion_app=null|main_icon=null|is_untethered_headset=null|untethered_left_icon=null|untethered_right_icon=null|untethered_case_icon=null|untethered_left_battery=null|untethered_right_battery=null|untethered_case_battery=null|untethered_left_charging=null|untethered_right_charging=null|untethered_case_charging=null|enhanced_settings_ui_uri=null|device_type=null|main_battery=null|main_charging=null|main_low_battery_threshold=null|untethered_left_low_battery_threshold=null|untethered_right_low_battery_threshold=null|untethered_case_low_battery_threshold=null|spatial_audio=null|fastpair_customized=null|le_audio=null|gmcs_cccd=null|gtbs_cccd=null), hfp client audio policy(callEstablishAudioPolicy=0|connectingTimeAudioPolicy=0|inBandRingtoneAudioPolicy=0)}
+    XX:XX:XX:XX:04:5C last_active_time=0 {profile connection policy(A2DP=-1|A2DP_SINK=-1|CSIP_SET_COORDINATOR=-1|HEADSET=-1|HEADSET_CLIENT=-1|HID_HOST=-1|PAN=-1|PBAP=-1|PBAP_CLIENT=-1|MAP=-1|MAP_CLIENT=-1|SAP=-1|HAP=-1|HEARING_AID=-1|LE_AUDIO=-1|VOLUME_CONTROL=-1|LE_CALL_CONTROL=-1|LE_BROADCAST_ASSISTANT=-1|BATTERY=-1), optional codec(support=-1|enabled=-1), custom metadata(manufacturer_name=null|model_name=null|software_version=null|hardware_version=null|companion_app=null|main_icon=null|is_untethered_headset=null|untethered_left_icon=null|untethered_right_icon=null|untethered_case_icon=null|untethered_left_battery=null|untethered_right_battery=null|untethered_case_battery=null|untethered_left_charging=null|untethered_right_charging=null|untethered_case_charging=null|enhanced_settings_ui_uri=null|device_type=null|main_battery=null|main_charging=null|main_low_battery_threshold=null|untethered_left_low_battery_threshold=null|untethered_right_low_battery_threshold=null|untethered_case_low_battery_threshold=null|spatial_audio=null|fastpair_customized=null|le_audio=null|gmcs_cccd=null|gtbs_cccd=null), hfp client audio policy(callEstablishAudioPolicy=0|connectingTimeAudioPolicy=0|inBandRingtoneAudioPolicy=0)}
+
+Profile: GattService
+  mAdvertisingServiceUuids:
+  mMaxScanFilters: 0
+
+  13: [164]   Characteristic abbafc03-e56a-484c-b832-8b17cf6cbfe8
+  13: [165]     Descriptor 00002902-0000-1000-8000-00805f9b34fb
+
+Profile: A2dpService
+  mActiveDevice: null
+  mMaxConnectedAudioDevices: 5
+  codecConfigPriorities:
+    aptX HD: 4001
+    LDAC: 5001
+    Opus: 7001
+  mA2dpOffloadEnabled: true
+  codecConfigOffloading:
+    {codecName:SBC,mCodecType:0,mCodecPriority:0,mSampleRate:0x0(NONE),mBitsPerSample:0x0(NONE),mChannelMode:0x0(NONE),mCodecSpecific1:0,mCodecSpecific2:0,mCodecSpecific3:0,mCodecSpecific4:0}
+    {codecName:AAC,mCodecType:1,mCodecPriority:0,mSampleRate:0x0(NONE),mBitsPerSample:0x0(NONE),mChannelMode:0x0(NONE),mCodecSpecific1:0,mCodecSpecific2:0,mCodecSpecific3:0,mCodecSpecific4:0}
+
+Profile: AvrcpTargetService:
+  AVRCP version: 1.5
+  List of MediaControllers: size=12
+  <Active>   Media Player 1: org.schabi.newpipe
+      08-26 22:20:38.908 storeVolume: Storing stream volume level for device XX:XX:XX:XX:19:DA : 25
+      08-26 23:06:17.158 RemoveStoredVolume: Remove stored stream volume level for device XX:XX:XX:XX:19:DA
+
+Profile: BatteryService
+
+Profile: CsipSetCoordinatorService
+  mFoundSetMemberToGroupId: 
+
+Profile: HapClientService
+
+Profile: HeadsetService
+  mMaxHeadsetConnections: 5
+  DefaultMaxHeadsetConnections: 5
+  mActiveDevice: XX:XX:XX:XX:6C:24
+  isInbandRingingEnabled: true
+  isInbandRingingSupported: true
+  mInbandRingingRuntimeDisable: false
+  AudioManager.isBluetoothScoOn(): false
+  Telecom.isInCall(): false
+  Telecom.isRinging(): false
+  ==== StateMachine for XX:XX:XX:XX:6C:24 ====
+    mCurrentDevice: XX:XX:XX:XX:6C:24
+    mCurrentState: Connected
+    mPrevState: Connecting
+    mConnectionState: 2
+    StateMachineLog:
+      HeadsetStateMachine:
+       total records=11
+       rec[0]: time=08-26 23:06:19.965 processed=Disconnected org=Disconnected dest=Connecting what=1(0x1) CONNECT: arg1=0, arg2=0, obj=XX:XX:XX:XX:6C:24
+       rec[1]: time=08-26 23:06:25.869 processed=Connecting org=Connecting dest=<null> what=101(0x65) STACK_EVENT: arg1=0, arg2=0, obj=EVENT_TYPE_CONNECTION_STATE_CHANGED[1], valInt=1, valInt2=0, valString=null, valObject=null, device=XX:XX:XX:XX:6C:24
+       rec[2]: time=08-26 23:06:25.869 processed=Connecting org=Connecting dest=<null> what=101(0x65) STACK_EVENT: arg1=0, arg2=0, obj=EVENT_TYPE_CONNECTION_STATE_CHANGED[1], valInt=2, valInt2=0, valString=null, valObject=null, device=XX:XX:XX:XX:6C:24
+       rec[3]: time=08-26 23:06:26.083 processed=Connecting org=Connecting dest=<null> what=101(0x65) STACK_EVENT: arg1=0, arg2=0, obj=EVENT_TYPE_WBS[17], valInt=2, valInt2=0, valString=null, valObject=null, device=XX:XX:XX:XX:6C:24
+       rec[4]: time=08-26 23:06:26.083 processed=Connecting org=Connecting dest=<null> what=101(0x65) STACK_EVENT: arg1=0, arg2=0, obj=EVENT_TYPE_SWB[21], valInt=1, valInt2=0, valString=null, valObject=null, device=XX:XX:XX:XX:6C:24
+       rec[5]: time=08-26 23:06:26.125 processed=Connecting org=Connecting dest=<null> what=101(0x65) STACK_EVENT: arg1=0, arg2=0, obj=EVENT_TYPE_AT_CIND[12], valInt=0, valInt2=0, valString=null, valObject=null, device=XX:XX:XX:XX:6C:24
+       rec[6]: time=08-26 23:06:26.177 processed=Connecting org=Connecting dest=Connected what=101(0x65) STACK_EVENT: arg1=0, arg2=0, obj=EVENT_TYPE_CONNECTION_STATE_CHANGED[1], valInt=3, valInt2=0, valString=null, valObject=null, device=XX:XX:XX:XX:6C:24
+       rec[7]: time=08-26 23:06:26.251 processed=Connected org=Connected dest=<null> what=13(0xd) UNKNOWN(13): arg1=1, arg2=0, obj=null
+       rec[8]: time=08-26 23:06:26.252 processed=Connected org=Connected dest=<null> what=10(0xa) DEVICE_STATE_CHANGED: arg1=0, arg2=0, obj=HeadsetDeviceState[hasCellularService=1, isRoaming=0, signalStrength2, batteryCharge=4]
+       rec[9]: time=08-26 23:06:26.348 processed=Connected org=Connected dest=<null> what=101(0x65) STACK_EVENT: arg1=0, arg2=0, obj=EVENT_TYPE_AT_CLCC[14], valInt=0, valInt2=0, valString=null, valObject=null, device=XX:XX:XX:XX:6C:24
+       rec[10]: time=08-26 23:06:26.966 processed=Connected org=Connected dest=<null> what=10(0xa) DEVICE_STATE_CHANGED: arg1=0, arg2=0, obj=HeadsetDeviceState[hasCellularService=1, isRoaming=0, signalStrength3, batteryCharge=4]
+      curState=Connected
+
+Profile: HearingAidService
+
+Profile: HidDeviceService
+
+Profile: HidHostService
+  mTargetDevice: null
+  mInputDevices:
+
+Profile: LeAudioService
+  isDualModeAudioEnabled: false
+  Active Groups information: 
+    currentlyActiveGroupId: -1
+    mHfpHandoverDevice:null
+    mLeAudioIsInbandRingtoneSupported:true
+
+Profile: TbsService
+TbsService instance:
+	Ringer Mode: 1
+	Current call list:
+TbsGatt instance (CCID= 1) event log:
+  08-26 17:29:26.054 Initializing
+
+Profile: BluetoothMapService
+  mRemoteDevice: null
+  sRemoteDeviceName: HandsFreeLink
+  mState: 0
+    null : MasId: 0 Uri:null SMS/MMS:true
+  mEnabledAccounts:
+
+Profile: McpService
+Media Control Service instance list:
+	MediaControlService instance current state:
+		Ccid = 2
+  08-26 22:35:45.282 onCurrentPlayerStateUpdated state= PAUSED, supported opcodes= 0x183f (PLAY | PAUSE | FAST_REWIND | FAST_FORWARD | STOP | MOVE_RELATIVE | PREVIOUS_TRACK | NEXT_TRACK), track position= 240797 (240797)
+
+
+Profile: BluetoothOppService
+
+Profile: PanService
+  mMaxPanDevices: 5
+  mPanIfName: bt-pan
+  mTetherOn: false
+  mPanDevices:
+
+Profile: BluetoothPbapService
+
+Profile: SapService
+
+Profile: VolumeControlService
+
+Connection Events:
+  08-26 23:06:26.769 CONNECTED    xx:xx:xx:xx:30:27
