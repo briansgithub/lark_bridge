@@ -1110,6 +1110,26 @@ class TransactionTests(unittest.TestCase):
         with self.assertRaisesRegex(ta.RigFailure, "status is missing"):
             ta.verify_runtime(backend, 0.95, ta.FIXED_AUX_TARGET, "candidate")
 
+    def test_runtime_waits_past_old_supervisor_stop_status(self) -> None:
+        backend = FakeBackend()
+        normal_pi = backend.pi
+        condition_probes = 0
+
+        def pi(script, *, timeout=60, stdin=None):
+            nonlocal condition_probes
+            if "'condition_probe':True" in script:
+                condition_probes += 1
+                if condition_probes == 1:
+                    old = json.loads(json.dumps(backend.snapshot))
+                    del old["status"]["phone"]
+                    return ta.CommandResult(0, json.dumps(old), "")
+            return normal_pi(script, timeout=timeout, stdin=stdin)
+
+        backend.pi = pi  # type: ignore[method-assign]
+        result = ta.verify_runtime(backend, 0.95, ta.FIXED_AUX_TARGET, "candidate")
+        self.assertGreaterEqual(condition_probes, 2)
+        self.assertIn("phone", result["status"])
+
     def test_runtime_rejects_wrong_aux_target_or_volume(self) -> None:
         backend = FakeBackend()
         phone = backend.snapshot["status"]["phone"]
