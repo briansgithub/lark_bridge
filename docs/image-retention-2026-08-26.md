@@ -12,14 +12,35 @@ transmitters`). Its exact install archive is:
 
 The archive and Git commit preserve the versioned software, but they are not a bootable
 card image and do not contain all per-unit configuration, Bluetooth pairing state, or SSH
-identity. A new full-card image of the deployed Pi is therefore required. Track its
-filename, byte size, SHA-256, capture time, boot ID, deployed manifest, configuration hash,
-partition table, capture consistency steps, and post-capture readiness result here after
-capture. Store the raw image outside Git: it is roughly 15 GiB and contains device secrets.
+identity. The required full-card capture is now complete; its independent spare-card
+restore/boot test is not. The raw image remains outside Git because it is roughly 15 GiB
+and contains device secrets.
 
-Status at review time: **full-card capture pending**. The Pi was not reachable by its saved
-hostname, last IPv4 address, or last link-local IPv6 address, so no current image or hash is
-claimed by this record.
+Status updated 2026-08-27: **full-card capture complete and hashed**. The guarded read produced
+`E:\larkbridge-images\20260827T204627Z\LarkBridge-bt500-aux-03df47e-20260827T204627Z.img`,
+exactly `16088301568` bytes, SHA-256
+`18349d99672237cc50f9aa28a9511f8f60b83e80f3bb821bd4b7843742019493`. External
+`capture-metadata.json` beside the image records the source identity, partition table, consistency
+steps, and source-Pi restoration result without putting device secrets in Git. Capture ran from
+`2026-08-27T20:46:27Z` through `2026-08-27T21:09:28Z` from `/dev/mmcblk0`. The recorded partition
+table is: partition 1 start `16384`, size `1048576`, type `c`; partition 2 start `1064960`, size
+`28260352`, type `83`; partition 3 start `29325312`, size `2097152`, type `83`.
+
+The capture stopped the previously active Bluetooth/watchdog/pairing and user audio services,
+synced, remounted `LARKDATA` read-only, streamed `/dev/mmcblk0`, then restored `LARKDATA` read-write
+and every recorded service. The boot ID remained
+`7f23ba7d-2d8a-447b-a94a-4834c69d343a`; deployed-manifest and configuration hashes remained
+`e57414034b3a7b04f968456ba411e7d77f280bb2018c01a2edc6b3bdb4f2f1f6` and
+`73aa5203ab5cb23500e940d101fbffc2b87dcc74996e621fbc378d7c88b21361`. The supervisor returned
+`CALL_DOWN`, the controller was ready, and AUX volume was verified at 0.95. The Pixel remained
+paired/bonded/trusted; its first reconnect burst timed out after the deliberate Bluetooth stop,
+then the connection was re-established and the watchdog returned to `device-connected` with no
+error.
+
+The operator explicitly waived a spare-card restore/boot test only as a gate for volatile,
+disposable-Pi rapid development. That waiver does not apply to promotion, reboot/install
+qualification, or image retirement. The test remains **pending**, and the older `c63c823` image
+must still not be retired until it is eventually completed.
 
 Do not retire the older `c63c823` image until the new image has been captured, hashed, and
 successfully restored and booted at least once.
@@ -31,6 +52,7 @@ there are no byte-for-byte duplicate boot images.
 
 | Image | SHA-256 | Purpose | Decision |
 |---|---|---|---|
+| `E:\larkbridge-images\20260827T204627Z\LarkBridge-bt500-aux-03df47e-20260827T204627Z.img` | `18349d99672237cc50f9aa28a9511f8f60b83e80f3bb821bd4b7843742019493` | Consistent full-card capture of deployed `03df47e`, including current configuration and unit identity | **Keep.** Capture/hash and source-Pi state restoration passed. Independent spare-card restore/boot remains pending; it is waived only for rapid development. |
 | `E:\larkbridge-source-20260823.img` | `847b4d34d112cbef497304885494780a15a5104e29ff69e1339ede306202f6bc` | Clean-shutdown, pre-hardening source state; its recovery card was physically boot-tested | **Keep permanently.** This is the documented last-resort rollback and preserves a hybrid deployed state that no Git commit fully represents. Keep `host-safety-evidence.json` and the recovery card with it. |
 | `rpi_lark_mic_bridge-mode1\artifacts\phase5\source-PhysicalDrive3-0123456789ABCDE.img` | `d61a145b91498df38973806eed6bf2aa1b76dc49bc72ef8c9cb02e9795c313db` | Verified pre-mutation rollback for the unfinished dual-USB/BT600 experiment | **Keep while that experiment may resume.** If the experiment is formally abandoned, it can be retired after retaining its evidence because the production rollback above remains available. |
 | `rpi_lark_mic_bridge-mode1\artifacts\phase5\candidate-preboot-PhysicalDrive3-0123456789ABCDE.img` | `c3fae02c5216f68f5179e8ff2592f67540882540deaf0922635d891f0a3a5d9e` | Mutated intermediate dual-USB/BT600 candidate from a non-production branch | **Best immediate retirement candidate.** It is not the source rollback, is not production, and its smaller evidence and Git history preserve the experiment. Reclaims 14.9834 GiB. |
