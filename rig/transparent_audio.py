@@ -3363,7 +3363,7 @@ def run_focused_tests(backend: Backend, candidate: Candidate) -> dict[str, Any]:
         "unittest",
         "discover",
         "-s",
-        "pi/bridged/tests",
+        "tests",
         "-p",
         "test_*.py",
     ]
@@ -3400,9 +3400,13 @@ def run_focused_tests(backend: Backend, candidate: Candidate) -> dict[str, Any]:
                                 f"could not read {member.name} from candidate archive"
                             )
                         target.write_bytes(stream.read())
-            result = backend.local(command, cwd=test_root, timeout=180)
+            result = backend.local(
+                command, cwd=test_root / "pi" / "bridged", timeout=180
+            )
         else:
-            result = backend.local(command, cwd=test_root, timeout=180)
+            result = backend.local(
+                command, cwd=test_root / "pi" / "bridged", timeout=180
+            )
     finally:
         if temporary is not None:
             temporary.cleanup()
