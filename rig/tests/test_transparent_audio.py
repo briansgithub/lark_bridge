@@ -831,12 +831,13 @@ class CandidateTests(unittest.TestCase):
             test_root = backend.local_cwds[-1]
             self.assertEqual(
                 backend.local_calls[-1][3:],
-                ("discover", "-s", "pi/bridged/tests", "-p", "test_*.py"),
+                ("discover", "-s", "tests", "-p", "test_*.py"),
             )
             self.assertIsNotNone(test_root)
-            self.assertNotEqual(test_root, root)
+            self.assertNotEqual(test_root, root / "pi" / "bridged")
             assert test_root is not None
-            self.assertFalse(test_root.exists())
+            self.assertEqual(test_root.parts[-2:], ("pi", "bridged"))
+            self.assertFalse(test_root.parent.parent.exists())
 
     def test_focused_gate_rejects_zero_discovered_tests(self) -> None:
         backend = FakeBackend()
