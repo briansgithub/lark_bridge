@@ -86,6 +86,18 @@ class BluetoothOperationCancelled(BluetoothOperationError):
     """The owner disappeared or shutdown was requested."""
 
 
+def connect_in_progress(ok: bool, detail: str) -> bool:
+    """Keep BlueZ's pending-operation signal distinct from ordinary failures."""
+    if ok:
+        return False
+    normalized = detail.casefold()
+    return (
+        "org.bluez.error.inprogress" in normalized
+        or "call failed: in progress" in normalized
+        or "operation already in progress" in normalized
+    )
+
+
 @dataclass(frozen=True)
 class Adapter:
     """One controller. `hci` is a lookup result, never an identity -- do not cache it."""

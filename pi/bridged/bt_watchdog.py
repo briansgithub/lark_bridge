@@ -49,6 +49,7 @@ RECONNECT_DELAY = float(os.environ.get("BRIDGE_WD_RECONNECT_DELAY", "20"))
 RECONNECT_RETRY = float(os.environ.get("BRIDGE_WD_RECONNECT_RETRY", "30"))
 CALL_RECONNECT_ATTEMPTS = int(os.environ.get("BRIDGE_WD_CALL_ATTEMPTS", "3"))
 CALL_RECONNECT_COOLDOWN = float(os.environ.get("BRIDGE_WD_CALL_COOLDOWN", "120"))
+CONNECT_PENDING_TIMEOUT = float(os.environ.get("BRIDGE_WD_CONNECT_PENDING_TIMEOUT", "45"))
 BACKOFF_START = 60.0
 BACKOFF_MAX = 900.0
 
@@ -79,6 +80,9 @@ class RecoveryState:
     recoveries: int = 0
     reconnect_attempts: int = 0
     reconnect_next: float = 0.0
+    connect_pending_since: float | None = None
+    connect_pending_target: str | None = None
+    connect_collision_cancellations: int = 0
     last_attempt: float = 0.0
     last_recovery: float = 0.0
     backoff: float = BACKOFF_START
@@ -97,6 +101,14 @@ class RecoveryState:
             "recoveries": self.recoveries,
             "reconnect_attempts": self.reconnect_attempts,
             "reconnect_next_monotonic": self.reconnect_next,
+            "connect_pending_since_monotonic": self.connect_pending_since,
+            "connect_pending_deadline_monotonic": (
+                self.connect_pending_since + CONNECT_PENDING_TIMEOUT
+                if self.connect_pending_since is not None
+                else None
+            ),
+            "connect_pending_target": self.connect_pending_target,
+            "connect_collision_cancellations": self.connect_collision_cancellations,
             "last_attempt_monotonic": self.last_attempt,
             "last_recovery_monotonic": self.last_recovery,
             "backoff_seconds": self.backoff,
@@ -384,6 +396,10 @@ def attempt_recovery(
     if state.last_attempt and observed - state.last_attempt < state.backoff:
         state.last_action = "backoff"
         return False
+    # A controller-level mutation invalidates any Device1 operation observed before it.
+    state.connect_pending_since = None
+    state.connect_pending_target = None
+    state.connect_collision_cancellations = 0
     result = recover()
     state.last_action = result.action
     state.last_error = None if result.ok else result.detail
@@ -422,6 +438,50 @@ def record_failure_and_recover(
     return attempt_recovery(state, operation)
 
 
+def _adapter_runtime_target(adapter: btadapters.Adapter) -> str:
+    """Describe one resolved runtime target without turning topology into identity."""
+    return "|".join(
+        (
+            adapter.address,
+            adapter.hci,
+            adapter.usb_parent or "",
+            adapter.usb_interface or "",
+            str(adapter.rfkill_index) if adapter.rfkill_index is not None else "",
+        )
+    )
+
+
+def _clear_pending_connect(state: RecoveryState) -> None:
+    state.connect_pending_since = None
+    state.connect_pending_target = None
+
+
+def _clear_connect_collision(state: RecoveryState) -> None:
+    _clear_pending_connect(state)
+    state.connect_collision_cancellations = 0
+
+
+def _mark_device_connected(state: RecoveryState) -> None:
+    state.reconnect_attempts = 0
+    state.reconnect_next = 0.0
+    _clear_connect_collision(state)
+    state.identity_error = None
+    state.last_action = "device-connected"
+    state.last_error = None
+
+
+def _disconnect_quiesced(ok: bool, detail: str) -> bool:
+    if ok:
+        return True
+    normalized = detail.casefold()
+    return (
+        "org.bluez.error.notconnected" in normalized
+        or "not connected" in normalized
+        or "org.freedesktop.dbus.error.unknownobject" in normalized
+        or "unknown object" in normalized
+    )
+
+
 def service_reconnect(
     roles: controller_roles.ControllerRoles,
     role: str,
@@ -435,6 +495,7 @@ def service_reconnect(
     address = recovery_device(roles, role)
     if address is None:
         state.reconnect_attempts = 0
+        _clear_connect_collision(state)
         return False
     try:
         _before_mutation(cancelled)
@@ -445,15 +506,70 @@ def service_reconnect(
         state.last_error = str(exc)
         return False
     except controller_roles.ControllerRoleError as exc:
+        _clear_pending_connect(state)
+        state.reconnect_next = observed + RECONNECT_DELAY
         state.identity_error = f"{exc.code}: {exc.detail}"
+        state.last_action = "resolve"
+        state.last_error = state.identity_error
         return False
     if btadapters.connected_on(adapter, address, tree):
-        state.reconnect_attempts = 0
-        state.reconnect_next = 0.0
-        state.identity_error = None
-        state.last_action = "device-connected"
-        state.last_error = None
+        _mark_device_connected(state)
         return True
+
+    if state.connect_pending_since is not None:
+        pending_deadline = state.connect_pending_since + CONNECT_PENDING_TIMEOUT
+        if observed < pending_deadline:
+            state.reconnect_next = pending_deadline
+            state.last_action = "device-connect-pending"
+            return False
+
+        # The operation did not finish inside BlueZ's normal Connect window. The object tree and
+        # adapter above were refreshed on this tick; validate them before the exact cancellation.
+        current_target = _adapter_runtime_target(adapter)
+        if current_target != state.connect_pending_target:
+            log.info(
+                "pending Connect target changed from %s to %s; settling without cancellation",
+                state.connect_pending_target,
+                current_target,
+            )
+            _clear_connect_collision(state)
+            state.reconnect_next = observed + RECONNECT_DELAY
+            state.last_action = "device-connect-target-refreshed"
+            state.last_error = None
+            return False
+
+        device_path = btadapters.path_for(adapter, address)
+        if "org.bluez.Device1" not in (tree.get(device_path) or {}):
+            log.info("pending Connect object %s disappeared; settling before retry", device_path)
+            _clear_connect_collision(state)
+            state.reconnect_next = observed + RECONNECT_DELAY
+            state.last_action = "device-connect-object-refreshed"
+            state.last_error = f"{device_path}: Device1 disappeared while Connect was pending"
+            return False
+
+        try:
+            _before_mutation(cancelled)
+            cancel_ok, cancel_detail = btadapters.disconnect(address, adapter, cancelled=cancelled)
+        except (RecoveryCancelled, btadapters.BluetoothOperationCancelled) as exc:
+            state.last_action = "cancelled"
+            state.last_error = str(exc)
+            return False
+
+        _clear_pending_connect(state)
+        state.connect_collision_cancellations += 1
+        if _disconnect_quiesced(cancel_ok, cancel_detail):
+            log.warning("cancelled stale Connect on %s before retry", device_path)
+            state.reconnect_next = observed + RECONNECT_DELAY
+            state.last_action = "device-connect-cancelled"
+            state.last_error = None
+        else:
+            # Cancellation is uncertain, so do not issue another Connect in this burst.
+            state.reconnect_attempts = CALL_RECONNECT_ATTEMPTS
+            state.reconnect_next = observed + CALL_RECONNECT_COOLDOWN
+            state.last_action = "device-connect-cancel-failed"
+            state.last_error = cancel_detail
+        return False
+
     if observed < state.reconnect_next:
         return False
     # A reset phone may decline every connection attempt while its cellular call remains
@@ -461,8 +577,7 @@ def service_reconnect(
     # lifetime ceiling that leaves a healthy, re-enumerated controller permanently disconnected.
     # Once the conservative cooldown has elapsed, begin a fresh burst.  Both controller
     # resolutions below still run before the next exact-device mutation.
-    if state.reconnect_attempts >= CALL_RECONNECT_ATTEMPTS:
-        state.reconnect_attempts = 0
+    new_burst = state.reconnect_attempts >= CALL_RECONNECT_ATTEMPTS
     try:
         _before_mutation(cancelled)
         adapter = resolve_role(roles, role)
@@ -471,8 +586,14 @@ def service_reconnect(
         state.last_error = str(exc)
         return False
     except controller_roles.ControllerRoleError as exc:
+        _clear_pending_connect(state)
+        state.reconnect_next = observed + RECONNECT_DELAY
         state.identity_error = f"{exc.code}: {exc.detail}"
         return False
+    if new_burst:
+        # Renew cancellation authority only after the exact controller resolves successfully.
+        state.reconnect_attempts = 0
+        state.connect_collision_cancellations = 0
     try:
         _before_mutation(cancelled)
         state.reconnect_attempts += 1
@@ -492,11 +613,35 @@ def service_reconnect(
         state.last_action = "cancelled"
         state.last_error = str(exc)
         return False
+    if btadapters.connect_in_progress(ok, detail):
+        if state.connect_collision_cancellations == 0:
+            # This call did not start another operation, so it does not spend a reconnect attempt.
+            pending_started = time.monotonic() if now is None else observed
+            state.reconnect_attempts = max(0, state.reconnect_attempts - 1)
+            state.connect_pending_since = pending_started
+            state.connect_pending_target = _adapter_runtime_target(adapter)
+            state.reconnect_next = pending_started + CONNECT_PENDING_TIMEOUT
+            state.last_action = "device-connect-pending"
+            state.last_error = detail
+            log.warning(
+                "Connect already in progress on %s; observing for %.0f seconds",
+                state.connect_pending_target,
+                CONNECT_PENDING_TIMEOUT,
+            )
+            return False
+        state.last_action = "device-connect-collision"
+        state.last_error = detail
+        state.reconnect_attempts = CALL_RECONNECT_ATTEMPTS
+        state.reconnect_next = observed + CALL_RECONNECT_COOLDOWN
+        return False
+
     state.last_action = "device-reconnect"
     state.last_error = None if ok else detail
     if ok:
         state.reconnect_attempts = 0
-    return ok
+        _clear_connect_collision(state)
+        return True
+    return False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -551,6 +696,8 @@ def main(argv: list[str] | None = None) -> int:
             except controller_roles.ControllerRoleError as exc:
                 adapter = None
                 state.probe = ProbeStatus.UNKNOWN.value
+                _clear_pending_connect(state)
+                state.reconnect_next = time.monotonic() + RECONNECT_DELAY
                 state.identity_error = f"{exc.code}: {exc.detail}"
                 state.last_error = state.identity_error
                 write_state(state, None)
