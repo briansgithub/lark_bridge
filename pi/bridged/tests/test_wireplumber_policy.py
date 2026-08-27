@@ -38,3 +38,12 @@ def test_phone_media_role_is_advertised_without_removing_existing_roles() -> Non
 
     for role in ("a2dp_source", "a2dp_sink", "hfp_hf", "hsp_hs"):
         assert role in roles
+
+
+def test_fixed_aux_sink_has_measured_media_headroom() -> None:
+    policy = (POLICY_ROOT / "67-bridge-aux-headroom.conf").read_text(encoding="utf-8")
+
+    assert f'node.name = "{AUX_NODE}"' in policy
+    assert "api.alsa.headroom = 960" in policy
+    assert "period-size" not in policy
+    assert "node.latency" not in policy

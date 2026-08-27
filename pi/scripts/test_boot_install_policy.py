@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FRAGMENTS = (
     "50-bridge-bluez.conf",
     "66-bridge-a2dp-source-target.conf",
+    "67-bridge-aux-headroom.conf",
 )
 
 
