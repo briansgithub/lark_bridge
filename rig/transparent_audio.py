@@ -3125,6 +3125,59 @@ def _raise_primary_and_cleanup(
         raise primary.with_traceback(primary.__traceback__)
 
 
+def wait_aux_program_signal(
+    backend: Backend,
+    *,
+    alsa_id: str,
+    rate: int,
+    channels: int,
+    remote_root: str,
+    calibrated_noise_floor_dbfs: float,
+    required_margin_db: float,
+    timeout: float = 35.0,
+) -> dict[str, Any]:
+    threshold_dbfs = calibrated_noise_floor_dbfs + required_margin_db
+    remote_probe = remote_root + "/program-ready.wav"
+    started = time.monotonic()
+    probes: list[dict[str, Any]] = []
+    while time.monotonic() - started < timeout:
+        script = f"""set -euo pipefail
+# larkbridge e19 AUX program readiness
+mkdir -p {shlex.quote(remote_root)}
+/usr/bin/arecord -D {shlex.quote('plughw:CARD=' + alsa_id + ',DEV=0')} -q -t wav -f S16_LE -r {rate} -c {channels} -d 1 {shlex.quote(remote_probe)}
+python3 - {shlex.quote(remote_probe)} <<'PY'
+import json, math, struct, sys, wave
+with wave.open(sys.argv[1], 'rb') as source:
+    frames = source.readframes(source.getnframes())
+samples = struct.unpack('<%dh' % (len(frames) // 2), frames)
+mean = sum(samples) / max(len(samples), 1)
+rms = math.sqrt(sum((value - mean) ** 2 for value in samples) / max(len(samples), 1)) / 32768
+print(json.dumps({{'ac_rms_dbfs': -200.0 if rms <= 0 else 20 * math.log10(rms), 'frames': len(samples)}}))
+PY
+rm -f {shlex.quote(remote_probe)}
+"""
+        result = backend.pi(script, timeout=15)
+        measurement = parse_json_result(result, "measure live AUX program readiness")
+        level = float(measurement.get("ac_rms_dbfs", -200.0))
+        probes.append(
+            {
+                "elapsed_s": round(time.monotonic() - started, 3),
+                "ac_rms_dbfs": round(level, 2),
+            }
+        )
+        if level >= threshold_dbfs:
+            return {
+                "ready_after_s": round(time.monotonic() - started, 3),
+                "threshold_dbfs": round(threshold_dbfs, 2),
+                "probes": probes,
+            }
+        backend.wait(0.1)
+    raise RigFailure(
+        f"YouTube Music did not produce AUX program audio above {threshold_dbfs:.2f} "
+        f"dBFS within {timeout:g}s; probes={probes}"
+    )
+
+
 def media_smoke(
     backend: Backend,
     inventory: Inventory,
@@ -3141,7 +3194,7 @@ def media_smoke(
     unit = "larkbridge-e19-media-capture"
     top_unit = "larkbridge-e19-media-pw-top"
     alsa_id = str(instrument["alsa_id"])
-    capture_seconds = math.ceil(seconds + 5)
+    capture_seconds = math.ceil(seconds)
     volume_before = get_android_music_volume(backend)
     volume_during: dict[str, Any] | None = None
     volume_after: dict[str, Any] | None = None
@@ -3149,6 +3202,27 @@ def media_smoke(
     primary_failure: BaseException | None = None
     cleanup_failures: list[BaseException] = []
     try:
+        playback = start_youtube_music_playback(backend)
+        active_status, active_elapsed = wait_phone_transport(
+            backend, "MEDIA_ACTIVE", timeout=3.0
+        )
+        youtube_music_session = wait_youtube_music_playing(backend, timeout=6.0)
+        # Android applies safe-media and per-device volume policy. A pre-playback
+        # `--set` addresses the speaker device and can be silently capped, so do not
+        # mutate it. Record the active A2DP value; the fixed Pi AUX 0.95 gate is the
+        # deterministic electrical level owned by this rig.
+        volume_during = get_android_music_volume(backend)
+        program_ready = wait_aux_program_signal(
+            backend,
+            alsa_id=alsa_id,
+            rate=inventory.instrument.rate,
+            channels=inventory.instrument.capture_channels,
+            remote_root=remote_root,
+            calibrated_noise_floor_dbfs=float(
+                quick_calibration["metrics"]["noise_floor_dbfs"]
+            ),
+            required_margin_db=inventory.thresholds.aux_above_floor_db,
+        )
         start = backend.pi(
             f"set -euo pipefail\nmkdir -p {shlex.quote(remote_root)}\n"
             f"systemctl --user reset-failed {unit}.service {top_unit}.service 2>/dev/null || true\n"
@@ -3163,16 +3237,6 @@ def media_smoke(
         start.require("start GeneralPlus AUX capture and pw-top observation")
         wait_unit_active(backend, unit + ".service")
         wait_unit_active(backend, top_unit + ".service")
-        playback = start_youtube_music_playback(backend)
-        active_status, active_elapsed = wait_phone_transport(
-            backend, "MEDIA_ACTIVE", timeout=3.0
-        )
-        youtube_music_session = wait_youtube_music_playing(backend, timeout=6.0)
-        # Android applies safe-media and per-device volume policy. A pre-playback
-        # `--set` addresses the speaker device and can be silently capped, so do not
-        # mutate it. Record the active A2DP value; the fixed Pi AUX 0.95 gate is the
-        # deterministic electrical level owned by this rig.
-        volume_during = get_android_music_volume(backend)
         wait_unit_inactive(backend, unit + ".service", timeout=capture_seconds + 20)
         wait_unit_inactive(backend, top_unit + ".service", timeout=capture_seconds + 20)
         capture = artifact / "aux-capture.wav"
@@ -3205,6 +3269,7 @@ def media_smoke(
             },
             "youtube_music_playback": playback,
             "youtube_music_session": youtube_music_session,
+            "program_ready": program_ready,
             "media_active_after_playback_request_s": round(active_elapsed, 3),
             "active_phone_status": active_status,
             "pw_top": {

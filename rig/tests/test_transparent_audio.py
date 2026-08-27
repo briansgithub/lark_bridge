@@ -296,6 +296,10 @@ class FakeBackend:
             self.unit_query_counts[name] = 0
         if "usb_id,required_port" in script:
             return ta.CommandResult(0, json.dumps(self.instrument), "")
+        if "larkbridge e19 AUX program readiness" in script:
+            return ta.CommandResult(
+                0, json.dumps({"ac_rms_dbfs": -20.0, "frames": 48000}), ""
+            )
         if "'deployed_hashes':hashes" in script:
             return ta.CommandResult(0, json.dumps(self.snapshot), "")
         if "'condition_probe':True" in script:
