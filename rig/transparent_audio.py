@@ -1639,7 +1639,9 @@ for raw,item in preimages.items():
   try: p.unlink()
   except FileNotFoundError: pass
 PY
-{mixer_restore} || true
+set +e
+{mixer_restore}
+set -e
 rm -rf {shlex.quote(f'{RUNTIME_ROOT}/{session_id}')}
 systemctl --user daemon-reload
 systemctl --user stop bridge-supervisor.service
@@ -1812,6 +1814,7 @@ def apply_candidate(
         "[Service]\n"
         "ExecStart=\n"
         f"ExecStart=/usr/bin/python3 {candidate_root}/bridge_supervisor.py\n"
+        f"Environment=BRIDGE_CONFIG={CONFIG_PATH}\n"
         f"Environment=LARKBRIDGE_DEV_CANDIDATE={candidate.candidate_id}\n"
     ).encode()
     commands = [_write_remote_file(OVERRIDE_PATH, override)]
