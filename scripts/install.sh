@@ -57,6 +57,8 @@ done
 model="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)"
 [ "$model" = "Raspberry Pi 3 Model B Rev 1.2" ] ||
     die "expected Raspberry Pi 3 Model B Rev 1.2, found '${model:-unknown}'"
+[ "$BRIDGE_USER" = admin ] ||
+    die "expected bridge user admin; rollback paths are intentionally fixed to that appliance account"
 [ "$(id -u "$BRIDGE_USER" 2>/dev/null || true)" = "1000" ] ||
     die "expected $BRIDGE_USER to be UID 1000"
 
@@ -75,7 +77,9 @@ managed_sources=(
     "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf"
     "pi/systemd/system/NetworkManager-10-larkbridge-netplan-skip.conf"
     "pi/pipewire/pipewire.conf.d/20-bridge-endpoints.notes.txt"
+    "pi/wireplumber/wireplumber.conf.d/50-bridge-bluez.conf"
     "pi/wireplumber/wireplumber.conf.d/65-bridge-hfp-no-autolink.conf"
+    "pi/wireplumber/wireplumber.conf.d/66-bridge-a2dp-source-target.conf"
 )
 for relative in "${managed_sources[@]}"; do
     [ -f "$SOURCE_ROOT/$relative" ] || die "source file missing: $SOURCE_ROOT/$relative"
@@ -224,8 +228,12 @@ install_managed "pi/pipewire/pipewire.conf.d/20-bridge-endpoints.notes.txt" \
     "$pipewire_dir/20-bridge-endpoints.notes.txt" 0644 "$BRIDGE_USER" "$BRIDGE_USER"
 
 wireplumber_dir="/home/$BRIDGE_USER/.config/wireplumber/wireplumber.conf.d"
+install_managed "pi/wireplumber/wireplumber.conf.d/50-bridge-bluez.conf" \
+    "$wireplumber_dir/50-bridge-bluez.conf" 0644 "$BRIDGE_USER" "$BRIDGE_USER"
 install_managed "pi/wireplumber/wireplumber.conf.d/65-bridge-hfp-no-autolink.conf" \
     "$wireplumber_dir/65-bridge-hfp-no-autolink.conf" 0644 "$BRIDGE_USER" "$BRIDGE_USER"
+install_managed "pi/wireplumber/wireplumber.conf.d/66-bridge-a2dp-source-target.conf" \
+    "$wireplumber_dir/66-bridge-a2dp-source-target.conf" 0644 "$BRIDGE_USER" "$BRIDGE_USER"
 
 install_login_barrier() {
     local vendor instance normalized after sessions_after vendor_hash

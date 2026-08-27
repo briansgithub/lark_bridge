@@ -11,6 +11,8 @@ import install_release as installer
 import pytest
 from install_release import InstallError, read_release
 
+A2DP_TARGET_FRAGMENT = "66-bridge-a2dp-source-target.conf"
+
 
 def make_archive(path: Path, *, corrupt: bool = False, unsafe: bool = False) -> str:
     payload = b"runtime\n"
@@ -55,6 +57,7 @@ def make_install_archive(path: Path) -> str:
         },
         "pi/pipewire/pipewire.conf.d/10-test.conf": b"new pipewire\n",
         "pi/wireplumber/wireplumber.conf.d/10-test.conf": b"new wireplumber\n",
+        f"pi/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}": (b"new phone media target\n"),
         "pi/bluez/main.conf.d/10-bridge.conf": b"new bluez\n",
         "pi/scripts/netplan-startup-fastpath": b"new netplan script\n",
         "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf": (
@@ -172,6 +175,10 @@ def test_install_deploys_powerloss_verifier(
     checksum = make_install_archive(archive)
     system_root = tmp_path / "root"
     target = system_root / "home/admin/rpi-lark-bridge"
+    fragment = (
+        system_root / "home/admin/.config/wireplumber/wireplumber.conf.d" / A2DP_TARGET_FRAGMENT
+    )
+    write_file(fragment, b"old phone media target\n")
 
     def portable_symlink(target_name: str, link: Path) -> None:
         write_file(link, f"symlink:{target_name}\n".encode())
@@ -185,11 +192,15 @@ def test_install_deploys_powerloss_verifier(
         netplan_fastpath=False,
     )
 
-    verifier = (
-        system_root
-        / "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py"
-    )
+    verifier = system_root / "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py"
     assert verifier.read_bytes() == b"new powerloss_verify.py\n"
+    assert fragment.read_bytes() == b"new phone media target\n"
+    transactions = list(
+        (system_root / "var/lib/rpi-lark-bridge/releases" / ("a" * 12)).glob("install-*")
+    )
+    manifest = json.loads((transactions[0] / "system-preimage/MANIFEST.json").read_text("utf-8"))
+    paths = {entry["path"] for entry in manifest["entries"]}
+    assert f"home/admin/.config/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}" in paths
 
 
 def test_failed_install_restores_all_system_and_user_preimages(
@@ -212,6 +223,9 @@ def test_failed_install_restores_all_system_and_user_preimages(
         / "home/admin/.config/pipewire/pipewire.conf.d/10-test.conf": (
             b"old pipewire\n"
         ),
+        system_root
+        / "home/admin/.config/wireplumber/wireplumber.conf.d"
+        / A2DP_TARGET_FRAGMENT: b"old phone media target\n",
         system_root / "etc/bluetooth/main.conf.d/10-bridge.conf": b"old bluez\n",
         system_root
         / "etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf": (
@@ -277,4 +291,5 @@ def test_failed_install_restores_all_system_and_user_preimages(
     assert "etc/larkbridge/DEPLOYED.json" in paths
     assert "etc/systemd/system/graphical.target.wants/bridge-btfw.service" in paths
     assert "home/admin/.config/wireplumber/wireplumber.conf.d/10-test.conf" in paths
+    assert f"home/admin/.config/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}" in paths
     assert "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py" in paths

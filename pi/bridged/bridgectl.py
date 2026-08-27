@@ -11,6 +11,7 @@
     bridgectl output status       # one line, or --json
     bridgectl microphone list     # ordered candidates and live diagnostics
     bridgectl microphone status   # selected microphone, or --json
+    bridgectl phone status        # phone media/microphone transport, or --json
 
 This is the first slice of the CLI PLAN.md 4.2 has specified since the beginning and which
 never existed. It is deliberately the FIRST front-end rather than the phone app, because it
@@ -195,6 +196,42 @@ def do_microphone_status(args: argparse.Namespace) -> int:
     print(
         f"{selected.get('label') or '<none>'}  "
         f"[{selected.get('id') or '-'}]  {block.get('selection_reason') or ''}"
+    )
+    return 0
+
+
+def phone_of(status: dict[str, Any]) -> dict[str, Any]:
+    block = status.get("phone")
+    if not isinstance(block, dict):
+        raise SystemExit(
+            "the supervisor published no phone transport status.\n"
+            "Its build may predate transparent phone audio."
+        )
+    return block
+
+
+def do_phone_status(args: argparse.Namespace) -> int:
+    """Report transport truth without attempting to connect or change the phone."""
+    block = phone_of(read_status())
+    if args.json:
+        print(json.dumps(block, indent=2))
+        return 0
+
+    connected = "phone connected" if block.get("connected") else "phone disconnected"
+    media = "media routed" if block.get("media_routed") else "media not routed"
+    if block.get("android_microphone_transport"):
+        microphone = "Android microphone transport open"
+    else:
+        reason = str(
+            block.get("microphone_transport_reason")
+            or "Android has not opened a microphone transport"
+        )
+        microphone = f"Android microphone transport closed: {reason}"
+    failure = block.get("failure_reason")
+    failure_text = f"  failure: {failure}" if failure else ""
+    print(
+        f"{block.get('transport') or 'UNKNOWN'}  {connected}  {media}  "
+        f"{microphone}{failure_text}"
     )
     return 0
 
@@ -731,6 +768,18 @@ def main(argv: list[str] | None = None) -> int:
 
     # Read-only by design: configured order is authoritative and there is no runtime set.
     microphone.set_defaults(func=do_microphone_list, json=False)
+
+    phone = top.add_parser("phone", help="phone media and microphone transport state")
+    phone_actions = phone.add_subparsers(dest="action")
+
+    phone_status = phone_actions.add_parser(
+        "status", help="one line about the phone's live transports"
+    )
+    phone_status.add_argument("--json", action="store_true")
+    phone_status.set_defaults(func=do_phone_status)
+
+    # Read-only by design: Android decides when its communication transport exists.
+    phone.set_defaults(func=do_phone_status, json=False)
 
     args = parser.parse_args(argv)
     return int(args.func(args))
