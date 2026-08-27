@@ -80,6 +80,7 @@ managed_sources=(
     "pi/wireplumber/wireplumber.conf.d/50-bridge-bluez.conf"
     "pi/wireplumber/wireplumber.conf.d/65-bridge-hfp-no-autolink.conf"
     "pi/wireplumber/wireplumber.conf.d/66-bridge-a2dp-source-target.conf"
+    "pi/wireplumber/wireplumber.conf.d/67-bridge-aux-headroom.conf"
 )
 for relative in "${managed_sources[@]}"; do
     [ -f "$SOURCE_ROOT/$relative" ] || die "source file missing: $SOURCE_ROOT/$relative"
@@ -234,6 +235,8 @@ install_managed "pi/wireplumber/wireplumber.conf.d/65-bridge-hfp-no-autolink.con
     "$wireplumber_dir/65-bridge-hfp-no-autolink.conf" 0644 "$BRIDGE_USER" "$BRIDGE_USER"
 install_managed "pi/wireplumber/wireplumber.conf.d/66-bridge-a2dp-source-target.conf" \
     "$wireplumber_dir/66-bridge-a2dp-source-target.conf" 0644 "$BRIDGE_USER" "$BRIDGE_USER"
+install_managed "pi/wireplumber/wireplumber.conf.d/67-bridge-aux-headroom.conf" \
+    "$wireplumber_dir/67-bridge-aux-headroom.conf" 0644 "$BRIDGE_USER" "$BRIDGE_USER"
 
 install_login_barrier() {
     local vendor instance normalized after sessions_after vendor_hash

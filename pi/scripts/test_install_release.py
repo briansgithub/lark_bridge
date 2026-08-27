@@ -12,6 +12,7 @@ import pytest
 from install_release import InstallError, read_release
 
 A2DP_TARGET_FRAGMENT = "66-bridge-a2dp-source-target.conf"
+AUX_HEADROOM_FRAGMENT = "67-bridge-aux-headroom.conf"
 
 
 def make_archive(path: Path, *, corrupt: bool = False, unsafe: bool = False) -> str:
@@ -58,6 +59,7 @@ def make_install_archive(path: Path) -> str:
         "pi/pipewire/pipewire.conf.d/10-test.conf": b"new pipewire\n",
         "pi/wireplumber/wireplumber.conf.d/10-test.conf": b"new wireplumber\n",
         f"pi/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}": (b"new phone media target\n"),
+        f"pi/wireplumber/wireplumber.conf.d/{AUX_HEADROOM_FRAGMENT}": (b"new AUX headroom\n"),
         "pi/bluez/main.conf.d/10-bridge.conf": b"new bluez\n",
         "pi/scripts/netplan-startup-fastpath": b"new netplan script\n",
         "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf": (
@@ -178,7 +180,13 @@ def test_install_deploys_powerloss_verifier(
     fragment = (
         system_root / "home/admin/.config/wireplumber/wireplumber.conf.d" / A2DP_TARGET_FRAGMENT
     )
+    aux_fragment = (
+        system_root
+        / "home/admin/.config/wireplumber/wireplumber.conf.d"
+        / AUX_HEADROOM_FRAGMENT
+    )
     write_file(fragment, b"old phone media target\n")
+    write_file(aux_fragment, b"old AUX headroom\n")
 
     def portable_symlink(target_name: str, link: Path) -> None:
         write_file(link, f"symlink:{target_name}\n".encode())
@@ -195,12 +203,14 @@ def test_install_deploys_powerloss_verifier(
     verifier = system_root / "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py"
     assert verifier.read_bytes() == b"new powerloss_verify.py\n"
     assert fragment.read_bytes() == b"new phone media target\n"
+    assert aux_fragment.read_bytes() == b"new AUX headroom\n"
     transactions = list(
         (system_root / "var/lib/rpi-lark-bridge/releases" / ("a" * 12)).glob("install-*")
     )
     manifest = json.loads((transactions[0] / "system-preimage/MANIFEST.json").read_text("utf-8"))
     paths = {entry["path"] for entry in manifest["entries"]}
     assert f"home/admin/.config/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}" in paths
+    assert f"home/admin/.config/wireplumber/wireplumber.conf.d/{AUX_HEADROOM_FRAGMENT}" in paths
 
 
 def test_failed_install_restores_all_system_and_user_preimages(
@@ -292,4 +302,5 @@ def test_failed_install_restores_all_system_and_user_preimages(
     assert "etc/systemd/system/graphical.target.wants/bridge-btfw.service" in paths
     assert "home/admin/.config/wireplumber/wireplumber.conf.d/10-test.conf" in paths
     assert f"home/admin/.config/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}" in paths
+    assert f"home/admin/.config/wireplumber/wireplumber.conf.d/{AUX_HEADROOM_FRAGMENT}" in paths
     assert "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py" in paths
