@@ -2067,6 +2067,7 @@ class CommandTests(unittest.TestCase):
                 "clipped_pct": 0,
             },
         }
+        start_order: list[str] = []
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(
             ta, "resolve_candidate", return_value=candidate
         ), mock.patch.object(
@@ -2096,13 +2097,23 @@ class CommandTests(unittest.TestCase):
         ), mock.patch.object(
             ta, "arm_deadman"
         ), mock.patch.object(
-            ta, "prepare_mixer", return_value=good_instrument()
+            ta,
+            "prepare_mixer",
+            side_effect=lambda *_args, **_kwargs: (
+                start_order.append("prepare_mixer") or good_instrument()
+            ),
         ) as prepare, mock.patch.object(
             ta, "policy_restart_from_snapshot", return_value="supervisor"
         ), mock.patch.object(
-            ta, "apply_candidate"
+            ta,
+            "apply_candidate",
+            side_effect=lambda *_args, **_kwargs: start_order.append("apply_candidate"),
         ), mock.patch.object(
-            ta, "verify_runtime", return_value=snapshot()
+            ta,
+            "verify_runtime",
+            side_effect=lambda *_args, **_kwargs: (
+                start_order.append("verify_runtime") or snapshot()
+            ),
         ):
             args = mock.Mock(
                 artifacts=Path(directory),
@@ -2120,6 +2131,9 @@ class CommandTests(unittest.TestCase):
         self.assertIn("quick_calibration_sha256", session)
         self.assertEqual(session["focused_tests"]["returncode"], 0)
         self.assertEqual(prepare.call_args.kwargs["capture_gain"], "0%")
+        self.assertEqual(
+            start_order, ["apply_candidate", "verify_runtime", "prepare_mixer"]
+        )
 
     def test_session_start_restore_failure_is_reported_and_retryable(self) -> None:
         backend = FakeBackend()

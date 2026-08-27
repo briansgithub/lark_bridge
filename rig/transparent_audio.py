@@ -3545,13 +3545,6 @@ def command_session_start(
     try:
         install_recovery_script(backend, session_id, recovery, inventory.instrument)
         arm_deadman(backend, session_id, recovery, arguments.deadman)
-        prepared = prepare_mixer(
-            backend,
-            inventory,
-            instrument,
-            capture_gain=str(quick_calibration["capture_gain_request"]),
-        )
-        session["instrument"] = prepared
         restart_class = policy_restart_from_snapshot(baseline, candidate)
         apply_candidate(backend, candidate, session_id, restart_class)
         verified = verify_runtime(
@@ -3560,6 +3553,16 @@ def command_session_start(
             inventory.aux_target,
             candidate.candidate_id,
         )
+        # Rebuilding PipeWire may restore an old ALSA hardware value. Prepare and
+        # read back the measurement fixture only after the final session-start
+        # restart so every later code-only iteration inherits the calibrated state.
+        prepared = prepare_mixer(
+            backend,
+            inventory,
+            instrument,
+            capture_gain=str(quick_calibration["capture_gain_request"]),
+        )
+        session["instrument"] = prepared
         session["start_restart_class"] = restart_class
         session["start_snapshot"] = verified
         session["status"] = "active"
