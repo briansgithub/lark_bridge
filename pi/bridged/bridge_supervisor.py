@@ -90,6 +90,23 @@ class State(str, Enum):
     SAFE = "SAFE"
 
 
+class PhoneTransport(str, Enum):
+    """Operator-facing state of the Pixel's orthogonal audio transport.
+
+    HFP call ownership and the call graph's internal build state are deliberately not folded
+    into :class:`State`: a connected Pixel can be ready for media while no call graph exists,
+    and an A2DP stream can be degraded without making microphone selection unsafe.
+    """
+
+    ABSENT = "ABSENT"
+    MEDIA_READY = "MEDIA_READY"
+    MEDIA_ACTIVE = "MEDIA_ACTIVE"
+    SWITCHING = "SWITCHING"
+    CALL = "CALL"
+    MEDIA_RESTORED_APP_PAUSED = "MEDIA_RESTORED_APP_PAUSED"
+    DEGRADED = "DEGRADED"
+
+
 @dataclass(frozen=True)
 class AecSettings:
     enabled: bool = False
@@ -522,6 +539,23 @@ def call_role_acceptance(
     if other:
         return False, "Pixel is also connected on another controller: " + ", ".join(other)
     return True, None
+
+
+def phone_connected_anywhere(
+    settings: Settings,
+    objects: dict[str, dict],
+    inventory: list[Any],
+) -> bool:
+    """Report raw Pixel connectedness independently of controller-role acceptance."""
+
+    import btadapters
+
+    phone_address = (
+        settings.controller_roles.phone_address
+        if settings.controller_roles is not None
+        else settings.phone_mac
+    )
+    return any(btadapters.connected_on(adapter, phone_address, objects) for adapter in inventory)
 
 
 def accepted_call_nodes(
@@ -1208,6 +1242,76 @@ def find_lark(nodes: NodeMap, settings: Settings) -> str | None:
     return None
 
 
+def find_phone_media_candidates(nodes: NodeMap, phone_mac: str) -> tuple[str, ...]:
+    """Return configured-phone nodes with any A2DP-media identity evidence.
+
+    Candidates are deliberately broader than adopted media nodes so an auto-linked node with
+    malformed or incomplete properties is quarantined rather than ignored. HFP nodes have
+    neither the A2DP profile nor the output-stream media class and are therefore excluded.
+    """
+
+    prefix = f"bluez_input.{phone_mac.replace(':', '_')}.".lower()
+    return tuple(
+        sorted(
+            name
+            for name, props in nodes.items()
+            if name.lower().startswith(prefix)
+            and (
+                props.get("api.bluez5.profile") == "a2dp-source"
+                or props.get("media.class") == "Stream/Output/Audio"
+            )
+        )
+    )
+
+
+def find_phone_media_nodes(nodes: NodeMap, phone_mac: str) -> tuple[str, ...]:
+    """Return fully qualified A2DP streams without assuming a profile index.
+
+    The measured Pixel stream is a client ``Stream/Output/Audio`` node. Its numeric suffix
+    changed with BlueZ enumeration, and the HFP uplink uses the same ``bluez_input`` name
+    family, so the MAC, profile, and media class are all required identity evidence.
+    """
+
+    candidates = find_phone_media_candidates(nodes, phone_mac)
+    return tuple(
+        sorted(
+            name
+            for name in candidates
+            if (props := nodes[name]).get("api.bluez5.profile") == "a2dp-source"
+            and props.get("media.class") == "Stream/Output/Audio"
+        )
+    )
+
+
+def find_foreign_phone_media_candidates(nodes: NodeMap, phone_mac: str) -> tuple[str, ...]:
+    """Return nonconfigured-phone nodes with any A2DP-media identity evidence."""
+
+    configured_prefix = f"bluez_input.{phone_mac.replace(':', '_')}.".lower()
+    return tuple(
+        sorted(
+            name
+            for name, props in nodes.items()
+            if name.lower().startswith("bluez_input.")
+            and not name.lower().startswith(configured_prefix)
+            and (
+                props.get("api.bluez5.profile") == "a2dp-source"
+                or props.get("media.class") == "Stream/Output/Audio"
+            )
+        )
+    )
+
+
+def find_phone_media_node(nodes: NodeMap, phone_mac: str) -> str | None:
+    """Return the unique Pixel media stream, failing closed on ambiguity."""
+
+    matches = find_phone_media_nodes(nodes, phone_mac)
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        log.error("phone media identity %s is ambiguous: %s", phone_mac, matches)
+    return None
+
+
 def link(source: str, target: str) -> bool:
     try:
         result = subprocess.run(
@@ -1712,6 +1816,26 @@ class CallGraph:
         self.mic_control_blocked = False
         self.mic_control_primed = False
         self.mic_link_requested = False
+        self.phone_transport = PhoneTransport.ABSENT
+        self.phone_connected = False
+        self.media_node: str | None = None
+        self.media_route_verified = False
+        self.phone_transition_reason = "configured phone has not been observed"
+        self.phone_failure_reason: str | None = None
+        self.phone_binding_accepted = False
+        self.phone_binding_error: str | None = None
+        self.raw_android_microphone_transport = False
+        self.foreign_media_quarantined = False
+        self.media_volume_observed: float | None = None
+        self.media_volume_verified = False
+        self.media_volume_error: str | None = None
+        self._known_media_nodes: set[str] = set()
+        self._known_foreign_media_nodes: set[str] = set()
+        self._post_call_waiting_for_media = False
+        self._post_call_media_absence_seen = False
+        self._last_media_instance: tuple[str, str | None] | None = None
+        self._pre_call_media_instance: tuple[str, str | None] | None = None
+        self._media_cleanup_pending = False
 
     @property
     def output_target(self) -> str:
@@ -1720,6 +1844,435 @@ class CallGraph:
     @property
     def microphone_controls_required(self) -> bool:
         return self.settings.mic_gain_db is not None and self.settings.mic_muted is not None
+
+    @property
+    def media_target(self) -> str:
+        """The fixed transparent-media target for this release: the Pi AUX sink."""
+
+        return self.settings.wired_output
+
+    @staticmethod
+    def _media_instance(nodes: NodeMap, node: str) -> tuple[str, str | None]:
+        raw_object_id = nodes.get(node, {}).get("object.id")
+        return node, str(raw_object_id) if raw_object_id is not None else None
+
+    def ensure_media_target_volume(self, nodes: NodeMap) -> bool:
+        """Independently prove the fixed AUX volume while transparent media is available."""
+
+        target = self.media_target
+        desired = self.settings.wired_output_volume
+        if target not in nodes:
+            self.media_volume_observed = None
+            self.media_volume_verified = False
+            self.media_volume_error = f"configured media target is unavailable: {target}"
+            return False
+        if desired is None:
+            self.media_volume_observed = None
+            self.media_volume_verified = True
+            self.media_volume_error = None
+            return True
+
+        # Once established, read every connected no-call tick so an external mixer change
+        # cannot leave MEDIA_ACTIVE stale. Only issue a set when first taking ownership or
+        # when readback is missing/mismatched.
+        if self.media_volume_verified:
+            observed = read_sink_volume(target)
+            self.media_volume_observed = observed
+            if observed is not None and abs(observed - desired) <= 0.01:
+                self.media_volume_error = None
+                return True
+
+        ok, observed, error = set_and_verify_sink_volume(target, desired)
+        self.media_volume_observed = observed
+        self.media_volume_verified = ok
+        self.media_volume_error = error
+        return ok
+
+    @staticmethod
+    def _unique_links(links: LinkList) -> LinkList:
+        return list(dict.fromkeys(links))
+
+    def _remove_media_links(self, routes: LinkList) -> bool:
+        """Request removal of each distinct route and report whether all requests succeeded."""
+
+        ok = True
+        for source, target in self._unique_links(routes):
+            log.warning("removing phone media route %s -> %s", source, target)
+            ok = unlink(source, target) and ok
+        return ok
+
+    def _quiesce_call_for_media_conflict(self, reason: str) -> None:
+        """Fail closed if an A2DP media conflict appears during communication."""
+
+        had_graph = any(item is not None for item in (self.aec_host, self.microphone, self.callout))
+        if had_graph:
+            self.generation += 1
+            self.teardown(reason)
+            self.attempts = 0
+            self.next_attempt = 0.0
+            # The current PipeWire snapshot still contains the just-stopped graph. Require a
+            # later clean snapshot before creating its replacement.
+            self.break_before_make = True
+        self.state = State.SWITCHING
+
+    def _record_call_transport_presence(
+        self,
+        nodes: NodeMap,
+        observed_media: tuple[str, ...],
+    ) -> None:
+        """Remember call history even when another safety gate blocks graph convergence."""
+
+        entering_call = not self._post_call_waiting_for_media
+        current_instance = (
+            self._media_instance(nodes, observed_media[0]) if len(observed_media) == 1 else None
+        )
+        if entering_call:
+            self._pre_call_media_instance = current_instance or self._last_media_instance
+            self._post_call_media_absence_seen = not observed_media
+        elif not observed_media:
+            self._post_call_media_absence_seen = True
+        self._post_call_waiting_for_media = True
+
+    def reconcile_phone_transport(
+        self,
+        nodes: NodeMap,
+        links: LinkList,
+        *,
+        call_up: bool,
+        connected: bool,
+        binding_accepted: bool,
+        binding_error: str | None,
+        media_volume_ready: bool,
+    ) -> bool:
+        """Reconcile Pixel media and return whether a fresh graph snapshot is required.
+
+        WirePlumber's ``target.object`` rule is the arrival-time bootstrap. This method is
+        the authority that proves the resulting graph is exact, removes fan-out and stale
+        links, and recreates only the single expected route. A mutation is never considered
+        verified against the snapshot that preceded it.
+        """
+
+        candidates = find_phone_media_candidates(nodes, self.settings.phone_mac)
+        observed = find_phone_media_nodes(nodes, self.settings.phone_mac)
+        foreign = find_foreign_phone_media_candidates(nodes, self.settings.phone_mac)
+        suspicious = tuple(sorted(set(candidates) - set(observed)))
+        self._known_media_nodes.update(candidates)
+        self._known_foreign_media_nodes.update(foreign)
+        sources = set(candidates) | self._known_media_nodes
+        routes = [pair for pair in links if pair[0] in sources]
+        foreign_sources = set(foreign) | self._known_foreign_media_nodes
+        foreign_routes = [pair for pair in links if pair[0] in foreign_sources]
+        self.phone_connected = connected
+        self.phone_binding_accepted = binding_accepted
+        self.phone_binding_error = binding_error
+        self.media_route_verified = False
+
+        if call_up:
+            self._record_call_transport_presence(nodes, observed)
+
+        if foreign or foreign_routes:
+            self.foreign_media_quarantined = True
+            configured_cleanup_required = bool(routes and (not connected or not binding_accepted))
+            configured_removed = (
+                self._remove_media_links(routes) if configured_cleanup_required else True
+            )
+            if not connected:
+                # Foreign quarantine must not bypass the configured phone's disconnect edge.
+                # Clear call/media history now so a later reconnect starts at MEDIA_READY,
+                # and retain cleanup state until a fresh snapshot proves stale routes gone.
+                self._media_cleanup_pending = bool(routes)
+                self._post_call_waiting_for_media = False
+                self._post_call_media_absence_seen = False
+                self._pre_call_media_instance = None
+                self._last_media_instance = None
+                if not routes:
+                    self._known_media_nodes.clear()
+            elif not binding_accepted:
+                self._media_cleanup_pending = bool(routes)
+            if call_up:
+                self._quiesce_call_for_media_conflict(
+                    "foreign A2DP media source appeared during communication"
+                )
+            removed = self._remove_media_links(foreign_routes) if foreign_routes else True
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.media_node = None
+            self.phone_transition_reason = (
+                "configured phone is disconnected; quarantining foreign media and stale routes"
+                if not connected
+                else (
+                    "controller ownership failed closed; quarantining all phone media routes"
+                    if not binding_accepted
+                    else "quarantining media from a nonconfigured phone"
+                )
+            )
+            names = foreign or tuple(sorted({source for source, _target in foreign_routes}))
+            foreign_reason = (
+                "foreign A2DP media source is not authorized: "
+                + ", ".join(names)
+                + ("" if removed else "; its route could not be removed")
+            )
+            if not connected and routes:
+                configured_reason = (
+                    "disconnected configured-phone route is awaiting removal verification"
+                    if configured_removed
+                    else "disconnected configured-phone route could not be removed"
+                )
+                foreign_reason = f"{foreign_reason}; {configured_reason}"
+            elif not binding_accepted:
+                binding_reason = binding_error or "configured phone controller binding was rejected"
+                foreign_reason = f"{foreign_reason}; {binding_reason}"
+                if routes:
+                    cleanup = (
+                        "untrusted configured-phone route is awaiting removal verification"
+                        if configured_removed
+                        else "untrusted configured-phone route could not be removed"
+                    )
+                    foreign_reason = f"{foreign_reason}; {cleanup}"
+            self.phone_failure_reason = foreign_reason
+            return bool(foreign_routes or configured_cleanup_required) or call_up
+        self.foreign_media_quarantined = False
+        self._known_foreign_media_nodes.clear()
+
+        if not connected:
+            removed = self._remove_media_links(routes) if routes else True
+            self._media_cleanup_pending = bool(routes)
+            self.phone_transport = PhoneTransport.ABSENT
+            self.media_node = None
+            self.phone_transition_reason = (
+                "configured phone is disconnected; removing its stale media route"
+                if routes
+                else "configured phone is disconnected"
+            )
+            self.phone_failure_reason = (
+                (
+                    "disconnected phone media route is awaiting removal verification"
+                    if removed
+                    else "disconnected phone media route could not be removed; retrying"
+                )
+                if routes
+                else None
+            )
+            self._post_call_waiting_for_media = False
+            self._post_call_media_absence_seen = False
+            self._pre_call_media_instance = None
+            self._last_media_instance = None
+            if not routes:
+                self._known_media_nodes.clear()
+            return bool(routes)
+
+        if not binding_accepted:
+            removed = self._remove_media_links(routes) if routes else True
+            self._media_cleanup_pending = bool(routes)
+            reason = binding_error or "configured phone controller binding was rejected"
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.media_node = None
+            self.phone_transition_reason = (
+                "phone is connected but controller ownership failed closed"
+            )
+            self.phone_failure_reason = (
+                reason if removed else f"{reason}; untrusted media route could not be removed"
+            )
+            return bool(routes)
+
+        if self._media_cleanup_pending:
+            if routes:
+                removed = self._remove_media_links(routes)
+                self.phone_transport = PhoneTransport.DEGRADED
+                self.media_node = None
+                self.phone_transition_reason = "finishing stale media cleanup before reconnect"
+                self.phone_failure_reason = (
+                    "stale media route cleanup is awaiting a fresh snapshot"
+                    if removed
+                    else "stale media route cleanup failed and will be retried"
+                )
+                return True
+            self._media_cleanup_pending = False
+
+        if call_up:
+            self.media_node = None
+            if routes:
+                self._quiesce_call_for_media_conflict(
+                    "A2DP media route appeared during communication"
+                )
+                removed = self._remove_media_links(routes)
+                prior_failure = self.phone_failure_reason
+                self.phone_transport = (
+                    PhoneTransport.DEGRADED if prior_failure else PhoneTransport.SWITCHING
+                )
+                self.phone_transition_reason = (
+                    "removing A2DP media before constructing the communication graph"
+                )
+                self.phone_failure_reason = (
+                    prior_failure
+                    if removed and prior_failure
+                    else (None if removed else "one or more A2DP media links could not be removed")
+                )
+                return True
+            active_call = bool(
+                self.state == State.ACTIVE
+                and self.verified
+                and self.microphone is not None
+                and self.callout is not None
+            )
+            if active_call:
+                self.phone_transport = PhoneTransport.CALL
+                self.phone_transition_reason = "communication graph is active"
+                self.phone_failure_reason = None
+            elif self.phone_transport == PhoneTransport.DEGRADED and self.phone_failure_reason:
+                # Preserve a concrete build/backoff failure until the call graph verifies or
+                # an endpoint-generation transition explicitly starts a new attempt.
+                pass
+            else:
+                self.phone_transport = PhoneTransport.SWITCHING
+                self.phone_transition_reason = (
+                    "communication transport is present; call graph is converging"
+                )
+                self.phone_failure_reason = None
+            return False
+
+        if not media_volume_ready:
+            removed = self._remove_media_links(routes) if routes else True
+            self._media_cleanup_pending = bool(routes)
+            reason = self.media_volume_error or "configured AUX media volume did not verify"
+            self.media_node = None
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_transition_reason = "configured AUX media volume failed verification"
+            self.phone_failure_reason = (
+                reason if removed else f"{reason}; active media route could not be removed"
+            )
+            return bool(routes)
+
+        if suspicious:
+            removed = self._remove_media_links(routes) if routes else True
+            self._media_cleanup_pending = bool(routes)
+            self.media_node = None
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_transition_reason = "quarantining an incompletely identified media node"
+            self.phone_failure_reason = (
+                "configured-phone A2DP candidate lacks the required profile/media class: "
+                + ", ".join(suspicious)
+                + ("" if removed else "; its route could not be removed")
+            )
+            return bool(routes)
+
+        # A media node is destroyed when playback pauses. Do not invent a paused-node state
+        # or try to recreate a route until a newly arriving stream actually exists.
+        if not observed:
+            if self._post_call_waiting_for_media:
+                self._post_call_media_absence_seen = True
+            if routes:
+                removed = self._remove_media_links(routes)
+                self.phone_transport = (
+                    PhoneTransport.MEDIA_RESTORED_APP_PAUSED
+                    if self._post_call_waiting_for_media
+                    else PhoneTransport.DEGRADED
+                )
+                self.phone_transition_reason = "removing stale route for an absent media stream"
+                self.phone_failure_reason = (
+                    "stale A2DP media route is awaiting removal"
+                    if removed
+                    else "stale A2DP media route could not be removed"
+                )
+                return True
+            self.media_node = None
+            self._known_media_nodes.clear()
+            self.phone_failure_reason = None
+            if self._post_call_waiting_for_media:
+                self.phone_transport = PhoneTransport.MEDIA_RESTORED_APP_PAUSED
+                self.phone_transition_reason = "communication transport ended; waiting for Android to create a new media stream"
+            else:
+                self.phone_transport = PhoneTransport.MEDIA_READY
+                self.phone_transition_reason = "phone is connected and no media stream is active"
+            return False
+
+        if len(observed) != 1:
+            if routes:
+                self._remove_media_links(routes)
+            self.media_node = None
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_transition_reason = "phone media identity is ambiguous"
+            self.phone_failure_reason = (
+                "multiple A2DP media streams match the configured phone: " + ", ".join(observed)
+            )
+            return bool(routes)
+
+        media = observed[0]
+        current_instance = self._media_instance(nodes, media)
+        if self._post_call_waiting_for_media:
+            previous = self._pre_call_media_instance
+            object_changed = bool(
+                previous is not None
+                and previous[1] is not None
+                and current_instance[1] is not None
+                and previous[1] != current_instance[1]
+            )
+            fresh = bool(previous is None or self._post_call_media_absence_seen or object_changed)
+            if not fresh:
+                removed = self._remove_media_links(routes) if routes else True
+                self.media_node = None
+                self.phone_transport = PhoneTransport.MEDIA_RESTORED_APP_PAUSED
+                self.phone_transition_reason = (
+                    "refusing the pre-call media instance while waiting for a fresh Android stream"
+                )
+                self.phone_failure_reason = (
+                    None if removed else "lingering pre-call media route could not be removed"
+                )
+                return bool(routes)
+
+        self._last_media_instance = current_instance
+        self.media_node = media
+        expected = (media, self.media_target)
+        current_routes = [pair for pair in routes if pair[0] == media]
+        stale_routes = [pair for pair in routes if pair[0] != media]
+
+        if self.media_target not in nodes:
+            if routes:
+                self._remove_media_links(routes)
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_transition_reason = "media is active but the configured AUX target is absent"
+            self.phone_failure_reason = (
+                f"configured media target is unavailable: {self.media_target}"
+            )
+            return bool(routes)
+
+        # pw-link reports a node pair once from each endpoint's port view and once per
+        # channel. A healthy stereo route therefore appears as four identical tuples. The
+        # invariant is one UNIQUE target node, not one tuple occurrence.
+        current_targets = {target for _source, target in current_routes}
+        unexpected = [pair for pair in current_routes if pair != expected] + stale_routes
+        if unexpected:
+            # Preserve the correct target when present and remove only stale/wrong targets.
+            # A later snapshot must prove that the unique target set has converged.
+            removed = self._remove_media_links(unexpected)
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_transition_reason = "reconciling stale or wrong-target media routes"
+            self.phone_failure_reason = (
+                "media route cleanup is awaiting a fresh PipeWire snapshot"
+                if removed
+                else "one or more incorrect media routes could not be removed"
+            )
+            return True
+
+        if self.media_target not in current_targets:
+            requested = link(*expected)
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_transition_reason = "requesting the configured AUX media route"
+            self.phone_failure_reason = (
+                "media route is awaiting verification"
+                if requested
+                else f"could not route {media} to {self.media_target}"
+            )
+            return True
+
+        self._known_media_nodes = {media}
+        self.media_route_verified = True
+        self.phone_transport = PhoneTransport.MEDIA_ACTIVE
+        self.phone_transition_reason = "media stream has exactly one verified route to AUX"
+        self.phone_failure_reason = None
+        self._post_call_waiting_for_media = False
+        self._post_call_media_absence_seen = False
+        self._pre_call_media_instance = None
+        return False
 
     def teardown(self, reason: str) -> None:
         # Microphone switches are deliberately break-before-make. Stop the only owned HFP
@@ -1834,6 +2387,9 @@ class CallGraph:
         self.mic_control_blocked = True
         self.last_failure = reason
         self.state = State.SAFE
+        self.phone_transport = PhoneTransport.DEGRADED
+        self.phone_failure_reason = reason
+        self.phone_transition_reason = "communication microphone control failed closed"
         log.error("call graph held SAFE: %s", reason)
 
     def update_signature(self, signature: tuple[Any, ...]) -> bool:
@@ -1850,7 +2406,27 @@ class CallGraph:
         self.mic_control_blocked = False
         return had_graph
 
-    def fail(self, reason: str) -> None:
+    def fail(
+        self,
+        reason: str,
+        *,
+        phone_connected: bool | None = None,
+        phone_binding_accepted: bool | None = None,
+        phone_binding_error: str | None = None,
+        raw_hfp_nodes_present: bool | None = None,
+    ) -> None:
+        # PipeWire inspection can fail before the first tick has copied the current BlueZ
+        # observation into the graph. Accept that observation here so startup failure status
+        # cannot report a connected phone as ABSENT or erase its controller-binding truth.
+        if phone_connected is not None:
+            self.phone_connected = phone_connected
+        if phone_binding_accepted is not None:
+            self.phone_binding_accepted = phone_binding_accepted
+            self.phone_binding_error = phone_binding_error
+        if raw_hfp_nodes_present is not None:
+            self.raw_android_microphone_transport = bool(
+                self.phone_connected and raw_hfp_nodes_present
+            )
         self.last_failure = reason
         self.attempts += 1
         log.error("call graph generation %d failed: %s", self.generation, reason)
@@ -1861,9 +2437,20 @@ class CallGraph:
         else:
             self.state = State.DEGRADED
             self.next_attempt = time.monotonic() + min(2**self.attempts, 30)
+        if self.phone_connected:
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.media_route_verified = False
+            self.phone_failure_reason = reason
+            self.phone_transition_reason = "phone audio graph could not be verified"
 
     def begin_build(self, lark: str) -> None:
         self.state = State.BUILDING
+        if self.phone_failure_reason:
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_transition_reason = "retrying the communication graph after a failure"
+        else:
+            self.phone_transport = PhoneTransport.SWITCHING
+            self.phone_transition_reason = "constructing the communication graph"
         self.build_started = time.monotonic()
         if self.settings.aec.enabled:
             self.aec_host = NativeAecHost(
@@ -2022,8 +2609,20 @@ class CallGraph:
         microphone_report: dict[str, Any] | None = None,
         microphone_blocked: bool | None = None,
         raw_hfp_sink_present: bool | None = None,
+        phone_connected: bool | None = None,
+        phone_binding_accepted: bool | None = None,
+        phone_binding_error: str | None = None,
+        raw_hfp_nodes_present: bool | None = None,
     ) -> None:
         call_up = self.settings.hfp_sink in nodes and self.settings.hfp_source in nodes
+        media_candidates = find_phone_media_candidates(nodes, self.settings.phone_mac)
+        connected = (
+            bool(call_up or media_candidates) if phone_connected is None else phone_connected
+        )
+        binding_accepted = connected if phone_binding_accepted is None else phone_binding_accepted
+        self.raw_android_microphone_transport = bool(
+            connected and (call_up if raw_hfp_nodes_present is None else raw_hfp_nodes_present)
+        )
         safety_hfp_sink_present = (
             self.settings.hfp_sink in nodes
             if raw_hfp_sink_present is None
@@ -2061,6 +2660,23 @@ class CallGraph:
         signature = (call_up, token)
         endpoints_changed = signature != self.signature
         self.update_signature(signature)
+        if endpoints_changed and call_up and binding_accepted:
+            # A new accepted endpoint generation is a materially new transition. It may
+            # retry a prior failure; subsequent same-generation ticks must preserve it.
+            self.phone_failure_reason = None
+            self.phone_transport = PhoneTransport.SWITCHING
+        media_volume_ready = True
+        if connected and binding_accepted and not call_up:
+            media_volume_ready = self.ensure_media_target_volume(nodes)
+        phone_wait = self.reconcile_phone_transport(
+            nodes,
+            links,
+            call_up=call_up,
+            connected=connected,
+            binding_accepted=binding_accepted,
+            binding_error=phone_binding_error,
+            media_volume_ready=media_volume_ready,
+        )
 
         # This is the first graph action on every call tick, including missing/blocked
         # selections. It covers every identity-matched candidate rather than only the active
@@ -2078,6 +2694,17 @@ class CallGraph:
             self.teardown(reason)
             self.last_failure = reason
             self.state = State.SAFE
+            if call_up:
+                self.phone_transport = PhoneTransport.DEGRADED
+                self.phone_failure_reason = reason
+                self.phone_transition_reason = "communication microphone selection failed closed"
+            return
+
+        if call_up and phone_wait:
+            if not any(item is not None for item in (self.aec_host, self.microphone, self.callout)):
+                self.state = State.SWITCHING
+            # Break before make: only a later pw-link snapshot may prove that A2DP no longer
+            # feeds an output and permit construction of the call graph.
             return
 
         if not call_up:
@@ -2094,8 +2721,21 @@ class CallGraph:
                 self.output_volume_verified = False
                 self.output_volume_error = "wired output is unavailable"
                 self.last_failure = self.output_volume_error
+            elif (
+                connected
+                and binding_accepted
+                and resolved == self.media_target
+                and self.media_volume_verified
+            ):
+                # Reuse the independent AUX proof from this same tick rather than issuing a
+                # second set/readback that could contradict the media gate.
+                self.output_volume_target = resolved
+                self.output_volume_observed = self.media_volume_observed
+                self.output_volume_verified = True
+                self.output_volume_error = None
+                self.last_failure = self.phone_failure_reason
             elif self.ensure_output_volume(resolved):
-                self.last_failure = None
+                self.last_failure = self.phone_failure_reason
             else:
                 self.last_failure = self.output_volume_error or "wired output volume did not verify"
             self.state = State.CALL_DOWN
@@ -2107,11 +2747,17 @@ class CallGraph:
                 (report or {}).get("selection_reason") or "no usable microphone is present"
             )
             self.state = State.WAITING_MIC
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_failure_reason = self.last_failure
+            self.phone_transition_reason = "communication transport has no usable microphone"
             return
         if resolved is None:
             self.teardown("required output endpoint absent")
             self.last_failure = "no usable output is present"
             self.state = State.DISCOVERING
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_failure_reason = self.last_failure
+            self.phone_transition_reason = "communication transport has no usable output"
             return
 
         if early_links_removed:
@@ -2134,6 +2780,9 @@ class CallGraph:
 
         if self.mic_control_blocked:
             self.state = State.SAFE
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_failure_reason = self.mic_control_error or "microphone controls are blocked"
+            self.phone_transition_reason = "communication microphone control remains blocked"
             return
 
         # Mixer verification precedes both initial graph construction and a live switch
@@ -2154,6 +2803,10 @@ class CallGraph:
             self.output_node = resolved
             self.last_failure = reason
             self.state = State.SAFE
+            self.media_route_verified = False
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_failure_reason = reason
+            self.phone_transition_reason = "communication output volume failed verification"
             log.error("call graph held SAFE: %s", reason)
             return
 
@@ -2258,6 +2911,9 @@ class CallGraph:
         self.verified = True
         self.attempts = 0
         self.state = State.ACTIVE
+        self.phone_transport = PhoneTransport.CALL
+        self.phone_failure_reason = None
+        self.phone_transition_reason = "communication graph is active and verified"
 
     def status(
         self,
@@ -2266,8 +2922,39 @@ class CallGraph:
         microphone: Any = None,
         *,
         microphone_report: dict[str, Any] | None = None,
+        phone_connected: bool | None = None,
+        phone_binding_accepted: bool | None = None,
+        phone_binding_error: str | None = None,
+        raw_hfp_nodes_present: bool | None = None,
     ) -> dict[str, Any]:
         call_up = self.settings.hfp_sink in nodes and self.settings.hfp_source in nodes
+        connected = self.phone_connected if phone_connected is None else phone_connected
+        if phone_binding_accepted is None:
+            binding_accepted = self.phone_binding_accepted
+            binding_error = (
+                self.phone_binding_error if phone_binding_error is None else phone_binding_error
+            )
+        else:
+            binding_accepted = phone_binding_accepted
+            binding_error = phone_binding_error
+        if not connected:
+            binding_accepted = False
+            binding_error = None
+        android_microphone_transport = bool(
+            connected
+            and (
+                self.raw_android_microphone_transport
+                if raw_hfp_nodes_present is None
+                else raw_hfp_nodes_present
+            )
+        )
+        reported_transport = (
+            self.phone_transport
+            if connected or self.foreign_media_quarantined
+            else PhoneTransport.ABSENT
+        )
+        reported_media_node = self.media_node if connected else None
+        reported_media_route = bool(connected and self.media_route_verified)
         selected = selected_microphone_node(microphone) or self.selected_microphone
         report = (
             microphone_report or microphone_resolution_report(microphone) or self.microphone_report
@@ -2312,6 +2999,36 @@ class CallGraph:
             "state": self.state.value,
             "generation": self.generation,
             "call": {"hfp_nodes_present": call_up},
+            "phone": {
+                "connected": connected,
+                "connection_state": "connected" if connected else "disconnected",
+                "transport": reported_transport.value,
+                "media_node": reported_media_node,
+                "expected_target": self.media_target,
+                "media_routed": reported_media_route,
+                "route_verified": reported_media_route,
+                "controller_binding_accepted": binding_accepted,
+                "controller_binding_error": binding_error,
+                "android_microphone_transport": android_microphone_transport,
+                "microphone_transport_reason": (
+                    None
+                    if android_microphone_transport
+                    else (
+                        "Android has not opened an HFP/SCO communication transport"
+                        if connected
+                        else "configured phone is disconnected"
+                    )
+                ),
+                "transition_reason": self.phone_transition_reason,
+                "failure_reason": self.phone_failure_reason,
+                "target_volume": {
+                    "required": bool(connected and self.settings.wired_output_volume is not None),
+                    "desired": self.settings.wired_output_volume,
+                    "observed": self.media_volume_observed,
+                    "verified": bool(connected and self.media_volume_verified),
+                    "error": self.media_volume_error,
+                },
+            },
             "microphone": report,
             "endpoints": {
                 "microphone": selected,
@@ -2505,17 +3222,25 @@ def main() -> int:
         call_binding_accepted, call_binding_error = call_role_acceptance(
             settings, bluez_tree, controller_inventory
         )
+        raw_phone_connected = phone_connected_anywhere(settings, bluez_tree, controller_inventory)
         snapshot = pw_snapshot()
         nodes = snapshot[0] if snapshot is not None else None
         pw_objects = snapshot[1] if snapshot is not None else []
         links = pw_links()
         observed_desire = desire_stamp()
         if nodes is None or links is None:
-            graph.fail("PipeWire graph could not be inspected")
+            graph.fail(
+                "PipeWire graph could not be inspected",
+                phone_connected=raw_phone_connected,
+                phone_binding_accepted=call_binding_accepted,
+                phone_binding_error=call_binding_error,
+                raw_hfp_nodes_present=False,
+            )
             nodes = nodes or {}
             links = links or []
         else:
             accepted_nodes = accepted_call_nodes(nodes, settings, call_binding_accepted)
+            raw_hfp_nodes_present = settings.hfp_sink in nodes and settings.hfp_source in nodes
             observations, physical_microphone_resolution = discover_microphones(
                 pw_objects,
                 settings,
@@ -2564,6 +3289,10 @@ def main() -> int:
                 microphone_report=microphone_report,
                 microphone_blocked=microphone_resolution.blocked,
                 raw_hfp_sink_present=settings.hfp_sink in nodes,
+                phone_connected=raw_phone_connected,
+                phone_binding_accepted=call_binding_accepted,
+                phone_binding_error=call_binding_error,
+                raw_hfp_nodes_present=raw_hfp_nodes_present,
             )
 
         now = time.monotonic()
@@ -2577,6 +3306,10 @@ def main() -> int:
             links,
             microphone_resolution,
             microphone_report=microphone_report,
+            phone_connected=raw_phone_connected,
+            phone_binding_accepted=call_binding_accepted,
+            phone_binding_error=call_binding_error,
+            raw_hfp_nodes_present=raw_hfp_nodes_present,
         )
         status["call"].update(
             {
@@ -2605,12 +3338,20 @@ def main() -> int:
     lark_liveness.close()
     graph.teardown("supervisor shutting down")
     graph.state = State.CALL_DOWN
+    graph.phone_transport = PhoneTransport.ABSENT
+    graph.foreign_media_quarantined = False
+    graph.phone_failure_reason = None
+    graph.phone_transition_reason = "supervisor stopped"
     try:
         stopped_status = graph.status(
             {},
             [],
             microphone_resolution,
             microphone_report=microphone_report,
+            phone_connected=False,
+            phone_binding_accepted=False,
+            phone_binding_error="supervisor stopped",
+            raw_hfp_nodes_present=False,
         )
         stopped_status["call"].update(
             {
