@@ -129,8 +129,8 @@ part of this decision rather than implementation detail:
   route to an ordinary-application microphone, the controller is capable, and it deserves its own
   experiment rather than being smuggled into this one.
 - This ADR is **provisional**. The microphone mechanism, A2DP sink behavior, combined profile,
-  pause behavior, and deterministic AUX pin are measured. E19 row 3 is confirmed; live
-  confirmation of rows 4, 7 and 8 remains a gate before promotion.
+  pause behavior, deterministic AUX pin, and Discord communication transition are measured. E19
+  rows 3 and 8 are confirmed; live confirmation of rows 4 and 7 remains a gate before promotion.
 
 
 ## Amendment — 2026-08-27, after measuring on the hardware
@@ -179,5 +179,29 @@ an AUX-only WirePlumber rule setting `api.alsa.headroom = 960`, one additional 4
 period. It deliberately leaves period size, Bluetooth latency, and graph quantum unchanged. Two
 consecutive YouTube Music captures on immutable candidate `be38d43349-787d0cd69f2a` then passed
 with more than 40 dB margin over the calibrated electrical floor, zero clipping, zero route loss,
-and zero new AUX or BlueZ errors. This closes the rapid media checkpoint, not the ADR's remaining
-Discord communication-session and post-call restoration gate.
+and zero new AUX or BlueZ errors. Those captures close the rapid media checkpoint only.
+
+Later Discord trials on immutable candidate `af84c58dcc-921ce47313f1` included commit `7235233`,
+which corrected an HFP source being mistaken for A2DP because both can report
+`media.class = Stream/Output/Audio`. Retained transition evidence records `MEDIA_ACTIVE` before
+Discord and verified `ACTIVE` / `CALL` afterward. Android reported `com.discord` owning
+`MODE_IN_COMMUNICATION` with SCO active, while the Pi graph had exactly one post-AEC uplink and no
+physical-microphone bypass. A separate retained teardown artifact proves
+`MEDIA_RESTORED_APP_PAUSED` with the call graph removed. Interactive watchers also held the two
+call states for 38.620 and 41.132 seconds with zero supervisor restarts, but those hold traces were
+not retained in the hashed bundles. This confirms E19 row 8 and the measured transport/graph
+decision. It does not close acoustic AEC scoring, true far-end validation, repeated-cycle, soak,
+or promotion gates. A subsequent fixed-speaker near-end smoke on the selected FIFINE also passed
+with 0.000% raw/clean clipping. The scorer reported `-2.46 dB` preservation loss, meaning the clean
+correlated level was 2.46 dB higher than raw. It explicitly reports echo suppression as not
+measured and requires the separate speaker-mode reference fixture for that gate.
+
+One later uninterrupted trial re-staged the same tracked `af84c58` ref from a Git archive as
+candidate `af84c58dcc-a1f2b4244b2b`. A later audit found that the earlier worktree package had
+included ignored tool-cache files, so the tracked source was unchanged but the two package byte
+sets and candidate IDs were not identical. The retained full-cycle bundle records the AUX-only
+A2DP node before Discord, verified `CALL` after 8.179 seconds, one active HFP-sink input from
+`output.bridge.mic`, no direct physical-microphone bypass, and a later return to AUX-only
+`MEDIA_ACTIVE` without service-restart or kernel-error growth. This is one media-to-call-to-media
+cycle, not the required three-cycle acceptance run; paused-history proof comes from the separate
+teardown artifact.
