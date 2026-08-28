@@ -1,8 +1,30 @@
 # LarkBridge image retention review — 2026-08-26
 
-## Current image to preserve
+## Promoted transparent-audio image — 2026-08-28
 
-The desired appliance state is the deployment built from commit
+The accepted transparent media/call appliance is release commit
+`6f08cbc78911780ebba75f1c88bc7bb7d631f8bf`. Its exact install archive is
+`archive/LarkBridge-bt500-aux-6f08cbc78911-20260828T054454Z.zip`, SHA-256
+`ed679819305c7336ce45fe1b3df45183c6901138780054a85bc22be769b60757`.
+
+The guarded full-card capture is
+`E:\larkbridge-images\20260828T060759Z\LarkBridge-bt500-aux-6f08cbc-20260828T060759Z.img`,
+exactly `16088301568` bytes, SHA-256
+`d77ac682157b80406982a8d689152e4be61a5c3024c6c5f8146723ed2db65d16`. The
+capture streamed `/dev/mmcblk0` with persistent storage read-only and Bluetooth/audio state
+writers stopped, then restored the data filesystem and all previously active services. Before
+capture, the exact installed release, fresh Pixel bond, AUX volume 0.95, media -> Discord call ->
+media transition, read-only boot/lower-root mounts, and `powerloss_verify.py` `ready: true` were
+confirmed. External `capture-metadata.json` beside the image records the source and partition
+identity without committing unit secrets.
+
+Independent restore/boot verification on a spare equal-or-larger card remains pending, as does
+the optional repeated physical power-cut campaign. Retain all older rollback images until the
+spare-card test passes.
+
+## Previous image retained
+
+The preceding appliance state was the deployment built from commit
 `03df47e8486b99ba741d65949b83557f983d4e33` (`feat(microphone): prefer live Lark
 transmitters`). Its exact install archive is:
 
@@ -52,6 +74,7 @@ there are no byte-for-byte duplicate boot images.
 
 | Image | SHA-256 | Purpose | Decision |
 |---|---|---|---|
+| `E:\larkbridge-images\20260828T060759Z\LarkBridge-bt500-aux-6f08cbc-20260828T060759Z.img` | `d77ac682157b80406982a8d689152e4be61a5c3024c6c5f8146723ed2db65d16` | Guarded full-card capture of accepted transparent A2DP media / HFP call release `6f08cbc`, including the fresh Pixel bond and persistent AUX 0.95 configuration | **Keep as current candidate.** Capture/hash and source-Pi restoration passed; independent spare-card restore/boot remains pending. |
 | `E:\larkbridge-images\20260827T204627Z\LarkBridge-bt500-aux-03df47e-20260827T204627Z.img` | `18349d99672237cc50f9aa28a9511f8f60b83e80f3bb821bd4b7843742019493` | Consistent full-card capture of deployed `03df47e`, including current configuration and unit identity | **Keep.** Capture/hash and source-Pi state restoration passed. Independent spare-card restore/boot remains pending; it is waived only for rapid development. |
 | `E:\larkbridge-source-20260823.img` | `847b4d34d112cbef497304885494780a15a5104e29ff69e1339ede306202f6bc` | Clean-shutdown, pre-hardening source state; its recovery card was physically boot-tested | **Keep permanently.** This is the documented last-resort rollback and preserves a hybrid deployed state that no Git commit fully represents. Keep `host-safety-evidence.json` and the recovery card with it. |
 | `rpi_lark_mic_bridge-mode1\artifacts\phase5\source-PhysicalDrive3-0123456789ABCDE.img` | `d61a145b91498df38973806eed6bf2aa1b76dc49bc72ef8c9cb02e9795c313db` | Verified pre-mutation rollback for the unfinished dual-USB/BT600 experiment | **Keep while that experiment may resume.** If the experiment is formally abandoned, it can be retired after retaining its evidence because the production rollback above remains available. |
