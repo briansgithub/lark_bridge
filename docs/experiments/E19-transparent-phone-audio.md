@@ -1,7 +1,8 @@
 # E19 — Can the appliance carry Pixel media and microphone audio transparently, not only during calls?
 
-- **Status:** In progress — transport/policy implementation and rapid live media acceptance are
-  complete; Step 3 rows 4/7/8 and all call/promotion gates remain open
+- **Status:** In progress — rapid live media acceptance and the Discord communication-transport
+  checkpoint are complete; rows 4/7, echo-suppression/far-end acoustics, soak, and promotion
+  remain open
 - **Resolves risk:** phone audio is usable only inside a call; media playback is not deterministically routed to the selected output
 - **Gates milestone:** transparent phone audio release
 - **Owner / date:** Claude (runtime model `claude-opus-5`), 2026-08-26
@@ -134,16 +135,16 @@ The preservation procedure was:
 |---|---|---|
 | 1 | Establish the isolated workspace | **COMPLETE** |
 | 2 | Static Bluetooth and audio architecture audit | **COMPLETE** |
-| 3 | Live Pixel and Pi capability characterization | **MEASURED 2026-08-27** — row 3 confirmed; rows 4, 7, 8 still open |
+| 3 | Live Pixel and Pi capability characterization | **MEASURED 2026-08-27** — rows 3 and 8 confirmed; row 4 open; row 7 supported but not proven |
 | 4 | Feasibility verdict and approved contract | **COMPLETE** — contract approved (provisional), ADR-0009 |
 | 5 | Encode the routing contract as tests | **COMPLETE** — historical red contract, now green |
 | 6 | Implement deterministic idle media routing | **IMPLEMENTED LOCALLY** — `b9e1b4f` |
-| 7 | Implement safe A2DP/HFP transitions | **IMPLEMENTED LOCALLY** — `b9e1b4f` |
+| 7 | Implement safe A2DP/HFP transitions | **IMPLEMENTED LOCALLY** — `b9e1b4f`; live HFP classifier correction `7235233` |
 | 8 | Integrate the approved idle microphone behavior | **IMPLEMENTED LOCALLY** — honest idle status; idle route remains unsupported |
 | 9 | Status, CLI, policy, installer, and documentation | **IMPLEMENTED LOCALLY** — `9ec30d7`, docs in progress |
-| 10 | Independent local regression and safety review | **IN PROGRESS** — transport clean; rapid runner under review |
+| 10 | Independent local regression and safety review | **COMPLETE FOR THIS CHECKPOINT** — 120 runner tests (1 host-capability skip), 330 bridge tests plus 39 subtests, Ruff, Black, and diff check pass |
 | 11 | Preserve the baseline image and deploy | **PRESERVATION COMPLETE; PRODUCTION DEPLOYMENT NOT STARTED** |
-| 12 | Abbreviated live acceptance test | **NOT STARTED** — wiring continuity only |
+| 12 | Abbreviated live acceptance test | **IN PROGRESS** — media and Discord transport/graph checkpoints measured; acoustic and promotion gates remain |
 | 13 | Final audit and release verdict | Not started |
 
 ## Step 1 — Establish the isolated workspace
@@ -791,9 +792,9 @@ These `PhoneTransport` values are orthogonal to the existing call-graph `State` 
 
 The A2DP transport, combined BlueZ profile, `a2dp-source` node identity, node-on-pause behavior,
 and `target.object` routing have now been measured on the Pixel 7a. Matrix row 3 is confirmed.
-Rows **4, 7 and 8** remain binding before promotion: second-app/notification behavior, an
-ordinary-recorder negative control, and a Discord positive communication control. Step 12 cannot
-pass and Step 13 cannot return `PASS` until they do.
+The later rapid-loop Discord checkpoint confirms row 8. Rows **4 and 7** remain binding before
+promotion: second-app/notification behavior and an ordinary-recorder negative control. Step 12
+cannot pass and Step 13 cannot return `PASS` until those and the remaining acceptance gates do.
 
 ### Status
 
@@ -1051,11 +1052,11 @@ Two honesty notes that keep this short of proof:
   consistent with the AOSP model and with E01, but it is weaker than a recorder app genuinely
   capturing.
 
-**No positive control was obtained in this session**: SCO was never observed opening, so
-"no transport" cannot yet be fully distinguished from "SCO is broken in this arrangement".
-`HeadsetService` reporting LarkBridge as `mActiveDevice` with `mAudioRouteAllowed: true` argues
-against the latter, but a Discord call remains outstanding and is the one thing that would settle
-it. **Matrix rows 7 and 8 stay open.**
+**No positive control was obtained in this characterization session**: SCO was never observed
+opening, so "no transport" could not yet be fully distinguished from "SCO is broken in this
+arrangement". `HeadsetService` reporting LarkBridge as `mActiveDevice` with
+`mAudioRouteAllowed: true` argued against the latter. The later rapid-loop Discord checkpoint
+below supplies the positive control and confirms row 8; row 7 remains supported but not proven.
 
 ### Robustness defects found in passing
 
@@ -1097,10 +1098,10 @@ does not change `/etc/larkbridge/DEPLOYED.json`, which continues to identify pro
 |---|---|---|
 | 3 | A2DP media active, routed to the selected output | **CONFIRMED** |
 | 4 | Notification / second-app audio | not exercised |
-| 7 | Ordinary app opens no microphone transport | **supported, not proven** — no positive control |
-| 8 | App communication session opens one | **OPEN** — needs the Discord call |
+| 7 | Ordinary app opens no microphone transport | **supported, not proven** — an ordinary app's active capture route has not yet been retained |
+| 8 | App communication session opens one | **CONFIRMED** — Discord opened SCO and the verified AEC/uplink graph |
 
-Rows 3, 4, 7 and 8 are the binding pre-deployment gate. Row 3 is met; 4, 7 and 8 are not.
+Rows 3, 4, 7 and 8 are the binding pre-deployment gate. Rows 3 and 8 are met; 4 and 7 are not.
 
 ## Rapid closed-loop media checkpoint — 2026-08-27
 
@@ -1139,6 +1140,17 @@ flat. After a clean development-session restart, the same immutable candidate
 | `20260827T234155Z-media-be38d43349-787d0cd69f2a` | 85.84 s | 41.23 dB | 30.0 s | 0.000% | 0 / 0 | 0 |
 | `20260827T234344Z-media-be38d43349-787d0cd69f2a` | 52.73 s | 40.99 dB | 29.4 s | 0.000% | 0 / 0 | 0 |
 
+A later arbitrary-song capture measured 38.86 dB above the same floor and was rejected solely by
+the original 40 dB threshold even though routing, clipping, service, USB/HCI, and PipeWire-counter
+checks were clean. Because catalog-mastering level and quiet passages are not controlled, the
+runner now separates two gates: calibrated/reference stimuli retain the required 40 dB electrical
+margin, while arbitrary YouTube Music uses a quick presence threshold of
+`max(calibrated floor + 20 dB, -55 dBFS)`. The same effective threshold classifies active program
+windows. This lower catalog threshold cannot satisfy reference-waveform continuity, calibration,
+AEC, far-end, soak, or promotion gates; those remain separate. Raising AUX from 0.95 to 1.00 would
+add only about 0.45 dB and would not have made that rejected capture reach 40 dB, so AUX remains at
+the measured unclipped 0.95 setting.
+
 Raw evidence remains ignored under `artifacts/e19-dev/iterations/`. The corresponding capture
 SHA-256 values are
 `fad4eea66f5239a9723e8bb3e54bec485537963d33e38d45b7a37bd8cd652f90` and
@@ -1151,5 +1163,89 @@ This arbitrary-song loop proves electrical level, clipping, deterministic routin
 scheduling continuity. It deliberately reports audible-dropout detection as
 `NOT_MEASURED_UNREFERENCED_SOURCE`: legitimate silence in catalog music cannot be distinguished
 from a dropout without a known reference waveform. A synthetic reference remains required for
-promotion-grade discontinuity scoring. Discord transition, post-AEC uplink, and true far-end
-validation remain open.
+promotion-grade discontinuity scoring. The Discord transition and post-AEC graph topology were
+measured later below; echo suppression and true far-end validation remain open.
+
+## Rapid Discord transport checkpoint — 2026-08-27
+
+The first live Discord call exposed a real classifier defect. Its HFP source is a BlueZ
+`headset-audio-gateway` stream whose `media.class` is also `Stream/Output/Audio`; the broad media
+test therefore mistook live HFP for A2DP, tore down the graph it had just built, and repeated the
+cycle. Commit `7235233` makes an explicit non-A2DP BlueZ profile override that ambiguous media
+class. The first two live proofs and acoustic smoke used immutable candidate
+`af84c58dcc-921ce47313f1` (revision `af84c58dcca1e9c873e343cc6bf997e2a8d0220d`), which contains
+that correction. After the long pause before the final cycle, the same Git ref was hot-staged
+again from a Git archive as runtime candidate `af84c58dcc-a1f2b4244b2b`. A later audit found that
+the earlier worktree package had included ignored tool-cache files. The tracked source revision
+and transport fix were unchanged, but the package byte sets and therefore candidate IDs were not
+identical. The runner now builds worktree candidates from tracked files plus explicitly allowed
+untracked files, excluding tool caches.
+
+Three complementary live proofs passed:
+
+1. **Supervisor-only hot proof.** With Discord's SCO transport already open, candidate supervisor
+   PID `258496` built generation 1 with native AEC owner PID `258557`, reported `ACTIVE` and phone
+   transport `CALL`, and held that verified state for **38.620 s** with `NRestarts=0`. Android
+   reported `com.discord` owning `MODE_IN_COMMUNICATION` and `SCO_STATE_ACTIVE_INTERNAL`. The graph
+   had exactly one uplink, `output.bridge.mic -> bluez_output.5C_33_7B_CB_BF_C5.1`. The selected
+   FIFINE fallback fed `echo-cancel-capture`; there was no physical-microphone-to-HFP bypass. The
+   hold duration came from an interactive watcher and is not retained in the hashed bundle.
+2. **Full-policy A2DP-to-Discord proof.** Session
+   `20260828T003518Z-af84c58dcc-921ce47313f1` started with the candidate's complete WirePlumber
+   policy and a verified YouTube Music A2DP route. Transition artifact
+   `20260828T003911Z-call` records `MEDIA_ACTIVE` before Discord and `ACTIVE` / `CALL` after Android
+   replaced A2DP with SCO. The same supervisor PID `266343` advanced to generation 2 with native
+   AEC owner PID `269910`; all six expected links were present, with no missing or unexpected
+   links. It then held for **41.132 s** with `NRestarts=0`, Android still reporting Discord
+   communication mode and active SCO, exactly one post-AEC uplink, and no physical-microphone
+   bypass. The transition and graph are retained; the later hold duration was an interactive
+   observation and is not retained in that artifact.
+3. **Uninterrupted full-cycle proof.** Artifact `20260828T031200Z-full-cycle` began with media node
+   `bluez_input.5C_33_7B_CB_BF_C5.2` routed only to AUX. Its `call.json` records that media node and
+   `transition_from_media_s=8.179`; the retained after-state is `ACTIVE` / `CALL`, generation 2,
+   supervisor PID `296574`, native AEC owner PID `297980`, and all six expected links with no
+   missing or unexpected links. The hashed `pw-dump` contains exactly one active input to the HFP
+   sink, from `output.bridge.mic`, and no direct physical-microphone bypass; SHA-256
+   `e069af63f679fda891a3606cbce9696887f7e97d929d29383cf7a8629e180e79` is the full call
+   snapshot's `pw-dump` output hash. Both retained post-call snapshots report `CALL_DOWN` /
+   `MEDIA_ACTIVE`, Android `MODE_NORMAL`, SCO inactive, and the `.2` node routed only to AUX. Their
+   service, system-service, and kernel-error evidence is byte-identical to the call snapshot.
+
+The first call's teardown watcher observed the HFP edge at `1787876820.0312885`; the next status
+publication was `CALL_DOWN` / `MEDIA_RESTORED_APP_PAUSED`, with the call graph removed. The full
+post-teardown Android snapshot was `MODE_NORMAL` with SCO inactive. This verifies honest paused
+history after one teardown; it does not claim Android resumed media. The retained artifact is
+`20260828T030926Z-manual-paused-hot`; its transition JSON and evidence-manifest SHA-256 values are
+`4b20c5ee4b20a8c2c7ca65ae312204f65d2fbdaf8d35ad449ce373267d957079` and
+`939f8210553d82690785b71c4db9c58e35f05e4788f04321ddd87796763cfa58`.
+
+While the second call remained stable, near-end smoke artifact
+`20260828T004420Z-af84c58dcc-921ce47313f1` also passed. The user confirmed the GeneralPlus output
+was feeding the fixed speaker aimed at the selected FIFINE. The raw and clean taps were 48 kHz,
+mono, S16 PCM and approximately 21.5 seconds long. The known near-end stimulus measured
+`-45.35 dBFS` correlated in raw (`r=0.3779`) and `-42.89 dBFS` correlated post-AEC (`r=0.5021`),
+with 0.000% clipping in both captures. The scorer reported `-2.46 dB` preservation loss, meaning
+the clean correlated level was 2.46 dB higher than raw. Together with the contemporaneous verified
+call graph, this proves that the selected microphone's near-end signal traversed the post-AEC path
+without being lost. The scorer explicitly reports
+`NOT_MEASURED_USE_SEPARATE_SPEAKER_MODE_FIXTURE` for echo suppression: this near-end-only smoke
+does not measure the 10 dB far-end echo-suppression gate.
+
+One audible 1 kHz-tone attempt is explicitly **invalid evidence**: the preceding full-policy
+session start had failed and completed its rollback, so the adapter was on the deployed baseline
+that did not advertise `Audio Sink`. Hearing that tone from the Pixel speaker therefore says
+nothing about candidate A2DP routing.
+
+The transition JSON and its evidence manifest remain ignored under `artifacts/e19-dev/transitions/`;
+their SHA-256 values are
+`1cfa479d1ec5bd78249378ae6af704f9ff9310059b5145338a90a276a169eec4` and
+`739ac016904a43390e4f878f1e45dd7228e51f1fdaadccf5b3c71e0206b07d2a`. The call-smoke JSON and
+evidence-manifest SHA-256 values are
+`da1e6aa9f3f8b97061fae71381e51c47c54e7f1806f448d3978af1d958a31448` and
+`4a48d8c962d31704897f2e99a31d4fae1612bb416543947da2ce789555388364`. The uninterrupted-cycle
+evidence-manifest SHA-256 is
+`d63d843a00be9b940a9ec51483593f0ce01379b60657d9e31124583c0700ccdb`. These measurements confirm
+the Discord positive control, the earlier targeted transitions plus one uninterrupted
+media-to-call-to-media cycle, a separate paused-history teardown, post-AEC graph topology, and
+near-end preservation. They do **not** constitute measured echo suppression, true far-end
+validation, three transition cycles, live-Lark qualification, soak, or promotion.
