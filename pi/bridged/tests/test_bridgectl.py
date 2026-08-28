@@ -59,8 +59,10 @@ class SelectorTests(unittest.TestCase):
         self.assertEqual(bridgectl.resolve_selector("wired", ALL), WIRED)
 
     def test_ambiguity_is_refused_rather_than_guessed(self) -> None:
-        pair = [candidate("a2dp:AA:AA:AA:AA:AA:AA", "Kitchen speaker"),
-                candidate("a2dp:BB:BB:BB:BB:BB:BB", "Bedroom speaker")]
+        pair = [
+            candidate("a2dp:AA:AA:AA:AA:AA:AA", "Kitchen speaker"),
+            candidate("a2dp:BB:BB:BB:BB:BB:BB", "Bedroom speaker"),
+        ]
         with self.assertRaises(SystemExit) as caught:
             bridgectl.resolve_selector("speaker", pair)
         self.assertIn("ambiguous", str(caught.exception))
@@ -176,6 +178,33 @@ class StatusParsingTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             bridgectl.main(["phone", "set"])
 
+    def test_phone_status_reports_verified_usb_uplink_separately_from_android_truth(self) -> None:
+        status = {
+            "phone": {
+                "connected": False,
+                "transport": "ABSENT",
+                "media_routed": False,
+                "android_microphone_transport": False,
+                "microphone_transport_reason": (
+                    "Pi USB uplink is active; Android endpoint consumption is not observable"
+                ),
+                "usb_microphone_uplink": {
+                    "state": "ACTIVE",
+                    "route_verified": True,
+                },
+            }
+        }
+        output = StringIO()
+        with (
+            mock.patch.object(bridgectl, "read_status", return_value=status),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(bridgectl.do_phone_status(Namespace(json=False)), 0)
+        report = output.getvalue()
+        self.assertIn("USB uplink ACTIVE (verified)", report)
+        self.assertIn("not observable", report)
+        self.assertNotIn("Android microphone transport open", report)
+
     def test_degraded_phone_status_prints_the_actionable_failure(self) -> None:
         status = {
             "phone": {
@@ -238,12 +267,8 @@ class SelectionSafetyTests(unittest.TestCase):
         args = Namespace(selector="boombox", connect=True, force=False, chime=False)
         with (
             mock.patch.object(bridgectl, "read_status", return_value=status),
-            mock.patch.object(
-                bridgectl.btadapters, "adapter_by_address", return_value=adapter
-            ),
-            mock.patch.object(
-                bridgectl.btadapters, "pin_to_adapter", return_value=failed
-            ),
+            mock.patch.object(bridgectl.btadapters, "adapter_by_address", return_value=adapter),
+            mock.patch.object(bridgectl.btadapters, "pin_to_adapter", return_value=failed),
             mock.patch.object(bridgectl.supervisor, "write_desire") as write_desire,
         ):
             self.assertEqual(bridgectl.do_set(args), 1)
@@ -372,9 +397,10 @@ node_latency_frames = 1920
             BOOMBOX["id"],
         )
         command = run.call_args.args[0]
-        self.assertEqual(command[:5], [
-            "sudo", "-n", "python3", str(Path("/installed/lark_state.py")), "config-write"
-        ])
+        self.assertEqual(
+            command[:5],
+            ["sudo", "-n", "python3", str(Path("/installed/lark_state.py")), "config-write"],
+        )
 
     def test_failed_live_mirror_rolls_the_persistent_pointer_back(self) -> None:
         commits = []

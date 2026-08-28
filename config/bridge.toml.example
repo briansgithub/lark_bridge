@@ -107,6 +107,21 @@ output_gain_db = 0.0
 wired_output_volume = 0.95
 
 
+[audio.usb_uplink]
+# Experimental system-wide Android microphone path. This continuously feeds whichever
+# Lark/FIFINE candidate the supervisor selected to the named Pi output. Connect that output
+# to the microphone input of a USB audio device attached to the Pixel. Android then sees one
+# ordinary USB microphone, independent of which physical microphone the Pi selected.
+#
+# Default-off because this repurposes the output as an uplink. HFP communication and Bluetooth
+# A2DP media preempt it automatically; source changes are break-before-make. `level = 0.60`
+# is the first live Pixel/GeneralPlus setting that was clearly louder than 0.20 with improved
+# voice-to-noise ratio and no reported distortion. It remains a fixture-specific starting point.
+enabled = false
+target = "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+level = 0.60
+
+
 [audio.sidetone]
 # Hear your own voice in the output. Off by default; some people find it essential and
 # others find it maddening.

@@ -108,6 +108,18 @@ class PhoneTransport(str, Enum):
     DEGRADED = "DEGRADED"
 
 
+class UsbUplinkState(str, Enum):
+    """State of the optional selected-microphone feed to an analog USB bridge."""
+
+    DISABLED = "DISABLED"
+    WAITING_MIC = "WAITING_MIC"
+    STARTING = "STARTING"
+    SWITCHING = "SWITCHING"
+    ACTIVE = "ACTIVE"
+    SUSPENDED = "SUSPENDED"
+    DEGRADED = "DEGRADED"
+
+
 @dataclass(frozen=True)
 class AecSettings:
     enabled: bool = False
@@ -128,6 +140,15 @@ class AecSettings:
     # trials, so that is the default here rather than a bench-only override.
     node_latency_frames: int | None = 1920
     play_delay_frames: int | None = None
+
+
+@dataclass(frozen=True)
+class UsbUplinkSettings:
+    """Opt-in AUX feed used to prototype a system-wide Android USB microphone."""
+
+    enabled: bool = False
+    target: str | None = None
+    level: float = 0.60
 
 
 @dataclass(frozen=True)
@@ -159,6 +180,7 @@ class Settings:
     microphone_candidates: tuple[Any, ...] = ()
     mic_gain_db: float | None = None
     mic_muted: bool | None = None
+    usb_uplink: UsbUplinkSettings = UsbUplinkSettings()
 
     @property
     def hfp_sink(self) -> str:
@@ -321,6 +343,29 @@ def load_settings(path: Path | None = None) -> Settings:
         raise ValueError("audio.mic_gain_db must be finite")
     mic_muted = toml_bool(audio_data, "mic_muted", False)
 
+    usb_uplink_data = audio_data.get("usb_uplink") or {}
+    if not isinstance(usb_uplink_data, dict):
+        raise TypeError("audio.usb_uplink must be a TOML table")
+    usb_uplink_enabled = toml_bool(usb_uplink_data, "enabled", False)
+    if "BRIDGE_USB_UPLINK_ENABLED" in os.environ:
+        usb_uplink_enabled = parse_bool(os.environ["BRIDGE_USB_UPLINK_ENABLED"])
+    raw_usb_uplink_level = usb_uplink_data.get("level", 0.60)
+    if "BRIDGE_USB_UPLINK_LEVEL" in os.environ:
+        raw_usb_uplink_level = os.environ["BRIDGE_USB_UPLINK_LEVEL"]
+        try:
+            raw_usb_uplink_level = float(raw_usb_uplink_level)
+        except ValueError as exc:
+            raise TypeError("BRIDGE_USB_UPLINK_LEVEL must be a number") from exc
+    if isinstance(raw_usb_uplink_level, bool) or not isinstance(raw_usb_uplink_level, (int, float)):
+        raise TypeError("audio.usb_uplink.level must be a number")
+    usb_uplink_level = float(raw_usb_uplink_level)
+    if not math.isfinite(usb_uplink_level) or not 0.0 < usb_uplink_level <= 1.0:
+        raise ValueError("audio.usb_uplink.level must be greater than 0 and at most 1")
+    usb_uplink_target = str(usb_uplink_data.get("target", "") or "").strip() or None
+    usb_uplink_target = (
+        os.environ.get("BRIDGE_USB_UPLINK_TARGET", usb_uplink_target or "").strip() or None
+    )
+
     # The resolver owns microphone schema/precedence. Keep this import local because a few
     # measurement tools load this module by path only to reuse NativeAecHost.
     import microphones as microphones_module
@@ -422,6 +467,7 @@ def load_settings(path: Path | None = None) -> Settings:
         raise ValueError("Bluetooth/A2DP output requires a configured output role")
 
     status_value = os.environ.get("BRIDGE_STATUS")
+    wired_output = os.environ.get("BRIDGE_WIRED_OUT", DEFAULT_WIRED_OUT)
     return Settings(
         aec=AecSettings(
             enabled=enabled,
@@ -447,7 +493,7 @@ def load_settings(path: Path | None = None) -> Settings:
             if configured_lark is not None and configured_lark.alsa_component
             else os.environ.get("BRIDGE_LARK_COMPONENT", DEFAULT_LARK_COMPONENT)
         ),
-        wired_output=os.environ.get("BRIDGE_WIRED_OUT", DEFAULT_WIRED_OUT),
+        wired_output=wired_output,
         phone_mac=(phone_override or phone).upper(),
         status_path=Path(status_value) if status_value else default_status_path(),
         config_path=config_path,
@@ -460,6 +506,11 @@ def load_settings(path: Path | None = None) -> Settings:
         microphone_candidates=microphone_candidates,
         mic_gain_db=mic_gain_db,
         mic_muted=mic_muted,
+        usb_uplink=UsbUplinkSettings(
+            enabled=usb_uplink_enabled,
+            target=usb_uplink_target or wired_output,
+            level=usb_uplink_level,
+        ),
     )
 
 
@@ -1486,6 +1537,28 @@ def set_and_verify_microphone_control(
     return True, observed_db, observed_muted, None
 
 
+def wait_for_microphone_control(
+    nodes: NodeMap,
+    node: str,
+    gain_db: float,
+    muted: bool,
+    *,
+    timeout_seconds: float = 1.0,
+    retry_seconds: float = 0.02,
+) -> tuple[bool, float | None, bool | None, str | None]:
+    """Retry the transient zero-dB readback seen while a new stream activates."""
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        result = set_and_verify_microphone_control(nodes, node, gain_db, muted)
+        if result[0]:
+            return result
+        error = result[3] or ""
+        activation_mismatch = "microphone control mismatch" in error and "observed 0.00 dB" in error
+        if not activation_mismatch or time.monotonic() >= deadline:
+            return result
+        time.sleep(retry_seconds)
+
+
 class Loopback:
     """A child pw-loopback with explicit, continuously verified targets."""
 
@@ -1496,6 +1569,7 @@ class Loopback:
         self.channels = channels
         self.proc: subprocess.Popen[str] | None = None
         self.defer_playback = False
+        self.use_passive_properties = True
 
     @property
     def out_node(self) -> str:
@@ -1520,15 +1594,21 @@ class Loopback:
             self.capture,
             "--channels",
             str(self.channels),
-            "--capture-props",
-            "{ node.dont-reconnect = true node.passive = true }",
-            "--playback-props",
-            (
-                "{ node.dont-reconnect = true node.passive = true " "node.autoconnect = false }"
-                if self.defer_playback
-                else "{ node.dont-reconnect = true node.passive = true }"
-            ),
         ]
+        if self.use_passive_properties:
+            command.extend(
+                [
+                    "--capture-props",
+                    "{ node.dont-reconnect = true node.passive = true }",
+                    "--playback-props",
+                    (
+                        "{ node.dont-reconnect = true node.passive = true "
+                        "node.autoconnect = false }"
+                        if self.defer_playback
+                        else "{ node.dont-reconnect = true node.passive = true }"
+                    ),
+                ]
+            )
         if not self.defer_playback:
             command[command.index("--channels") : command.index("--channels")] = [
                 "--playback",
@@ -1556,6 +1636,262 @@ class Loopback:
                 self.proc.kill()
                 self.proc.wait(timeout=5)
         self.proc = None
+
+
+class UsbMicrophoneUplink:
+    """Continuously feed the selected microphone to an analog-to-USB phone bridge.
+
+    The Pi cannot observe whether Android has opened the USB capture endpoint. This owner
+    therefore reports only the part it can prove: one selected physical source, one
+    controlled loopback, and one exact AUX target. HFP and Bluetooth media always preempt
+    the feed because they already own the microphone or the same physical AUX output.
+    """
+
+    NAME = "bridge.phone-usb-uplink"
+
+    def __init__(self, settings: UsbUplinkSettings):
+        self.settings = settings
+        self.route: Loopback | None = None
+        self.selected_token: Any = None
+        self.state = UsbUplinkState.WAITING_MIC if settings.enabled else UsbUplinkState.DISABLED
+        self.started_at = 0.0
+        self.control_primed = False
+        self.verified = False
+        self.waiting_for_cleanup = False
+        self.observed_gain_db: float | None = None
+        self.observed_muted: bool | None = None
+        self.failure_reason: str | None = None
+        self.transition_reason = (
+            "waiting for a selected microphone"
+            if settings.enabled
+            else "USB microphone uplink is disabled"
+        )
+
+    @property
+    def in_node(self) -> str:
+        return f"input.{self.NAME}"
+
+    @property
+    def out_node(self) -> str:
+        return f"output.{self.NAME}"
+
+    @property
+    def control_node(self) -> str:
+        # Live PipeWire 1.4.2 testing showed that the capture/input stream accepts wpctl
+        # gain and mute while the playback/output stream reports success but retains 1.00.
+        return self.in_node
+
+    @property
+    def gain_db(self) -> float:
+        return 20.0 * math.log10(self.settings.level)
+
+    def related_links(self, links: LinkList) -> LinkList:
+        return [pair for pair in links if pair[0] == self.out_node or pair[1] == self.in_node]
+
+    def stop(
+        self,
+        reason: str,
+        *,
+        state: UsbUplinkState,
+        failure: str | None = None,
+    ) -> bool:
+        had_route = self.route is not None
+        if self.route is not None:
+            self.route.stop(reason)
+        self.route = None
+        self.selected_token = None
+        self.started_at = 0.0
+        self.control_primed = False
+        self.verified = False
+        self.observed_gain_db = None
+        self.observed_muted = None
+        self.waiting_for_cleanup = self.waiting_for_cleanup or had_route
+        self.state = state
+        self.failure_reason = failure
+        self.transition_reason = reason
+        return had_route
+
+    def shutdown(self, reason: str) -> None:
+        self.stop(reason, state=UsbUplinkState.DISABLED)
+        self.waiting_for_cleanup = False
+
+    def tick(
+        self,
+        nodes: NodeMap,
+        links: LinkList,
+        selected: str | None,
+        token: Any,
+        *,
+        blocked: bool,
+        call_up: bool,
+        bluetooth_media_present: bool,
+    ) -> bool:
+        """Reconcile the feed and return whether a conflicting owner must wait."""
+
+        stale = bool(self.related_links(links))
+        if not self.settings.enabled:
+            self.stop(
+                "USB microphone uplink is disabled",
+                state=UsbUplinkState.DISABLED,
+            )
+            self.waiting_for_cleanup = stale
+            return False
+
+        if call_up or bluetooth_media_present:
+            owner = "HFP communication" if call_up else "Bluetooth media"
+            self.stop(
+                f"suspended while {owner} owns the audio path",
+                state=UsbUplinkState.SUSPENDED,
+            )
+            self.waiting_for_cleanup = stale
+            return stale
+
+        if blocked:
+            reason = "microphone selection is blocked"
+            self.stop(reason, state=UsbUplinkState.DEGRADED, failure=reason)
+            self.waiting_for_cleanup = stale
+            return False
+
+        target = self.settings.target
+        if target is None or target not in nodes:
+            reason = f"USB uplink target is unavailable: {target or '<unset>'}"
+            self.stop(reason, state=UsbUplinkState.DEGRADED, failure=reason)
+            self.waiting_for_cleanup = stale
+            return False
+
+        if selected is None or selected not in nodes:
+            reason = "waiting for a selected microphone"
+            self.stop(reason, state=UsbUplinkState.WAITING_MIC)
+            self.waiting_for_cleanup = stale
+            return False
+
+        if self.route is not None and (
+            self.route.capture != selected
+            or self.route.playback != target
+            or self.selected_token != token
+        ):
+            self.stop(
+                "selected microphone generation changed; breaking the old USB uplink",
+                state=UsbUplinkState.SWITCHING,
+            )
+            return True
+
+        if self.waiting_for_cleanup:
+            if stale:
+                self.state = UsbUplinkState.SWITCHING
+                self.transition_reason = "waiting for the old USB uplink links to disappear"
+                return True
+            self.waiting_for_cleanup = False
+
+        if self.route is None:
+            self.route = Loopback(self.NAME, selected, target, 1)
+            # This is an always-bound analog feed. On PipeWire 1.4.2, passive stream
+            # properties make its input-side gain read-only at unity; the conventional
+            # fully bound pw-loopback has been verified to retain the requested level.
+            self.route.use_passive_properties = False
+            self.route.start()
+            self.selected_token = token
+            self.started_at = time.monotonic()
+            self.state = UsbUplinkState.STARTING
+            self.failure_reason = None
+            self.transition_reason = "starting the selected-microphone USB uplink"
+            return False
+
+        if not self.route.running:
+            reason = "USB uplink loopback exited"
+            self.stop(reason, state=UsbUplinkState.DEGRADED, failure=reason)
+            return False
+
+        expected = {(selected, self.in_node), (self.out_node, target)}
+        related = set(self.related_links(links))
+        wrong = related - expected
+        if wrong:
+            for source, destination in sorted(wrong):
+                unlink(source, destination)
+            self.verified = False
+            self.state = UsbUplinkState.SWITCHING
+            self.transition_reason = "removing a duplicate or wrong-target USB uplink"
+            return True
+
+        if self.in_node not in nodes or self.out_node not in nodes:
+            if time.monotonic() - self.started_at > BUILD_TIMEOUT_SECONDS:
+                reason = "USB uplink nodes did not appear before timeout"
+                self.stop(reason, state=UsbUplinkState.DEGRADED, failure=reason)
+            return False
+
+        if related != expected:
+            if time.monotonic() - self.started_at > BUILD_TIMEOUT_SECONDS:
+                reason = "USB uplink links did not verify before timeout"
+                self.stop(reason, state=UsbUplinkState.DEGRADED, failure=reason)
+            return False
+
+        if not self.control_primed:
+            # PipeWire 1.4.2 retains input-side stream controls only after pw-loopback has
+            # started with both endpoints bound. Apply the level after both links verify.
+            ok, gain, muted, error = wait_for_microphone_control(
+                nodes,
+                self.control_node,
+                self.gain_db,
+                False,
+            )
+            self.observed_gain_db = gain
+            self.observed_muted = muted
+            if not ok:
+                unlink(self.out_node, target)
+                reason = error or "USB uplink gain could not be applied"
+                self.stop(reason, state=UsbUplinkState.DEGRADED, failure=reason)
+                return False
+            self.control_primed = True
+            self.transition_reason = "USB uplink level applied; awaiting a fresh graph snapshot"
+            return False
+
+        if not self.verified:
+            ok, gain, muted, error = set_and_verify_microphone_control(
+                nodes,
+                self.control_node,
+                self.gain_db,
+                False,
+            )
+            self.observed_gain_db = gain
+            self.observed_muted = muted
+            if not ok:
+                reason = error or "USB uplink gain could not be verified"
+                self.stop(reason, state=UsbUplinkState.DEGRADED, failure=reason)
+                return False
+            self.verified = True
+            log.info("USB microphone uplink ACTIVE: %s -> %s", selected, target)
+
+        self.state = UsbUplinkState.ACTIVE
+        self.failure_reason = None
+        self.transition_reason = "selected microphone has one verified feed to the USB bridge"
+        return False
+
+    def status(self, links: LinkList, report: dict[str, Any] | None) -> dict[str, Any]:
+        selected = (report or {}).get("selected") or {}
+        expected: LinkList = []
+        if self.route is not None:
+            expected = [
+                (self.route.capture, self.in_node),
+                (self.out_node, self.route.playback),
+            ]
+        return {
+            "enabled": self.settings.enabled,
+            "state": self.state.value,
+            "selected_microphone_id": selected.get("id") if isinstance(selected, dict) else None,
+            "selected_microphone_node": (
+                selected.get("node") if isinstance(selected, dict) else None
+            ),
+            "target": self.settings.target,
+            "level": self.settings.level,
+            "observed_gain_db": self.observed_gain_db,
+            "observed_muted": self.observed_muted,
+            "route_verified": self.verified and all(pair in links for pair in expected),
+            "expected_links": expected,
+            "missing_links": [pair for pair in expected if pair not in links],
+            "android_endpoint_observed": None,
+            "transition_reason": self.transition_reason,
+            "failure_reason": self.failure_reason,
+        }
 
 
 def spa_string(value: str) -> str:
@@ -1786,6 +2122,7 @@ def lark_node_from_report(report: dict[str, Any] | None) -> str | None:
 class CallGraph:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.usb_uplink = UsbMicrophoneUplink(settings.usb_uplink)
         self.state = State.CALL_DOWN
         self.generation = 0
         self.signature: tuple[Any, ...] | None = None
@@ -2684,6 +3021,23 @@ class CallGraph:
             # retry a prior failure; subsequent same-generation ticks must preserve it.
             self.phone_failure_reason = None
             self.phone_transport = PhoneTransport.SWITCHING
+        usb_conflict_wait = self.usb_uplink.tick(
+            nodes,
+            links,
+            selected,
+            token,
+            blocked=blocked,
+            call_up=call_up,
+            bluetooth_media_present=bool(media_candidates),
+        )
+        if usb_conflict_wait and (call_up or media_candidates):
+            if call_up:
+                self.state = State.SWITCHING
+                self.phone_transport = PhoneTransport.SWITCHING
+                self.phone_transition_reason = (
+                    "waiting for the USB microphone uplink to release AUX before communication"
+                )
+            return
         media_volume_ready = True
         if connected and binding_accepted and not call_up:
             media_volume_ready = self.ensure_media_target_volume(nodes)
@@ -3013,6 +3367,7 @@ class CallGraph:
         actual_lark = lark_node_from_report(report)
         if actual_lark is None and self.microphone_report is None:
             actual_lark = selected
+        usb_uplink = self.usb_uplink.status(links, report)
         return {
             "timestamp": time.time(),
             "state": self.state.value,
@@ -3033,11 +3388,22 @@ class CallGraph:
                     None
                     if android_microphone_transport
                     else (
-                        "Android has not opened an HFP/SCO communication transport"
+                        (
+                            "Pi USB uplink is active; Android endpoint consumption is not "
+                            "observable from the Pi"
+                            if usb_uplink["route_verified"]
+                            else "Android has not opened an HFP/SCO communication transport"
+                        )
                         if connected
-                        else "configured phone is disconnected"
+                        else (
+                            "Pi USB uplink is active; Android endpoint consumption is not "
+                            "observable from the Pi"
+                            if usb_uplink["route_verified"]
+                            else "configured phone is disconnected"
+                        )
                     )
                 ),
+                "usb_microphone_uplink": usb_uplink,
                 "transition_reason": self.phone_transition_reason,
                 "failure_reason": self.phone_failure_reason,
                 "target_volume": {
@@ -3248,6 +3614,11 @@ def main() -> int:
         links = pw_links()
         observed_desire = desire_stamp()
         if nodes is None or links is None:
+            graph.usb_uplink.stop(
+                "PipeWire graph could not be inspected",
+                state=UsbUplinkState.DEGRADED,
+                failure="PipeWire graph could not be inspected",
+            )
             graph.fail(
                 "PipeWire graph could not be inspected",
                 phone_connected=raw_phone_connected,
@@ -3355,6 +3726,7 @@ def main() -> int:
         )
 
     lark_liveness.close()
+    graph.usb_uplink.shutdown("supervisor shutting down")
     graph.teardown("supervisor shutting down")
     graph.state = State.CALL_DOWN
     graph.phone_transport = PhoneTransport.ABSENT

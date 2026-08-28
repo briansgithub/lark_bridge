@@ -160,6 +160,51 @@ wired_output_volume = 0.85
             with self.assertRaisesRegex(TypeError, "mic_gain_db"):
                 supervisor.load_settings(config)
 
+    def test_usb_uplink_settings_load_explicit_target_and_level(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "bridge.toml"
+            config.write_text(
+                """
+[audio.usb_uplink]
+enabled = true
+target = "alsa_output.platform-test.stereo"
+level = 0.60
+""",
+                encoding="utf-8",
+            )
+            settings = supervisor.load_settings(config)
+        self.assertTrue(settings.usb_uplink.enabled)
+        self.assertEqual(settings.usb_uplink.target, "alsa_output.platform-test.stereo")
+        self.assertEqual(settings.usb_uplink.level, 0.60)
+
+    def test_usb_uplink_level_must_be_a_positive_linear_value(self) -> None:
+        for value in ("0.0", "1.01", '"loud"'):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                config = Path(directory) / "bridge.toml"
+                config.write_text(
+                    f"[audio.usb_uplink]\nenabled = true\nlevel = {value}\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaises((TypeError, ValueError)):
+                    supervisor.load_settings(config)
+
+    def test_usb_uplink_environment_enables_a_volatile_candidate(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.dict(
+                os.environ,
+                {
+                    "BRIDGE_USB_UPLINK_ENABLED": "true",
+                    "BRIDGE_USB_UPLINK_TARGET": "alsa_output.platform-live.stereo",
+                    "BRIDGE_USB_UPLINK_LEVEL": "0.60",
+                },
+            ),
+        ):
+            settings = supervisor.load_settings(Path(directory) / "missing.toml")
+        self.assertTrue(settings.usb_uplink.enabled)
+        self.assertEqual(settings.usb_uplink.target, "alsa_output.platform-live.stereo")
+        self.assertEqual(settings.usb_uplink.level, 0.60)
+
 
 class ControllerBindingTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -435,6 +480,172 @@ class FakeLoopback:
             self.out_node,
             self.playback,
         ) in links
+
+
+class UsbMicrophoneUplinkTests(unittest.TestCase):
+    SOURCE = "alsa_input.usb-fifine.mono"
+    OTHER_SOURCE = "alsa_input.usb-lark.stereo"
+    TARGET = "alsa_output.platform-aux.stereo"
+
+    def uplink(self) -> supervisor.UsbMicrophoneUplink:
+        return supervisor.UsbMicrophoneUplink(
+            supervisor.UsbUplinkSettings(enabled=True, target=self.TARGET, level=0.60)
+        )
+
+    def base_nodes(self) -> dict[str, dict]:
+        return {self.SOURCE: {}, self.OTHER_SOURCE: {}, self.TARGET: {}}
+
+    def test_default_disabled_uplink_creates_no_route(self) -> None:
+        uplink = supervisor.UsbMicrophoneUplink(supervisor.UsbUplinkSettings())
+        uplink.tick(
+            self.base_nodes(),
+            [],
+            self.SOURCE,
+            "token-1",
+            blocked=False,
+            call_up=False,
+            bluetooth_media_present=False,
+        )
+        self.assertEqual(uplink.state, supervisor.UsbUplinkState.DISABLED)
+        self.assertIsNone(uplink.route)
+
+    def test_selected_microphone_is_levelled_then_verified_active(self) -> None:
+        uplink = self.uplink()
+        nodes = self.base_nodes()
+        with mock.patch.object(supervisor, "Loopback", FakeLoopback):
+            uplink.tick(
+                nodes,
+                [],
+                self.SOURCE,
+                "token-1",
+                blocked=False,
+                call_up=False,
+                bluetooth_media_present=False,
+            )
+        self.assertIsNotNone(uplink.route)
+        assert uplink.route is not None
+        self.assertFalse(uplink.route.use_passive_properties)
+        self.assertEqual(uplink.state, supervisor.UsbUplinkState.STARTING)
+
+        nodes[uplink.in_node] = {"object.id": 80}
+        nodes[uplink.out_node] = {"object.id": 81}
+        capture_link = (self.SOURCE, uplink.in_node)
+        playback_link = (uplink.out_node, self.TARGET)
+        with mock.patch.object(
+            supervisor,
+            "wait_for_microphone_control",
+            return_value=(True, uplink.gain_db, False, None),
+        ) as control:
+            uplink.tick(
+                nodes,
+                [capture_link, playback_link],
+                self.SOURCE,
+                "token-1",
+                blocked=False,
+                call_up=False,
+                bluetooth_media_present=False,
+            )
+        control.assert_called_once_with(nodes, uplink.control_node, uplink.gain_db, False)
+
+        with mock.patch.object(
+            supervisor,
+            "set_and_verify_microphone_control",
+            return_value=(True, uplink.gain_db, False, None),
+        ) as control:
+            uplink.tick(
+                nodes,
+                [capture_link, playback_link],
+                self.SOURCE,
+                "token-1",
+                blocked=False,
+                call_up=False,
+                bluetooth_media_present=False,
+            )
+        control.assert_called_once_with(nodes, uplink.control_node, uplink.gain_db, False)
+        self.assertEqual(uplink.state, supervisor.UsbUplinkState.ACTIVE)
+        self.assertTrue(uplink.verified)
+        self.assertTrue(uplink.status([capture_link, playback_link], {})["route_verified"])
+
+    def test_source_change_is_break_before_make(self) -> None:
+        uplink = self.uplink()
+        with mock.patch.object(supervisor, "Loopback", FakeLoopback):
+            uplink.tick(
+                self.base_nodes(),
+                [],
+                self.SOURCE,
+                "token-1",
+                blocked=False,
+                call_up=False,
+                bluetooth_media_present=False,
+            )
+            wait = uplink.tick(
+                self.base_nodes(),
+                [(self.SOURCE, uplink.in_node)],
+                self.OTHER_SOURCE,
+                "token-2",
+                blocked=False,
+                call_up=False,
+                bluetooth_media_present=False,
+            )
+            self.assertTrue(wait)
+            self.assertIsNone(uplink.route)
+            self.assertEqual(uplink.state, supervisor.UsbUplinkState.SWITCHING)
+            uplink.tick(
+                self.base_nodes(),
+                [],
+                self.OTHER_SOURCE,
+                "token-2",
+                blocked=False,
+                call_up=False,
+                bluetooth_media_present=False,
+            )
+        self.assertIsNotNone(uplink.route)
+        assert uplink.route is not None
+        self.assertEqual(uplink.route.capture, self.OTHER_SOURCE)
+
+    def test_hfp_and_bluetooth_media_preempt_the_aux_uplink(self) -> None:
+        for owner in ("call", "media"):
+            with self.subTest(owner=owner), mock.patch.object(supervisor, "Loopback", FakeLoopback):
+                uplink = self.uplink()
+                uplink.tick(
+                    self.base_nodes(),
+                    [],
+                    self.SOURCE,
+                    "token-1",
+                    blocked=False,
+                    call_up=False,
+                    bluetooth_media_present=False,
+                )
+                wait = uplink.tick(
+                    self.base_nodes(),
+                    [
+                        (self.SOURCE, uplink.in_node),
+                        (uplink.out_node, self.TARGET),
+                    ],
+                    self.SOURCE,
+                    "token-1",
+                    blocked=False,
+                    call_up=owner == "call",
+                    bluetooth_media_present=owner == "media",
+                )
+                self.assertTrue(wait)
+                self.assertIsNone(uplink.route)
+                self.assertEqual(uplink.state, supervisor.UsbUplinkState.SUSPENDED)
+
+    def test_missing_target_is_degraded_not_active(self) -> None:
+        uplink = self.uplink()
+        nodes = {self.SOURCE: {}}
+        uplink.tick(
+            nodes,
+            [],
+            self.SOURCE,
+            "token-1",
+            blocked=False,
+            call_up=False,
+            bluetooth_media_present=False,
+        )
+        self.assertEqual(uplink.state, supervisor.UsbUplinkState.DEGRADED)
+        self.assertIn("unavailable", uplink.failure_reason or "")
 
 
 class WiredVolumeTests(unittest.TestCase):
@@ -1499,6 +1710,19 @@ class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
         self.assertIn("node.autoconnect = false", playback_props)
         self.assertNotIn("--playback", command)
 
+    def test_loopback_can_use_conventional_bound_streams_for_usb_uplink(self) -> None:
+        process = mock.Mock()
+        process.poll.return_value = None
+        with mock.patch.object(supervisor.subprocess, "Popen", return_value=process) as popen:
+            loopback = supervisor.Loopback("bridge.usb", "capture", "playback", 1)
+            loopback.use_passive_properties = False
+            loopback.start()
+        command = popen.call_args.args[0]
+        self.assertEqual(command[command.index("--capture") + 1], "capture")
+        self.assertEqual(command[command.index("--playback") + 1], "playback")
+        self.assertNotIn("--capture-props", command)
+        self.assertNotIn("--playback-props", command)
+
     def test_microphone_gain_and_mute_are_set_then_read_back(self) -> None:
         replies = [
             mock.Mock(returncode=0, stdout="", stderr=""),
@@ -1518,6 +1742,55 @@ class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
         self.assertTrue(result[2])
         self.assertEqual(run.call_args_list[0].args[0], ["wpctl", "set-mute", "77", "1"])
         self.assertEqual(run.call_args_list[-1].args[0], ["wpctl", "get-volume", "77"])
+
+    def test_microphone_control_waits_for_stream_activation(self) -> None:
+        mismatch = (
+            False,
+            0.0,
+            False,
+            (
+                "microphone control mismatch: desired -4.44 dB/muted=False, "
+                "observed 0.00 dB/muted=False"
+            ),
+        )
+        applied = (True, -4.44, False, None)
+        with (
+            mock.patch.object(
+                supervisor,
+                "set_and_verify_microphone_control",
+                side_effect=[mismatch, applied],
+            ) as control,
+            mock.patch.object(supervisor.time, "sleep") as sleep,
+        ):
+            result = supervisor.wait_for_microphone_control(
+                {"input.bridge.phone-usb-uplink": {"object.id": 100}},
+                "input.bridge.phone-usb-uplink",
+                -4.44,
+                False,
+            )
+        self.assertEqual(result, applied)
+        self.assertEqual(control.call_count, 2)
+        sleep.assert_called_once_with(0.02)
+
+    def test_microphone_control_wait_does_not_retry_command_failure(self) -> None:
+        failed = (False, None, None, "microphone control failed: unavailable")
+        with (
+            mock.patch.object(
+                supervisor,
+                "set_and_verify_microphone_control",
+                return_value=failed,
+            ) as control,
+            mock.patch.object(supervisor.time, "sleep") as sleep,
+        ):
+            result = supervisor.wait_for_microphone_control(
+                {"input.bridge.phone-usb-uplink": {"object.id": 100}},
+                "input.bridge.phone-usb-uplink",
+                -4.44,
+                False,
+            )
+        self.assertEqual(result, failed)
+        control.assert_called_once()
+        sleep.assert_not_called()
 
     def test_control_failure_holds_graph_safe(self) -> None:
         settings = supervisor.Settings(

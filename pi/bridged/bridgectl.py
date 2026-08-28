@@ -153,7 +153,9 @@ def do_status(args: argparse.Namespace) -> int:
         print(json.dumps(block, indent=2))
         return 0
     chosen = block.get("chosen") or {}
-    print(f"{chosen.get('label') or '<none>'}  [{chosen.get('id') or '-'}]  {block.get('reason', '')}")
+    print(
+        f"{chosen.get('label') or '<none>'}  [{chosen.get('id') or '-'}]  {block.get('reason', '')}"
+    )
     return 0
 
 
@@ -181,7 +183,9 @@ def do_microphone_list(args: argparse.Namespace) -> int:
         detail = f"{state}: {candidate.get('reason') or ''}"
         if nodes:
             detail += f" ({', '.join(str(node) for node in nodes)})"
-        print(f" {marker}{index:2}  {str(candidate.get('label') or candidate.get('id'))[:24]:24}   {detail}")
+        print(
+            f" {marker}{index:2}  {str(candidate.get('label') or candidate.get('id'))[:24]:24}   {detail}"
+        )
     print()
     print(f"  {block.get('selection_reason') or ''}")
     return 0
@@ -229,9 +233,15 @@ def do_phone_status(args: argparse.Namespace) -> int:
         microphone = f"Android microphone transport closed: {reason}"
     failure = block.get("failure_reason")
     failure_text = f"  failure: {failure}" if failure else ""
+    usb = block.get("usb_microphone_uplink")
+    usb_text = ""
+    if isinstance(usb, dict):
+        usb_state = str(usb.get("state") or "UNKNOWN")
+        verification = "verified" if usb.get("route_verified") else "not verified"
+        usb_text = f"  USB uplink {usb_state} ({verification})"
     print(
         f"{block.get('transport') or 'UNKNOWN'}  {connected}  {media}  "
-        f"{microphone}{failure_text}"
+        f"{microphone}{usb_text}{failure_text}"
     )
     return 0
 
@@ -330,7 +340,10 @@ def play_chime(node: str) -> bool:
     try:
         result = subprocess.run(
             ["pw-play", "--target", node, str(chime_path())],
-            capture_output=True, text=True, timeout=15, check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
         )
         return result.returncode == 0
     except (OSError, subprocess.SubprocessError):
@@ -456,9 +469,7 @@ def startup_config_for(target: dict[str, Any], current: str) -> str:
             raise ValueError(
                 "Bluetooth startup choices require the speaker and controller addresses"
             )
-        output_values.update(
-            {"address": address, "adapter": adapter, "reconnect": True}
-        )
+        output_values.update({"address": address, "adapter": adapter, "reconnect": True})
     return patch_toml_table(candidate, "devices.output", output_values)
 
 
@@ -626,9 +637,7 @@ def do_set(args: argparse.Namespace) -> int:
             return 1
 
     if getattr(args, "remember", False):
-        config_path = Path(
-            status.get("config_path") or supervisor.default_config_path()
-        )
+        config_path = Path(status.get("config_path") or supervisor.default_config_path())
         saved, detail = remember_startup_output(target, config_path)
         if not saved:
             print(f"cannot remember {target['label']}: {detail}", file=sys.stderr)
@@ -636,9 +645,7 @@ def do_set(args: argparse.Namespace) -> int:
         print(f"startup: {detail}", file=sys.stderr)
 
     needs_connect = target["kind"] == "a2dp" and not target["present"]
-    shares_call_radio = bool(
-        target.get("adapter") and target["adapter"] == _call_adapter(status)
-    )
+    shares_call_radio = bool(target.get("adapter") and target["adapter"] == _call_adapter(status))
     if needs_connect and args.connect:
         if _call_is_up(status) and shares_call_radio and not args.force:
             print(
@@ -650,10 +657,14 @@ def do_set(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
         elif btadapters is None:
-            print("btadapters unavailable; recording the choice without connecting.", file=sys.stderr)
+            print(
+                "btadapters unavailable; recording the choice without connecting.", file=sys.stderr
+            )
         else:
             ok, detail = btadapters.connect_profile(target["address"], speaker_adapter)
-            print(f"connect {target['label']}: {'ok' if ok else 'failed'} ({detail})", file=sys.stderr)
+            print(
+                f"connect {target['label']}: {'ok' if ok else 'failed'} ({detail})", file=sys.stderr
+            )
 
     supervisor.write_desire(target["id"], source="bridgectl")
     print(f"chose {target['label']}  [{target['id']}]")
