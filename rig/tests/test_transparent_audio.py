@@ -1223,6 +1223,44 @@ class TransactionTests(unittest.TestCase):
         self.assertGreaterEqual(condition_probes, 2)
         self.assertIn("phone", result["status"])
 
+    def test_runtime_waits_for_rebuilt_aux_volume_to_converge(self) -> None:
+        backend = FakeBackend()
+        normal_pi = backend.pi
+        condition_probes = 0
+        backend.snapshot["status"]["phone"]["target_volume"].update(
+            observed=1.0,
+            verified=False,
+            error="volume mismatch: desired 0.950, observed 1.000",
+        )
+        backend.snapshot["status"]["wired_output_volume"].update(
+            observed=1.0,
+            verified=False,
+            error="volume mismatch: desired 0.950, observed 1.000",
+        )
+
+        def pi(script, *, timeout=60, stdin=None):
+            nonlocal condition_probes
+            if "'condition_probe':True" in script:
+                condition_probes += 1
+                if condition_probes == 3:
+                    for block in (
+                        backend.snapshot["status"]["phone"]["target_volume"],
+                        backend.snapshot["status"]["wired_output_volume"],
+                    ):
+                        block.update(observed=0.95, verified=True, error=None)
+            return normal_pi(script, timeout=timeout, stdin=stdin)
+
+        backend.pi = pi  # type: ignore[method-assign]
+        result = ta.verify_runtime(
+            backend,
+            0.95,
+            ta.FIXED_AUX_TARGET,
+            "candidate",
+            mode="call",
+        )
+        self.assertGreaterEqual(condition_probes, 3)
+        self.assertEqual(result["status"]["wired_output_volume"]["observed"], 0.95)
+
     def test_runtime_rejects_wrong_aux_target_or_volume(self) -> None:
         backend = FakeBackend()
         phone = backend.snapshot["status"]["phone"]
