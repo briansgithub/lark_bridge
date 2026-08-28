@@ -20,6 +20,7 @@ import sys
 import tempfile
 import time
 import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -1242,12 +1243,22 @@ def find_lark(nodes: NodeMap, settings: Settings) -> str | None:
     return None
 
 
+def _has_phone_media_candidate_identity(props: Mapping[str, Any]) -> bool:
+    """Accept incomplete A2DP identity, but never override an explicit HFP profile."""
+
+    profile = props.get("api.bluez5.profile")
+    return profile == "a2dp-source" or (
+        profile in (None, "") and props.get("media.class") == "Stream/Output/Audio"
+    )
+
+
 def find_phone_media_candidates(nodes: NodeMap, phone_mac: str) -> tuple[str, ...]:
     """Return configured-phone nodes with any A2DP-media identity evidence.
 
     Candidates are deliberately broader than adopted media nodes so an auto-linked node with
-    malformed or incomplete properties is quarantined rather than ignored. HFP nodes have
-    neither the A2DP profile nor the output-stream media class and are therefore excluded.
+    malformed or incomplete properties is quarantined rather than ignored. The measured HFP
+    input also has ``Stream/Output/Audio`` media class, so an explicit non-A2DP BlueZ profile
+    always wins over that otherwise ambiguous class.
     """
 
     prefix = f"bluez_input.{phone_mac.replace(':', '_')}.".lower()
@@ -1255,11 +1266,7 @@ def find_phone_media_candidates(nodes: NodeMap, phone_mac: str) -> tuple[str, ..
         sorted(
             name
             for name, props in nodes.items()
-            if name.lower().startswith(prefix)
-            and (
-                props.get("api.bluez5.profile") == "a2dp-source"
-                or props.get("media.class") == "Stream/Output/Audio"
-            )
+            if name.lower().startswith(prefix) and _has_phone_media_candidate_identity(props)
         )
     )
 
@@ -1293,10 +1300,7 @@ def find_foreign_phone_media_candidates(nodes: NodeMap, phone_mac: str) -> tuple
             for name, props in nodes.items()
             if name.lower().startswith("bluez_input.")
             and not name.lower().startswith(configured_prefix)
-            and (
-                props.get("api.bluez5.profile") == "a2dp-source"
-                or props.get("media.class") == "Stream/Output/Audio"
-            )
+            and _has_phone_media_candidate_identity(props)
         )
     )
 
@@ -1958,6 +1962,21 @@ class CallGraph:
         suspicious = tuple(sorted(set(candidates) - set(observed)))
         self._known_media_nodes.update(candidates)
         self._known_foreign_media_nodes.update(foreign)
+        # BlueZ/PipeWire may reuse the complete ``bluez_input.<MAC>.<N>`` name when
+        # Android replaces A2DP with HFP. A remembered media name is therefore not an
+        # identity: if that name now belongs to a live node with no A2DP-media evidence,
+        # retire it before classifying links. Otherwise the expected HFP callout link is
+        # mistaken for stale media and the call graph tears itself down forever.
+        reused_configured_names = {
+            name for name in self._known_media_nodes if name in nodes and name not in candidates
+        }
+        reused_foreign_names = {
+            name
+            for name in self._known_foreign_media_nodes
+            if name in nodes and name not in foreign
+        }
+        self._known_media_nodes.difference_update(reused_configured_names)
+        self._known_foreign_media_nodes.difference_update(reused_foreign_names)
         sources = set(candidates) | self._known_media_nodes
         routes = [pair for pair in links if pair[0] in sources]
         foreign_sources = set(foreign) | self._known_foreign_media_nodes

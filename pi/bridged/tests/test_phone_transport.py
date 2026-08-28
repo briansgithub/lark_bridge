@@ -92,7 +92,11 @@ def call_nodes(settings: supervisor.Settings) -> dict:
     return {
         settings.lark_node: {},
         settings.wired_output: {},
-        settings.hfp_source: {},
+        settings.hfp_source: {
+            "api.bluez5.profile": "headset-audio-gateway",
+            "media.class": "Stream/Output/Audio",
+            "media.role": "Communication",
+        },
         settings.hfp_sink: {},
     }
 
@@ -137,7 +141,17 @@ class PhoneMediaNodeDiscoveryTests(unittest.TestCase):
     def test_hfp_uplink_is_not_mistaken_for_media(self) -> None:
         """The HFP source shares the bluez_input.<MAC>.<N> shape. Only the profile separates them."""
         settings = call_settings()
-        nodes = {settings.hfp_source: {"api.bluez5.profile": "headset-audio-gateway"}}
+        nodes = {
+            settings.hfp_source: {
+                "api.bluez5.profile": "headset-audio-gateway",
+                "media.class": "Stream/Output/Audio",
+                "media.role": "Communication",
+            }
+        }
+        self.assertEqual(
+            supervisor.find_phone_media_candidates(nodes, PHONE_MAC),
+            (),
+        )
         self.assertIsNone(supervisor.find_phone_media_node(nodes, PHONE_MAC))
 
     def test_speaker_is_not_mistaken_for_phone_media(self) -> None:
@@ -524,6 +538,53 @@ class TransportTransitionTests(unittest.TestCase):
             build_call(graph, settings)
         self.assertEqual(graph.phone_transport, supervisor.PhoneTransport.CALL)
         self.assertIsNone(graph.media_node)
+
+    def test_hfp_reusing_a_former_media_node_name_is_not_removed_as_media(self) -> None:
+        """The full BlueZ node name can be reused when Android replaces A2DP with HFP."""
+
+        settings = call_settings()
+        graph = supervisor.CallGraph(settings)
+        reused_name = settings.hfp_source
+        media_nodes = {
+            settings.lark_node: {},
+            settings.wired_output: {},
+            reused_name: media_props(object_id=101),
+        }
+        graph.tick(
+            media_nodes,
+            [(reused_name, settings.wired_output)],
+            settings.lark_node,
+        )
+
+        nodes = call_nodes(settings)
+        with (
+            mock.patch.object(supervisor, "NativeAecHost", FakeHost),
+            mock.patch.object(supervisor, "Loopback", FakeLoopback),
+            mock.patch.object(supervisor, "set_aec_mute", return_value=True),
+            mock.patch.object(supervisor, "unlink", return_value=True) as unlinker,
+        ):
+            graph.tick(nodes, [], settings.lark_node)
+            aec_nodes = {
+                **nodes,
+                supervisor.AEC_SOURCE: {},
+                supervisor.AEC_SINK: {},
+            }
+            graph.tick(aec_nodes, [], settings.lark_node)
+            assert graph.microphone is not None and graph.callout is not None
+            graph.routes_started -= supervisor.ATTACH_GRACE_SECONDS + 1
+            links = [
+                (settings.lark_node, supervisor.AEC_CAPTURE),
+                (supervisor.AEC_PLAYBACK, settings.wired_output),
+                (graph.microphone.capture, graph.microphone.in_node),
+                (graph.microphone.out_node, graph.microphone.playback),
+                (graph.callout.capture, graph.callout.in_node),
+                (graph.callout.out_node, graph.callout.playback),
+            ]
+            graph.tick(aec_nodes, links, settings.lark_node)
+
+        unlinker.assert_not_called()
+        self.assertEqual(graph.state, supervisor.State.ACTIVE)
+        self.assertEqual(graph.phone_transport, supervisor.PhoneTransport.CALL)
 
     def test_call_teardown_waits_for_a_new_media_node_before_routing(self) -> None:
         settings = call_settings()
