@@ -1,7 +1,7 @@
 # ADR-0009 — A2DP media out, HFP microphone only during a communication session
 
-- **Status:** Accepted (provisional), **amended 2026-08-27** — the decision stands; two parts of
-  its justification and one implementation guard were refuted by measurement. See *Amendment*.
+- **Status:** Accepted, **amended 2026-08-28** — the narrowed release contract is measured and
+  accepted. Universal app microphone transport and LE Audio are outside this release.
 - **Date:** 2026-08-26
 - **Relates to:** `docs/experiments/E19-transparent-phone-audio.md`, E01, E03, E15, E16;
   ADR-0007 (48 kHz internal graph)
@@ -59,7 +59,7 @@ verified AEC/uplink graph: transport presence does not by itself prove safe call
 | Persistent SCO/HFP outside any session | **Rejected** | Contradicted by AOSP; never demonstrated; would displace media entirely and cap it at 16 kHz |
 | Ordinary recorder / camera / plain app microphone | **Not achievable over classic HFP** | AOSP, plus the E01 mechanism |
 | USB Audio Class | **Not achievable on this hardware** | The Pi 3B's `dwc_otg` is host-only; ADR-0005 and E05 route UAC through a separate Pico, which is a different product |
-| LE Audio (BAP) ordinary-app microphone | **Unknown — hardware is capable** | `btmgmt` reports `cis-central cis-peripheral iso-broadcaster` in *current* settings; the Pixel advertises TMAP `0x1855`; BlueZ/PipeWire maturity unproven |
+| LE Audio (BAP) ordinary-app microphone | **Explored; not adopted** | Controller capability gates passed, but the stock-stack pairing spike did not produce a valid, usable Pixel microphone endpoint; see E19 closure |
 
 **The requested universal idle-state microphone is not possible over classic Bluetooth**, and the
 reason is Android's audio policy, not a defect in the appliance. **Transparent full duplex —
@@ -125,12 +125,13 @@ part of this decision rather than implementation detail:
 - The 48 kHz internal graph (ADR-0007) is retained. A2DP negotiation may land at 44.1 kHz under
   `55-bridge-a2dp-coex.conf`; that is one resample on a path whose ceiling is already set
   elsewhere, and does not justify reshaping the graph.
-- LE Audio is **not** adopted here and **not** foreclosed. It is the only documented Bluetooth
-  route to an ordinary-application microphone, the controller is capable, and it deserves its own
-  experiment rather than being smuggled into this one.
-- This ADR is **provisional**. The microphone mechanism, A2DP sink behavior, combined profile,
-  pause behavior, deterministic AUX pin, and Discord communication transition are measured. E19
-  rows 3 and 8 are confirmed; live confirmation of rows 4 and 7 remains a gate before promotion.
+- LE Audio is **not adopted**. The rapid stock-stack spike did not establish a usable Pixel
+  microphone endpoint, and the analog GeneralPlus uplink was rejected as a permanent product
+  path. Either can be reconsidered only as a separate product experiment.
+- This release decision is final for the stated scope: deterministic A2DP media to AUX and
+  automatic HFP/SCO call switching through the selected microphone and existing AEC graph.
+  Broader soak, true far-end AEC scoring, and repeated physical power-cut qualification remain
+  quality gates, not prerequisites for accepting the transport contract.
 
 
 ## Amendment — 2026-08-27, after measuring on the hardware

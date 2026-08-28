@@ -1,8 +1,8 @@
 # E19 — Can the appliance carry Pixel media and microphone audio transparently, not only during calls?
 
-- **Status:** In progress — rapid live media acceptance and the Discord communication-transport
-  checkpoint are complete; rows 4/7, echo-suppression/far-end acoustics, soak, and promotion
-  remain open
+- **Status:** Complete for the accepted release scope — rapid live media acceptance and the
+  Discord communication-transport checkpoint passed; broader app-microphone exploration is
+  closed, while echo-suppression/far-end acoustics and soak remain optional qualification work
 - **Resolves risk:** phone audio is usable only inside a call; media playback is not deterministically routed to the selected output
 - **Gates milestone:** transparent phone audio release
 - **Owner / date:** Claude (runtime model `claude-opus-5`), 2026-08-26
@@ -1249,3 +1249,27 @@ the Discord positive control, the earlier targeted transitions plus one uninterr
 media-to-call-to-media cycle, a separate paused-history teardown, post-AEC graph topology, and
 near-end preservation. They do **not** constitute measured echo suppression, true far-end
 validation, three transition cycles, live-Lark qualification, soak, or promotion.
+
+## Exploration closure and release decision — 2026-08-28
+
+The operator accepted the narrower transparent-appliance goal: Pixel media is routed
+automatically over A2DP to Pi AUX; when Android opens a communication session, the appliance
+switches automatically to HFP/SCO, sends the selected Lark/FIFINE microphone through the existing
+AEC uplink, and keeps call audio on AUX; after teardown it routes a newly arriving media stream.
+This behavior is implemented at `a6d4b29` and supported by the measured media and Discord evidence
+above. AUX remains at `0.95`, which is about 2.89 dB louder than the earlier `0.85` setting while
+retaining measured headroom; `1.00` was not selected.
+
+The universal ordinary-app microphone goal is closed as out of scope for this release. A
+GeneralPlus analog/USB experiment demonstrated a possible external workaround but was rejected as
+a permanent architecture. Its default-off prototype is preserved separately at `9118cec` and is
+not part of the production image. A rapid stock LE Audio spike established BT500 controller
+CIS/ISO/LC3 capability, but did not establish a usable Pixel endpoint: BlueZ 5.82 pairing failed
+with GATT status 135/no valid descriptor, while the locally built BlueZ 5.86 TMAP trial was not a
+valid qualification because it mismatched PipeWire 1.4.2, registered no endpoints, omitted the
+TMAP UUID, and failed advertising. No LE spike configuration is promoted.
+
+Remaining work is release engineering rather than transport design: install the exact accepted
+commit into the immutable lower filesystem, persist configuration, reboot and run readiness
+checks, capture and hash the card image, and separately perform spare-card restore/boot and the
+physical power-cut campaign when that hardware validation is desired.
