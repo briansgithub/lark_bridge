@@ -1996,6 +1996,33 @@ PY"""
     )
 
 
+def _runtime_status_volume_ready(
+    status: Mapping[str, Any],
+    *,
+    mode: str,
+    expected_target: str,
+    expected_volume: float,
+) -> bool:
+    """Return whether status has converged enough to perform final runtime checks."""
+
+    if mode == "call":
+        wired = status.get("wired_output_volume")
+        if not isinstance(wired, dict) or wired.get("target") != expected_target:
+            # A dynamic non-AUX call output needs the independent probe below; do not
+            # run that heavier command inside the 100 ms condition loop.
+            return True
+        return not call_output_aux_volume_failures(
+            status,
+            expected_target=expected_target,
+            expected_volume=expected_volume,
+        )
+    return not aux_volume_failures(
+        status,
+        expected_target=expected_target,
+        expected_volume=expected_volume,
+    )
+
+
 def verify_runtime(
     backend: Backend,
     expected_volume: float,
@@ -2009,6 +2036,7 @@ def verify_runtime(
     expected_marker = f"LARKBRIDGE_DEV_CANDIDATE={expected_candidate_id}"
     expected_root = f"/candidates/{expected_candidate_id}/bridge_supervisor.py"
     schema_ready_process_mismatches = 0
+    volume_settle_polls = 0
     while time.monotonic() - started < 30:
         snapshot = capture_condition_snapshot(backend)
         services = snapshot.get("services")
@@ -2025,15 +2053,31 @@ def verify_runtime(
         phone = status.get("phone") if isinstance(status, dict) else None
         if active >= 4 and isinstance(phone, dict):
             if expected_marker in process_output and expected_root in process_output:
-                break
-            schema_ready_process_mismatches += 1
-            # A restart can briefly expose the previous candidate's final status and
-            # process. Give systemd two seconds of condition polls to converge, then
-            # leave the loop so the explicit identity check reports a stale process.
-            if schema_ready_process_mismatches >= 20:
-                break
+                schema_ready_process_mismatches = 0
+                if _runtime_status_volume_ready(
+                    status,
+                    mode=mode,
+                    expected_target=expected_target,
+                    expected_volume=expected_volume,
+                ):
+                    break
+                volume_settle_polls += 1
+                # PipeWire can publish the rebuilt sink before the supervisor's first
+                # volume-ownership tick. Wait up to five seconds, then let the explicit
+                # check below report the still-wrong value rather than accepting 1.00.
+                if volume_settle_polls >= 50:
+                    break
+            else:
+                volume_settle_polls = 0
+                schema_ready_process_mismatches += 1
+                # A restart can briefly expose the previous candidate's final status and
+                # process. Give systemd two seconds of condition polls to converge, then
+                # leave the loop so the explicit identity check reports a stale process.
+                if schema_ready_process_mismatches >= 20:
+                    break
         else:
             schema_ready_process_mismatches = 0
+            volume_settle_polls = 0
         backend.wait(0.1)
     else:
         raise RigFailure(
