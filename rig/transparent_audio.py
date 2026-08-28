@@ -25,6 +25,7 @@ import argparse
 import array
 import base64
 import contextlib
+import gzip
 import hashlib
 import io
 import json
@@ -84,6 +85,8 @@ GENERALPLUS_PLAYBACK_CHANNELS = 2
 FIXED_AUX_TARGET = "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
 MEDIA_STIMULUS_FREQUENCY_HZ = 1000.0
 MIN_MEDIA_TONE_TO_RESIDUAL_DB = 10.0
+RUNTIME_START_TIMEOUT_SECONDS = 30.0
+RUNTIME_VOLUME_SETTLE_SECONDS = 5.0
 
 REQUIRED_CALIBRATION_STAGES = ("self-loop", "aux-loop", "acoustic")
 POLICY_PREFIXES = ("pi/wireplumber/",)
@@ -92,6 +95,12 @@ ALLOWED_UNTRACKED_PREFIXES = (
     "pi/bridged/",
     "pi/wireplumber/",
     "config/",
+)
+CANDIDATE_EXCLUDED_DIRECTORY_NAMES = (
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
 )
 
 
@@ -122,6 +131,24 @@ def atomic_json(path: Path, document: Any) -> None:
 
 class RigFailure(RuntimeError):
     """A measured or safety failure."""
+
+
+class AuxVolumeVerificationFailure(RigFailure):
+    """The candidate is running, but fixed-AUX volume evidence did not converge."""
+
+    def __init__(
+        self, failures: Sequence[str], *, evidence: Mapping[str, Any] | None = None
+    ) -> None:
+        self.failures = tuple(str(item) for item in failures)
+        self.evidence = dict(evidence or {})
+        source = self.evidence.get("source")
+        source_detail = f" ({source})" if isinstance(source, str) and source else ""
+        super().__init__(
+            "AUX volume verification failed"
+            + source_detail
+            + ": "
+            + "; ".join(self.failures)
+        )
 
 
 class HardwareRequired(RigFailure):
@@ -252,6 +279,7 @@ class Thresholds:
     dynamic_range_db: float = 50.0
     quick_aux_above_floor_db: float = 20.0
     aux_above_floor_db: float = 40.0
+    catalog_program_above_floor_db: float = 20.0
     acoustic_snr_db: float = 20.0
     clipping_pct: float = 0.01
     call_raw_dbfs: float = -55.0
@@ -305,6 +333,9 @@ class Inventory:
                 data.get("e19_min_quick_aux_above_floor_db", 20.0)
             ),
             aux_above_floor_db=float(data.get("e19_min_aux_above_floor_db", 40.0)),
+            catalog_program_above_floor_db=float(
+                data.get("e19_min_catalog_program_above_floor_db", 20.0)
+            ),
             acoustic_snr_db=float(data.get("e19_min_acoustic_snr_db", 20.0)),
             clipping_pct=float(data.get("e19_max_clipping_pct", 0.01)),
             call_raw_dbfs=float(data.get("e19_min_call_raw_dbfs", -55.0)),
@@ -336,6 +367,7 @@ class Inventory:
             and thresholds.dynamic_range_db >= 50.0
             and thresholds.quick_aux_above_floor_db >= 20.0
             and thresholds.aux_above_floor_db >= 40.0
+            and thresholds.catalog_program_above_floor_db >= 20.0
             and thresholds.acoustic_snr_db >= 20.0
             and 0 <= thresholds.clipping_pct <= 0.01
             and -55.0 <= thresholds.call_raw_dbfs <= 0
@@ -1006,20 +1038,28 @@ def _git(repo: Path, *arguments: str, binary: bool = False) -> bytes | str:
     return proc.stdout if binary else proc.stdout.decode("utf-8", errors="replace")
 
 
-def _candidate_files(root: Path) -> dict[str, bytes]:
+def _is_tool_cache_path(path: str) -> bool:
+    parts = PurePosixPath(path).parts
+    return any(
+        part in CANDIDATE_EXCLUDED_DIRECTORY_NAMES for part in parts
+    ) or path.endswith(".pyc")
+
+
+def _candidate_files(root: Path, paths: Sequence[str]) -> dict[str, bytes]:
     files: dict[str, bytes] = {}
-    for prefix in ("pi/bridged", "pi/wireplumber"):
-        directory = root / prefix
-        if not directory.is_dir():
+    for raw in sorted(set(paths)):
+        normalized = PurePosixPath(raw).as_posix()
+        if not normalized.startswith(("pi/bridged/", "pi/wireplumber/")):
             continue
-        for path in sorted(directory.rglob("*")):
-            if (
-                not path.is_file()
-                or "__pycache__" in path.parts
-                or path.suffix == ".pyc"
-            ):
-                continue
-            files[path.relative_to(root).as_posix()] = path.read_bytes()
+        if _is_tool_cache_path(normalized):
+            continue
+        path = root.joinpath(*PurePosixPath(normalized).parts)
+        if path.is_symlink():
+            raise RigFailure(
+                f"candidate package does not permit symlinks: {normalized}"
+            )
+        if path.is_file():
+            files[normalized] = path.read_bytes()
     return files
 
 
@@ -1037,17 +1077,28 @@ def _archive_files(repo: Path, revision: str) -> dict[str, bytes]:
     files: dict[str, bytes] = {}
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as handle:
         for member in handle.getmembers():
+            if member.issym() or member.islnk():
+                raise RigFailure(
+                    f"candidate package does not permit symlinks: {member.name}"
+                )
             if not member.isfile():
+                continue
+            normalized = PurePosixPath(member.name).as_posix()
+            if _is_tool_cache_path(normalized):
                 continue
             stream = handle.extractfile(member)
             if stream is not None:
-                files[PurePosixPath(member.name).as_posix()] = stream.read()
+                files[normalized] = stream.read()
     return files
 
 
 def _package_tar(files: Mapping[str, bytes]) -> bytes:
     stream = io.BytesIO()
-    with tarfile.open(fileobj=stream, mode="w:gz", format=tarfile.PAX_FORMAT) as handle:
+    with gzip.GzipFile(
+        fileobj=stream, mode="wb", filename="", mtime=0
+    ) as compressed, tarfile.open(
+        fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT
+    ) as handle:
         for path, content in sorted(files.items()):
             if not path.startswith("pi/bridged/"):
                 continue
@@ -1072,20 +1123,31 @@ def resolve_candidate(source: str, *, repository: Path = REPO) -> Candidate:
         diff = _git(repo, "diff", "--binary", "--no-ext-diff", "HEAD", binary=True)
         assert isinstance(diff, bytes)
         changed = set(str(_git(repo, "diff", "--name-only", "HEAD")).splitlines())
+        tracked_paths = str(
+            _git(repo, "ls-files", "--", "pi/bridged", "pi/wireplumber")
+        ).splitlines()
         untracked_paths = str(
             _git(repo, "ls-files", "--others", "--exclude-standard")
         ).splitlines()
         allowed_untracked: list[dict[str, str]] = []
+        candidate_paths = set(tracked_paths)
         for path in sorted(untracked_paths):
             normalized = PurePosixPath(path).as_posix()
-            if not normalized.startswith(ALLOWED_UNTRACKED_PREFIXES):
+            if not normalized.startswith(
+                ALLOWED_UNTRACKED_PREFIXES
+            ) or _is_tool_cache_path(normalized):
                 continue
             absolute = repo / Path(normalized)
+            if absolute.is_symlink():
+                raise RigFailure(
+                    f"candidate package does not permit symlinks: {normalized}"
+                )
             if absolute.is_file():
                 digest = sha256_bytes(absolute.read_bytes())
                 allowed_untracked.append({"path": normalized, "sha256": digest})
                 changed.add(normalized)
-        files = _candidate_files(repo)
+                candidate_paths.add(normalized)
+        files = _candidate_files(repo, tuple(candidate_paths))
     else:
         repo = repository
         revision = str(_git(repo, "rev-parse", source)).strip()
@@ -1416,6 +1478,29 @@ def status_phone(snapshot: Mapping[str, Any]) -> Mapping[str, Any]:
         return {}
     phone = status.get("phone")
     return phone if isinstance(phone, dict) else {}
+
+
+def snapshot_runtime_mode(snapshot: Mapping[str, Any]) -> str:
+    """Infer whether a captured baseline already owns an HFP communication session.
+
+    Current supervisors publish the orthogonal phone transport.  A deployed legacy
+    supervisor can still be the baseline after the deadman restores production, so retain
+    the older state/endpoint signals as a compatibility fallback.
+    """
+
+    status = snapshot.get("status")
+    if not isinstance(status, dict):
+        return "media"
+    if status_phone(snapshot).get("transport") in {"CALL", "SWITCHING"}:
+        return "call"
+    endpoints = status.get("endpoints")
+    if isinstance(endpoints, dict) and any(
+        endpoints.get(name) for name in ("hfp_source", "hfp_sink")
+    ):
+        return "call"
+    if status.get("state") in {"ACTIVE", "BUILDING", "SWITCHING"}:
+        return "call"
+    return "media"
 
 
 CONDITION_PROBE = r"""python3 - <<'PY'
@@ -1857,6 +1942,27 @@ def apply_candidate(
     backend.pi(transaction, timeout=75).require(f"apply {restart_class} candidate")
 
 
+def rebuild_candidate_audio_stack(backend: Backend, candidate_id: str) -> None:
+    """Perform one bounded full-stack rebuild while retaining the staged candidate."""
+
+    expected_marker = f"Environment=LARKBRIDGE_DEV_CANDIDATE={candidate_id}"
+    expected_root = f"/candidates/{candidate_id}/bridge_supervisor.py"
+    transaction = f"""set -euo pipefail
+mkdir -p {shlex.quote(RUNTIME_ROOT)}
+exec 8>{shlex.quote(RUNTIME_ROOT + '/mutation.lock')}
+flock -n 8 || {{ echo 'another candidate mutation/recovery is active' >&2; exit 75; }}
+grep -Fq -- {shlex.quote(expected_marker)} {shlex.quote(OVERRIDE_PATH)}
+grep -Fq -- {shlex.quote(expected_root)} {shlex.quote(OVERRIDE_PATH)}
+rm -f {shlex.quote(STATUS_PATH)}
+systemctl --user stop bridge-supervisor.service
+systemctl --user restart pipewire.service pipewire-pulse.service wireplumber.service
+systemctl --user start bridge-supervisor.service
+"""
+    backend.pi(transaction, timeout=75).require(
+        f"second full audio-stack rebuild for candidate {candidate_id}"
+    )
+
+
 def aux_volume_evidence(
     status: Mapping[str, Any],
     *,
@@ -1996,30 +2102,129 @@ PY"""
     )
 
 
-def _runtime_status_volume_ready(
+def wait_independent_fixed_aux_volume(
+    backend: Backend,
+    *,
+    expected_target: str,
+    expected_volume: float,
+) -> tuple[dict[str, Any], list[str]]:
+    """Wait for fixed AUX to converge when a call owns another output node."""
+
+    started = time.monotonic()
+    attempts = 0
+    while True:
+        attempts += 1
+        raw = probe_fixed_aux_volume(backend, expected_target)
+        observed = raw.get("observed")
+        try:
+            observed_matches = observed is not None and math.isclose(
+                float(observed), expected_volume, abs_tol=0.011
+            )
+        except (TypeError, ValueError):
+            observed_matches = False
+        raw_error = raw.get("error")
+        error = raw_error
+        if raw_error is None and not observed_matches:
+            error = (
+                f"volume mismatch: desired {expected_volume:.3f}, observed {observed!r}"
+            )
+        synthetic = {
+            "phone": {
+                "expected_target": raw.get("target"),
+                "target_volume": {
+                    "required": True,
+                    "desired": expected_volume,
+                    "observed": observed,
+                    "verified": (
+                        raw.get("verified") is True
+                        and observed_matches
+                        and error is None
+                    ),
+                    "error": error,
+                },
+            }
+        }
+        evidence, failures = aux_volume_evidence(
+            synthetic,
+            expected_target=expected_target,
+            expected_volume=expected_volume,
+        )
+        elapsed = time.monotonic() - started
+        evidence.update(
+            source="independent fixed-AUX volume probe",
+            attempts=attempts,
+            settle_elapsed_s=round(elapsed, 3),
+        )
+        if not failures or elapsed >= RUNTIME_VOLUME_SETTLE_SECONDS:
+            return evidence, failures
+        backend.wait(0.1)
+
+
+def _runtime_status_volume_result(
     status: Mapping[str, Any],
     *,
     mode: str,
     expected_target: str,
     expected_volume: float,
-) -> bool:
-    """Return whether status has converged enough to perform final runtime checks."""
+) -> tuple[dict[str, Any], list[str]]:
+    """Return lightweight fixed-AUX evidence without running an independent probe."""
 
     if mode == "call":
         wired = status.get("wired_output_volume")
         if not isinstance(wired, dict) or wired.get("target") != expected_target:
             # A dynamic non-AUX call output needs the independent probe below; do not
             # run that heavier command inside the 100 ms condition loop.
-            return True
-        return not call_output_aux_volume_failures(
-            status,
+            return {}, []
+        synthetic = {
+            "phone": {
+                "expected_target": wired.get("target"),
+                "target_volume": wired,
+            }
+        }
+        return aux_volume_evidence(
+            synthetic,
             expected_target=expected_target,
             expected_volume=expected_volume,
         )
-    return not aux_volume_failures(
+    return aux_volume_evidence(
         status,
         expected_target=expected_target,
         expected_volume=expected_volume,
+    )
+
+
+def _rebuilt_aux_stuck_at_unity(
+    failure: AuxVolumeVerificationFailure,
+    *,
+    expected_target: str,
+    expected_volume: float,
+) -> bool:
+    """Return whether a second stack rebuild is safe for this one known stall."""
+
+    evidence = failure.evidence
+    try:
+        desired_matches = math.isclose(
+            float(evidence.get("desired")), expected_volume, abs_tol=0.011
+        )
+        observed_is_unity = math.isclose(
+            float(evidence.get("observed")), 1.0, abs_tol=0.001
+        )
+    except (TypeError, ValueError):
+        return False
+    return bool(
+        failure.failures
+        and evidence.get("required") is True
+        and evidence.get("target") == expected_target
+        and desired_matches
+        and observed_is_unity
+        and evidence.get("verified") is not True
+        and all(
+            item == "fixed AUX volume is not verified"
+            or item.startswith(
+                ("observed volume is ", "fixed AUX volume reports error ")
+            )
+            for item in failure.failures
+        )
     )
 
 
@@ -2036,8 +2241,10 @@ def verify_runtime(
     expected_marker = f"LARKBRIDGE_DEV_CANDIDATE={expected_candidate_id}"
     expected_root = f"/candidates/{expected_candidate_id}/bridge_supervisor.py"
     schema_ready_process_mismatches = 0
-    volume_settle_polls = 0
-    while time.monotonic() - started < 30:
+    volume_settle_started: float | None = None
+    last_volume_evidence: dict[str, Any] = {}
+    last_volume_failures: list[str] = []
+    while True:
         snapshot = capture_condition_snapshot(backend)
         services = snapshot.get("services")
         active = (
@@ -2054,21 +2261,28 @@ def verify_runtime(
         if active >= 4 and isinstance(phone, dict):
             if expected_marker in process_output and expected_root in process_output:
                 schema_ready_process_mismatches = 0
-                if _runtime_status_volume_ready(
+                volume_evidence, volume_failures = _runtime_status_volume_result(
                     status,
                     mode=mode,
                     expected_target=expected_target,
                     expected_volume=expected_volume,
-                ):
+                )
+                if not volume_failures:
                     break
-                volume_settle_polls += 1
+                last_volume_evidence = volume_evidence
+                last_volume_failures = volume_failures
+                now = time.monotonic()
+                if volume_settle_started is None:
+                    volume_settle_started = now
                 # PipeWire can publish the rebuilt sink before the supervisor's first
-                # volume-ownership tick. Wait up to five seconds, then let the explicit
-                # check below report the still-wrong value rather than accepting 1.00.
-                if volume_settle_polls >= 50:
+                # volume-ownership tick. Bound this by elapsed time because each SSH
+                # probe can take much longer than the nominal 100 ms polling interval.
+                if now - volume_settle_started >= RUNTIME_VOLUME_SETTLE_SECONDS:
                     break
             else:
-                volume_settle_polls = 0
+                volume_settle_started = None
+                last_volume_evidence = {}
+                last_volume_failures = []
                 schema_ready_process_mismatches += 1
                 # A restart can briefly expose the previous candidate's final status and
                 # process. Give systemd two seconds of condition polls to converge, then
@@ -2077,12 +2291,21 @@ def verify_runtime(
                     break
         else:
             schema_ready_process_mismatches = 0
-            volume_settle_polls = 0
+            volume_settle_started = None
+            last_volume_evidence = {}
+            last_volume_failures = []
+        if (
+            volume_settle_started is None
+            and time.monotonic() - started >= RUNTIME_START_TIMEOUT_SECONDS
+        ):
+            if last_volume_failures:
+                raise AuxVolumeVerificationFailure(
+                    last_volume_failures, evidence=last_volume_evidence
+                )
+            raise RigFailure(
+                "timed out after 30s waiting for the audio stack using the lightweight condition probe"
+            )
         backend.wait(0.1)
-    else:
-        raise RigFailure(
-            "timed out after 30s waiting for the audio stack using the lightweight condition probe"
-        )
     status = snapshot.get("status")
     if not isinstance(status, dict):
         raise RigFailure("supervisor status is unavailable after candidate restart")
@@ -2113,30 +2336,32 @@ def verify_runtime(
         or status_timestamp > probe_epoch + 1.0
     ):
         raise RigFailure("supervisor status is stale or has an invalid timestamp")
-    fixed_aux_evidence: Mapping[str, Any] | None = None
     if mode == "call":
         wired = status.get("wired_output_volume")
         if not isinstance(wired, dict) or wired.get("target") != expected_target:
-            fixed_aux_evidence = probe_fixed_aux_volume(backend, expected_target)
-        volume_failures = call_output_aux_volume_failures(
-            status,
-            expected_target=expected_target,
-            expected_volume=expected_volume,
-            fixed_aux_evidence=fixed_aux_evidence,
-        )
+            volume_evidence, volume_failures = wait_independent_fixed_aux_volume(
+                backend,
+                expected_target=expected_target,
+                expected_volume=expected_volume,
+            )
+        else:
+            volume_evidence, volume_failures = _runtime_status_volume_result(
+                status,
+                mode=mode,
+                expected_target=expected_target,
+                expected_volume=expected_volume,
+            )
     else:
-        volume_failures = aux_volume_failures(
+        volume_evidence, volume_failures = aux_volume_evidence(
             status,
             expected_target=expected_target,
             expected_volume=expected_volume,
-        )
-    if volume_failures:
-        raise RigFailure(
-            "AUX volume verification failed: " + "; ".join(volume_failures)
         )
     bluetooth = str(snapshot.get("bluetooth", {}).get("stdout", ""))
     if "Audio Sink" not in bluetooth and "0000110b" not in bluetooth.lower():
         raise RigFailure("adapter does not advertise the A2DP sink role after restart")
+    if volume_failures:
+        raise AuxVolumeVerificationFailure(volume_failures, evidence=volume_evidence)
     return snapshot
 
 
@@ -2346,7 +2571,27 @@ def score_media(
     all_samples = channels[0]
     capture_duration_s = len(all_samples) / rate
     window = max(int(rate * 0.1), 1)
-    threshold_dbfs = max(calibrated_noise_floor_dbfs + 15.0, -55.0)
+    if content_kind == "catalog-music":
+        required_above_floor_db = thresholds.catalog_program_above_floor_db
+        floor_derived_threshold_dbfs = (
+            calibrated_noise_floor_dbfs + required_above_floor_db
+        )
+        minimum_absolute_dbfs: float | None = -55.0
+        effective_signal_threshold_dbfs = max(
+            floor_derived_threshold_dbfs, minimum_absolute_dbfs
+        )
+        # Use the acceptance threshold for window classification too. Otherwise a
+        # quieter window can count toward active duration while failing the signal
+        # level gate computed over that same span.
+        threshold_dbfs = effective_signal_threshold_dbfs
+    else:
+        required_above_floor_db = thresholds.aux_above_floor_db
+        floor_derived_threshold_dbfs = (
+            calibrated_noise_floor_dbfs + required_above_floor_db
+        )
+        minimum_absolute_dbfs = None
+        effective_signal_threshold_dbfs = floor_derived_threshold_dbfs
+        threshold_dbfs = max(calibrated_noise_floor_dbfs + 15.0, -55.0)
     active: list[bool] = []
     for index in range(0, len(all_samples) - window + 1, window):
         segment = all_samples[index : index + window]
@@ -2354,11 +2599,19 @@ def score_media(
         rms = math.sqrt(sum((sample - mean) ** 2 for sample in segment) / len(segment))
         dbfs = -200.0 if rms <= 0 else 20.0 * math.log10(rms)
         active.append(dbfs >= threshold_dbfs)
+    no_detected_program = False
     try:
         first_active = active.index(True)
         last_active = len(active) - 1 - active[::-1].index(True)
     except ValueError as exc:
-        raise RigFailure("media capture has no detected program audio") from exc
+        if content_kind != "catalog-music" or not active:
+            raise RigFailure("media capture has no detected program audio") from exc
+        # Catalog failures still need an auditable signal_gate in iteration.json.
+        # Score the complete capture span and report FAIL rather than throwing before
+        # structured threshold evidence exists.
+        no_detected_program = True
+        first_active = 0
+        last_active = len(active) - 1
 
     inactive_gaps: list[dict[str, float]] = []
     gap_start: int | None = None
@@ -2393,7 +2646,31 @@ def score_media(
         100.0 * sum(abs(sample) >= 32767 / 32768 for sample in samples) / len(samples)
     )
     signal_margin = signal_rms_dbfs - calibrated_noise_floor_dbfs
+    signal_gate = {
+        "policy": (
+            "catalog-floor-margin-with-absolute-minimum"
+            if content_kind == "catalog-music"
+            else "reference-tone-calibrated-margin"
+        ),
+        "scope": (
+            "quick catalog-program presence only; not reference-tone, calibration, "
+            "continuity, AEC, or far-end promotion acceptance"
+            if content_kind == "catalog-music"
+            else "reference-tone electrical level acceptance"
+        ),
+        "calibrated_noise_floor_dbfs": round(calibrated_noise_floor_dbfs, 2),
+        "required_above_floor_db": round(required_above_floor_db, 2),
+        "floor_derived_threshold_dbfs": round(floor_derived_threshold_dbfs, 2),
+        "minimum_absolute_dbfs": minimum_absolute_dbfs,
+        "effective_threshold_dbfs": round(effective_signal_threshold_dbfs, 2),
+        "active_window_threshold_dbfs": round(threshold_dbfs, 2),
+        "observed_ac_rms_dbfs": round(signal_rms_dbfs, 2),
+        "observed_above_floor_db": round(signal_margin, 2),
+        "passed": signal_rms_dbfs >= effective_signal_threshold_dbfs,
+    }
     failures: list[str] = []
+    if no_detected_program:
+        failures.append("media capture has no detected program audio")
     if active_program_s < minimum_stable_s:
         failures.append(
             f"active program audio is {active_program_s:.2f}s, below required "
@@ -2411,10 +2688,17 @@ def score_media(
             f"capture is {capture_duration_s:.3f}s, shorter than expected "
             f"{expected_capture_s:.3f}s"
         )
-    if signal_margin < thresholds.aux_above_floor_db:
-        failures.append(
-            f"signal margin {signal_margin:.2f} dB is below {thresholds.aux_above_floor_db:.2f} dB"
-        )
+    if not signal_gate["passed"]:
+        if content_kind == "catalog-music":
+            failures.append(
+                f"catalog signal level {signal_rms_dbfs:.2f} dBFS is below effective "
+                f"threshold {effective_signal_threshold_dbfs:.2f} dBFS"
+            )
+        else:
+            failures.append(
+                f"signal margin {signal_margin:.2f} dB is below "
+                f"{thresholds.aux_above_floor_db:.2f} dB"
+            )
     if clipped_pct > thresholds.clipping_pct:
         failures.append("capture clipped")
 
@@ -2510,6 +2794,7 @@ def score_media(
         },
         "signal_ac_rms_dbfs": round(signal_rms_dbfs, 2),
         "signal_above_calibrated_floor_db": round(signal_margin, 2),
+        "signal_gate": signal_gate,
         "stimulus_signature": signature,
         "audible_dropout_verdict": (
             "NOT_MEASURED_UNREFERENCED_SOURCE"
@@ -3292,9 +3577,15 @@ def wait_aux_program_signal(
     remote_root: str,
     calibrated_noise_floor_dbfs: float,
     required_margin_db: float,
+    minimum_absolute_dbfs: float | None = None,
     timeout: float = 35.0,
 ) -> dict[str, Any]:
-    threshold_dbfs = calibrated_noise_floor_dbfs + required_margin_db
+    floor_derived_threshold_dbfs = calibrated_noise_floor_dbfs + required_margin_db
+    threshold_dbfs = (
+        max(floor_derived_threshold_dbfs, minimum_absolute_dbfs)
+        if minimum_absolute_dbfs is not None
+        else floor_derived_threshold_dbfs
+    )
     remote_probe = remote_root + "/program-ready.wav"
     started = time.monotonic()
     probes: list[dict[str, Any]] = []
@@ -3321,12 +3612,34 @@ rm -f {shlex.quote(remote_probe)}
             {
                 "elapsed_s": round(time.monotonic() - started, 3),
                 "ac_rms_dbfs": round(level, 2),
+                "passed": level >= threshold_dbfs,
             }
         )
         if level >= threshold_dbfs:
             return {
                 "ready_after_s": round(time.monotonic() - started, 3),
                 "threshold_dbfs": round(threshold_dbfs, 2),
+                "signal_gate": {
+                    "policy": "catalog-floor-margin-with-absolute-minimum",
+                    "scope": (
+                        "quick catalog-program presence only; not reference-tone, "
+                        "calibration, continuity, AEC, or far-end promotion acceptance"
+                    ),
+                    "calibrated_noise_floor_dbfs": round(
+                        calibrated_noise_floor_dbfs, 2
+                    ),
+                    "required_above_floor_db": round(required_margin_db, 2),
+                    "floor_derived_threshold_dbfs": round(
+                        floor_derived_threshold_dbfs, 2
+                    ),
+                    "minimum_absolute_dbfs": minimum_absolute_dbfs,
+                    "effective_threshold_dbfs": round(threshold_dbfs, 2),
+                    "observed_ac_rms_dbfs": round(level, 2),
+                    "observed_above_floor_db": round(
+                        level - calibrated_noise_floor_dbfs, 2
+                    ),
+                    "passed": True,
+                },
                 "probes": probes,
             }
         backend.wait(0.1)
@@ -3379,7 +3692,8 @@ def media_smoke(
             calibrated_noise_floor_dbfs=float(
                 quick_calibration["metrics"]["noise_floor_dbfs"]
             ),
-            required_margin_db=inventory.thresholds.aux_above_floor_db,
+            required_margin_db=inventory.thresholds.catalog_program_above_floor_db,
+            minimum_absolute_dbfs=-55.0,
         )
         start = backend.pi(
             f"set -euo pipefail\nmkdir -p {shlex.quote(remote_root)}\n"
@@ -4379,6 +4693,7 @@ def command_session_start(
         arguments.artifacts / QUICK_CALIBRATION_FILE
     )
     validate_quick_calibration(quick_calibration, fingerprint, inventory.thresholds)
+    start_mode = snapshot_runtime_mode(baseline)
     session_id = f"{stamp()}-{candidate.candidate_id}"
     preimages, recovery = capture_preimages(
         backend, candidate, session_id, instrument, inventory.instrument
@@ -4392,6 +4707,7 @@ def command_session_start(
         "instrument": instrument,
         "instrument_fingerprint": fingerprint,
         "quick_calibration_sha256": sha256_bytes(canonical_json(quick_calibration)),
+        "start_mode": start_mode,
         "focused_tests": focused,
         "recovery_root": recovery,
         "preimages": preimages,
@@ -4407,17 +4723,59 @@ def command_session_start(
         arm_deadman(backend, session_id, recovery, arguments.deadman)
         restart_class = policy_restart_from_snapshot(baseline, candidate)
         apply_candidate(backend, candidate, session_id, restart_class)
-        verified = verify_runtime(
-            backend,
-            inventory.aux_volume,
-            inventory.aux_target,
-            candidate.candidate_id,
-        )
+        try:
+            verified = verify_runtime(
+                backend,
+                inventory.aux_volume,
+                inventory.aux_target,
+                candidate.candidate_id,
+                mode=start_mode,
+            )
+        except AuxVolumeVerificationFailure as first_volume_failure:
+            if restart_class != "audio-stack" or not _rebuilt_aux_stuck_at_unity(
+                first_volume_failure,
+                expected_target=inventory.aux_target,
+                expected_volume=inventory.aux_volume,
+            ):
+                raise
+            retry: dict[str, Any] = {
+                "attempted": utc_now(),
+                "first_failure": str(first_volume_failure),
+                "first_evidence": first_volume_failure.evidence,
+                "status": "rebuilding",
+            }
+            session["start_audio_stack_rebuild_retry"] = retry
+            atomic_json(active, session)
+            try:
+                rebuild_candidate_audio_stack(backend, candidate.candidate_id)
+                verified = verify_runtime(
+                    backend,
+                    inventory.aux_volume,
+                    inventory.aux_target,
+                    candidate.candidate_id,
+                    mode=start_mode,
+                )
+            except BaseException as retry_failure:
+                retry["status"] = "failed"
+                retry["failure"] = f"{type(retry_failure).__name__}: {retry_failure}"
+                atomic_json(active, session)
+                raise
+            retry["status"] = "passed"
+            retry["completed"] = utc_now()
+            atomic_json(active, session)
         phone_negotiation: dict[str, Any] | None = None
-        if restart_class == "audio-stack":
+        if restart_class == "audio-stack" and start_mode == "media":
             phone_negotiation = renegotiate_phone_profiles(
                 backend, inventory.pixel_bt_mac
             )
+        elif restart_class == "audio-stack":
+            phone_negotiation = {
+                "status": "deferred",
+                "reason": (
+                    "the baseline owns an active communication session; disconnecting the "
+                    "Pixel to renegotiate media roles would destroy that session"
+                ),
+            }
         # Rebuilding PipeWire may restore an old ALSA hardware value. Prepare and
         # read back the measurement fixture only after the final session-start
         # restart so every later code-only iteration inherits the calibrated state.
@@ -4624,13 +4982,64 @@ def command_iterate(
             restart_class,
             remove_policy_names=sorted(previous_policy_names - candidate_policy_names),
         )
-        verify_runtime(
-            backend,
-            inventory.aux_volume,
-            inventory.aux_target,
-            candidate.candidate_id,
-            mode=arguments.mode,
-        )
+        try:
+            verify_runtime(
+                backend,
+                inventory.aux_volume,
+                inventory.aux_target,
+                candidate.candidate_id,
+                mode=arguments.mode,
+            )
+        except AuxVolumeVerificationFailure as first_volume_failure:
+            if restart_class != "audio-stack" or not _rebuilt_aux_stuck_at_unity(
+                first_volume_failure,
+                expected_target=inventory.aux_target,
+                expected_volume=inventory.aux_volume,
+            ):
+                raise
+            retry = {
+                "attempted": utc_now(),
+                "first_failure": str(first_volume_failure),
+                "first_evidence": first_volume_failure.evidence,
+                "status": "rebuilding",
+            }
+            record["audio_stack_rebuild_retry"] = retry
+            atomic_json(iteration_root / "iteration.json", record)
+            try:
+                rebuild_candidate_audio_stack(backend, candidate.candidate_id)
+                verify_runtime(
+                    backend,
+                    inventory.aux_volume,
+                    inventory.aux_target,
+                    candidate.candidate_id,
+                    mode=arguments.mode,
+                )
+            except BaseException as retry_failure:
+                retry["status"] = "failed"
+                retry["failure"] = f"{type(retry_failure).__name__}: {retry_failure}"
+                atomic_json(iteration_root / "iteration.json", record)
+                raise
+            retry["status"] = "passed"
+            retry["completed"] = utc_now()
+            atomic_json(iteration_root / "iteration.json", record)
+        if restart_class == "audio-stack":
+            post_restart_instrument = probe_instrument(backend, inventory.instrument)
+            if instrument_fingerprint(
+                inventory, post_restart_instrument
+            ) != session.get("instrument_fingerprint"):
+                raise HardwareRequired(
+                    "GeneralPlus fixture changed during the audio-stack restart"
+                )
+            prepared_after_restart = prepare_mixer(
+                backend,
+                inventory,
+                post_restart_instrument,
+                capture_gain=str(quick_calibration["capture_gain_request"]),
+            )
+            session["instrument"] = prepared_after_restart
+            record["instrument_after_restart"] = prepared_after_restart
+            atomic_json(session_path(arguments.artifacts), session)
+            atomic_json(iteration_root / "iteration.json", record)
         call_restored_s: float | None = None
         if arguments.mode == "call":
             _call_status, call_restored_s = wait_phone_transport(
@@ -4744,6 +5153,20 @@ def command_iterate(
                 last_good.candidate_id,
                 mode=arguments.mode,
             )
+            if rollback_class == "audio-stack":
+                rollback_instrument = probe_instrument(backend, inventory.instrument)
+                if instrument_fingerprint(
+                    inventory, rollback_instrument
+                ) != session.get("instrument_fingerprint"):
+                    raise HardwareRequired(
+                        "GeneralPlus fixture changed while restoring the last-good candidate"
+                    )
+                session["instrument"] = prepare_mixer(
+                    backend,
+                    inventory,
+                    rollback_instrument,
+                    capture_gain=str(quick_calibration["capture_gain_request"]),
+                )
         except BaseException as rollback_exc:  # noqa: BLE001
             _restore_iteration_baseline(
                 backend,
@@ -4940,6 +5363,10 @@ def command_quick_calibrate(
             ),
             "max_clipping_pct": inventory.thresholds.clipping_pct,
             "strict_media_margin_db": inventory.thresholds.aux_above_floor_db,
+            "catalog_program_margin_db": (
+                inventory.thresholds.catalog_program_above_floor_db
+            ),
+            "catalog_program_minimum_dbfs": -55.0,
             "scope": "quick wiring continuity only; not promotion acceptance",
         },
         "artifact": str(artifact),
@@ -5152,6 +5579,10 @@ def command_accept(
         "accepted": utc_now(),
         "session_id": session["session_id"],
         "candidate_id": candidate_id,
+        "scope": (
+            "quick inner-loop candidate evidence only; not AEC, Discord far-end, "
+            "soak, installation, or promotion acceptance"
+        ),
         "inner_loop": files,
         "discord_far_end": None,
         "note": "Discord far-end milestone evidence is intentionally separate from synthetic inner-loop acceptance.",
@@ -5422,7 +5853,7 @@ def build_parser() -> argparse.ArgumentParser:
     quick.add_argument("--hardware-ready", action="store_true")
     quick.add_argument(
         "--capture-gain",
-        help="explicit GeneralPlus capture gain; always touches 0% first (default: 0%)",
+        help="explicit GeneralPlus capture gain; always touches 0%% first (default: 0%%)",
     )
     live(quick)
 
@@ -5436,7 +5867,7 @@ def build_parser() -> argparse.ArgumentParser:
     calibrate.add_argument("--hardware-ready", action="store_true")
     calibrate.add_argument(
         "--capture-gain",
-        help="explicit GeneralPlus capture gain; self-loop begins at 0% by default",
+        help="explicit GeneralPlus capture gain; self-loop begins at 0%% by default",
     )
     live(calibrate)
 

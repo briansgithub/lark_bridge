@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import io
 import json
 import math
 import re
 import struct
 import subprocess
+import tarfile
 import tempfile
 import unittest
 import wave
@@ -502,6 +504,7 @@ class InstrumentTests(unittest.TestCase):
         self.assertEqual(inventory.aux_target, ta.FIXED_AUX_TARGET)
         self.assertEqual(inventory.thresholds.quick_aux_above_floor_db, 20.0)
         self.assertEqual(inventory.thresholds.aux_above_floor_db, 40.0)
+        self.assertEqual(inventory.thresholds.catalog_program_above_floor_db, 20.0)
 
     def test_probe_is_identity_and_port_based_not_card_number_based(self) -> None:
         backend = FakeBackend()
@@ -566,15 +569,18 @@ Capture:
                 path.write_text(path.read_text().replace(old, new), encoding="utf-8")
                 with self.assertRaises(ta.SafetyFailure):
                     ta.Inventory.load(path)
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "inventory.toml"
-            write_inventory(path)
-            path.write_text(
-                path.read_text() + "e19_min_aux_above_floor_db = 10\n",
-                encoding="utf-8",
-            )
-            with self.assertRaises(ta.SafetyFailure):
-                ta.Inventory.load(path)
+        for weakened in (
+            "e19_min_aux_above_floor_db = 10\n",
+            "e19_min_catalog_program_above_floor_db = 19.9\n",
+        ):
+            with self.subTest(
+                weakened=weakened
+            ), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "inventory.toml"
+                write_inventory(path)
+                path.write_text(path.read_text() + weakened, encoding="utf-8")
+                with self.assertRaises(ta.SafetyFailure):
+                    ta.Inventory.load(path)
 
     def test_unqualified_mixer_map_fails_closed(self) -> None:
         report = good_instrument()
@@ -845,6 +851,67 @@ class CandidateTests(unittest.TestCase):
             self.assertNotEqual(second.candidate_id, third.candidate_id)
             self.assertEqual(third.untracked[0]["path"], "pi/bridged/new.py")
 
+    def test_candidate_worktree_matches_ref_and_ignores_tool_caches(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.make_repo(root)
+            ref = ta.resolve_candidate("HEAD", repository=root)
+            clean = ta.resolve_candidate(str(root))
+            self.assertEqual(clean.candidate_id, ref.candidate_id)
+            self.assertEqual(clean.content_sha256, ref.content_sha256)
+            self.assertEqual(clean.package_tar, ref.package_tar)
+
+            cache_files = (
+                root / "pi/bridged/.mypy_cache/cache.json",
+                root / "pi/bridged/.pytest_cache/v/cache/nodeids",
+                root / "pi/bridged/.ruff_cache/0/file",
+                root / "pi/bridged/__pycache__/helper.cpython-313.pyc",
+                root / "pi/wireplumber/.ruff_cache/policy",
+            )
+            for path in cache_files:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"cache artifact")
+
+            cached = ta.resolve_candidate(str(root))
+            self.assertEqual(cached.candidate_id, clean.candidate_id)
+            self.assertEqual(cached.content_sha256, clean.content_sha256)
+            self.assertEqual(cached.package_tar, clean.package_tar)
+            self.assertEqual(cached.untracked, clean.untracked)
+
+            import tarfile
+
+            with tarfile.open(
+                fileobj=__import__("io").BytesIO(cached.package_tar), mode="r:gz"
+            ) as handle:
+                names = set(handle.getnames())
+            self.assertFalse(any("cache" in name for name in names))
+
+    def test_candidate_worktree_rejects_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "pi/bridged").mkdir(parents=True)
+            target = root / "outside.py"
+            target.write_text("SECRET = True\n")
+            link = root / "pi/bridged/link.py"
+            try:
+                link.symlink_to(target)
+            except OSError as exc:
+                self.skipTest(f"symlinks are unavailable on this host: {exc}")
+            with self.assertRaisesRegex(ta.RigFailure, "does not permit symlinks"):
+                ta._candidate_files(root, ("pi/bridged/link.py",))
+
+    def test_candidate_archive_rejects_symlinks(self) -> None:
+        archive = io.BytesIO()
+        with tarfile.open(fileobj=archive, mode="w") as handle:
+            member = tarfile.TarInfo("pi/bridged/link.py")
+            member.type = tarfile.SYMTYPE
+            member.linkname = "../../outside.py"
+            handle.addfile(member)
+        with mock.patch.object(
+            ta, "_git", return_value=archive.getvalue()
+        ), self.assertRaisesRegex(ta.RigFailure, "does not permit symlinks"):
+            ta._archive_files(Path("repository"), "HEAD")
+
     def test_package_is_complete_and_policy_is_separate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -946,6 +1013,23 @@ class CandidateTests(unittest.TestCase):
 
 
 class TransactionTests(unittest.TestCase):
+    def test_runtime_mode_supports_current_and_legacy_call_status(self) -> None:
+        current = snapshot("CALL", "ACTIVE")
+        self.assertEqual(ta.snapshot_runtime_mode(current), "call")
+
+        legacy = snapshot("MEDIA_ACTIVE", "ACTIVE")
+        legacy["status"].pop("phone")
+        self.assertEqual(ta.snapshot_runtime_mode(legacy), "call")
+
+        endpoint_only = snapshot("MEDIA_ACTIVE", "CALL_DOWN")
+        endpoint_only["status"].pop("phone")
+        endpoint_only["status"]["endpoints"]["hfp_source"] = "bluez_input.legacy.1"
+        self.assertEqual(ta.snapshot_runtime_mode(endpoint_only), "call")
+
+        idle_safe = snapshot("MEDIA_READY", "SAFE")
+        idle_safe["status"].pop("phone")
+        self.assertEqual(ta.snapshot_runtime_mode(idle_safe), "media")
+
     def test_remote_snapshot_reports_missing_optional_command_instead_of_aborting(
         self,
     ) -> None:
@@ -1261,6 +1345,115 @@ class TransactionTests(unittest.TestCase):
         self.assertGreaterEqual(condition_probes, 3)
         self.assertEqual(result["status"]["wired_output_volume"]["observed"], 0.95)
 
+    def test_runtime_volume_settle_budget_is_elapsed_not_poll_count(self) -> None:
+        backend = FakeBackend()
+        normal_pi = backend.pi
+        condition_probes = 0
+        backend.snapshot["status"]["phone"]["target_volume"].update(
+            observed=1.0,
+            verified=False,
+            error="volume mismatch: desired 0.950, observed 1.000",
+        )
+
+        def pi(script, *, timeout=60, stdin=None):
+            nonlocal condition_probes
+            if "'condition_probe':True" in script:
+                condition_probes += 1
+                if condition_probes == 55:
+                    backend.snapshot["status"]["phone"]["target_volume"].update(
+                        observed=0.95, verified=True, error=None
+                    )
+            return normal_pi(script, timeout=timeout, stdin=stdin)
+
+        def wait(_seconds):
+            backend.clock += 0.01
+
+        backend.pi = pi  # type: ignore[method-assign]
+        backend.wait = wait  # type: ignore[method-assign]
+        with mock.patch.object(ta.time, "monotonic", side_effect=lambda: backend.clock):
+            result = ta.verify_runtime(backend, 0.95, ta.FIXED_AUX_TARGET, "candidate")
+        self.assertGreaterEqual(condition_probes, 55)
+        self.assertEqual(result["status"]["phone"]["target_volume"]["observed"], 0.95)
+
+    def test_runtime_timeout_preserves_last_explicit_volume_failure(self) -> None:
+        backend = FakeBackend()
+        backend.snapshot["status"]["phone"]["target_volume"].update(
+            observed=1.0,
+            verified=False,
+            error="volume mismatch: desired 0.950, observed 1.000",
+        )
+
+        def capture(_backend):
+            backend.clock += 1.0
+            return backend.snapshot
+
+        with mock.patch.object(
+            ta, "capture_condition_snapshot", side_effect=capture
+        ), mock.patch.object(
+            ta.time, "monotonic", side_effect=lambda: backend.clock
+        ), self.assertRaisesRegex(
+            ta.AuxVolumeVerificationFailure,
+            "observed volume is 1.0.*fixed AUX volume is not verified",
+        ):
+            ta.verify_runtime(backend, 0.95, ta.FIXED_AUX_TARGET, "candidate")
+
+    def test_second_audio_stack_rebuild_retains_candidate_and_is_bounded(self) -> None:
+        backend = FakeBackend()
+        backend.pi = mock.Mock(wraps=backend.pi)  # type: ignore[method-assign]
+        ta.rebuild_candidate_audio_stack(backend, "candidate")
+        script, _stdin = backend.pi_calls[-1]
+        self.assertIn("LARKBRIDGE_DEV_CANDIDATE=candidate", script)
+        self.assertIn("/candidates/candidate/bridge_supervisor.py", script)
+        self.assertIn(
+            "restart pipewire.service pipewire-pulse.service wireplumber.service",
+            script,
+        )
+        self.assertIn("flock -n", script)
+        self.assertEqual(backend.pi.call_args.kwargs["timeout"], 75)
+
+    def test_unity_stall_retry_classifier_is_exact(self) -> None:
+        evidence = {
+            "required": True,
+            "target": ta.FIXED_AUX_TARGET,
+            "desired": 0.95,
+            "observed": 1.0,
+            "verified": False,
+            "error": "volume mismatch",
+        }
+        failure = ta.AuxVolumeVerificationFailure(
+            (
+                "observed volume is 1.0, expected 0.95",
+                "fixed AUX volume is not verified",
+                "fixed AUX volume reports error 'volume mismatch'",
+            ),
+            evidence=evidence,
+        )
+        self.assertTrue(
+            ta._rebuilt_aux_stuck_at_unity(
+                failure,
+                expected_target=ta.FIXED_AUX_TARGET,
+                expected_volume=0.95,
+            )
+        )
+        for field, value in (
+            ("observed", 0.5),
+            ("verified", True),
+            ("target", "wrong-target"),
+        ):
+            with self.subTest(field=field):
+                changed = dict(evidence)
+                changed[field] = value
+                rejected = ta.AuxVolumeVerificationFailure(
+                    failure.failures, evidence=changed
+                )
+                self.assertFalse(
+                    ta._rebuilt_aux_stuck_at_unity(
+                        rejected,
+                        expected_target=ta.FIXED_AUX_TARGET,
+                        expected_volume=0.95,
+                    )
+                )
+
     def test_runtime_rejects_wrong_aux_target_or_volume(self) -> None:
         backend = FakeBackend()
         phone = backend.snapshot["status"]["phone"]
@@ -1318,6 +1511,41 @@ class TransactionTests(unittest.TestCase):
                 "candidate",
                 mode="call",
             )
+
+    def test_dynamic_call_output_waits_for_independent_aux_convergence(self) -> None:
+        backend = FakeBackend()
+        backend.snapshot = snapshot("CALL", "ACTIVE")
+        backend.snapshot["status"]["wired_output_volume"].update(
+            target="alsa_output.usb-GeneralPlus", verified=True
+        )
+        probes = (
+            {
+                "target": ta.FIXED_AUX_TARGET,
+                "observed": 1.0,
+                "verified": True,
+                "error": None,
+            },
+            {
+                "target": ta.FIXED_AUX_TARGET,
+                "observed": 0.95,
+                "verified": True,
+                "error": None,
+            },
+        )
+        with mock.patch.object(
+            ta, "probe_fixed_aux_volume", side_effect=probes
+        ) as probe, mock.patch.object(
+            ta.time, "monotonic", side_effect=lambda: backend.clock
+        ):
+            ta.verify_runtime(
+                backend,
+                0.95,
+                ta.FIXED_AUX_TARGET,
+                "candidate",
+                mode="call",
+            )
+        self.assertEqual(probe.call_count, 2)
+        self.assertGreaterEqual(backend.clock, 0.1)
 
     def test_call_runtime_accepts_fixed_aux_call_output_directly(self) -> None:
         backend = FakeBackend()
@@ -1585,6 +1813,88 @@ class ScoringAndRoutingTests(unittest.TestCase):
         )
         self.assertEqual(result["stimulus_signature"]["status"], "NOT_APPLICABLE")
 
+    def test_catalog_music_uses_clamped_program_gate_but_reference_keeps_40_db(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            capture = root / "measured-level.wav"
+            desired_rms_dbfs = -39.08
+            write_sine(
+                capture,
+                seconds=5,
+                amplitude=math.sqrt(2.0) * 10 ** (desired_rms_dbfs / 20.0),
+            )
+            top = root / "pw-top.txt"
+            write_pw_top(top)
+            catalog = ta.score_media(
+                capture,
+                calibrated_noise_floor_dbfs=-77.94,
+                thresholds=ta.Thresholds(),
+                minimum_stable_s=3,
+                content_kind="catalog-music",
+                pw_top=top,
+                media_node="bluez_input.AA_BB_CC_DD_EE_FF.7",
+            )
+            reference = ta.score_media(
+                capture,
+                calibrated_noise_floor_dbfs=-77.94,
+                thresholds=ta.Thresholds(),
+                minimum_stable_s=3,
+                content_kind="reference-tone",
+            )
+
+        self.assertEqual(catalog["verdict"], "PASS")
+        self.assertAlmostEqual(catalog["signal_ac_rms_dbfs"], -39.08, delta=0.05)
+        self.assertEqual(catalog["signal_gate"]["required_above_floor_db"], 20.0)
+        self.assertEqual(catalog["signal_gate"]["floor_derived_threshold_dbfs"], -57.94)
+        self.assertEqual(catalog["signal_gate"]["minimum_absolute_dbfs"], -55.0)
+        self.assertEqual(catalog["signal_gate"]["effective_threshold_dbfs"], -55.0)
+        self.assertEqual(catalog["signal_gate"]["active_window_threshold_dbfs"], -55.0)
+        self.assertTrue(catalog["signal_gate"]["passed"])
+        self.assertEqual(reference["verdict"], "FAIL")
+        self.assertEqual(reference["signal_gate"]["required_above_floor_db"], 40.0)
+        self.assertFalse(reference["signal_gate"]["passed"])
+        self.assertTrue(any("signal margin" in item for item in reference["failures"]))
+
+    def test_catalog_below_gate_returns_structured_failure_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            capture = root / "quiet.wav"
+            write_sine(capture, seconds=2, amplitude=0.0001)
+            top = root / "pw-top.txt"
+            write_pw_top(top)
+            result = ta.score_media(
+                capture,
+                calibrated_noise_floor_dbfs=-77.94,
+                thresholds=ta.Thresholds(),
+                content_kind="catalog-music",
+                pw_top=top,
+                media_node="bluez_input.AA_BB_CC_DD_EE_FF.7",
+            )
+        self.assertEqual(result["verdict"], "FAIL")
+        self.assertFalse(result["signal_gate"]["passed"])
+        self.assertIn("media capture has no detected program audio", result["failures"])
+
+    def test_catalog_music_gate_uses_floor_derived_threshold_when_louder(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            capture = root / "music.wav"
+            write_sine(capture, seconds=3, amplitude=0.02, frequency=440)
+            top = root / "pw-top.txt"
+            write_pw_top(top)
+            result = ta.score_media(
+                capture,
+                calibrated_noise_floor_dbfs=-60.0,
+                thresholds=ta.Thresholds(),
+                content_kind="catalog-music",
+                pw_top=top,
+                media_node="bluez_input.AA_BB_CC_DD_EE_FF.7",
+            )
+        self.assertEqual(result["signal_gate"]["floor_derived_threshold_dbfs"], -40.0)
+        self.assertEqual(result["signal_gate"]["effective_threshold_dbfs"], -40.0)
+        self.assertEqual(result["signal_gate"]["active_window_threshold_dbfs"], -40.0)
+
     def test_catalog_music_rejects_new_pipewire_errors_after_startup(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1846,6 +2156,33 @@ class ScoringAndRoutingTests(unittest.TestCase):
 
 
 class CommandTests(unittest.TestCase):
+    @staticmethod
+    def unity_volume_failure() -> ta.AuxVolumeVerificationFailure:
+        return ta.AuxVolumeVerificationFailure(
+            (
+                "observed volume is 1.0, expected 0.95",
+                "fixed AUX volume is not verified",
+                "fixed AUX volume reports error 'volume mismatch'",
+            ),
+            evidence={
+                "required": True,
+                "target": ta.FIXED_AUX_TARGET,
+                "desired": 0.95,
+                "observed": 1.0,
+                "verified": False,
+                "error": "volume mismatch",
+            },
+        )
+
+    def test_subcommand_help_renders_literal_percentages(self) -> None:
+        for command in ("quick-calibrate", "calibrate"):
+            with self.subTest(command=command), mock.patch(
+                "sys.stdout", new=__import__("io").StringIO()
+            ) as output, self.assertRaises(SystemExit) as stopped:
+                ta.build_parser().parse_args([command, "--help"])
+            self.assertEqual(stopped.exception.code, 0)
+            self.assertIn("0%", output.getvalue())
+
     def test_without_live_no_backend_action_occurs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -1963,6 +2300,22 @@ class CommandTests(unittest.TestCase):
         self.assertFalse(result["android_music_volume"]["mutated_by_runner"])
         self.assertEqual(result["metrics"]["verdict"], "PASS")
         self.assertEqual(result["metrics"]["content_kind"], "catalog-music")
+
+    def test_catalog_readiness_reports_the_same_clamped_signal_gate(self) -> None:
+        result = ta.wait_aux_program_signal(
+            FakeBackend(),
+            alsa_id="GeneralPlus",
+            rate=ta.GENERALPLUS_RATE,
+            channels=ta.GENERALPLUS_CAPTURE_CHANNELS,
+            remote_root="/run/user/1000/test",
+            calibrated_noise_floor_dbfs=-77.94,
+            required_margin_db=20.0,
+            minimum_absolute_dbfs=-55.0,
+        )
+        self.assertEqual(result["threshold_dbfs"], -55.0)
+        self.assertEqual(result["signal_gate"]["floor_derived_threshold_dbfs"], -57.94)
+        self.assertEqual(result["signal_gate"]["effective_threshold_dbfs"], -55.0)
+        self.assertTrue(result["signal_gate"]["passed"])
 
     def test_profile_renegotiation_stops_youtube_music_and_waits_for_media_ready(
         self,
@@ -2100,6 +2453,103 @@ class CommandTests(unittest.TestCase):
             any("90-larkbridge-dev.conf" in script for script, _ in backend.pi_calls)
         )
 
+    def test_policy_iteration_rebuilds_once_for_unity_stall(self) -> None:
+        backend = FakeBackend()
+        old_manifest = {
+            "candidate_id": "old",
+            "content_sha256": "old-content",
+            "policy_files": {},
+        }
+        candidate = mock.Mock(
+            candidate_id="new",
+            content_sha256="new-content",
+            policy_files={"66-policy.conf": b"policy"},
+            manifest=lambda: {
+                "candidate_id": "new",
+                "content_sha256": "new-content",
+                "policy_files": {"66-policy.conf": "hash"},
+            },
+        )
+        quick = {
+            "instrument_fingerprint": "fingerprint",
+            "capture_gain_request": "0%",
+            "metrics": {
+                "noise_floor_dbfs": -65,
+                "above_floor_db": 45,
+                "clipped_pct": 0,
+            },
+        }
+        before = snapshot(candidate_id="old")
+        after = snapshot(candidate_id="new")
+        session = {
+            "status": "active",
+            "session_id": "session",
+            "recovery_root": "/recovery",
+            "baseline": {"boot_id": before["boot_id"]},
+            "instrument": good_instrument(),
+            "instrument_fingerprint": "fingerprint",
+            "quick_calibration_sha256": ta.sha256_bytes(ta.canonical_json(quick)),
+            "current_candidate": old_manifest,
+            "last_good_candidate": "old",
+            "iterations": [],
+        }
+        replacements = {
+            "load_session": mock.Mock(return_value=session),
+            "resolve_candidate": mock.Mock(return_value=candidate),
+            "run_focused_tests": mock.Mock(return_value={}),
+            "confirm_candidate_still_current": mock.Mock(),
+            "cache_candidate": mock.Mock(),
+            "capture_snapshot": mock.Mock(side_effect=(before, after)),
+            "load_quick_calibration": mock.Mock(return_value=quick),
+            "validate_quick_calibration": mock.Mock(),
+            "probe_instrument": mock.Mock(return_value=good_instrument()),
+            "instrument_fingerprint": mock.Mock(return_value="fingerprint"),
+            "validate_prepared_mixer_state": mock.Mock(),
+            "classify_restart": mock.Mock(return_value="audio-stack"),
+            "extend_preimages": mock.Mock(),
+            "arm_deadman": mock.Mock(),
+            "capture_condition_snapshot": mock.Mock(return_value=before),
+            "apply_candidate": mock.Mock(),
+            "verify_runtime": mock.Mock(
+                side_effect=(self.unity_volume_failure(), after)
+            ),
+            "rebuild_candidate_audio_stack": mock.Mock(),
+            "prepare_mixer": mock.Mock(return_value=good_instrument()),
+            "media_smoke": mock.Mock(
+                return_value={"metrics": {"verdict": "PASS", "failures": []}}
+            ),
+            "_route_failures": mock.Mock(return_value=[]),
+        }
+        with tempfile.TemporaryDirectory() as directory, mock.patch.multiple(
+            ta, **replacements
+        ):
+            artifacts = Path(directory)
+            args = mock.Mock(
+                artifacts=artifacts,
+                candidate=".",
+                mode="media",
+                deadman=900,
+                seconds=3,
+            )
+            inventory = mock.Mock(
+                aux_volume=0.95,
+                aux_target=ta.FIXED_AUX_TARGET,
+                instrument=ta.InstrumentSpec(),
+                thresholds=ta.Thresholds(),
+            )
+            self.assertEqual(ta.command_iterate(args, inventory, backend), 0)
+            record_path = next((artifacts / "iterations").glob("*/iteration.json"))
+            record = json.loads(record_path.read_text())
+
+        replacements["apply_candidate"].assert_called_once()
+        replacements["rebuild_candidate_audio_stack"].assert_called_once_with(
+            backend, "new"
+        )
+        self.assertEqual(replacements["verify_runtime"].call_count, 2)
+        replacements["prepare_mixer"].assert_called_once()
+        self.assertIn("instrument_after_restart", record)
+        self.assertEqual(record["audio_stack_rebuild_retry"]["status"], "passed")
+
     def test_transition_times_media_to_call_edge(self) -> None:
         before = snapshot("MEDIA_ACTIVE", "CALL_DOWN")
         after = snapshot("CALL", "ACTIVE")
@@ -2135,11 +2585,11 @@ class CommandTests(unittest.TestCase):
         candidate = mock.Mock(
             candidate_id="new",
             content_sha256="new-content",
-            policy_files={},
+            policy_files={"66-policy.conf": b"policy"},
             manifest=lambda: {
                 "candidate_id": "new",
                 "content_sha256": "new-content",
-                "policy_files": {},
+                "policy_files": {"66-policy.conf": "hash"},
             },
         )
         last_good = mock.Mock(
@@ -2181,6 +2631,7 @@ class CommandTests(unittest.TestCase):
         )
         state = snapshot(candidate_id="good")
         backend.snapshot = state
+        prepare = mock.Mock(return_value=good_instrument())
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(
             ta, "load_session", return_value=session
         ), mock.patch.object(
@@ -2201,12 +2652,12 @@ class CommandTests(unittest.TestCase):
             ta,
             "load_calibration",
             side_effect=AssertionError("full gate was consulted"),
-        ), mock.patch.object(
-            ta, "probe_instrument", return_value=good_instrument()
-        ), mock.patch.object(
-            ta, "instrument_fingerprint", return_value="fingerprint"
-        ), mock.patch.object(
-            ta, "validate_prepared_mixer_state"
+        ), mock.patch.multiple(
+            ta,
+            probe_instrument=mock.Mock(return_value=good_instrument()),
+            instrument_fingerprint=mock.Mock(return_value="fingerprint"),
+            validate_prepared_mixer_state=mock.Mock(),
+            prepare_mixer=prepare,
         ), mock.patch.object(
             ta, "extend_preimages"
         ), mock.patch.object(
@@ -2231,11 +2682,13 @@ class CommandTests(unittest.TestCase):
                 instrument=ta.InstrumentSpec(),
                 thresholds=ta.Thresholds(),
                 aux_volume=0.95,
+                aux_target=ta.FIXED_AUX_TARGET,
             )
             with self.assertRaisesRegex(ta.RigFailure, "capture failed"):
                 ta.command_iterate(args, inventory, backend)
         self.assertEqual(apply.call_count, 2)
         self.assertIs(apply.call_args_list[-1].args[1], last_good)
+        self.assertEqual(prepare.call_count, 2)
 
     def test_first_failed_same_candidate_restores_deployed_baseline(self) -> None:
         backend = FakeBackend()
@@ -2518,7 +2971,7 @@ class CommandTests(unittest.TestCase):
             side_effect=lambda *_args, **_kwargs: (
                 start_order.append("verify_runtime") or snapshot()
             ),
-        ):
+        ) as verify:
             args = mock.Mock(
                 artifacts=Path(directory),
                 candidate=".",
@@ -2526,6 +2979,7 @@ class CommandTests(unittest.TestCase):
             )
             inventory = mock.Mock(
                 aux_volume=0.95,
+                aux_target=ta.FIXED_AUX_TARGET,
                 instrument=ta.InstrumentSpec(),
                 thresholds=ta.Thresholds(),
             )
@@ -2535,8 +2989,157 @@ class CommandTests(unittest.TestCase):
         self.assertIn("quick_calibration_sha256", session)
         self.assertEqual(session["focused_tests"]["returncode"], 0)
         self.assertEqual(prepare.call_args.kwargs["capture_gain"], "0%")
+        self.assertEqual(verify.call_args.kwargs["mode"], "media")
         self.assertEqual(
             start_order, ["apply_candidate", "verify_runtime", "prepare_mixer"]
+        )
+
+    def test_call_session_start_rebuilds_once_for_unity_stall_and_reverifies(
+        self,
+    ) -> None:
+        backend = FakeBackend()
+        candidate = mock.Mock(
+            candidate_id="candidate",
+            policy_files={"66-policy.conf": b"policy"},
+            manifest=lambda: {
+                "candidate_id": "candidate",
+                "content_sha256": "content",
+                "policy_files": {"66-policy.conf": "hash"},
+            },
+        )
+        quick = {
+            "instrument_fingerprint": "fingerprint",
+            "capture_gain_request": "0%",
+            "metrics": {
+                "noise_floor_dbfs": -65,
+                "above_floor_db": 45,
+                "clipped_pct": 0,
+            },
+        }
+        call_state = snapshot("CALL", "ACTIVE")
+        replacements = {
+            "resolve_candidate": mock.Mock(return_value=candidate),
+            "run_focused_tests": mock.Mock(return_value={"returncode": 0}),
+            "confirm_candidate_still_current": mock.Mock(),
+            "cache_candidate": mock.Mock(),
+            "capture_snapshot": mock.Mock(return_value=call_state),
+            "probe_instrument": mock.Mock(return_value=good_instrument()),
+            "instrument_fingerprint": mock.Mock(return_value="fingerprint"),
+            "load_quick_calibration": mock.Mock(return_value=quick),
+            "validate_quick_calibration": mock.Mock(),
+            "capture_preimages": mock.Mock(return_value=({}, "/recovery")),
+            "install_recovery_script": mock.Mock(),
+            "arm_deadman": mock.Mock(),
+            "prepare_mixer": mock.Mock(return_value=good_instrument()),
+            "policy_restart_from_snapshot": mock.Mock(return_value="audio-stack"),
+            "apply_candidate": mock.Mock(),
+            "verify_runtime": mock.Mock(
+                side_effect=(self.unity_volume_failure(), call_state)
+            ),
+            "rebuild_candidate_audio_stack": mock.Mock(),
+            "renegotiate_phone_profiles": mock.Mock(return_value={"ready": True}),
+        }
+        with tempfile.TemporaryDirectory() as directory, mock.patch.multiple(
+            ta, **replacements
+        ):
+            artifacts = Path(directory)
+            args = mock.Mock(artifacts=artifacts, candidate=".", deadman=900)
+            inventory = mock.Mock(
+                aux_volume=0.95,
+                aux_target=ta.FIXED_AUX_TARGET,
+                instrument=ta.InstrumentSpec(),
+                thresholds=ta.Thresholds(),
+                pixel_bt_mac="AA:BB:CC:DD:EE:FF",
+            )
+            self.assertEqual(ta.command_session_start(args, inventory, backend), 0)
+            checkpoint = json.loads((artifacts / ta.SESSION_FILE).read_text())
+
+        self.assertEqual(replacements["verify_runtime"].call_count, 2)
+        self.assertTrue(
+            all(
+                call.kwargs["mode"] == "call"
+                for call in replacements["verify_runtime"].call_args_list
+            )
+        )
+        replacements["rebuild_candidate_audio_stack"].assert_called_once_with(
+            backend, "candidate"
+        )
+        replacements["apply_candidate"].assert_called_once()
+        replacements["renegotiate_phone_profiles"].assert_not_called()
+        self.assertEqual(checkpoint["start_mode"], "call")
+        self.assertEqual(checkpoint["phone_negotiation"]["status"], "deferred")
+        self.assertEqual(
+            checkpoint["start_audio_stack_rebuild_retry"]["status"], "passed"
+        )
+
+    def test_failed_session_start_rebuild_retry_restores_baseline(self) -> None:
+        backend = FakeBackend()
+        candidate = mock.Mock(
+            candidate_id="candidate",
+            policy_files={"66-policy.conf": b"policy"},
+            manifest=lambda: {
+                "candidate_id": "candidate",
+                "content_sha256": "content",
+                "policy_files": {"66-policy.conf": "hash"},
+            },
+        )
+        quick = {
+            "instrument_fingerprint": "fingerprint",
+            "capture_gain_request": "0%",
+            "metrics": {
+                "noise_floor_dbfs": -65,
+                "above_floor_db": 45,
+                "clipped_pct": 0,
+            },
+        }
+        baseline = snapshot()
+        replacements = {
+            "resolve_candidate": mock.Mock(return_value=candidate),
+            "run_focused_tests": mock.Mock(return_value={"returncode": 0}),
+            "confirm_candidate_still_current": mock.Mock(),
+            "cache_candidate": mock.Mock(),
+            "capture_snapshot": mock.Mock(return_value=baseline),
+            "probe_instrument": mock.Mock(return_value=good_instrument()),
+            "instrument_fingerprint": mock.Mock(return_value="fingerprint"),
+            "load_quick_calibration": mock.Mock(return_value=quick),
+            "validate_quick_calibration": mock.Mock(),
+            "capture_preimages": mock.Mock(return_value=({}, "/recovery")),
+            "install_recovery_script": mock.Mock(),
+            "arm_deadman": mock.Mock(),
+            "prepare_mixer": mock.Mock(return_value=good_instrument()),
+            "policy_restart_from_snapshot": mock.Mock(return_value="audio-stack"),
+            "apply_candidate": mock.Mock(),
+            "verify_runtime": mock.Mock(
+                side_effect=(
+                    self.unity_volume_failure(),
+                    ta.RigFailure("AUX still stuck after second rebuild"),
+                )
+            ),
+            "rebuild_candidate_audio_stack": mock.Mock(),
+            "renegotiate_phone_profiles": mock.Mock(),
+            "restore_remote_session": mock.Mock(return_value={"restored": True}),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            artifacts = Path(directory)
+            args = mock.Mock(artifacts=artifacts, candidate=".", deadman=900)
+            inventory = mock.Mock(
+                aux_volume=0.95,
+                aux_target=ta.FIXED_AUX_TARGET,
+                instrument=ta.InstrumentSpec(),
+                thresholds=ta.Thresholds(),
+                pixel_bt_mac="AA:BB:CC:DD:EE:FF",
+            )
+            with mock.patch.multiple(ta, **replacements), self.assertRaisesRegex(
+                ta.RigFailure, "still stuck"
+            ):
+                ta.command_session_start(args, inventory, backend)
+            checkpoint = json.loads((artifacts / ta.SESSION_FILE).read_text())
+        self.assertEqual(replacements["verify_runtime"].call_count, 2)
+        replacements["rebuild_candidate_audio_stack"].assert_called_once()
+        replacements["restore_remote_session"].assert_called_once()
+        self.assertEqual(checkpoint["status"], "start-failed-restored")
+        self.assertEqual(
+            checkpoint["start_audio_stack_rebuild_retry"]["status"], "failed"
         )
 
     def test_session_start_restore_failure_is_reported_and_retryable(self) -> None:
