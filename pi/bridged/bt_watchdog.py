@@ -47,6 +47,9 @@ FAILURES_TO_ACT = int(os.environ.get("BRIDGE_WD_FAILURES", "2"))
 PROBE_TIMEOUT = float(os.environ.get("BRIDGE_WD_PROBE_TIMEOUT", "20"))
 RECONNECT_DELAY = float(os.environ.get("BRIDGE_WD_RECONNECT_DELAY", "20"))
 RECONNECT_RETRY = float(os.environ.get("BRIDGE_WD_RECONNECT_RETRY", "30"))
+STARTUP_RECONNECT_RETRY = float(
+    os.environ.get("BRIDGE_WD_STARTUP_RECONNECT_RETRY", "2")
+)
 CALL_RECONNECT_ATTEMPTS = int(os.environ.get("BRIDGE_WD_CALL_ATTEMPTS", "3"))
 CALL_RECONNECT_COOLDOWN = float(os.environ.get("BRIDGE_WD_CALL_COOLDOWN", "120"))
 CONNECT_REQUEST_TIMEOUT = float(
@@ -782,14 +785,30 @@ def service_startup_reconnect(
     adapter: btadapters.Adapter,
     previous_target: str | None,
     *,
+    now: float | None = None,
     cancelled: Callable[[], bool] | None = None,
 ) -> str:
     """Issue one immediate reconnect when an exact runtime controller first resolves."""
     target = _adapter_runtime_target(adapter)
     if target != previous_target:
         state.reconnect_next = 0.0
-        service_reconnect(roles, role, state, cancelled=cancelled)
+        service_reconnect(roles, role, state, now=now, cancelled=cancelled)
+        if (
+            state.bond_state != "connected"
+            and state.repair_state == "idle"
+            and state.connect_pending_since is None
+        ):
+            observed = time.monotonic() if now is None else now
+            state.reconnect_next = observed + STARTUP_RECONNECT_RETRY
     return target
+
+
+def service_sleep_interval(state: RecoveryState, *, now: float | None = None) -> float:
+    """Wake for a pending reconnect deadline without accelerating idle polling."""
+    observed = time.monotonic() if now is None else now
+    if state.bond_state != "connected" and state.reconnect_next > observed:
+        return max(0.1, min(PROBE_INTERVAL, state.reconnect_next - observed))
+    return PROBE_INTERVAL
 
 
 def _set_production_pairing_closed(
@@ -1114,7 +1133,7 @@ def main(argv: list[str] | None = None) -> int:
                     cancelled=lambda: stopping,
                 )
             write_state(state, adapter)
-            time.sleep(PROBE_INTERVAL)
+            time.sleep(service_sleep_interval(state))
 
     write_state(state, adapter)
     return 0
