@@ -340,16 +340,35 @@ class ReconnectTests(unittest.TestCase):
         state = bt_watchdog.RecoveryState("call", reconnect_next=999.0)
         with mock.patch.object(bt_watchdog, "service_reconnect") as reconnect:
             observed = bt_watchdog.service_startup_reconnect(
-                roles(), "call", state, BT500, None
+                roles(), "call", state, BT500, None, now=100.0
             )
             repeated = bt_watchdog.service_startup_reconnect(
-                roles(), "call", state, BT500, observed
+                roles(), "call", state, BT500, observed, now=101.0
             )
 
         self.assertEqual(observed, bt_watchdog._adapter_runtime_target(BT500))
         self.assertEqual(repeated, observed)
-        self.assertEqual(state.reconnect_next, 0.0)
-        reconnect.assert_called_once_with(roles(), "call", state, cancelled=None)
+        self.assertEqual(
+            state.reconnect_next, 100.0 + bt_watchdog.STARTUP_RECONNECT_RETRY
+        )
+        reconnect.assert_called_once_with(
+            roles(), "call", state, now=100.0, cancelled=None
+        )
+
+    def test_disconnected_poll_wakes_for_boot_retry_deadline(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call", bond_state="trusted", reconnect_next=102.0
+        )
+        self.assertEqual(bt_watchdog.service_sleep_interval(state, now=100.0), 2.0)
+
+    def test_connected_poll_keeps_normal_probe_interval(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call", bond_state="connected", reconnect_next=102.0
+        )
+        self.assertEqual(
+            bt_watchdog.service_sleep_interval(state, now=100.0),
+            bt_watchdog.PROBE_INTERVAL,
+        )
 
     def test_missing_pixel_object_requires_operator_pairing_without_auto_repair(
         self,
