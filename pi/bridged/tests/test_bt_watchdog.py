@@ -65,10 +65,23 @@ def adapter(
 BT500 = adapter()
 
 
-def phone_tree(resolved: btadapters.Adapter, *, connected: bool = False) -> dict:
+def phone_tree(
+    resolved: btadapters.Adapter,
+    *,
+    connected: bool = False,
+    paired: bool = True,
+    bonded: bool = True,
+    trusted: bool = True,
+) -> dict:
     return {
         btadapters.path_for(resolved, PHONE_ADDRESS): {
-            "org.bluez.Device1": {"Connected": {"data": connected}}
+            "org.bluez.Device1": {
+                "Address": {"data": PHONE_ADDRESS},
+                "Connected": {"data": connected},
+                "Paired": {"data": paired},
+                "Bonded": {"data": bonded},
+                "Trusted": {"data": trusted},
+            }
         }
     }
 
@@ -76,7 +89,9 @@ def phone_tree(resolved: btadapters.Adapter, *, connected: bool = False) -> dict
 class ResolutionTests(unittest.TestCase):
     def test_call_role_uses_permanent_identity_not_hci_order(self) -> None:
         onboard = btadapters.Adapter("hci0", ONBOARD_ADDRESS, "UART", 0)
-        observed = bt_watchdog.resolve_role(roles(), "call", objects={}, inventory=[onboard, BT500])
+        observed = bt_watchdog.resolve_role(
+            roles(), "call", objects={}, inventory=[onboard, BT500]
+        )
         self.assertIs(observed, BT500)
 
     def test_onboard_phone_object_never_selects_the_call_controller(self) -> None:
@@ -90,7 +105,9 @@ class ResolutionTests(unittest.TestCase):
             bt_watchdog.resolve_role(roles(), "call", objects={}, inventory=[wrong])
 
     def test_absent_output_watchdog_uses_typed_error(self) -> None:
-        with self.assertRaises(controller_roles.ControllerRoleNotConfiguredError) as raised:
+        with self.assertRaises(
+            controller_roles.ControllerRoleNotConfiguredError
+        ) as raised:
             bt_watchdog.role_spec(roles(), "output")
         self.assertEqual(raised.exception.code, "controller_role_not_configured")
 
@@ -171,7 +188,9 @@ class TargetedRecoveryTests(unittest.TestCase):
             with (
                 mock.patch.object(bt_watchdog, "SYS_USB_DRIVERS", Path(directory)),
                 mock.patch.object(bt_watchdog.subprocess, "run", side_effect=run),
-                mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+                mock.patch.object(
+                    bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+                ),
                 mock.patch.object(bt_watchdog.btadapters, "disconnect"),
                 mock.patch.object(bt_watchdog.time, "sleep"),
             ):
@@ -215,7 +234,9 @@ class TargetedRecoveryTests(unittest.TestCase):
 
     def test_usb_rebind_rejects_non_btusb_or_ambiguous_interface(self) -> None:
         wrong_driver = adapter()
-        wrong_driver = btadapters.Adapter(**{**wrong_driver.__dict__, "driver": "other"})
+        wrong_driver = btadapters.Adapter(
+            **{**wrong_driver.__dict__, "driver": "other"}
+        )
         ambiguous = adapter(usb_interface="../../unbind")
         with mock.patch.object(Path, "write_text") as write:
             self.assertFalse(bt_watchdog.rebind_usb(wrong_driver))
@@ -226,7 +247,9 @@ class TargetedRecoveryTests(unittest.TestCase):
 class RecoveryStateTests(unittest.TestCase):
     def test_recovery_waits_for_threshold_then_applies_backoff(self) -> None:
         state = bt_watchdog.RecoveryState("call", failures=1)
-        recover = mock.Mock(return_value=bt_watchdog.RecoveryResult(True, "hci-down-up"))
+        recover = mock.Mock(
+            return_value=bt_watchdog.RecoveryResult(True, "hci-down-up")
+        )
         self.assertFalse(bt_watchdog.attempt_recovery(state, recover, now=100.0))
         state.failures = 2
         self.assertTrue(bt_watchdog.attempt_recovery(state, recover, now=100.0))
@@ -256,7 +279,9 @@ class RecoveryStateTests(unittest.TestCase):
 
     def test_failed_recovery_does_not_consume_backoff_window(self) -> None:
         state = bt_watchdog.RecoveryState("call", failures=2)
-        recover = mock.Mock(return_value=bt_watchdog.RecoveryResult(False, "exhausted", "wedged"))
+        recover = mock.Mock(
+            return_value=bt_watchdog.RecoveryResult(False, "exhausted", "wedged")
+        )
         self.assertFalse(bt_watchdog.attempt_recovery(state, recover, now=100.0))
         self.assertFalse(bt_watchdog.attempt_recovery(state, recover, now=101.0))
         self.assertEqual(state.last_attempt, 0.0)
@@ -275,20 +300,60 @@ class RecoveryStateTests(unittest.TestCase):
 
 
 class ReconnectTests(unittest.TestCase):
+    def test_missing_pixel_object_requires_operator_pairing_without_auto_repair(
+        self,
+    ) -> None:
+        state = bt_watchdog.RecoveryState("call")
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters, "managed_objects", return_value={}
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
+            mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
+        ):
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=100.0)
+            )
+
+        self.assertEqual(state.bond_state, "missing")
+        self.assertEqual(state.repair_state, "pairing_required")
+        self.assertIsNone(state.repair_trigger)
+        self.assertEqual(state.last_action, "pairing_required")
+        power_on.assert_not_called()
+        connect.assert_not_called()
+
     def test_phone_reconnect_uses_only_the_resolved_bt500(self) -> None:
         state = bt_watchdog.RecoveryState("call")
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
-            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500) as resolve,
-            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
-            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
+            mock.patch.object(
+                bt_watchdog, "resolve_role", return_value=BT500
+            ) as resolve,
+            mock.patch.object(
+                bt_watchdog.btadapters, "connected_on", return_value=False
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
             mock.patch.object(
                 bt_watchdog.btadapters, "connect", return_value=(True, "connected")
             ) as connect,
         ):
-            self.assertTrue(bt_watchdog.service_reconnect(roles(), "call", state, now=100.0))
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=100.0)
+            )
         self.assertGreaterEqual(resolve.call_count, 2)
-        connect.assert_called_once_with(PHONE_ADDRESS, BT500, cancelled=None)
+        connect.assert_called_once_with(
+            PHONE_ADDRESS,
+            BT500,
+            timeout=bt_watchdog.CONNECT_REQUEST_TIMEOUT,
+            cancelled=None,
+        )
         self.assertEqual(state.reconnect_attempts, 0)
 
     def test_shutdown_between_power_and_connect_stops_reconnect(self) -> None:
@@ -301,9 +366,15 @@ class ReconnectTests(unittest.TestCase):
             return True, "on"
 
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connected_on", return_value=False
+            ),
             mock.patch.object(bt_watchdog.btadapters, "power_on", side_effect=power_on),
             mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
         ):
@@ -315,20 +386,34 @@ class ReconnectTests(unittest.TestCase):
         connect.assert_not_called()
         self.assertEqual(state.last_action, "cancelled")
 
-    def test_in_progress_waits_without_duplicate_connect_or_spending_attempt(self) -> None:
+    def test_in_progress_waits_without_duplicate_connect_or_spending_attempt(
+        self,
+    ) -> None:
         state = bt_watchdog.RecoveryState("call")
-        pending = "Call failed: org.bluez.Error.InProgress: Operation already in progress"
+        pending = (
+            "Call failed: org.bluez.Error.InProgress: Operation already in progress"
+        )
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
-            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connected_on", return_value=False
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
             mock.patch.object(
                 bt_watchdog.btadapters, "connect", return_value=(False, pending)
             ) as connect,
             mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
         ):
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=100.0))
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=100.0)
+            )
             self.assertFalse(
                 bt_watchdog.service_reconnect(
                     roles(),
@@ -338,11 +423,18 @@ class ReconnectTests(unittest.TestCase):
                 )
             )
 
-        connect.assert_called_once_with(PHONE_ADDRESS, BT500, cancelled=None)
+        connect.assert_called_once_with(
+            PHONE_ADDRESS,
+            BT500,
+            timeout=bt_watchdog.CONNECT_REQUEST_TIMEOUT,
+            cancelled=None,
+        )
         disconnect.assert_not_called()
         self.assertEqual(state.reconnect_attempts, 0)
         self.assertEqual(state.connect_pending_since, 100.0)
-        self.assertEqual(state.reconnect_next, 100.0 + bt_watchdog.CONNECT_PENDING_TIMEOUT)
+        self.assertEqual(
+            state.reconnect_next, 100.0 + bt_watchdog.CONNECT_PENDING_TIMEOUT
+        )
         self.assertEqual(state.last_action, "device-connect-pending")
         snapshot = state.as_dict(BT500)
         self.assertEqual(snapshot["connect_pending_since_monotonic"], 100.0)
@@ -355,19 +447,35 @@ class ReconnectTests(unittest.TestCase):
         state = bt_watchdog.RecoveryState("call")
         pending = "Call failed: In Progress"
         with (
-            mock.patch.object(bt_watchdog.time, "monotonic", side_effect=(100.0, 140.0)),
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(
+                bt_watchdog.time, "monotonic", side_effect=(100.0, 140.0)
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
-            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
-            mock.patch.object(bt_watchdog.btadapters, "connect", return_value=(False, pending)),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connected_on", return_value=False
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect", return_value=(False, pending)
+            ),
         ):
             self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state))
 
         self.assertEqual(state.connect_pending_since, 140.0)
-        self.assertEqual(state.reconnect_next, 140.0 + bt_watchdog.CONNECT_PENDING_TIMEOUT)
+        self.assertEqual(
+            state.reconnect_next, 140.0 + bt_watchdog.CONNECT_PENDING_TIMEOUT
+        )
 
-    def test_observed_connection_during_pending_wait_completes_without_cancel(self) -> None:
+    def test_observed_connection_during_pending_wait_completes_without_cancel(
+        self,
+    ) -> None:
         state = bt_watchdog.RecoveryState(
             "call",
             connect_pending_since=100.0,
@@ -377,18 +485,22 @@ class ReconnectTests(unittest.TestCase):
         )
         tree = phone_tree(BT500, connected=True)
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value=tree),
+            mock.patch.object(
+                bt_watchdog.btadapters, "managed_objects", return_value=tree
+            ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
             mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
             mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
             mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
         ):
-            self.assertTrue(bt_watchdog.service_reconnect(roles(), "call", state, now=120.0))
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=120.0)
+            )
 
         self.assertIsNone(state.connect_pending_since)
         self.assertIsNone(state.connect_pending_target)
         self.assertEqual(state.connect_collision_cancellations, 0)
-        self.assertEqual(state.last_action, "device-connected")
+        self.assertEqual(state.last_action, "connected")
         self.assertIsNone(state.last_error)
         power_on.assert_not_called()
         connect.assert_not_called()
@@ -403,43 +515,63 @@ class ReconnectTests(unittest.TestCase):
         )
         tree = phone_tree(BT500)
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value=tree),
+            mock.patch.object(
+                bt_watchdog.btadapters, "managed_objects", return_value=tree
+            ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
             mock.patch.object(
-                bt_watchdog.btadapters, "disconnect", return_value=(True, "disconnected")
+                bt_watchdog.btadapters,
+                "disconnect",
+                return_value=(True, "disconnected"),
             ) as disconnect,
             mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
             mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
         ):
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=145.0))
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=146.0))
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=145.0)
+            )
 
         disconnect.assert_called_once_with(PHONE_ADDRESS, BT500, cancelled=None)
         power_on.assert_not_called()
         connect.assert_not_called()
         self.assertEqual(state.connect_collision_cancellations, 1)
-        self.assertEqual(state.reconnect_next, 145.0 + bt_watchdog.RECONNECT_DELAY)
+        self.assertEqual(
+            state.reconnect_next, 145.0 + bt_watchdog.POST_CANCEL_RETRY_DELAY
+        )
         self.assertEqual(state.last_action, "device-connect-cancelled")
 
         moved = adapter("hci9", rfkill_index=9, usb_interface="1-1.4:1.0")
         with (
             mock.patch.object(
-                bt_watchdog.btadapters, "managed_objects", return_value=phone_tree(moved)
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(moved),
             ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=moved),
-            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
             mock.patch.object(
                 bt_watchdog.btadapters, "connect", return_value=(True, "connected")
             ) as connect,
             mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect_again,
         ):
-            self.assertTrue(bt_watchdog.service_reconnect(roles(), "call", state, now=165.0))
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=165.0)
+            )
 
-        connect.assert_called_once_with(PHONE_ADDRESS, moved, cancelled=None)
+        connect.assert_called_once_with(
+            PHONE_ADDRESS,
+            moved,
+            timeout=bt_watchdog.CONNECT_REQUEST_TIMEOUT,
+            cancelled=None,
+        )
         disconnect_again.assert_not_called()
         self.assertEqual(state.connect_collision_cancellations, 0)
 
-    def test_changed_pending_target_settles_without_cancelling_new_adapter(self) -> None:
+    def test_changed_pending_target_settles_without_cancelling_new_adapter(
+        self,
+    ) -> None:
         state = bt_watchdog.RecoveryState(
             "call",
             connect_pending_since=100.0,
@@ -449,14 +581,18 @@ class ReconnectTests(unittest.TestCase):
         moved = adapter("hci8", rfkill_index=8, usb_interface="1-1.3:1.0")
         with (
             mock.patch.object(
-                bt_watchdog.btadapters, "managed_objects", return_value=phone_tree(moved)
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(moved),
             ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=moved),
             mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
             mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
             mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
         ):
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=145.0))
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=145.0)
+            )
 
         disconnect.assert_not_called()
         power_on.assert_not_called()
@@ -465,50 +601,86 @@ class ReconnectTests(unittest.TestCase):
         self.assertIsNone(state.connect_pending_since)
         self.assertEqual(state.reconnect_next, 145.0 + bt_watchdog.RECONNECT_DELAY)
 
-    def test_second_in_progress_waits_for_cooldown_before_new_pending_window(self) -> None:
+    def test_second_in_progress_after_exact_cancel_requests_stale_bond_repair(
+        self,
+    ) -> None:
         state = bt_watchdog.RecoveryState(
             "call",
             connect_collision_cancellations=1,
         )
         pending = "Call failed: In Progress"
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
-            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connected_on", return_value=False
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
             mock.patch.object(
                 bt_watchdog.btadapters, "connect", return_value=(False, pending)
             ) as connect,
             mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
         ):
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=200.0))
             self.assertFalse(
-                bt_watchdog.service_reconnect(
-                    roles(),
-                    "call",
-                    state,
-                    now=200.0 + bt_watchdog.CALL_RECONNECT_COOLDOWN - 1,
-                )
+                bt_watchdog.service_reconnect(roles(), "call", state, now=200.0)
             )
+        connect.assert_called_once_with(
+            PHONE_ADDRESS,
+            BT500,
+            timeout=bt_watchdog.CONNECT_REQUEST_TIMEOUT,
+            cancelled=None,
+        )
+        disconnect.assert_not_called()
+        self.assertEqual(state.reconnect_attempts, 1)
+        self.assertEqual(state.reconnect_next, 0.0)
+        self.assertEqual(state.last_action, "stale_bond_suspected")
+        self.assertEqual(state.repair_state, "requested")
+        self.assertEqual(state.repair_trigger, "repeated-in-progress")
+        self.assertEqual(state.stale_connect_signatures, 1)
+        self.assertEqual(state.connect_collision_cancellations, 1)
+
+    def test_timeout_after_exact_cancel_is_not_stale_bond_evidence(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            connect_collision_cancellations=1,
+        )
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "connect",
+                return_value=(False, "request timed out"),
+            ) as connect,
+        ):
             self.assertFalse(
-                bt_watchdog.service_reconnect(
-                    roles(),
-                    "call",
-                    state,
-                    now=200.0 + bt_watchdog.CALL_RECONNECT_COOLDOWN,
-                )
+                bt_watchdog.service_reconnect(roles(), "call", state, now=200.0)
             )
 
-        self.assertEqual(connect.call_count, 2)
-        disconnect.assert_not_called()
-        self.assertEqual(state.reconnect_attempts, 0)
-        self.assertEqual(
-            state.reconnect_next,
-            200.0 + bt_watchdog.CALL_RECONNECT_COOLDOWN + bt_watchdog.CONNECT_PENDING_TIMEOUT,
+        connect.assert_called_once_with(
+            PHONE_ADDRESS,
+            BT500,
+            timeout=bt_watchdog.CONNECT_REQUEST_TIMEOUT,
+            cancelled=None,
         )
-        self.assertEqual(state.last_action, "device-connect-pending")
-        self.assertEqual(state.connect_pending_since, 200.0 + bt_watchdog.CALL_RECONNECT_COOLDOWN)
-        self.assertEqual(state.connect_collision_cancellations, 0)
+        self.assertEqual(state.repair_state, "idle")
+        self.assertIsNone(state.repair_trigger)
+        self.assertEqual(state.stale_connect_signatures, 0)
+        self.assertEqual(state.last_action, "device-reconnect")
+        self.assertEqual(state.reconnect_next, 200.0 + bt_watchdog.RECONNECT_RETRY)
 
     def test_failed_pending_cancel_enters_cooldown_without_retry(self) -> None:
         state = bt_watchdog.RecoveryState(
@@ -518,7 +690,9 @@ class ReconnectTests(unittest.TestCase):
         )
         tree = phone_tree(BT500)
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value=tree),
+            mock.patch.object(
+                bt_watchdog.btadapters, "managed_objects", return_value=tree
+            ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
             mock.patch.object(
                 bt_watchdog.btadapters,
@@ -528,7 +702,9 @@ class ReconnectTests(unittest.TestCase):
             mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
             mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
         ):
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=145.0))
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=145.0)
+            )
             self.assertFalse(
                 bt_watchdog.service_reconnect(
                     roles(),
@@ -543,9 +719,13 @@ class ReconnectTests(unittest.TestCase):
         connect.assert_not_called()
         self.assertEqual(state.last_action, "device-connect-cancel-failed")
         self.assertEqual(state.reconnect_attempts, bt_watchdog.CALL_RECONNECT_ATTEMPTS)
-        self.assertEqual(state.reconnect_next, 145.0 + bt_watchdog.CALL_RECONNECT_COOLDOWN)
+        self.assertEqual(
+            state.reconnect_next, 145.0 + bt_watchdog.CALL_RECONNECT_COOLDOWN
+        )
 
-    def test_missing_controller_clears_pending_but_preserves_cancel_budget(self) -> None:
+    def test_missing_controller_clears_pending_but_preserves_cancel_budget(
+        self,
+    ) -> None:
         state = bt_watchdog.RecoveryState(
             "call",
             connect_pending_since=100.0,
@@ -554,13 +734,19 @@ class ReconnectTests(unittest.TestCase):
         )
         error = controller_roles.ControllerMissingError("call", BT500_ADDRESS)
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
             mock.patch.object(bt_watchdog, "resolve_role", side_effect=error),
             mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
             mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
             mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
         ):
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=120.0))
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=120.0)
+            )
 
         self.assertIsNone(state.connect_pending_since)
         self.assertIsNone(state.connect_pending_target)
@@ -578,7 +764,9 @@ class ReconnectTests(unittest.TestCase):
             with self.subTest(detail=detail):
                 self.assertTrue(bt_watchdog._disconnect_quiesced(False, detail))
         self.assertFalse(
-            bt_watchdog._disconnect_quiesced(False, "Call failed: org.bluez.Error.Failed")
+            bt_watchdog._disconnect_quiesced(
+                False, "Call failed: org.bluez.Error.Failed"
+            )
         )
 
     def test_pending_cancel_fails_closed_when_identity_changes(self) -> None:
@@ -592,14 +780,18 @@ class ReconnectTests(unittest.TestCase):
         )
         with (
             mock.patch.object(
-                bt_watchdog.btadapters, "managed_objects", return_value=phone_tree(BT500)
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
             ),
             mock.patch.object(bt_watchdog, "resolve_role", side_effect=error),
             mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
             mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
             mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
         ):
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=145.0))
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=145.0)
+            )
 
         self.assertIn("controller_identity_mismatch", state.identity_error or "")
         self.assertEqual(state.last_action, "resolve")
@@ -616,7 +808,9 @@ class ReconnectTests(unittest.TestCase):
         checks = iter((False, True))
         with (
             mock.patch.object(
-                bt_watchdog.btadapters, "managed_objects", return_value=phone_tree(BT500)
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
             ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
             mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
@@ -634,18 +828,35 @@ class ReconnectTests(unittest.TestCase):
         power_on.assert_not_called()
         connect.assert_not_called()
 
-    def test_failed_burst_enters_cooldown_without_an_immediate_fourth_attempt(self) -> None:
+    def test_failed_burst_enters_cooldown_without_an_immediate_fourth_attempt(
+        self,
+    ) -> None:
         state = bt_watchdog.RecoveryState("call", reconnect_attempts=2)
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
-            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
-            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
             mock.patch.object(
-                bt_watchdog.btadapters, "connect", return_value=(False, "timed out")
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connected_on", return_value=False
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "connect",
+                return_value=(
+                    False,
+                    "Call failed: org.bluez.Error.Failed: Host is down",
+                ),
             ) as connect,
         ):
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=100.0))
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=100.0)
+            )
             self.assertFalse(
                 bt_watchdog.service_reconnect(
                     roles(),
@@ -657,7 +868,9 @@ class ReconnectTests(unittest.TestCase):
 
         self.assertEqual(connect.call_count, 1)
         self.assertEqual(state.reconnect_attempts, bt_watchdog.CALL_RECONNECT_ATTEMPTS)
-        self.assertEqual(state.reconnect_next, 100.0 + bt_watchdog.CALL_RECONNECT_COOLDOWN)
+        self.assertEqual(
+            state.reconnect_next, 100.0 + bt_watchdog.CALL_RECONNECT_COOLDOWN
+        )
 
     def test_cooldown_expiry_starts_a_new_exact_target_burst(self) -> None:
         state = bt_watchdog.RecoveryState(
@@ -666,17 +879,37 @@ class ReconnectTests(unittest.TestCase):
             reconnect_next=220.0,
         )
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
-            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
-            mock.patch.object(bt_watchdog.btadapters, "power_on", return_value=(True, "on")),
             mock.patch.object(
-                bt_watchdog.btadapters, "connect", return_value=(False, "timed out")
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connected_on", return_value=False
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "connect",
+                return_value=(
+                    False,
+                    "Call failed: org.bluez.Error.Failed: Host is down",
+                ),
             ) as connect,
         ):
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=220.0))
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=220.0)
+            )
 
-        connect.assert_called_once_with(PHONE_ADDRESS, BT500, cancelled=None)
+        connect.assert_called_once_with(
+            PHONE_ADDRESS,
+            BT500,
+            timeout=bt_watchdog.CONNECT_REQUEST_TIMEOUT,
+            cancelled=None,
+        )
         self.assertEqual(state.reconnect_attempts, 1)
         self.assertEqual(state.reconnect_next, 220.0 + bt_watchdog.RECONNECT_RETRY)
 
@@ -690,18 +923,26 @@ class ReconnectTests(unittest.TestCase):
             last_error="connection timed out",
         )
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500, connected=True),
+            ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=True),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connected_on", return_value=True
+            ),
             mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
             mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
         ):
-            self.assertTrue(bt_watchdog.service_reconnect(roles(), "call", state, now=300.0))
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=300.0)
+            )
 
         self.assertEqual(state.reconnect_attempts, 0)
         self.assertEqual(state.reconnect_next, 0.0)
         self.assertIsNone(state.identity_error)
-        self.assertEqual(state.last_action, "device-connected")
+        self.assertEqual(state.last_action, "connected")
         self.assertIsNone(state.last_error)
         power_on.assert_not_called()
         connect.assert_not_called()
@@ -717,13 +958,21 @@ class ReconnectTests(unittest.TestCase):
             "call", "expected USB 0b05:1bf6, observed 0b05:ffff"
         )
         with (
-            mock.patch.object(bt_watchdog.btadapters, "managed_objects", return_value={}),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
             mock.patch.object(bt_watchdog, "resolve_role", side_effect=[BT500, error]),
-            mock.patch.object(bt_watchdog.btadapters, "connected_on", return_value=False),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connected_on", return_value=False
+            ),
             mock.patch.object(bt_watchdog.btadapters, "power_on") as power_on,
             mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
         ):
-            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state, now=100.0))
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=100.0)
+            )
 
         self.assertIn("controller_identity_mismatch", state.identity_error or "")
         self.assertEqual(state.reconnect_attempts, bt_watchdog.CALL_RECONNECT_ATTEMPTS)
@@ -733,9 +982,27 @@ class ReconnectTests(unittest.TestCase):
 
 
 class ProbeAndUnitTests(unittest.TestCase):
+    def test_production_pairing_state_is_closed_on_exact_adapter(self) -> None:
+        with mock.patch.object(
+            bt_watchdog.btadapters,
+            "set_adapter_property",
+            return_value=(True, "ok"),
+        ) as setter:
+            ok, detail = bt_watchdog._set_production_pairing_closed(BT500)
+        self.assertTrue(ok, detail)
+        self.assertEqual(
+            setter.call_args_list,
+            [
+                mock.call(BT500, "Discoverable", False, cancelled=None),
+                mock.call(BT500, "Pairable", False, cancelled=None),
+            ],
+        )
+
     def test_probe_targets_only_current_resolved_hci(self) -> None:
         result = subprocess.CompletedProcess([], 0, "HCI Version: 6.0\n", "")
-        with mock.patch.object(bt_watchdog.subprocess, "run", return_value=result) as run:
+        with mock.patch.object(
+            bt_watchdog.subprocess, "run", return_value=result
+        ) as run:
             self.assertIs(
                 bt_watchdog.probe_controller(BT500),
                 bt_watchdog.ProbeStatus.ANSWERED,
@@ -756,6 +1023,156 @@ class ProbeAndUnitTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, template.lower())
             self.assertNotIn(forbidden, legacy.lower())
+
+
+class PairingRepairTests(unittest.TestCase):
+    def test_success_seals_before_delete_and_after_exact_pixel_pairing(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call", repair_state="requested", repair_trigger="repeated-in-progress"
+        )
+        events: list[str] = []
+
+        def timer(action: str) -> tuple[bool, str]:
+            events.append(f"timer:{action}")
+            return True, action
+
+        def seal() -> tuple[bool, str]:
+            events.append("seal")
+            return True, "slot"
+
+        def remove(address: str, resolved: btadapters.Adapter) -> tuple[bool, str]:
+            events.append(f"remove:{address}")
+            self.assertIs(resolved, BT500)
+            return True, "removed"
+
+        def window(*_args, **_kwargs) -> btadapters.PairingWindowResult:
+            events.append("window")
+            return btadapters.PairingWindowResult(True, "paired")
+
+        with (
+            mock.patch.object(bt_watchdog, "write_state"),
+            mock.patch.object(bt_watchdog, "_pairing_timer", side_effect=timer),
+            mock.patch.object(
+                bt_watchdog, "_pairing_seal", side_effect=seal
+            ) as sealing,
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "paired_addresses_on",
+                return_value={PHONE_ADDRESS},
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "remove_device", side_effect=remove
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "incoming_pairing_window", side_effect=window
+            ) as pairing,
+        ):
+            self.assertTrue(bt_watchdog.repair_phone_bond(roles(), state, BT500))
+
+        self.assertEqual(
+            events,
+            [
+                "timer:stop",
+                "seal",
+                f"remove:{PHONE_ADDRESS}",
+                "window",
+                "seal",
+                "timer:start",
+            ],
+        )
+        self.assertEqual(sealing.call_count, 2)
+        pairing.assert_called_once_with(
+            PHONE_ADDRESS,
+            BT500,
+            timeout=bt_watchdog.PAIRING_WINDOW_SECONDS,
+            preexisting_paired=set(),
+            cancelled=None,
+            heartbeat=mock.ANY,
+        )
+        self.assertEqual(state.bond_state, "trusted")
+        self.assertEqual(state.repair_state, "idle")
+        self.assertFalse(state.pairing_timer_paused)
+        self.assertEqual(state.last_action, "bond_sealed")
+
+    def test_timeout_leaves_bondless_state_unsealed_for_reboot_rollback(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call", repair_state="requested", repair_trigger="repeated-in-progress"
+        )
+        with (
+            mock.patch.object(bt_watchdog, "write_state"),
+            mock.patch.object(
+                bt_watchdog, "_pairing_timer", return_value=(True, "stopped")
+            ) as timer,
+            mock.patch.object(
+                bt_watchdog, "_pairing_seal", return_value=(True, "pre-repair")
+            ) as sealing,
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "paired_addresses_on",
+                return_value={PHONE_ADDRESS},
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "remove_device", return_value=(True, "removed")
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "incoming_pairing_window",
+                return_value=btadapters.PairingWindowResult(False, "pairing timed out"),
+            ),
+        ):
+            self.assertFalse(bt_watchdog.repair_phone_bond(roles(), state, BT500))
+
+        sealing.assert_called_once_with()
+        timer.assert_called_once_with("stop")
+        self.assertTrue(state.pairing_timer_paused)
+        self.assertEqual(state.bond_state, "missing")
+        self.assertEqual(state.repair_state, "pairing_required")
+        self.assertEqual(state.last_action, "pairing_required")
+        self.assertEqual(state.last_error, "pairing timed out")
+
+    def test_reopened_timeout_window_never_seals_bondless_live_state(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            bond_state="missing",
+            repair_state="requested",
+            repair_trigger="manual",
+            pairing_timer_paused=True,
+        )
+        with (
+            mock.patch.object(bt_watchdog, "write_state"),
+            mock.patch.object(bt_watchdog, "_pairing_timer") as timer,
+            mock.patch.object(bt_watchdog, "_pairing_seal") as sealing,
+            mock.patch.object(
+                bt_watchdog.btadapters, "managed_objects", return_value={}
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters, "paired_addresses_on", return_value=set()
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "incoming_pairing_window",
+                return_value=btadapters.PairingWindowResult(False, "still waiting"),
+            ),
+        ):
+            self.assertFalse(bt_watchdog.repair_phone_bond(roles(), state, BT500))
+
+        timer.assert_not_called()
+        sealing.assert_not_called()
+        self.assertTrue(state.pairing_timer_paused)
+        self.assertEqual(state.repair_state, "pairing_required")
 
 
 if __name__ == "__main__":

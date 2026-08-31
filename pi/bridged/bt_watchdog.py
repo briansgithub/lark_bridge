@@ -49,7 +49,22 @@ RECONNECT_DELAY = float(os.environ.get("BRIDGE_WD_RECONNECT_DELAY", "20"))
 RECONNECT_RETRY = float(os.environ.get("BRIDGE_WD_RECONNECT_RETRY", "30"))
 CALL_RECONNECT_ATTEMPTS = int(os.environ.get("BRIDGE_WD_CALL_ATTEMPTS", "3"))
 CALL_RECONNECT_COOLDOWN = float(os.environ.get("BRIDGE_WD_CALL_COOLDOWN", "120"))
-CONNECT_PENDING_TIMEOUT = float(os.environ.get("BRIDGE_WD_CONNECT_PENDING_TIMEOUT", "45"))
+CONNECT_REQUEST_TIMEOUT = float(
+    os.environ.get("BRIDGE_WD_CONNECT_REQUEST_TIMEOUT", "8")
+)
+CONNECT_PENDING_TIMEOUT = float(
+    os.environ.get("BRIDGE_WD_CONNECT_PENDING_TIMEOUT", "12")
+)
+PAIRING_WINDOW_SECONDS = float(os.environ.get("BRIDGE_WD_PAIRING_WINDOW", "120"))
+POST_CANCEL_RETRY_DELAY = float(os.environ.get("BRIDGE_WD_POST_CANCEL_RETRY", "1"))
+PAIRING_SEAL_TIMER = "bridge-pairing-seal.timer"
+PAIRING_SEAL_SERVICE = "bridge-pairing-seal.service"
+PAIRING_SEAL_COMMAND = Path(
+    os.environ.get(
+        "BRIDGE_WD_PAIRING_SEAL_COMMAND",
+        "/usr/local/lib/rpi-lark-bridge/powerloss/lark_state.py",
+    )
+)
 BACKOFF_START = 60.0
 BACKOFF_MAX = 900.0
 
@@ -83,6 +98,12 @@ class RecoveryState:
     connect_pending_since: float | None = None
     connect_pending_target: str | None = None
     connect_collision_cancellations: int = 0
+    stale_connect_signatures: int = 0
+    bond_state: str = "unknown"
+    repair_state: str = "idle"
+    repair_trigger: str | None = None
+    repair_deadline: float | None = None
+    pairing_timer_paused: bool = False
     last_attempt: float = 0.0
     last_recovery: float = 0.0
     backoff: float = BACKOFF_START
@@ -109,6 +130,12 @@ class RecoveryState:
             ),
             "connect_pending_target": self.connect_pending_target,
             "connect_collision_cancellations": self.connect_collision_cancellations,
+            "stale_connect_signatures": self.stale_connect_signatures,
+            "bond_state": self.bond_state,
+            "repair_state": self.repair_state,
+            "repair_trigger": self.repair_trigger,
+            "repair_deadline_monotonic": self.repair_deadline,
+            "pairing_timer_paused": self.pairing_timer_paused,
             "last_attempt_monotonic": self.last_attempt,
             "last_recovery_monotonic": self.last_recovery,
             "backoff_seconds": self.backoff,
@@ -157,6 +184,7 @@ def write_state(state: RecoveryState, adapter: btadapters.Adapter | None) -> Non
         handle.write("\n")
         temporary = Path(handle.name)
     os.replace(temporary, target)
+    os.chmod(target, 0o644)
 
 
 def role_spec(
@@ -210,7 +238,9 @@ def probe_controller(adapter: btadapters.Adapter) -> ProbeStatus:
     output = (result.stdout or "") + (result.stderr or "")
     if result.returncode != 0 or "Connection timed out" in output:
         return ProbeStatus.FAILED
-    return ProbeStatus.ANSWERED if "HCI Version" in result.stdout else ProbeStatus.FAILED
+    return (
+        ProbeStatus.ANSWERED if "HCI Version" in result.stdout else ProbeStatus.FAILED
+    )
 
 
 def wait_for_role_answer(
@@ -376,7 +406,9 @@ def targeted_recovery(
         _before_mutation(cancelled)
         adapter = current()
         if rebind_usb(adapter, cancelled=cancelled) and check():
-            return RecoveryResult(True, "usb-interface-rebind", adapter.usb_interface or "")
+            return RecoveryResult(
+                True, "usb-interface-rebind", adapter.usb_interface or ""
+            )
     except controller_roles.ControllerRoleError as exc:
         return RecoveryResult(False, "resolve", f"{exc.code}: {exc.detail}")
     except (RecoveryCancelled, btadapters.BluetoothOperationCancelled) as exc:
@@ -429,9 +461,13 @@ def record_failure_and_recover(
         _before_mutation(cancelled)
         role_spec(roles, role)
     except (RecoveryCancelled, controller_roles.ControllerRoleError) as exc:
-        state.last_action = "cancelled" if isinstance(exc, RecoveryCancelled) else "resolve"
+        state.last_action = (
+            "cancelled" if isinstance(exc, RecoveryCancelled) else "resolve"
+        )
         state.last_error = (
-            str(exc) if isinstance(exc, RecoveryCancelled) else f"{exc.code}: {exc.detail}"
+            str(exc)
+            if isinstance(exc, RecoveryCancelled)
+            else f"{exc.code}: {exc.detail}"
         )
         return False
     state.failures += 1
@@ -465,8 +501,13 @@ def _mark_device_connected(state: RecoveryState) -> None:
     state.reconnect_attempts = 0
     state.reconnect_next = 0.0
     _clear_connect_collision(state)
+    state.stale_connect_signatures = 0
+    state.bond_state = "connected"
+    state.repair_state = "idle"
+    state.repair_trigger = None
+    state.repair_deadline = None
     state.identity_error = None
-    state.last_action = "device-connected"
+    state.last_action = "connected"
     state.last_error = None
 
 
@@ -479,6 +520,12 @@ def _disconnect_quiesced(ok: bool, detail: str) -> bool:
         or "not connected" in normalized
         or "org.freedesktop.dbus.error.unknownobject" in normalized
         or "unknown object" in normalized
+    )
+
+
+def _connect_operation_pending(ok: bool, detail: str) -> bool:
+    return btadapters.connect_in_progress(ok, detail) or (
+        not ok and detail.strip().casefold().endswith("timed out")
     )
 
 
@@ -512,6 +559,51 @@ def service_reconnect(
         state.last_action = "resolve"
         state.last_error = state.identity_error
         return False
+    properties = btadapters.device_properties(adapter, address, tree)
+    if not properties or not btadapters.paired_on(adapter, address, tree):
+        state.bond_state = "missing"
+        if state.repair_state not in {
+            "requested",
+            "pairing_window",
+            "pairing_required",
+        }:
+            state.repair_state = "pairing_required"
+            state.repair_trigger = None
+            state.last_action = "pairing_required"
+            state.last_error = f"no paired Pixel object on {adapter.hci}"
+        return False
+    if not btadapters.bonded_on(adapter, address, tree):
+        state.bond_state = "unbonded"
+        if state.repair_state not in {
+            "requested",
+            "pairing_window",
+            "pairing_required",
+        }:
+            state.repair_state = "pairing_required"
+            state.repair_trigger = None
+            state.last_action = "pairing_required"
+            state.last_error = f"Pixel object on {adapter.hci} is not bonded"
+        return False
+    trusted = btadapters.trusted_on(adapter, address, tree)
+    state.bond_state = "trusted" if trusted else "untrusted"
+    if state.repair_state in {"requested", "pairing_window", "pairing_required"}:
+        return False
+    if not trusted:
+        try:
+            _before_mutation(cancelled)
+            trusted, detail = btadapters.set_trusted(
+                address, True, adapter, cancelled=cancelled
+            )
+        except (RecoveryCancelled, btadapters.BluetoothOperationCancelled) as exc:
+            state.last_action = "cancelled"
+            state.last_error = str(exc)
+            return False
+        if not trusted:
+            state.last_action = "trust_failed"
+            state.last_error = detail
+            state.reconnect_next = observed + RECONNECT_DELAY
+            return False
+        state.bond_state = "trusted"
     if btadapters.connected_on(adapter, address, tree):
         _mark_device_connected(state)
         return True
@@ -540,16 +632,23 @@ def service_reconnect(
 
         device_path = btadapters.path_for(adapter, address)
         if "org.bluez.Device1" not in (tree.get(device_path) or {}):
-            log.info("pending Connect object %s disappeared; settling before retry", device_path)
+            log.info(
+                "pending Connect object %s disappeared; settling before retry",
+                device_path,
+            )
             _clear_connect_collision(state)
             state.reconnect_next = observed + RECONNECT_DELAY
             state.last_action = "device-connect-object-refreshed"
-            state.last_error = f"{device_path}: Device1 disappeared while Connect was pending"
+            state.last_error = (
+                f"{device_path}: Device1 disappeared while Connect was pending"
+            )
             return False
 
         try:
             _before_mutation(cancelled)
-            cancel_ok, cancel_detail = btadapters.disconnect(address, adapter, cancelled=cancelled)
+            cancel_ok, cancel_detail = btadapters.disconnect(
+                address, adapter, cancelled=cancelled
+            )
         except (RecoveryCancelled, btadapters.BluetoothOperationCancelled) as exc:
             state.last_action = "cancelled"
             state.last_error = str(exc)
@@ -559,7 +658,7 @@ def service_reconnect(
         state.connect_collision_cancellations += 1
         if _disconnect_quiesced(cancel_ok, cancel_detail):
             log.warning("cancelled stale Connect on %s before retry", device_path)
-            state.reconnect_next = observed + RECONNECT_DELAY
+            state.reconnect_next = observed + POST_CANCEL_RETRY_DELAY
             state.last_action = "device-connect-cancelled"
             state.last_error = None
         else:
@@ -608,12 +707,18 @@ def service_reconnect(
             state.last_error = detail
             return False
         _before_mutation(cancelled)
-        ok, detail = btadapters.connect(address, adapter, cancelled=cancelled)
+        state.last_action = "connecting"
+        ok, detail = btadapters.connect(
+            address,
+            adapter,
+            timeout=CONNECT_REQUEST_TIMEOUT,
+            cancelled=cancelled,
+        )
     except (RecoveryCancelled, btadapters.BluetoothOperationCancelled) as exc:
         state.last_action = "cancelled"
         state.last_error = str(exc)
         return False
-    if btadapters.connect_in_progress(ok, detail):
+    if _connect_operation_pending(ok, detail):
         if state.connect_collision_cancellations == 0:
             # This call did not start another operation, so it does not spend a reconnect attempt.
             pending_started = time.monotonic() if now is None else observed
@@ -629,19 +734,209 @@ def service_reconnect(
                 CONNECT_PENDING_TIMEOUT,
             )
             return False
-        state.last_action = "device-connect-collision"
+        if btadapters.connect_in_progress(ok, detail):
+            state.stale_connect_signatures += 1
+            state.last_action = "stale_bond_suspected"
+            state.last_error = detail
+            state.repair_state = "requested"
+            state.repair_trigger = "repeated-in-progress"
+            state.reconnect_next = 0.0
+            log.error("stale Pixel bond signature detected on %s", adapter.hci)
+            return False
+        # A request timeout after one exact cancellation is not proof of a bad key.  A
+        # sleeping or out-of-range phone follows the normal bounded retry policy.
+        state.last_action = "device-reconnect"
         state.last_error = detail
-        state.reconnect_attempts = CALL_RECONNECT_ATTEMPTS
-        state.reconnect_next = observed + CALL_RECONNECT_COOLDOWN
+        state.reconnect_next = observed + RECONNECT_RETRY
         return False
 
     state.last_action = "device-reconnect"
     state.last_error = None if ok else detail
     if ok:
-        state.reconnect_attempts = 0
-        _clear_connect_collision(state)
+        _mark_device_connected(state)
         return True
     return False
+
+
+def _set_production_pairing_closed(
+    adapter: btadapters.Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
+    failures: list[str] = []
+    for name in ("Discoverable", "Pairable"):
+        ok, detail = btadapters.set_adapter_property(
+            adapter, name, False, cancelled=cancelled
+        )
+        if not ok:
+            failures.append(detail)
+    return not failures, "; ".join(failures) if failures else "pairing closed"
+
+
+def _pairing_seal() -> tuple[bool, str]:
+    command = ["python3", str(PAIRING_SEAL_COMMAND), "pairing-seal"]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
+    detail = (
+        result.stdout.strip() or result.stderr.strip() or f"exit {result.returncode}"
+    )
+    return result.returncode == 0, detail
+
+
+def _pairing_timer(action: str) -> tuple[bool, str]:
+    if action not in {"start", "stop"}:
+        raise ValueError(f"invalid timer action: {action}")
+    try:
+        units = (
+            [PAIRING_SEAL_TIMER, PAIRING_SEAL_SERVICE]
+            if action == "stop"
+            else [PAIRING_SEAL_TIMER]
+        )
+        result = subprocess.run(
+            ["systemctl", action, *units],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
+    detail = (
+        result.stderr.strip()
+        or result.stdout.strip()
+        or f"{PAIRING_SEAL_TIMER} {action}ed"
+    )
+    return result.returncode == 0, detail
+
+
+def repair_phone_bond(
+    roles: controller_roles.ControllerRoles,
+    state: RecoveryState,
+    adapter: btadapters.Adapter,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> bool:
+    """Replace only the configured Pixel bond in one recoverable transaction."""
+    address = roles.phone_address
+    trigger = state.repair_trigger or "manual"
+    state.last_action = (
+        "stale_bond_suspected" if trigger != "manual" else "pairing_required"
+    )
+    state.repair_state = "preparing"
+    state.last_error = None
+    write_state(state, adapter)
+
+    # A timed-out window deliberately leaves the timer paused and the live tree bondless.
+    # Reopening it -- including after a watchdog-only restart -- must retain the prior
+    # rollback point instead of promoting the temporary bondless tree to newest-good state.
+    rollback_already_sealed = state.bond_state == "missing"
+    if not state.pairing_timer_paused:
+        stopped, detail = _pairing_timer("stop")
+        if not stopped:
+            state.repair_state = "pairing_required"
+            state.last_action = "pairing_required"
+            state.last_error = f"could not pause {PAIRING_SEAL_TIMER}: {detail}"
+            return False
+        state.pairing_timer_paused = True
+
+    if not rollback_already_sealed:
+        sealed, detail = _pairing_seal()
+        if not sealed:
+            _pairing_timer("start")
+            state.pairing_timer_paused = False
+            state.repair_state = "pairing_required"
+            state.last_action = "pairing_required"
+            state.last_error = f"pre-repair pairing snapshot failed: {detail}"
+            return False
+
+    try:
+        _before_mutation(cancelled)
+        tree = btadapters.managed_objects(cancelled=cancelled)
+        current = resolve_role(roles, "call", objects=tree)
+        if _adapter_runtime_target(current) != _adapter_runtime_target(adapter):
+            raise controller_roles.ControllerIdentityMismatchError(
+                "call", "runtime target changed before stale bond removal"
+            )
+        baseline = btadapters.paired_addresses_on(current, tree) - {address}
+        if btadapters.device_properties(current, address, tree):
+            removed, detail = btadapters.remove_device(address, current)
+            if not removed:
+                state.repair_state = "pairing_required"
+                state.last_action = "pairing_required"
+                state.last_error = f"exact Pixel bond removal failed: {detail}"
+                return False
+
+        state.bond_state = "missing"
+        state.repair_state = "pairing_window"
+        state.last_action = "pairing_window"
+        state.repair_deadline = time.monotonic() + PAIRING_WINDOW_SECONDS
+        state.last_error = (
+            "Open Pixel Bluetooth settings, tap LarkBridge BT500, and approve Pair"
+        )
+
+        def heartbeat(_elapsed: float, _duration: float) -> None:
+            write_state(state, current)
+
+        result = btadapters.incoming_pairing_window(
+            address,
+            current,
+            timeout=PAIRING_WINDOW_SECONDS,
+            preexisting_paired=baseline,
+            cancelled=cancelled,
+            heartbeat=heartbeat,
+        )
+        state.repair_deadline = None
+        if not result.ok:
+            state.repair_state = "pairing_required"
+            state.last_action = "pairing_required"
+            state.last_error = result.detail
+            return False
+
+        sealed, detail = _pairing_seal()
+        if not sealed:
+            state.repair_state = "pairing_required"
+            state.last_action = "pairing_required"
+            state.last_error = f"new bond is live but was not sealed: {detail}"
+            return False
+        started, timer_detail = _pairing_timer("start")
+        state.pairing_timer_paused = not started
+        if not started:
+            state.repair_state = "pairing_required"
+            state.last_action = "pairing_required"
+            state.last_error = (
+                f"new bond sealed but timer did not resume: {timer_detail}"
+            )
+            return False
+
+        state.bond_state = "trusted"
+        state.repair_state = "idle"
+        state.repair_trigger = None
+        state.stale_connect_signatures = 0
+        state.connect_collision_cancellations = 0
+        state.reconnect_attempts = 0
+        state.reconnect_next = 0.0
+        _clear_pending_connect(state)
+        state.last_action = "bond_sealed"
+        state.last_error = None
+        return True
+    except (
+        RecoveryCancelled,
+        btadapters.BluetoothOperationCancelled,
+        controller_roles.ControllerRoleError,
+    ) as exc:
+        state.repair_deadline = None
+        state.repair_state = "pairing_required"
+        state.last_action = "pairing_required"
+        state.last_error = str(exc)
+        return False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -668,16 +963,24 @@ def main(argv: list[str] | None = None) -> int:
 
     state = RecoveryState(args.role)
     stopping = False
+    repair_requested = False
 
     def on_signal(signum: int, _frame: Any) -> None:
-        nonlocal stopping
+        nonlocal repair_requested, stopping
+        if signum == signal.SIGUSR1:
+            log.warning("manual Pixel repair requested")
+            repair_requested = True
+            return
         log.info("signal %s; stopping %s watchdog", signum, args.role)
         stopping = True
 
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
+    signal.signal(signal.SIGUSR1, on_signal)
 
-    with btadapters.speaker_radio_lock(role_lock_path(args.role), blocking=False) as acquired:
+    with btadapters.speaker_radio_lock(
+        role_lock_path(args.role), blocking=False
+    ) as acquired:
         if not acquired:
             log.error("another %s watchdog already owns its role lock", args.role)
             return 3
@@ -688,6 +991,7 @@ def main(argv: list[str] | None = None) -> int:
             configured.bus,
         )
         adapter: btadapters.Adapter | None = None
+        pairing_closed_target: str | None = None
         while not stopping:
             try:
                 tree = btadapters.managed_objects()
@@ -704,13 +1008,50 @@ def main(argv: list[str] | None = None) -> int:
                 time.sleep(PROBE_INTERVAL)
                 continue
 
+            target = _adapter_runtime_target(adapter)
+            if (
+                pairing_closed_target != target
+                and state.repair_state != "pairing_window"
+            ):
+                closed, detail = _set_production_pairing_closed(
+                    adapter, cancelled=lambda: stopping
+                )
+                if closed:
+                    pairing_closed_target = target
+                else:
+                    state.last_error = detail
+
+            if repair_requested:
+                repair_requested = False
+                state.repair_state = "requested"
+                state.repair_trigger = "manual"
+                state.last_action = "pairing_required"
+
             result = probe_controller(adapter)
             state.probe = result.value
             if result is ProbeStatus.ANSWERED:
                 state.failures = 0
-                if state.last_attempt and time.monotonic() - state.last_attempt > BACKOFF_MAX:
+                if (
+                    state.last_attempt
+                    and time.monotonic() - state.last_attempt > BACKOFF_MAX
+                ):
                     state.backoff = BACKOFF_START
                 service_reconnect(roles, args.role, state, cancelled=lambda: stopping)
+                if state.repair_state == "requested" and not stopping:
+                    repaired = repair_phone_bond(
+                        roles,
+                        state,
+                        adapter,
+                        cancelled=lambda: stopping,
+                    )
+                    pairing_closed_target = target
+                    if repaired and not stopping:
+                        service_reconnect(
+                            roles,
+                            args.role,
+                            state,
+                            cancelled=lambda: stopping,
+                        )
             elif result is ProbeStatus.FAILED:
                 record_failure_and_recover(
                     roles,

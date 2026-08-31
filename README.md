@@ -115,6 +115,23 @@ The K054 implementation uses its verified native S16LE/48 kHz/mono mode, but phy
 replacement-unit identity, acoustic performance, and AEC endurance remain field-QA gates; see
 [`E18`](docs/experiments/E18-fifine-k054-compat.md).
 
+## Pixel connection and pairing repair
+
+The call watchdog connects the configured Pixel through the USB-BT500 immediately at boot. It may
+replace a bond automatically only after the exact repeated-`InProgress` stale-key signature; an
+out-of-range phone or disabled phone Bluetooth never causes bond deletion. Inspect the live bond,
+repair deadline, reconnect timing, and instructions with:
+
+```bash
+bridgectl phone status
+bridgectl phone status --json
+```
+
+If status reports `pairing_required`, run `sudo bridgectl phone repair`, then tap **LarkBridge
+BT500** and approve pairing on the Pixel within 120 seconds. See
+[`docs/bluetooth-reconnect-policy.md`](docs/bluetooth-reconnect-policy.md) for the rollback and
+exact-device safety rules.
+
 ## Repository layout
 
 | Path | Contains |

@@ -148,6 +148,13 @@ class PairResult:
     detail: str = ""
 
 
+@dataclass(frozen=True)
+class PairingWindowResult:
+    ok: bool
+    detail: str
+    unexpected_removed: tuple[str, ...] = ()
+
+
 def canonical_mac(value: object) -> str | None:
     """Return one canonical public Bluetooth address, rejecting loose/partial syntax."""
     candidate = str(value).strip().upper() if isinstance(value, str) else ""
@@ -179,10 +186,14 @@ class DiscoveryAccumulator:
             self.observations[address] = rssi
 
 
-def parse_discovery_event(line: str, adapter_path: str) -> tuple[str, int | None] | None:
+def parse_discovery_event(
+    line: str, adapter_path: str
+) -> tuple[str, int | None] | None:
     """Parse one busctl monitor event without accepting another controller's object."""
     match = DEVICE_PATH_RE.search(line)
-    if match is None or not match.group("path").startswith(adapter_path.rstrip("/") + "/dev_"):
+    if match is None or not match.group("path").startswith(
+        adapter_path.rstrip("/") + "/dev_"
+    ):
         return None
     # A remembered object's Connected/Trusted churn is not an inquiry observation. BlueZ
     # discovery either adds the object or changes discovery-fed identity/radio properties.
@@ -475,8 +486,10 @@ def _sysfs_identity(path: Path) -> dict[str, str | None]:
     if usb_device is not None:
         return {
             "bus": "USB",
-            "usb_vendor_id": (_read_sysfs(usb_device, "idVendor") or "").lower() or None,
-            "usb_product_id": (_read_sysfs(usb_device, "idProduct") or "").lower() or None,
+            "usb_vendor_id": (_read_sysfs(usb_device, "idVendor") or "").lower()
+            or None,
+            "usb_product_id": (_read_sysfs(usb_device, "idProduct") or "").lower()
+            or None,
             "usb_parent": usb_device.name,
             "usb_interface": usb_interface.name if usb_interface is not None else None,
             "driver": driver or _bound_driver(usb_device),
@@ -488,7 +501,8 @@ def _sysfs_identity(path: Path) -> dict[str, str | None]:
         (
             candidate
             for candidate in ancestors
-            if "serial" in candidate.as_posix().lower() or "uart" in candidate.name.lower()
+            if "serial" in candidate.as_posix().lower()
+            or "uart" in candidate.name.lower()
         ),
         None,
     )
@@ -568,7 +582,9 @@ def adapters(objects: dict[str, dict] | None = None) -> list[Adapter]:
         # bare controller names are adapters.
         if ":" in entry.name:
             continue
-        interface = (tree.get(f"/org/bluez/{entry.name}") or {}).get("org.bluez.Adapter1") or {}
+        interface = (tree.get(f"/org/bluez/{entry.name}") or {}).get(
+            "org.bluez.Adapter1"
+        ) or {}
         address = str((interface.get("Address") or {}).get("data") or "").upper()
         identity = _controller_sysfs_identity(entry.name)
         found.append(
@@ -589,7 +605,9 @@ def adapters(objects: dict[str, dict] | None = None) -> list[Adapter]:
     return sorted(found, key=lambda adapter: (adapter.address == "", adapter.address))
 
 
-def adapter_by_address(address: str, objects: dict[str, dict] | None = None) -> Adapter | None:
+def adapter_by_address(
+    address: str, objects: dict[str, dict] | None = None
+) -> Adapter | None:
     wanted = address.strip().upper()
     matches = [adapter for adapter in adapters(objects) if adapter.address == wanted]
     return matches[0] if len(matches) == 1 else None
@@ -641,7 +659,9 @@ def device_properties(
 ) -> dict:
     """The explicit Device1 property map on one already-resolved controller."""
     tree = objects if objects is not None else managed_objects()
-    return (tree.get(path_for(adapter, device_mac)) or {}).get("org.bluez.Device1") or {}
+    return (tree.get(path_for(adapter, device_mac)) or {}).get(
+        "org.bluez.Device1"
+    ) or {}
 
 
 def device_property(
@@ -653,11 +673,27 @@ def device_property(
     return (device_properties(adapter, device_mac, objects).get(name) or {}).get("data")
 
 
-def paired_on(adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None) -> bool:
+def paired_on(
+    adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
+) -> bool:
     return bool(device_property(adapter, device_mac, "Paired", objects))
 
 
-def connected_on(adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None) -> bool:
+def bonded_on(
+    adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
+) -> bool:
+    return bool(device_property(adapter, device_mac, "Bonded", objects))
+
+
+def trusted_on(
+    adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
+) -> bool:
+    return bool(device_property(adapter, device_mac, "Trusted", objects))
+
+
+def connected_on(
+    adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
+) -> bool:
     return bool(device_property(adapter, device_mac, "Connected", objects))
 
 
@@ -682,7 +718,9 @@ def discover_bredr(
     if duration != DISCOVERY_SECONDS:
         raise ValueError("speaker discovery duration is fixed at 12 seconds")
     if canonical_mac(adapter.address) != adapter.address:
-        raise BluetoothOperationError("speaker controller has no canonical permanent address")
+        raise BluetoothOperationError(
+            "speaker controller has no canonical permanent address"
+        )
 
     owner: _LineProcess | None = None
     monitor: _LineProcess | None = None
@@ -709,13 +747,19 @@ def discover_bredr(
                     break
                 continue
             line = item[1]
-            if adapter.address in line and "Controller" in line and "not available" not in line:
+            if (
+                adapter.address in line
+                and "Controller" in line
+                and "not available" not in line
+            ):
                 selected = True
                 break
             if "not available" in line or "Failed" in line:
                 break
         if not selected:
-            raise BluetoothOperationError("configured speaker controller could not be selected")
+            raise BluetoothOperationError(
+                "configured speaker controller could not be selected"
+            )
 
         owner.send("scan bredr")
         start_deadline = time.monotonic() + DISCOVERY_START_TIMEOUT
@@ -855,6 +899,7 @@ def connect(
     device_mac: str,
     adapter: Adapter | None = None,
     *,
+    timeout: float | None = None,
     cancelled: Callable[[], bool] | None = None,
 ) -> tuple[bool, str]:
     """Connect a bond on an EXPLICIT adapter. Returns (ok, detail).
@@ -863,7 +908,13 @@ def connect(
 
     Prefer connect_profile() for speakers: this brings up everything the remote offers.
     """
-    return _act("Connect", device_mac, adapter, CONNECT_TIMEOUT, cancelled=cancelled)
+    return _act(
+        "Connect",
+        device_mac,
+        adapter,
+        CONNECT_TIMEOUT if timeout is None else timeout,
+        cancelled=cancelled,
+    )
 
 
 def connect_profile(
@@ -1009,7 +1060,9 @@ def pair_device(
         # This bluetoothctl build registers an agent at startup even without --agent.
         # Specify the capability there, wait for that one registration to finish, and
         # never issue the interactive `agent` toggle (which would unregister it).
-        agent = _LineProcess(["sudo", "-n", "bluetoothctl", "--agent", "NoInputNoOutput"])
+        agent = _LineProcess(
+            ["sudo", "-n", "bluetoothctl", "--agent", "NoInputNoOutput"]
+        )
         register_deadline = min(started + 3.0, started + timeout)
         registered = False
         while time.monotonic() < register_deadline:
@@ -1033,7 +1086,9 @@ def pair_device(
             cancel_pairing(address, adapter)
             return PairResult(False, True, "pairing requested a PIN or passkey")
         if not registered:
-            return PairResult(False, detail="temporary NoInputNoOutput agent did not register")
+            return PairResult(
+                False, detail="temporary NoInputNoOutput agent did not register"
+            )
 
         agent.send("default-agent")
         default_deadline = min(time.monotonic() + 3.0, started + timeout)
@@ -1059,13 +1114,23 @@ def pair_device(
             cancel_pairing(address, adapter)
             return PairResult(False, True, "pairing requested a PIN or passkey")
         if not defaulted:
-            return PairResult(False, detail="temporary NoInputNoOutput agent was not made default")
+            return PairResult(
+                False, detail="temporary NoInputNoOutput agent was not made default"
+            )
 
         remaining = max(0.1, started + timeout - time.monotonic())
         path = path_for(adapter, address)
         try:
             code, _, err = _run_cancellable(
-                ["busctl", "--system", "call", BLUEZ, path, "org.bluez.Device1", "Pair"],
+                [
+                    "busctl",
+                    "--system",
+                    "call",
+                    BLUEZ,
+                    path,
+                    "org.bluez.Device1",
+                    "Pair",
+                ],
                 timeout=remaining,
                 cancelled=is_cancelled,
                 heartbeat=pulse,
@@ -1094,8 +1159,194 @@ def pair_device(
                 heartbeat()
             time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
         cancel_pairing(address, adapter)
-        return PairResult(False, detail="Paired=true was not observed before the deadline")
+        return PairResult(
+            False, detail="Paired=true was not observed before the deadline"
+        )
     finally:
+        if agent is not None:
+            agent.stop("agent off", "quit")
+
+
+def set_adapter_property(
+    adapter: Adapter,
+    name: str,
+    enabled: bool,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
+    """Set and verify one boolean property on one already-resolved adapter."""
+    if name not in {"Pairable", "Discoverable"}:
+        raise ValueError(f"unsupported adapter property: {name}")
+    command = [
+        "busctl",
+        "--system",
+        "set-property",
+        BLUEZ,
+        adapter.path,
+        "org.bluez.Adapter1",
+        name,
+        "b",
+        "true" if enabled else "false",
+    ]
+    if cancelled is None:
+        code, _, err = _run(command)
+    else:
+        code, _, err = _run_cancellable(
+            command, timeout=QUERY_TIMEOUT, cancelled=cancelled
+        )
+    if code != 0:
+        return False, f"{adapter.path}: {err.strip() or 'exit ' + str(code)}"
+    observed = managed_objects(cancelled=cancelled)
+    actual = (
+        ((observed.get(adapter.path) or {}).get("org.bluez.Adapter1") or {})
+        .get(name, {})
+        .get("data")
+    )
+    if bool(actual) is not enabled:
+        return False, f"{adapter.path}: {name} readback was {actual!r}"
+    return True, f"{adapter.path}: {name}={str(enabled).lower()}"
+
+
+def paired_addresses_on(
+    adapter: Adapter, objects: dict[str, dict] | None = None
+) -> set[str]:
+    """Return paired device addresses on one controller, never across adapters."""
+    tree = objects if objects is not None else managed_objects()
+    prefix = adapter.path + "/dev_"
+    found: set[str] = set()
+    for path, interfaces in tree.items():
+        if not path.startswith(prefix) or "org.bluez.Device1" not in interfaces:
+            continue
+        if not bool(_device_property(interfaces, "Paired")):
+            continue
+        address = canonical_mac(_device_property(interfaces, "Address"))
+        if address is not None:
+            found.add(address)
+    return found
+
+
+def incoming_pairing_window(
+    device_mac: str,
+    adapter: Adapter,
+    *,
+    timeout: float,
+    preexisting_paired: set[str] | None = None,
+    cancelled: Callable[[], bool] | None = None,
+    heartbeat: Callable[[float, float], None] | None = None,
+) -> PairingWindowResult:
+    """Open one bounded Android-initiated pairing window on an explicit adapter.
+
+    The temporary bluetoothctl agent is system-wide because that is BlueZ's Agent1
+    contract.  The adapter path and accepted bond are still exact: bonds created during
+    the window that were neither present beforehand nor the configured phone are removed
+    immediately and are never returned as success.
+    """
+    address = canonical_mac(device_mac)
+    if address is None:
+        return PairingWindowResult(False, "invalid Bluetooth device address")
+    baseline = set(preexisting_paired or set())
+    agent: _LineProcess | None = None
+    removed: list[str] = []
+    started = time.monotonic()
+
+    def stopped() -> bool:
+        return cancelled is not None and cancelled()
+
+    try:
+        agent = _LineProcess(["bluetoothctl", "--agent", "NoInputNoOutput"])
+        register_deadline = min(started + 3.0, started + timeout)
+        registered = False
+        while time.monotonic() < register_deadline:
+            if stopped():
+                raise BluetoothOperationCancelled("pairing window cancelled")
+            item = agent.get(min(0.1, register_deadline - time.monotonic()))
+            if item is None:
+                if agent.process.poll() is not None:
+                    break
+                continue
+            lowered = item[1].casefold()
+            if "agent registered" in lowered:
+                registered = True
+                break
+            if "failed" in lowered:
+                break
+        if not registered:
+            return PairingWindowResult(
+                False, "temporary NoInputNoOutput agent did not register"
+            )
+
+        agent.send("default-agent")
+        default_deadline = min(time.monotonic() + 3.0, started + timeout)
+        defaulted = False
+        while time.monotonic() < default_deadline:
+            if stopped():
+                raise BluetoothOperationCancelled("pairing window cancelled")
+            item = agent.get(min(0.1, default_deadline - time.monotonic()))
+            if item is None:
+                if agent.process.poll() is not None:
+                    break
+                continue
+            lowered = item[1].casefold()
+            if "default agent request successful" in lowered:
+                defaulted = True
+                break
+            if "failed" in lowered:
+                break
+        if not defaulted:
+            return PairingWindowResult(
+                False, "temporary NoInputNoOutput agent was not made default"
+            )
+
+        for name in ("Pairable", "Discoverable"):
+            ok, detail = set_adapter_property(adapter, name, True, cancelled=cancelled)
+            if not ok:
+                return PairingWindowResult(False, detail, tuple(removed))
+
+        deadline = started + timeout
+        while time.monotonic() < deadline:
+            if stopped():
+                raise BluetoothOperationCancelled("pairing window cancelled")
+            now = time.monotonic()
+            if heartbeat is not None:
+                heartbeat(now - started, timeout)
+            tree = managed_objects(cancelled=cancelled)
+            for unexpected in sorted(
+                paired_addresses_on(adapter, tree) - baseline - {address}
+            ):
+                ok, _detail = remove_device(unexpected, adapter)
+                if ok:
+                    removed.append(unexpected)
+
+            if paired_on(adapter, address, tree) and bonded_on(adapter, address, tree):
+                trusted, detail = set_trusted(
+                    address, True, adapter, cancelled=cancelled
+                )
+                if not trusted:
+                    return PairingWindowResult(False, detail, tuple(removed))
+                verified = managed_objects(cancelled=cancelled)
+                if (
+                    paired_on(adapter, address, verified)
+                    and bonded_on(adapter, address, verified)
+                    and trusted_on(adapter, address, verified)
+                ):
+                    return PairingWindowResult(
+                        True, path_for(adapter, address), tuple(removed)
+                    )
+            time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+        return PairingWindowResult(
+            False,
+            "configured phone did not become paired, bonded, and trusted before the deadline",
+            tuple(removed),
+        )
+    finally:
+        # Cleanup is best effort but exact-controller scoped.  The watchdog records any
+        # failed opening write before entering this function, and production starts with
+        # both properties disabled on every subsequent pass.
+        for name in ("Discoverable", "Pairable"):
+            try:
+                set_adapter_property(adapter, name, False)
+            except (BluetoothOperationError, OSError):
+                pass
         if agent is not None:
             agent.stop("agent off", "quit")
 
@@ -1109,7 +1360,9 @@ def disconnect(
     return _act("Disconnect", device_mac, adapter, QUERY_TIMEOUT, cancelled=cancelled)
 
 
-def set_alias(device_mac: str, alias: str, adapter: Adapter | None = None) -> tuple[bool, str]:
+def set_alias(
+    device_mac: str, alias: str, adapter: Adapter | None = None
+) -> tuple[bool, str]:
     """Rename a bonded device, so a human can find it in a list.
 
     Devices name themselves badly. The Monoprice Boombox reports itself as "MP43247", which
@@ -1166,7 +1419,15 @@ def set_trusted(
             return False, f"no bond for {device_mac} on any adapter"
         path = resolved
     code, out, _ = _run(
-        ["busctl", "--system", "get-property", BLUEZ, path, "org.bluez.Device1", "Trusted"]
+        [
+            "busctl",
+            "--system",
+            "get-property",
+            BLUEZ,
+            path,
+            "org.bluez.Device1",
+            "Trusted",
+        ]
     )
     if code == 0 and out.strip().split()[-1:] == ["true" if trusted else "false"]:
         return True, f"{path}: already {trusted}"
@@ -1182,7 +1443,9 @@ def set_trusted(
         "true" if trusted else "false",
     ]
     if cancelled is not None:
-        code, _, err = _run_cancellable(command, timeout=QUERY_TIMEOUT, cancelled=cancelled)
+        code, _, err = _run_cancellable(
+            command, timeout=QUERY_TIMEOUT, cancelled=cancelled
+        )
     else:
         code, _, err = _run(command)
     if code == 0:
@@ -1226,7 +1489,9 @@ def pin_to_adapter(
         )
 
     changed: list[str] = []
-    wanted_interfaces = next(interfaces for path, interfaces in matches if path == wanted)
+    wanted_interfaces = next(
+        interfaces for path, interfaces in matches if path == wanted
+    )
     if not bool(_device_property(wanted_interfaces, "Trusted")):
         ok, detail = set_trusted(device_mac, True, adapter, cancelled=cancelled)
         if not ok:
@@ -1322,7 +1587,10 @@ def power_on(
     is registering; the resulting state, not that misleading reply, owns the outcome.
     """
     if is_blocked(adapter) is True and not unblock(adapter, cancelled=cancelled):
-        return False, f"could not clear rfkill{adapter.rfkill_index} for {adapter.address}"
+        return (
+            False,
+            f"could not clear rfkill{adapter.rfkill_index} for {adapter.address}",
+        )
     if is_powered(adapter):
         return True, f"{adapter.address}: already powered"
     if cancelled is not None and cancelled():

@@ -53,13 +53,21 @@ def make_install_archive(path: Path) -> str:
             for script in installer.LIB_SCRIPTS
         },
         **{
+            f"pi/scripts/{script}": f"new {script}\n".encode()
+            for script in installer.CLI_SCRIPTS
+        },
+        **{
             f"pi/powerloss/{script}": f"new {script}\n".encode()
             for script in installer.POWERLOSS_SCRIPTS
         },
         "pi/pipewire/pipewire.conf.d/10-test.conf": b"new pipewire\n",
         "pi/wireplumber/wireplumber.conf.d/10-test.conf": b"new wireplumber\n",
-        f"pi/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}": (b"new phone media target\n"),
-        f"pi/wireplumber/wireplumber.conf.d/{AUX_HEADROOM_FRAGMENT}": (b"new AUX headroom\n"),
+        f"pi/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}": (
+            b"new phone media target\n"
+        ),
+        f"pi/wireplumber/wireplumber.conf.d/{AUX_HEADROOM_FRAGMENT}": (
+            b"new AUX headroom\n"
+        ),
         "pi/bluez/main.conf.d/10-bridge.conf": b"new bluez\n",
         "pi/scripts/netplan-startup-fastpath": b"new netplan script\n",
         "pi/systemd/system/NetworkManager-10-larkbridge-netplan-startup.conf": (
@@ -178,7 +186,9 @@ def test_install_deploys_powerloss_verifier(
     system_root = tmp_path / "root"
     target = system_root / "home/admin/rpi-lark-bridge"
     fragment = (
-        system_root / "home/admin/.config/wireplumber/wireplumber.conf.d" / A2DP_TARGET_FRAGMENT
+        system_root
+        / "home/admin/.config/wireplumber/wireplumber.conf.d"
+        / A2DP_TARGET_FRAGMENT
     )
     aux_fragment = (
         system_root
@@ -200,17 +210,33 @@ def test_install_deploys_powerloss_verifier(
         netplan_fastpath=False,
     )
 
-    verifier = system_root / "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py"
+    verifier = (
+        system_root / "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py"
+    )
     assert verifier.read_bytes() == b"new powerloss_verify.py\n"
+    assert (system_root / "usr/local/bin/bridgectl").read_bytes() == b"new bridgectl\n"
+    assert (
+        system_root / "etc/systemd/system/timers.target.wants/bridge-pairing-seal.timer"
+    ).read_bytes() == b"symlink:../bridge-pairing-seal.timer\n"
     assert fragment.read_bytes() == b"new phone media target\n"
     assert aux_fragment.read_bytes() == b"new AUX headroom\n"
     transactions = list(
-        (system_root / "var/lib/rpi-lark-bridge/releases" / ("a" * 12)).glob("install-*")
+        (system_root / "var/lib/rpi-lark-bridge/releases" / ("a" * 12)).glob(
+            "install-*"
+        )
     )
-    manifest = json.loads((transactions[0] / "system-preimage/MANIFEST.json").read_text("utf-8"))
+    manifest = json.loads(
+        (transactions[0] / "system-preimage/MANIFEST.json").read_text("utf-8")
+    )
     paths = {entry["path"] for entry in manifest["entries"]}
-    assert f"home/admin/.config/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}" in paths
-    assert f"home/admin/.config/wireplumber/wireplumber.conf.d/{AUX_HEADROOM_FRAGMENT}" in paths
+    assert (
+        f"home/admin/.config/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}"
+        in paths
+    )
+    assert (
+        f"home/admin/.config/wireplumber/wireplumber.conf.d/{AUX_HEADROOM_FRAGMENT}"
+        in paths
+    )
 
 
 def test_failed_install_restores_all_system_and_user_preimages(
@@ -301,6 +327,12 @@ def test_failed_install_restores_all_system_and_user_preimages(
     assert "etc/larkbridge/DEPLOYED.json" in paths
     assert "etc/systemd/system/graphical.target.wants/bridge-btfw.service" in paths
     assert "home/admin/.config/wireplumber/wireplumber.conf.d/10-test.conf" in paths
-    assert f"home/admin/.config/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}" in paths
-    assert f"home/admin/.config/wireplumber/wireplumber.conf.d/{AUX_HEADROOM_FRAGMENT}" in paths
+    assert (
+        f"home/admin/.config/wireplumber/wireplumber.conf.d/{A2DP_TARGET_FRAGMENT}"
+        in paths
+    )
+    assert (
+        f"home/admin/.config/wireplumber/wireplumber.conf.d/{AUX_HEADROOM_FRAGMENT}"
+        in paths
+    )
     assert "usr/local/lib/rpi-lark-bridge/powerloss/powerloss_verify.py" in paths
