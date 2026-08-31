@@ -1026,6 +1026,24 @@ class ProbeAndUnitTests(unittest.TestCase):
 
 
 class PairingRepairTests(unittest.TestCase):
+    def test_pairing_seal_retries_a_transient_bluez_tree_change(self) -> None:
+        changing = subprocess.CompletedProcess(
+            [], 1, "", "ERROR: BlueZ state changed while the snapshot was being sealed"
+        )
+        stable = subprocess.CompletedProcess([], 0, "b\n", "")
+        with (
+            mock.patch.object(
+                bt_watchdog.subprocess, "run", side_effect=[changing, stable]
+            ) as run,
+            mock.patch.object(bt_watchdog.time, "sleep") as sleep,
+        ):
+            ok, detail = bt_watchdog._pairing_seal()
+
+        self.assertTrue(ok, detail)
+        self.assertEqual(detail, "b")
+        self.assertEqual(run.call_count, 2)
+        sleep.assert_called_once_with(bt_watchdog.PAIRING_SEAL_RETRY_DELAY)
+
     def test_success_seals_before_delete_and_after_exact_pixel_pairing(self) -> None:
         state = bt_watchdog.RecoveryState(
             "call", repair_state="requested", repair_trigger="repeated-in-progress"

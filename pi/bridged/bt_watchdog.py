@@ -59,6 +59,8 @@ PAIRING_WINDOW_SECONDS = float(os.environ.get("BRIDGE_WD_PAIRING_WINDOW", "120")
 POST_CANCEL_RETRY_DELAY = float(os.environ.get("BRIDGE_WD_POST_CANCEL_RETRY", "1"))
 PAIRING_SEAL_TIMER = "bridge-pairing-seal.timer"
 PAIRING_SEAL_SERVICE = "bridge-pairing-seal.service"
+PAIRING_SEAL_ATTEMPTS = 3
+PAIRING_SEAL_RETRY_DELAY = 1.0
 PAIRING_SEAL_COMMAND = Path(
     os.environ.get(
         "BRIDGE_WD_PAIRING_SEAL_COMMAND",
@@ -775,20 +777,28 @@ def _set_production_pairing_closed(
 
 def _pairing_seal() -> tuple[bool, str]:
     command = ["python3", str(PAIRING_SEAL_COMMAND), "pairing-seal"]
-    try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return False, str(exc)
-    detail = (
-        result.stdout.strip() or result.stderr.strip() or f"exit {result.returncode}"
-    )
-    return result.returncode == 0, detail
+    detail = "pairing seal did not run"
+    for attempt in range(1, PAIRING_SEAL_ATTEMPTS + 1):
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            detail = (
+                result.stdout.strip()
+                or result.stderr.strip()
+                or f"exit {result.returncode}"
+            )
+            if result.returncode == 0:
+                return True, detail
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            detail = str(exc)
+        if attempt < PAIRING_SEAL_ATTEMPTS:
+            time.sleep(PAIRING_SEAL_RETRY_DELAY)
+    return False, detail
 
 
 def _pairing_timer(action: str) -> tuple[bool, str]:
