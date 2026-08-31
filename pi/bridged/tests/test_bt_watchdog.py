@@ -245,6 +245,23 @@ class TargetedRecoveryTests(unittest.TestCase):
 
 
 class RecoveryStateTests(unittest.TestCase):
+    def test_watchdog_status_is_readable_by_unprivileged_bridgectl(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state_dir = Path(directory) / "watchdog"
+            with (
+                mock.patch.object(bt_watchdog, "STATE_DIR", state_dir),
+                mock.patch.object(bt_watchdog.os, "chmod") as chmod,
+            ):
+                bt_watchdog.write_state(bt_watchdog.RecoveryState("call"), BT500)
+
+            self.assertEqual(
+                chmod.call_args_list,
+                [
+                    mock.call(state_dir, 0o755),
+                    mock.call(state_dir / "call.json", 0o644),
+                ],
+            )
+
     def test_recovery_waits_for_threshold_then_applies_backoff(self) -> None:
         state = bt_watchdog.RecoveryState("call", failures=1)
         recover = mock.Mock(
