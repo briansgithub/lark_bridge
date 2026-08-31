@@ -317,6 +317,40 @@ class RecoveryStateTests(unittest.TestCase):
 
 
 class ReconnectTests(unittest.TestCase):
+    def test_connected_time_records_only_connection_transitions(self) -> None:
+        state = bt_watchdog.RecoveryState("call")
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500, connected=True),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+        ):
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=18.5)
+            )
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=33.5)
+            )
+
+        self.assertEqual(state.connected_monotonic, 18.5)
+
+    def test_first_exact_runtime_target_connects_before_liveness_gating(self) -> None:
+        state = bt_watchdog.RecoveryState("call", reconnect_next=999.0)
+        with mock.patch.object(bt_watchdog, "service_reconnect") as reconnect:
+            observed = bt_watchdog.service_startup_reconnect(
+                roles(), "call", state, BT500, None
+            )
+            repeated = bt_watchdog.service_startup_reconnect(
+                roles(), "call", state, BT500, observed
+            )
+
+        self.assertEqual(observed, bt_watchdog._adapter_runtime_target(BT500))
+        self.assertEqual(repeated, observed)
+        self.assertEqual(state.reconnect_next, 0.0)
+        reconnect.assert_called_once_with(roles(), "call", state, cancelled=None)
+
     def test_missing_pixel_object_requires_operator_pairing_without_auto_repair(
         self,
     ) -> None:

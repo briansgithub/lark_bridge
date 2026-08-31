@@ -97,6 +97,7 @@ class RecoveryState:
     recoveries: int = 0
     reconnect_attempts: int = 0
     reconnect_next: float = 0.0
+    connected_monotonic: float | None = None
     connect_pending_since: float | None = None
     connect_pending_target: str | None = None
     connect_collision_cancellations: int = 0
@@ -124,6 +125,7 @@ class RecoveryState:
             "recoveries": self.recoveries,
             "reconnect_attempts": self.reconnect_attempts,
             "reconnect_next_monotonic": self.reconnect_next,
+            "connected_monotonic": self.connected_monotonic,
             "connect_pending_since_monotonic": self.connect_pending_since,
             "connect_pending_deadline_monotonic": (
                 self.connect_pending_since + CONNECT_PENDING_TIMEOUT
@@ -500,7 +502,14 @@ def _clear_connect_collision(state: RecoveryState) -> None:
     state.connect_collision_cancellations = 0
 
 
-def _mark_device_connected(state: RecoveryState) -> None:
+def _mark_device_connected(
+    state: RecoveryState,
+    *,
+    observed: float | None = None,
+    record_time: bool = True,
+) -> None:
+    if record_time:
+        state.connected_monotonic = time.monotonic() if observed is None else observed
     state.reconnect_attempts = 0
     state.reconnect_next = 0.0
     _clear_connect_collision(state)
@@ -562,6 +571,7 @@ def service_reconnect(
         state.last_action = "resolve"
         state.last_error = state.identity_error
         return False
+    previously_connected = state.bond_state == "connected"
     properties = btadapters.device_properties(adapter, address, tree)
     if not properties or not btadapters.paired_on(adapter, address, tree):
         state.bond_state = "missing"
@@ -608,7 +618,11 @@ def service_reconnect(
             return False
         state.bond_state = "trusted"
     if btadapters.connected_on(adapter, address, tree):
-        _mark_device_connected(state)
+        _mark_device_connected(
+            state,
+            observed=observed,
+            record_time=not previously_connected,
+        )
         return True
 
     if state.connect_pending_since is not None:
@@ -756,9 +770,26 @@ def service_reconnect(
     state.last_action = "device-reconnect"
     state.last_error = None if ok else detail
     if ok:
-        _mark_device_connected(state)
+        _mark_device_connected(state, observed=observed)
         return True
     return False
+
+
+def service_startup_reconnect(
+    roles: controller_roles.ControllerRoles,
+    role: str,
+    state: RecoveryState,
+    adapter: btadapters.Adapter,
+    previous_target: str | None,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> str:
+    """Issue one immediate reconnect when an exact runtime controller first resolves."""
+    target = _adapter_runtime_target(adapter)
+    if target != previous_target:
+        state.reconnect_next = 0.0
+        service_reconnect(roles, role, state, cancelled=cancelled)
+    return target
 
 
 def _set_production_pairing_closed(
@@ -1003,6 +1034,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         adapter: btadapters.Adapter | None = None
         pairing_closed_target: str | None = None
+        startup_connect_target: str | None = None
         while not stopping:
             try:
                 tree = btadapters.managed_objects()
@@ -1010,6 +1042,8 @@ def main(argv: list[str] | None = None) -> int:
                 state.identity_error = None
             except controller_roles.ControllerRoleError as exc:
                 adapter = None
+                pairing_closed_target = None
+                startup_connect_target = None
                 state.probe = ProbeStatus.UNKNOWN.value
                 _clear_pending_connect(state)
                 state.reconnect_next = time.monotonic() + RECONNECT_DELAY
@@ -1037,6 +1071,15 @@ def main(argv: list[str] | None = None) -> int:
                 state.repair_state = "requested"
                 state.repair_trigger = "manual"
                 state.last_action = "pairing_required"
+
+            startup_connect_target = service_startup_reconnect(
+                roles,
+                args.role,
+                state,
+                adapter,
+                startup_connect_target,
+                cancelled=lambda: stopping,
+            )
 
             result = probe_controller(adapter)
             state.probe = result.value
