@@ -179,6 +179,7 @@ def role_state_path(role: str) -> Path:
 def write_state(state: RecoveryState, adapter: btadapters.Adapter | None) -> None:
     target = role_state_path(state.role)
     target.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(target.parent, 0o755)
     with tempfile.NamedTemporaryFile(
         "w", encoding="utf-8", dir=target.parent, prefix=f".{state.role}-", delete=False
     ) as handle:
