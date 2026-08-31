@@ -96,7 +96,9 @@ def pairing_identity(path: Path) -> dict[str, str]:
     return identity
 
 
-def selected_microphone(bridge: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+def selected_microphone(
+    bridge: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
     """Return the selected microphone while accepting pre-candidate status snapshots.
 
     Once the generic ``microphone`` object exists it is authoritative.  In particular,
@@ -129,6 +131,48 @@ def selected_microphone(bridge: dict[str, Any]) -> tuple[dict[str, Any] | None, 
     if isinstance(legacy_node, str) and legacy_node:
         return {"id": "lark-a1", "node": legacy_node, "legacy": True}, None
     return None, "no microphone endpoint is present"
+
+
+def call_bluetooth_failures(
+    adapter_report: dict[str, Any], watchdog: dict[str, Any]
+) -> list[str]:
+    """Validate the exact BT500's safe idle state and reconnect state schema."""
+    failures: list[str] = []
+    output = str(adapter_report.get("stdout") or "")
+    if adapter_report.get("rc") != 0:
+        failures.append("configured call adapter status is unavailable")
+    else:
+        if "Powered: yes" not in output:
+            failures.append("configured call adapter is not powered")
+        if "Pairable: no" not in output:
+            failures.append(
+                "configured call adapter is pairable outside a repair window"
+            )
+        if "Discoverable: no" not in output:
+            failures.append(
+                "configured call adapter is discoverable outside a repair window"
+            )
+
+    required = {
+        "bond_state",
+        "repair_state",
+        "repair_trigger",
+        "repair_deadline_monotonic",
+        "reconnect_attempts",
+        "reconnect_next_monotonic",
+        "last_action",
+    }
+    if watchdog.get("error"):
+        failures.append("call watchdog status is unavailable")
+    else:
+        missing = sorted(required - watchdog.keys())
+        if missing:
+            failures.append(f"call watchdog status lacks fields: {', '.join(missing)}")
+        if watchdog.get("repair_state") in {"requested", "preparing", "pairing_window"}:
+            failures.append("call watchdog has an active pairing repair transaction")
+        if watchdog.get("bond_state") not in {"trusted", "connected"}:
+            failures.append("configured Pixel bond is not trusted")
+    return failures
 
 
 def main() -> int:
@@ -179,10 +223,30 @@ def main() -> int:
     if failed_units["stdout"]:
         failures.append("systemd reports failed units")
 
-    bluetooth = run(["bluetoothctl", "show"])
+    controller_address = run(
+        [
+            "python3",
+            "/home/admin/rpi-lark-bridge/pi/bridged/controller_roles.py",
+            "--policy",
+            "final-usb",
+            "resolve",
+            "call",
+            "--field",
+            "address",
+        ]
+    )
+    details["call_controller_address"] = controller_address
+    bluetooth = (
+        run(["bluetoothctl", "show", controller_address["stdout"]])
+        if controller_address["rc"] == 0 and controller_address["stdout"]
+        else {"rc": 127, "stderr": "call controller did not resolve", "stdout": ""}
+    )
+    watchdog = read_json(Path("/run/larkbridge/bt-watchdog/call.json"))
     details["bluetooth"] = bluetooth
-    if "Powered: yes" not in bluetooth["stdout"]:
-        failures.append("Bluetooth adapter is not powered")
+    details["call_watchdog"] = watchdog
+    if controller_address["rc"] != 0:
+        failures.append("configured call controller identity did not resolve")
+    failures.extend(call_bluetooth_failures(bluetooth, watchdog))
 
     bridge = read_json(Path("/run/user/1000/bridge-status.json"))
     details["bridge"] = bridge

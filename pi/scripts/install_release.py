@@ -43,6 +43,7 @@ LIB_SCRIPTS = (
     "boot-trial.sh",
     "onboard_bluetooth_config.py",
 )
+CLI_SCRIPTS = ("bridgectl",)
 POWERLOSS_SCRIPTS = ("powerloss_verify.py",)
 DISABLED_SYSTEM_UNITS = (
     "bridge-btfw.service",
@@ -194,6 +195,7 @@ def managed_system_paths(release_root: Path, system_root: Path) -> list[Path]:
             system_root / "usr/local/lib/rpi-lark-bridge" / script
             for script in LIB_SCRIPTS
         ),
+        *(system_root / "usr/local/bin" / script for script in CLI_SCRIPTS),
         *(
             system_root / "usr/local/lib/rpi-lark-bridge/powerloss" / script
             for script in POWERLOSS_SCRIPTS
@@ -202,6 +204,8 @@ def managed_system_paths(release_root: Path, system_root: Path) -> list[Path]:
         / "etc/systemd/system/multi-user.target.wants/bridge-tuning.service",
         system_root
         / "etc/systemd/system/multi-user.target.wants/bridge-btwatchdog@call.service",
+        system_root
+        / "etc/systemd/system/timers.target.wants/bridge-pairing-seal.timer",
         system_root
         / "home/admin/.config/systemd/user/default.target.wants/bridge-supervisor.service",
         system_root
@@ -460,6 +464,12 @@ def provision_release(
             system_root / "usr" / "local" / "lib" / "rpi-lark-bridge" / script,
             0o755,
         )
+    for script in CLI_SCRIPTS:
+        copy_managed(
+            release_root / "pi" / "scripts" / script,
+            system_root / "usr" / "local" / "bin" / script,
+            0o755,
+        )
     for script in POWERLOSS_SCRIPTS:
         copy_managed(
             release_root / "pi" / "powerloss" / script,
@@ -484,6 +494,11 @@ def provision_release(
         "../bridge-btwatchdog@.service",
         system_root
         / "etc/systemd/system/multi-user.target.wants/bridge-btwatchdog@call.service",
+    )
+    symlink(
+        "../bridge-pairing-seal.timer",
+        system_root
+        / "etc/systemd/system/timers.target.wants/bridge-pairing-seal.timer",
     )
     symlink(
         "../bridge-supervisor.service",

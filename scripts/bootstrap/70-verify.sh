@@ -128,6 +128,39 @@ if [ "$call_controller" = usb-bt500 ]; then
         if systemctl is-active --quiet "$unit"; then ok "$unit active"; else bad "$unit inactive"; fi
         if systemctl is-enabled --quiet "$unit"; then ok "$unit enabled"; else bad "$unit disabled"; fi
     done
+    call_address="$(python3 "$SOURCE_ROOT/pi/bridged/controller_roles.py" \
+        --policy final-usb resolve call --field address 2>/dev/null || true)"
+    call_radio="$(bluetoothctl show "$call_address" 2>/dev/null || true)"
+    if grep -Fq 'Powered: yes' <<<"$call_radio"; then ok "call adapter powered"; else bad "call adapter is not powered"; fi
+    if grep -Fq 'Pairable: no' <<<"$call_radio"; then ok "call adapter pairability closed"; else bad "call adapter remains pairable"; fi
+    if grep -Fq 'Discoverable: no' <<<"$call_radio"; then ok "call adapter discovery closed"; else bad "call adapter remains discoverable"; fi
+    watchdog_state=/run/larkbridge/bt-watchdog/call.json
+    if python3 - "$watchdog_state" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    state = json.load(handle)
+required = {
+    "bond_state",
+    "repair_state",
+    "repair_trigger",
+    "repair_deadline_monotonic",
+    "reconnect_attempts",
+    "reconnect_next_monotonic",
+}
+if required - state.keys():
+    raise SystemExit(1)
+if state["repair_state"] in {"requested", "preparing", "pairing_window"}:
+    raise SystemExit(1)
+if state["bond_state"] not in {"trusted", "connected"}:
+    raise SystemExit(1)
+PY
+    then
+        ok "call watchdog bond and repair state ready"
+    else
+        bad "call watchdog bond or repair state is not ready"
+    fi
     for unit in bridge-btfw.service bridge-btwatchdog.service bridge-btwatchdog@output.service; do
         if systemctl is-active --quiet "$unit"; then bad "$unit unexpectedly active"; else ok "$unit inactive"; fi
         if systemctl is-enabled --quiet "$unit"; then bad "$unit unexpectedly enabled"; else ok "$unit disabled"; fi
@@ -168,6 +201,9 @@ systemd-analyze verify \
     /etc/systemd/system/bridge-btfw.service \
     /etc/systemd/system/bridge-btwatchdog@.service \
     /etc/systemd/system/bridge-btwatchdog.service \
+    /etc/systemd/system/bridge-storage-guard.service \
+    /etc/systemd/system/bridge-pairing-seal.service \
+    /etc/systemd/system/bridge-pairing-seal.timer \
     /etc/systemd/system/bridge-boot-trial-rollback.service \
     /etc/systemd/system/bridge-boot-trial-rollback.timer || bad "systemd unit verification"
 

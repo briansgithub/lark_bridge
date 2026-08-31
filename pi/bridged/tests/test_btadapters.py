@@ -70,6 +70,159 @@ class TrustPinTests(unittest.TestCase):
         self.assertIn("no bond", result.failures[0])
         setter.assert_not_called()
 
+
+class IncomingPairingWindowTests(unittest.TestCase):
+    @staticmethod
+    def paired_tree(*addresses: str, trusted: bool = False) -> dict:
+        return {
+            btadapters.path_for(TARGET, address): {
+                "org.bluez.Device1": {
+                    "Address": {"data": address},
+                    "Paired": {"data": True},
+                    "Bonded": {"data": True},
+                    "Trusted": {"data": trusted},
+                }
+            }
+            for address in addresses
+        }
+
+    def test_adapter_property_write_is_exact_and_verified(self) -> None:
+        tree = {TARGET.path: {"org.bluez.Adapter1": {"Pairable": {"data": True}}}}
+        with (
+            mock.patch.object(btadapters, "_run", return_value=(0, "", "")) as run,
+            mock.patch.object(btadapters, "managed_objects", return_value=tree),
+        ):
+            ok, detail = btadapters.set_adapter_property(TARGET, "Pairable", True)
+
+        self.assertTrue(ok, detail)
+        command = run.call_args.args[0]
+        self.assertIn(TARGET.path, command)
+        self.assertEqual(command[-3:], ["Pairable", "b", "true"])
+
+    def test_accepts_only_configured_phone_and_removes_new_unexpected_bond(
+        self,
+    ) -> None:
+        unexpected = "00:11:22:33:44:55"
+        children = []
+
+        class Process:
+            def poll(self):
+                return None
+
+        class Agent:
+            def __init__(self, command):
+                self.command = command
+                self.process = Process()
+                self.sent = []
+                self.stopped = ()
+                self.lines = iter(
+                    (
+                        (0.0, "Agent registered"),
+                        (0.0, "Default agent request successful"),
+                    )
+                )
+                children.append(self)
+
+            def send(self, command):
+                self.sent.append(command)
+
+            def get(self, _timeout):
+                return next(self.lines, None)
+
+            def stop(self, *commands):
+                self.stopped = commands
+
+        observed = self.paired_tree(SPEAKER, unexpected)
+        verified = self.paired_tree(SPEAKER, trusted=True)
+        with (
+            mock.patch.object(btadapters, "_LineProcess", Agent),
+            mock.patch.object(
+                btadapters, "set_adapter_property", return_value=(True, "ok")
+            ) as adapter_property,
+            mock.patch.object(
+                btadapters, "managed_objects", side_effect=[observed, verified]
+            ),
+            mock.patch.object(
+                btadapters, "remove_device", return_value=(True, "removed")
+            ) as remove,
+            mock.patch.object(
+                btadapters, "set_trusted", return_value=(True, "trusted")
+            ) as trust,
+        ):
+            result = btadapters.incoming_pairing_window(
+                SPEAKER,
+                TARGET,
+                timeout=1.0,
+                preexisting_paired=set(),
+            )
+
+        self.assertTrue(result.ok, result.detail)
+        self.assertEqual(result.unexpected_removed, (unexpected,))
+        remove.assert_called_once_with(unexpected, TARGET)
+        trust.assert_called_once_with(SPEAKER, True, TARGET, cancelled=None)
+        self.assertEqual(
+            children[0].command, ["bluetoothctl", "--agent", "NoInputNoOutput"]
+        )
+        self.assertEqual(children[0].sent, ["default-agent"])
+        self.assertEqual(children[0].stopped, ("agent off", "quit"))
+        self.assertEqual(
+            adapter_property.call_args_list,
+            [
+                mock.call(TARGET, "Pairable", True, cancelled=None),
+                mock.call(TARGET, "Discoverable", True, cancelled=None),
+                mock.call(TARGET, "Discoverable", False),
+                mock.call(TARGET, "Pairable", False),
+            ],
+        )
+
+    def test_timeout_always_closes_pairability_and_unregisters_agent(self) -> None:
+        children = []
+
+        class Process:
+            def poll(self):
+                return None
+
+        class Agent:
+            def __init__(self, _command):
+                self.process = Process()
+                self.stopped = ()
+                self.lines = iter(
+                    (
+                        (0.0, "Agent registered"),
+                        (0.0, "Default agent request successful"),
+                    )
+                )
+                children.append(self)
+
+            def send(self, _command):
+                pass
+
+            def get(self, _timeout):
+                return next(self.lines, None)
+
+            def stop(self, *commands):
+                self.stopped = commands
+
+        with (
+            mock.patch.object(btadapters, "_LineProcess", Agent),
+            mock.patch.object(
+                btadapters, "set_adapter_property", return_value=(True, "ok")
+            ) as adapter_property,
+            mock.patch.object(btadapters, "managed_objects", return_value={}),
+        ):
+            result = btadapters.incoming_pairing_window(SPEAKER, TARGET, timeout=0.02)
+
+        self.assertFalse(result.ok)
+        self.assertIn("deadline", result.detail)
+        self.assertEqual(children[0].stopped, ("agent off", "quit"))
+        self.assertEqual(
+            adapter_property.call_args_list[-2:],
+            [
+                mock.call(TARGET, "Discoverable", False),
+                mock.call(TARGET, "Pairable", False),
+            ],
+        )
+
     def test_target_write_failure_preserves_the_trusted_duplicate(self) -> None:
         tree = {path("hci0"): device(True), path("hci1"): device(False)}
         with (
@@ -107,10 +260,14 @@ class PowerTests(unittest.TestCase):
             mock.patch.object(btadapters, "is_blocked", return_value=True),
             mock.patch.object(btadapters, "unblock", return_value=True) as unblock,
             mock.patch.object(btadapters, "is_powered", side_effect=[False, True]),
-            mock.patch.object(btadapters, "_run", return_value=(1, "", "transition reply")) as run,
+            mock.patch.object(
+                btadapters, "_run", return_value=(1, "", "transition reply")
+            ) as run,
         ):
             ok, _detail = btadapters.power_on(TARGET)
-        self.assertTrue(ok, "verified Powered=true owns the outcome, not busctl's reply")
+        self.assertTrue(
+            ok, "verified Powered=true owns the outcome, not busctl's reply"
+        )
         unblock.assert_called_once_with(TARGET, cancelled=None)
         self.assertIn(TARGET.path, run.call_args.args[0])
 
@@ -140,7 +297,9 @@ class PowerTests(unittest.TestCase):
         checks = iter((False, True))
         with (
             mock.patch.object(btadapters, "is_blocked", return_value=True),
-            mock.patch.object(btadapters, "_run", return_value=(1, "", "failed")) as run,
+            mock.patch.object(
+                btadapters, "_run", return_value=(1, "", "failed")
+            ) as run,
             mock.patch.object(Path, "write_text") as write_text,
             self.assertRaises(btadapters.BluetoothOperationCancelled),
         ):
@@ -150,7 +309,9 @@ class PowerTests(unittest.TestCase):
 
 
 class DiscoveryTests(unittest.TestCase):
-    def test_usb_identity_comes_from_stable_device_metadata_not_port_number(self) -> None:
+    def test_usb_identity_comes_from_stable_device_metadata_not_port_number(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             device = root / "1-1.4"
@@ -174,11 +335,14 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(identity["usb_interface"], "1-1.4-interface-1.0")
         self.assertEqual(identity["driver"], "btusb")
 
-    def test_monitor_parser_keeps_only_exact_adapter_window_and_strongest_rssi(self) -> None:
+    def test_monitor_parser_keeps_only_exact_adapter_window_and_strongest_rssi(
+        self,
+    ) -> None:
         accumulator = btadapters.DiscoveryAccumulator(TARGET.path, 10.0, 22.0)
         target = f'{TARGET.path}/dev_{SPEAKER.replace(":", "_")}'
         event = lambda path_value, rssi: (
-            f'{{"path":"{path_value}","member":"PropertiesChanged",' f'"RSSI":{{"data":{rssi}}}}}'
+            f'{{"path":"{path_value}","member":"PropertiesChanged",'
+            f'"RSSI":{{"data":{rssi}}}}}'
         )
 
         accumulator.add(10.0, event(target, -20))  # exactly at start is pre-window
@@ -239,7 +403,15 @@ class DiscoveryTests(unittest.TestCase):
         monitor, owner = instances
         self.assertEqual(
             monitor.command,
-            ["sudo", "-n", "busctl", "--system", "--json=short", "monitor", btadapters.BLUEZ],
+            [
+                "sudo",
+                "-n",
+                "busctl",
+                "--system",
+                "--json=short",
+                "monitor",
+                btadapters.BLUEZ,
+            ],
         )
         self.assertEqual(owner.sent[:2], [f"select {TARGET.address}", "scan bredr"])
         self.assertEqual(owner.stopped, ("scan off", "quit"))
@@ -272,7 +444,9 @@ class ExplicitDeviceOperationTests(unittest.TestCase):
         for error, expected in cases:
             with (
                 self.subTest(error=error),
-                mock.patch.object(btadapters, "_run", return_value=(1, "", error)) as run,
+                mock.patch.object(
+                    btadapters, "_run", return_value=(1, "", error)
+                ) as run,
             ):
                 ok, detail = btadapters.connect(SPEAKER, TARGET)
 
@@ -340,7 +514,9 @@ class ExplicitDeviceOperationTests(unittest.TestCase):
 
         with (
             mock.patch.object(btadapters, "_LineProcess", Agent),
-            mock.patch.object(btadapters, "_run_cancellable", return_value=(0, "", "")) as run,
+            mock.patch.object(
+                btadapters, "_run_cancellable", return_value=(0, "", "")
+            ) as run,
             mock.patch.object(btadapters, "paired_on", return_value=True),
         ):
             result = btadapters.pair_device(SPEAKER, TARGET)

@@ -1,88 +1,50 @@
-# Reconnect policy: only chase the phone when it did not leave on purpose
+# Pixel reconnect and bond-repair policy
 
-Status: design agreed, not yet implemented.
-Date: 2026-08-23
+Status: implemented for the USB-BT500 call controller.
 
-## Why
+The Pi initiates the Pixel connection immediately after the configured BT500 is resolved. The
+normal path gives the D-Bus `Connect` request 8 seconds, then observes BlueZ for 12 seconds. If the
+request is still pending, the watchdog cancels only the configured Pixel object and retries once.
+This keeps a normal car boot within the 25-second connection target without resetting Bluetooth,
+PipeWire, WirePlumber, another adapter, or another bond.
 
-`bt_watchdog.py` already has `phone_connected()` and `reconnect_phone()`, and
-`bluetoothctl connect` from the Pi demonstrably works — E13 used it to restore the ACL
-after the Pixel dropped. But the call is unreachable in the common case.
+## When automatic repair is allowed
 
-The loop only reaches it inside the `else` branch, i.e. **after the controller wedges and
-`bt-reset.sh` recovers it**. When the controller is healthy and the phone simply
-disconnects — out of range, or what happened repeatedly during E12/E13 — the watchdog
-does nothing at all. It probes the controller; it never probes the phone.
+Automatic bond replacement requires one narrow signature on the same healthy controller:
 
-## The signal
+1. `Connect` reports `InProgress`;
+2. the 12-second observation window expires;
+3. an exact-device `Disconnect` quiesces that operation; and
+4. the immediate retry reports `InProgress` again.
 
-Every disconnect carries an HCI reason code, readable with `btmon` (present on the unit,
-verified opening the monitor socket).
+A page timeout, ordinary refusal, missing phone, phone Bluetooth being off, absent bond, or changed
+controller identity does not delete a key. Those cases remain in bounded reconnect handling or
+report `pairing_required` for an operator.
 
-| Code | Meaning | Reconnect? |
-|---|---|---|
-| `0x08` | Connection Timeout — out of range, RF loss | **yes** |
-| `0x13` | Remote User Terminated — BT switched off, or disconnected in settings | no |
-| `0x16` | Terminated By Local Host — we closed it | no |
-| n/a | unpaired (`Paired: no`) | impossible anyway |
+## Repair transaction
 
-## Policy
+Before removing the Pixel object, the watchdog stops `bridge-pairing-seal.timer` and synchronously
+seals the current `/var/lib/bluetooth` database as the rollback snapshot. It then removes only the
+configured Pixel object on the resolved BT500 and opens a 120-second `NoInputNoOutput` pairing
+window. Pairable and discoverable are enabled only for that window.
 
-- **`0x08`** → reconnect with exponential backoff.
-- **`0x13` / `0x16`** → stay quiet until something changes.
-- **Reason unknown** (after a reboot or a controller reset, when nothing was listening —
-  which is exactly the post-power-cut case): **one attempt, then stop.** The unit comes
-  back on its own after a power cut without needing a human, while a deliberate
-  disconnect is not repeatedly overridden.
+The replacement is accepted only when the configured Pixel is paired, bonded, and trusted on that
+same BT500. Any newly paired, unexpected device is removed. Success closes the window, unregisters
+the agent, seals the new key, restarts the periodic seal timer, and reconnects immediately.
 
-## Three things this deliberately does not claim
+Timeout or cancellation closes pairability and discovery but does not seal the bondless live state.
+The timer remains paused, so a reboot restores the pre-repair snapshot. If Android forgot the key,
+the user must tap **LarkBridge BT500** and approve the Pixel's pairing dialog; that confirmation is
+an Android security requirement and is never bypassed.
 
-- **`0x13` is a hint, not proof of intent.** Android emits it when its stack crashes or
-  when power management tears down an idle link. Sometimes we will decline to reconnect
-  when we should have.
-- **"Picked another output" is usually not a disconnect at all.** E13 measured Android
-  keeping the ACL up and routing the call to its own earpiece. No disconnect event fires,
-  so no reconnect logic can help. Separate problem, still unfixed.
-- Nothing here helps if the phone is out of range for a long time; backoff must cap so a
-  parked car does not sit retrying.
+## Operator commands
 
-## Shape
+```bash
+bridgectl phone status
+bridgectl phone status --json
+sudo bridgectl phone repair
+```
 
-A small `btmon` consumer records the last disconnect reason per device to
-`/run/larkbridge/last-disconnect.json`; `bt_watchdog` consults it before calling the
-`reconnect_phone()` it already has. Reading HCI is an established pattern in this repo —
-see `rig/analysis/btsnoop_window.py`.
-
-Note `/run` is tmpfs, so the record is deliberately lost on reboot. That is correct: a
-reboot means we genuinely do not know why we are disconnected, which is the
-"unknown → one attempt" case above.
-
-## Implemented 2026-08-23 — bounded attempts, not reason codes
-
-The premise this document was written on turned out to be wrong in a way worth recording.
-
-**The phone does not reconnect on its own.** The design here assumed the Pi should mostly stay out
-of the way and let Android re-initiate, with reconnect logic reserved for unusual cases. Measured on
-the hardened card: after a power cut the Pixel was watched for **130 s** while the Pi sat
-discoverable, bonded and trusted, and it never re-initiated. A Pi-initiated connect succeeded in
-20 s. In a car there is nobody to tap the phone, so the Pi has to make the call in the *ordinary*
-case, not the exceptional one.
-
-**What was implemented** (`cd5dbd4`) is the bounded-attempt half of this policy, not the
-reason-code half:
-
-- When the controller is healthy but the phone is absent, wait `RECONNECT_DELAY` (so Android is not
-  raced when it *does* choose to re-initiate), then initiate.
-- At most `RECONNECT_ATTEMPTS` (default 3) attempts. The budget resets **only** on a successful
-  connection.
-
-**The btmon reason-code consumer was not built.** The bounded budget approximates the intent:
-after an unintentional drop the Pi re-establishes within about 40 s, and after a deliberate
-departure it makes three failed attempts and then goes quiet rather than fighting the operator —
-the failure mode of `e6f4139`, where the bridge fought another app for the communication route.
-
-This approximation is weaker than the agreed policy in one specific way: **a deliberate
-disconnection still costs three attempts.** If the operator switches Bluetooth off and stays
-nearby, the Pi will try three times before giving up. That is a few seconds of pointless radio
-activity, not a functional problem, which is why the reason-code work was not treated as blocking.
-Build it if the three attempts ever prove to be a nuisance in practice.
+Status includes `bond_state`, `repair_state`, the repair trigger and deadline, reconnect timing,
+the watchdog action, and current instructions. Outside a repair window, readiness requires the
+BT500 to report `Pairable: no` and `Discoverable: no`.

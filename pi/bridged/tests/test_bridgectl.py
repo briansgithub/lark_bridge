@@ -15,7 +15,9 @@ import bridgectl
 import btadapters
 
 
-def candidate(output_id: str, label: str, kind: str = "a2dp", present: bool = True) -> dict:
+def candidate(
+    output_id: str, label: str, kind: str = "a2dp", present: bool = True
+) -> dict:
     return {
         "id": output_id,
         "kind": kind,
@@ -29,7 +31,9 @@ def candidate(output_id: str, label: str, kind: str = "a2dp", present: bool = Tr
     }
 
 
-WIRED = candidate("wired:alsa_output.platform-x.mailbox", "Built-in Audio Stereo", "wired")
+WIRED = candidate(
+    "wired:alsa_output.platform-x.mailbox", "Built-in Audio Stereo", "wired"
+)
 BOOMBOX = candidate("a2dp:C9:5C:FD:6E:28:46", "Boombox")
 IWORLD = candidate("a2dp:50:D7:1B:74:34:D6", "iWorld", present=False)
 SOUNDCORE = candidate("a2dp:98:47:44:CD:73:DE", "Soundcore Space A40", present=False)
@@ -59,8 +63,10 @@ class SelectorTests(unittest.TestCase):
         self.assertEqual(bridgectl.resolve_selector("wired", ALL), WIRED)
 
     def test_ambiguity_is_refused_rather_than_guessed(self) -> None:
-        pair = [candidate("a2dp:AA:AA:AA:AA:AA:AA", "Kitchen speaker"),
-                candidate("a2dp:BB:BB:BB:BB:BB:BB", "Bedroom speaker")]
+        pair = [
+            candidate("a2dp:AA:AA:AA:AA:AA:AA", "Kitchen speaker"),
+            candidate("a2dp:BB:BB:BB:BB:BB:BB", "Bedroom speaker"),
+        ]
         with self.assertRaises(SystemExit) as caught:
             bridgectl.resolve_selector("speaker", pair)
         self.assertIn("ambiguous", str(caught.exception))
@@ -122,7 +128,9 @@ class StatusParsingTests(unittest.TestCase):
         }
         output = StringIO()
         with (
-            mock.patch.object(bridgectl, "read_status", return_value={"microphone": block}),
+            mock.patch.object(
+                bridgectl, "read_status", return_value={"microphone": block}
+            ),
             redirect_stdout(output),
         ):
             self.assertEqual(bridgectl.main(["microphone", "list", "--json"]), 0)
@@ -142,7 +150,9 @@ class StatusParsingTests(unittest.TestCase):
                 "transport": "MEDIA_READY",
                 "media_routed": False,
                 "android_microphone_transport": False,
-                "microphone_transport_reason": ("Android has not opened a microphone transport"),
+                "microphone_transport_reason": (
+                    "Android has not opened a microphone transport"
+                ),
             }
         }
         output = StringIO()
@@ -167,14 +177,67 @@ class StatusParsingTests(unittest.TestCase):
             "microphone_transport_reason": None,
         }
         output = StringIO()
+        watchdog = {
+            "bond_state": "connected",
+            "repair_state": "idle",
+            "repair_trigger": None,
+            "last_action": "connected",
+            "reconnect_attempts": 0,
+            "reconnect_next_monotonic": 0.0,
+            "connect_pending_since_monotonic": None,
+            "connect_pending_deadline_monotonic": None,
+        }
         with (
             mock.patch.object(bridgectl, "read_status", return_value={"phone": block}),
+            mock.patch.object(
+                bridgectl, "read_phone_watchdog_state", return_value=watchdog
+            ),
             redirect_stdout(output),
         ):
             self.assertEqual(bridgectl.main(["phone", "status", "--json"]), 0)
-        self.assertEqual(json.loads(output.getvalue()), block)
+        report = json.loads(output.getvalue())
+        self.assertEqual({key: report[key] for key in block}, block)
+        self.assertEqual(report["bond_state"], "connected")
+        self.assertEqual(report["repair_state"], "idle")
+        self.assertEqual(report["watchdog_action"], "connected")
+        self.assertEqual(report["reconnect_timing"]["attempts"], 0)
+        self.assertEqual(report["instructions"], "No action required.")
         with self.assertRaises(SystemExit):
             bridgectl.main(["phone", "set"])
+
+    def test_phone_repair_signals_only_the_call_watchdog_as_root(self) -> None:
+        completed = mock.Mock(returncode=0, stdout="", stderr="")
+        output = StringIO()
+        with (
+            mock.patch.object(bridgectl.os, "geteuid", return_value=0, create=True),
+            mock.patch.object(
+                bridgectl.subprocess, "run", return_value=completed
+            ) as run,
+            redirect_stdout(output),
+        ):
+            self.assertEqual(bridgectl.main(["phone", "repair"]), 0)
+
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "systemctl",
+                "kill",
+                "--kill-whom=main",
+                "--signal=SIGUSR1",
+                "bridge-btwatchdog@call.service",
+            ],
+        )
+        self.assertIn("approve pairing", output.getvalue())
+
+    def test_phone_repair_requires_root_before_signalling(self) -> None:
+        with (
+            mock.patch.object(bridgectl.os, "geteuid", return_value=1000, create=True),
+            mock.patch.object(bridgectl.subprocess, "run") as run,
+            self.assertRaises(SystemExit) as caught,
+        ):
+            bridgectl.main(["phone", "repair"])
+        self.assertIn("sudo bridgectl phone repair", str(caught.exception))
+        run.assert_not_called()
 
     def test_degraded_phone_status_prints_the_actionable_failure(self) -> None:
         status = {
@@ -193,7 +256,9 @@ class StatusParsingTests(unittest.TestCase):
             redirect_stdout(output),
         ):
             self.assertEqual(bridgectl.do_phone_status(Namespace(json=False)), 0)
-        self.assertIn("failure: configured media target is unavailable: aux", output.getvalue())
+        self.assertIn(
+            "failure: configured media target is unavailable: aux", output.getvalue()
+        )
 
 
 class SelectionSafetyTests(unittest.TestCase):
@@ -209,13 +274,18 @@ class SelectionSafetyTests(unittest.TestCase):
     def test_target_adapter_never_falls_back_to_hci_index(self) -> None:
         with mock.patch.object(bridgectl.btadapters, "adapters") as adapters:
             self.assertIsNone(
-                bridgectl.target_adapter(dict(BOOMBOX, adapter_address=None, adapter="hci1"))
+                bridgectl.target_adapter(
+                    dict(BOOMBOX, adapter_address=None, adapter="hci1")
+                )
             )
         adapters.assert_not_called()
 
     def test_needs_setup_is_rejected_before_trust_connect_or_desire(self) -> None:
         target = dict(BOOMBOX, setup_state="needs_setup", present=False, node=None)
-        status = {"call": {"hfp_nodes_present": False}, "output": {"candidates": [target]}}
+        status = {
+            "call": {"hfp_nodes_present": False},
+            "output": {"candidates": [target]},
+        }
         args = Namespace(selector=target["id"], connect=True, force=False, chime=False)
         with (
             mock.patch.object(bridgectl, "read_status", return_value=status),
@@ -282,7 +352,9 @@ enabled = true
 node_latency_frames = 1920
 """
 
-    def test_bluetooth_default_preserves_audio_and_uses_stable_adapter_address(self) -> None:
+    def test_bluetooth_default_preserves_audio_and_uses_stable_adapter_address(
+        self,
+    ) -> None:
         candidate = bridgectl.startup_config_for(BOOMBOX, self.BASE)
         document = tomllib.loads(candidate)
 
@@ -308,7 +380,9 @@ node_latency_frames = 1920
         self.assertEqual(settings.speaker_adapter, BOOMBOX["adapter_address"])
         self.assertTrue(settings.aec.enabled)
 
-    def test_wired_default_preserves_dedicated_speaker_controller_identity(self) -> None:
+    def test_wired_default_preserves_dedicated_speaker_controller_identity(
+        self,
+    ) -> None:
         current = bridgectl.startup_config_for(BOOMBOX, self.BASE)
         candidate = bridgectl.startup_config_for(WIRED, current)
         document = tomllib.loads(candidate)
@@ -354,7 +428,9 @@ node_latency_frames = 1920
                     "default_status_path",
                     return_value=base / "runtime" / "bridge-status.json",
                 ),
-                mock.patch.object(bridgectl.subprocess, "run", side_effect=commit) as run,
+                mock.patch.object(
+                    bridgectl.subprocess, "run", side_effect=commit
+                ) as run,
             ):
                 ok, detail = bridgectl.remember_startup_output(
                     BOOMBOX,
@@ -372,9 +448,16 @@ node_latency_frames = 1920
             BOOMBOX["id"],
         )
         command = run.call_args.args[0]
-        self.assertEqual(command[:5], [
-            "sudo", "-n", "python3", str(Path("/installed/lark_state.py")), "config-write"
-        ])
+        self.assertEqual(
+            command[:5],
+            [
+                "sudo",
+                "-n",
+                "python3",
+                str(Path("/installed/lark_state.py")),
+                "config-write",
+            ],
+        )
 
     def test_failed_live_mirror_rolls_the_persistent_pointer_back(self) -> None:
         commits = []
@@ -394,7 +477,9 @@ node_latency_frames = 1920
                     return_value=base / "runtime" / "bridge-status.json",
                 ),
                 mock.patch.object(bridgectl.subprocess, "run", side_effect=commit),
-                mock.patch.object(bridgectl.os, "replace", side_effect=OSError("rename refused")),
+                mock.patch.object(
+                    bridgectl.os, "replace", side_effect=OSError("rename refused")
+                ),
             ):
                 ok, detail = bridgectl.remember_startup_output(
                     BOOMBOX,
@@ -409,7 +494,9 @@ node_latency_frames = 1920
         self.assertEqual(len(commits), 2)
         self.assertEqual(commits[1][-1], str(config))
 
-    def test_transaction_rollback_restores_exact_config_bytes_through_ab_writer(self) -> None:
+    def test_transaction_rollback_restores_exact_config_bytes_through_ab_writer(
+        self,
+    ) -> None:
         original = b'# exact operator bytes\r\n[bridge]\r\nmode = "bluetooth-wired"\r\n'
         captured = b""
 
@@ -421,7 +508,9 @@ node_latency_frames = 1920
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             config = base / "bridge.toml"
-            config.write_text(bridgectl.startup_config_for(BOOMBOX, self.BASE), encoding="utf-8")
+            config.write_text(
+                bridgectl.startup_config_for(BOOMBOX, self.BASE), encoding="utf-8"
+            )
             with (
                 mock.patch.object(
                     bridgectl.supervisor,

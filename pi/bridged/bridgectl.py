@@ -12,6 +12,7 @@
     bridgectl microphone list     # ordered candidates and live diagnostics
     bridgectl microphone status   # selected microphone, or --json
     bridgectl phone status        # phone media/microphone transport, or --json
+    sudo bridgectl phone repair   # open a bounded Pixel re-pairing window
 
 This is the first slice of the CLI PLAN.md 4.2 has specified since the beginning and which
 never existed. It is deliberately the FIRST front-end rather than the phone app, because it
@@ -53,8 +54,16 @@ import bridge_supervisor as supervisor
 
 try:  # Optional: only needed to power a speaker on, not to select one.
     import btadapters
-except ImportError:  # pragma: no cover - present on the appliance, absent in odd contexts
+except (
+    ImportError
+):  # pragma: no cover - present on the appliance, absent in odd contexts
     btadapters = None  # type: ignore[assignment]
+
+
+PHONE_WATCHDOG_STATE = Path(
+    os.environ.get("BRIDGE_WD_CALL_STATE", "/run/larkbridge/bt-watchdog/call.json")
+)
+PHONE_WATCHDOG_UNIT = "bridge-btwatchdog@call.service"
 
 
 def read_status(path: Path | None = None) -> dict[str, Any]:
@@ -62,7 +71,9 @@ def read_status(path: Path | None = None) -> dict[str, Any]:
     try:
         return json.loads(target.read_text(encoding="utf-8"))
     except OSError as exc:
-        raise SystemExit(f"cannot read {target}: {exc}\nIs bridge-supervisor running?") from exc
+        raise SystemExit(
+            f"cannot read {target}: {exc}\nIs bridge-supervisor running?"
+        ) from exc
     except json.JSONDecodeError as exc:
         raise SystemExit(f"{target} is not valid JSON: {exc}") from exc
 
@@ -107,7 +118,9 @@ def resolve_selector(selector: str, candidates: list[dict[str, Any]]) -> dict[st
     if len(matches) == 1:
         return matches[0]
     if not matches:
-        raise SystemExit(f"nothing matches {selector!r}. Run 'bridgectl output' for the list.")
+        raise SystemExit(
+            f"nothing matches {selector!r}. Run 'bridgectl output' for the list."
+        )
     names = ", ".join(str(c["label"]) for c in matches)
     raise SystemExit(f"{selector!r} is ambiguous: {names}")
 
@@ -137,10 +150,14 @@ def do_list(args: argparse.Namespace) -> int:
         elif candidate["kind"] == "a2dp":
             marks.append("connected")
         pointer = "->" if candidate["id"] == chosen else "  "
-        print(f" {pointer}{index:2}  {str(candidate['label'])[:24]:24}   {', '.join(marks)}")
+        print(
+            f" {pointer}{index:2}  {str(candidate['label'])[:24]:24}   {', '.join(marks)}"
+        )
     print()
     if desired and desired != chosen:
-        print(f"  note: {desired} is chosen but not available; {block.get('reason', '')}")
+        print(
+            f"  note: {desired} is chosen but not available; {block.get('reason', '')}"
+        )
     elif not desired:
         print("  no explicit choice; following the mode default")
     return 0
@@ -153,11 +170,15 @@ def do_status(args: argparse.Namespace) -> int:
         print(json.dumps(block, indent=2))
         return 0
     chosen = block.get("chosen") or {}
-    print(f"{chosen.get('label') or '<none>'}  [{chosen.get('id') or '-'}]  {block.get('reason', '')}")
+    print(
+        f"{chosen.get('label') or '<none>'}  [{chosen.get('id') or '-'}]  {block.get('reason', '')}"
+    )
     return 0
 
 
-def microphones_of(status: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def microphones_of(
+    status: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     block = status.get("microphone")
     if not isinstance(block, dict) or not isinstance(block.get("candidates"), list):
         raise SystemExit(
@@ -181,7 +202,9 @@ def do_microphone_list(args: argparse.Namespace) -> int:
         detail = f"{state}: {candidate.get('reason') or ''}"
         if nodes:
             detail += f" ({', '.join(str(node) for node in nodes)})"
-        print(f" {marker}{index:2}  {str(candidate.get('label') or candidate.get('id'))[:24]:24}   {detail}")
+        print(
+            f" {marker}{index:2}  {str(candidate.get('label') or candidate.get('id'))[:24]:24}   {detail}"
+        )
     print()
     print(f"  {block.get('selection_reason') or ''}")
     return 0
@@ -210,9 +233,75 @@ def phone_of(status: dict[str, Any]) -> dict[str, Any]:
     return block
 
 
+def read_phone_watchdog_state(path: Path | None = None) -> dict[str, Any]:
+    """Read reconnect truth without making phone status depend on watchdog availability."""
+    target = path or PHONE_WATCHDOG_STATE
+    try:
+        value = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def phone_status_view(status: dict[str, Any]) -> dict[str, Any]:
+    block = dict(phone_of(status))
+    watchdog = read_phone_watchdog_state()
+    repair_state = str(watchdog.get("repair_state") or "unavailable")
+    bond_state = str(watchdog.get("bond_state") or "unknown")
+    deadline = watchdog.get("repair_deadline_monotonic")
+    reconnect_next = watchdog.get("reconnect_next_monotonic")
+
+    if repair_state == "pairing_window":
+        instructions = (
+            "On the Pixel, open Bluetooth, tap LarkBridge BT500, and approve Pair."
+        )
+    elif repair_state == "pairing_required":
+        instructions = (
+            "Run 'sudo bridgectl phone repair', then approve pairing on the Pixel."
+        )
+    elif repair_state in {"requested", "preparing"}:
+        instructions = "Pairing repair is starting; keep the Pixel unlocked and nearby."
+    elif block.get("connected"):
+        instructions = "No action required."
+    else:
+        instructions = "Keep Pixel Bluetooth enabled and the phone in range."
+
+    block.update(
+        {
+            "bond_state": bond_state,
+            "repair_state": repair_state,
+            "repair_trigger": watchdog.get("repair_trigger"),
+            "repair_deadline_monotonic": deadline,
+            "repair_deadline_remaining_seconds": (
+                max(0.0, float(deadline) - time.monotonic())
+                if isinstance(deadline, (int, float))
+                else None
+            ),
+            "watchdog_action": watchdog.get("last_action"),
+            "reconnect_timing": {
+                "attempts": watchdog.get("reconnect_attempts"),
+                "next_monotonic": reconnect_next,
+                "next_in_seconds": (
+                    max(0.0, float(reconnect_next) - time.monotonic())
+                    if isinstance(reconnect_next, (int, float)) and reconnect_next > 0
+                    else 0.0 if reconnect_next == 0 else None
+                ),
+                "pending_since_monotonic": watchdog.get(
+                    "connect_pending_since_monotonic"
+                ),
+                "pending_deadline_monotonic": watchdog.get(
+                    "connect_pending_deadline_monotonic"
+                ),
+            },
+            "instructions": instructions,
+        }
+    )
+    return block
+
+
 def do_phone_status(args: argparse.Namespace) -> int:
     """Report transport truth without attempting to connect or change the phone."""
-    block = phone_of(read_status())
+    block = phone_status_view(read_status())
     if args.json:
         print(json.dumps(block, indent=2))
         return 0
@@ -232,6 +321,45 @@ def do_phone_status(args: argparse.Namespace) -> int:
     print(
         f"{block.get('transport') or 'UNKNOWN'}  {connected}  {media}  "
         f"{microphone}{failure_text}"
+    )
+    print(
+        f"bond: {block['bond_state']}  repair: {block['repair_state']}  "
+        f"action: {block.get('watchdog_action') or '-'}"
+    )
+    print(str(block["instructions"]))
+    return 0
+
+
+def do_phone_repair(_args: argparse.Namespace) -> int:
+    """Ask the running call watchdog to own one exact, bounded repair transaction."""
+    getuid = getattr(os, "geteuid", None)
+    if getuid is None or getuid() != 0:
+        raise SystemExit("phone repair requires root; run: sudo bridgectl phone repair")
+    try:
+        result = subprocess.run(
+            [
+                "systemctl",
+                "kill",
+                "--kill-whom=main",
+                "--signal=SIGUSR1",
+                PHONE_WATCHDOG_UNIT,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SystemExit(f"could not request phone repair: {exc}") from exc
+    if result.returncode != 0:
+        detail = (
+            result.stderr.strip()
+            or result.stdout.strip()
+            or f"exit {result.returncode}"
+        )
+        raise SystemExit(f"could not request phone repair: {detail}")
+    print(
+        "Pixel repair requested. Open Bluetooth on the Pixel and approve pairing when prompted."
     )
     return 0
 
@@ -289,7 +417,12 @@ def chime_path() -> Path:
             # Raised-cosine envelope: a hard edge on a Bluetooth sink is a click, and a click
             # is exactly the artefact the dropout detector is built to find.
             envelope = 0.5 - 0.5 * math.cos(2 * math.pi * index / max(count - 1, 1))
-            value = int(32767 * amplitude * envelope * math.sin(2 * math.pi * note * index / rate))
+            value = int(
+                32767
+                * amplitude
+                * envelope
+                * math.sin(2 * math.pi * note * index / rate)
+            )
             frames += struct.pack("<hh", value, value)
     with wave.open(str(target), "wb") as handle:
         handle.setnchannels(2)
@@ -314,7 +447,9 @@ def wait_for_node(target: dict[str, Any], seconds: float = 6.0) -> str | None:
         return None
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        node = outputs_module.find_a2dp_node(supervisor.pw_nodes() or {}, target["address"])
+        node = outputs_module.find_a2dp_node(
+            supervisor.pw_nodes() or {}, target["address"]
+        )
         if node:
             return node
         time.sleep(0.3)
@@ -330,7 +465,10 @@ def play_chime(node: str) -> bool:
     try:
         result = subprocess.run(
             ["pw-play", "--target", node, str(chime_path())],
-            capture_output=True, text=True, timeout=15, check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
         )
         return result.returncode == 0
     except (OSError, subprocess.SubprocessError):
@@ -437,7 +575,8 @@ def startup_config_for(target: dict[str, Any], current: str) -> str:
     )
     current_document = tomllib.loads(current)
     current_adapter = str(
-        (((current_document.get("devices") or {}).get("output") or {}).get("adapter")) or ""
+        (((current_document.get("devices") or {}).get("output") or {}).get("adapter"))
+        or ""
     ).strip()
     output_values: dict[str, str | bool | None] = {
         "id": output_id,
@@ -450,8 +589,12 @@ def startup_config_for(target: dict[str, Any], current: str) -> str:
     if kind == "a2dp":
         address = str(target.get("address") or "").upper()
         adapter = str(target.get("adapter_address") or "").upper()
-        valid_address = btadapters is not None and btadapters.canonical_mac(address) == address
-        valid_adapter = btadapters is not None and btadapters.canonical_mac(adapter) == adapter
+        valid_address = (
+            btadapters is not None and btadapters.canonical_mac(address) == address
+        )
+        valid_adapter = (
+            btadapters is not None and btadapters.canonical_mac(adapter) == adapter
+        )
         if not valid_address or not valid_adapter or output_id != f"a2dp:{address}":
             raise ValueError(
                 "Bluetooth startup choices require the speaker and controller addresses"
@@ -514,14 +657,24 @@ def _commit_startup_payload(
 
         state_tool = str(tool_path or state_tool_path())
         result = subprocess.run(
-            ["sudo", "-n", "python3", state_tool, "config-write", "--source", str(temporary)],
+            [
+                "sudo",
+                "-n",
+                "python3",
+                state_tool,
+                "config-write",
+                "--source",
+                str(temporary),
+            ],
             capture_output=True,
             text=True,
             timeout=20,
             check=False,
         )
         if result.returncode != 0:
-            detail = (result.stderr or result.stdout).strip() or f"exit {result.returncode}"
+            detail = (
+                result.stderr or result.stdout
+            ).strip() or f"exit {result.returncode}"
             return False, f"persistent configuration rejected: {detail}"
         slot = result.stdout.strip()
         try:
@@ -530,15 +683,28 @@ def _commit_startup_payload(
             # config-write has already advanced the durable pointer. Restore the old active
             # file into a fresh slot so a failed live rename cannot create a split-brain boot.
             rollback = subprocess.run(
-                ["sudo", "-n", "python3", state_tool, "config-write", "--source", str(config_path)],
+                [
+                    "sudo",
+                    "-n",
+                    "python3",
+                    state_tool,
+                    "config-write",
+                    "--source",
+                    str(config_path),
+                ],
                 capture_output=True,
                 text=True,
                 timeout=20,
                 check=False,
             )
             if rollback.returncode == 0:
-                return False, f"active configuration update failed and was rolled back: {exc}"
-            detail = (rollback.stderr or rollback.stdout).strip() or f"exit {rollback.returncode}"
+                return (
+                    False,
+                    f"active configuration update failed and was rolled back: {exc}",
+                )
+            detail = (
+                rollback.stderr or rollback.stdout
+            ).strip() or f"exit {rollback.returncode}"
             return False, (
                 f"choice reached slot {slot or '?'} but the active mirror failed: {exc}; "
                 f"rollback also failed: {detail}"
@@ -565,7 +731,9 @@ def remember_startup_output(
         candidate = startup_config_for(target, config_path.read_text(encoding="utf-8"))
     except (OSError, ValueError, tomllib.TOMLDecodeError) as exc:
         return False, f"cannot prepare startup configuration: {exc}"
-    return _commit_startup_payload(candidate.encode("utf-8"), config_path, tool_path=tool_path)
+    return _commit_startup_payload(
+        candidate.encode("utf-8"), config_path, tool_path=tool_path
+    )
 
 
 def restore_startup_config(
@@ -650,10 +818,16 @@ def do_set(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
         elif btadapters is None:
-            print("btadapters unavailable; recording the choice without connecting.", file=sys.stderr)
+            print(
+                "btadapters unavailable; recording the choice without connecting.",
+                file=sys.stderr,
+            )
         else:
             ok, detail = btadapters.connect_profile(target["address"], speaker_adapter)
-            print(f"connect {target['label']}: {'ok' if ok else 'failed'} ({detail})", file=sys.stderr)
+            print(
+                f"connect {target['label']}: {'ok' if ok else 'failed'} ({detail})",
+                file=sys.stderr,
+            )
 
     supervisor.write_desire(target["id"], source="bridgectl")
     print(f"chose {target['label']}  [{target['id']}]")
@@ -664,7 +838,9 @@ def do_set(args: argparse.Namespace) -> int:
         heard = play_chime(node)
         print(f"chime -> {target['label']}: {'played' if heard else 'FAILED'}")
     elif args.chime:
-        print(f"{target['label']} is not available yet; no chime to play", file=sys.stderr)
+        print(
+            f"{target['label']} is not available yet; no chime to play", file=sys.stderr
+        )
 
     print("the supervisor applies this in under 1s")
     return 0
@@ -680,7 +856,9 @@ def do_rename(args: argparse.Namespace) -> int:
     status = read_status()
     target = resolve_selector(args.selector, outputs_of(status))
     if target["kind"] != "a2dp":
-        raise SystemExit("only Bluetooth outputs can be renamed; the wired jack is named by ALSA")
+        raise SystemExit(
+            "only Bluetooth outputs can be renamed; the wired jack is named by ALSA"
+        )
     if btadapters is None:
         raise SystemExit("btadapters unavailable; cannot rename")
     adapter = target_adapter(target)
@@ -751,7 +929,9 @@ def main(argv: list[str] | None = None) -> int:
     # `bridgectl output` with no action lists, because listing is the harmless one.
     output.set_defaults(func=do_list, json=False)
 
-    microphone = top.add_parser("microphone", help="which configured microphone is active")
+    microphone = top.add_parser(
+        "microphone", help="which configured microphone is active"
+    )
     microphone_actions = microphone.add_subparsers(dest="action")
 
     microphone_listing = microphone_actions.add_parser(
@@ -778,7 +958,12 @@ def main(argv: list[str] | None = None) -> int:
     phone_status.add_argument("--json", action="store_true")
     phone_status.set_defaults(func=do_phone_status)
 
-    # Read-only by design: Android decides when its communication transport exists.
+    phone_repair = phone_actions.add_parser(
+        "repair", help="open a 120-second Pixel-only pairing repair window"
+    )
+    phone_repair.set_defaults(func=do_phone_repair)
+
+    # Status is the harmless default; repair must be explicit and root-owned.
     phone.set_defaults(func=do_phone_status, json=False)
 
     args = parser.parse_args(argv)

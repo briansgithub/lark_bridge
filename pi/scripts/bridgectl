@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /usr/bin/python3 /home/admin/rpi-lark-bridge/pi/bridged/bridgectl.py "$@"
