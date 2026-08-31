@@ -183,6 +183,7 @@ class StatusParsingTests(unittest.TestCase):
             "repair_trigger": None,
             "last_action": "connected",
             "reconnect_attempts": 0,
+            "connected_monotonic": 18.5,
             "reconnect_next_monotonic": 0.0,
             "connect_pending_since_monotonic": None,
             "connect_pending_deadline_monotonic": None,
@@ -201,6 +202,7 @@ class StatusParsingTests(unittest.TestCase):
         self.assertEqual(report["repair_state"], "idle")
         self.assertEqual(report["watchdog_action"], "connected")
         self.assertEqual(report["reconnect_timing"]["attempts"], 0)
+        self.assertEqual(report["reconnect_timing"]["connected_monotonic"], 18.5)
         self.assertEqual(report["instructions"], "No action required.")
         with self.assertRaises(SystemExit):
             bridgectl.main(["phone", "set"])

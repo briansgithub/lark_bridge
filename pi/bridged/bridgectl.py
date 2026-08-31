@@ -280,6 +280,7 @@ def phone_status_view(status: dict[str, Any]) -> dict[str, Any]:
             "watchdog_action": watchdog.get("last_action"),
             "reconnect_timing": {
                 "attempts": watchdog.get("reconnect_attempts"),
+                "connected_monotonic": watchdog.get("connected_monotonic"),
                 "next_monotonic": reconnect_next,
                 "next_in_seconds": (
                     max(0.0, float(reconnect_next) - time.monotonic())
