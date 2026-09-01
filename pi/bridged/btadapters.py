@@ -60,6 +60,8 @@ except ImportError:  # pragma: no cover - exercised by the Windows checkout
 SYS_BLUETOOTH = Path("/sys/class/bluetooth")
 SYS_RFKILL = Path("/sys/class/rfkill")
 BLUEZ = "org.bluez"
+A2DP_SOURCE_UUID = "0000110a-0000-1000-8000-00805f9b34fb"
+A2DP_SINK_UUID = "0000110b-0000-1000-8000-00805f9b34fb"
 
 # Long enough for a page attempt to a device that is present but asleep; short enough that
 # a watchdog poll loop is not blocked for a whole cycle by a device that is genuinely gone.
@@ -697,6 +699,31 @@ def connected_on(
     return bool(device_property(adapter, device_mac, "Connected", objects))
 
 
+def media_profile_ready_on(
+    adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
+) -> bool:
+    """Return true only when the exact device owns a usable A2DP transport.
+
+    ``Device1.Connected`` is true for a bare ACL link while Android performs SDP. Such a
+    link can have no HFP or A2DP profile and disappear a few seconds later. BlueZ creates
+    ``MediaTransport1`` only after the Pixel's A2DP Source has actually opened against the
+    Pi's A2DP Sink, and retains it in ``idle`` state between media streams.
+    """
+    tree = objects if objects is not None else managed_objects()
+    device_path = path_for(adapter, device_mac)
+    for path, interfaces in tree.items():
+        if not path.startswith(device_path + "/"):
+            continue
+        transport = interfaces.get("org.bluez.MediaTransport1") or {}
+        if (
+            (transport.get("Device") or {}).get("data") == device_path
+            and (transport.get("UUID") or {}).get("data") == A2DP_SINK_UUID
+            and (transport.get("State") or {}).get("data") in {"idle", "active"}
+        ):
+            return True
+    return False
+
+
 def path_for(adapter: Adapter, device_mac: str) -> str:
     """The path a bond WOULD have on this adapter. Does not assert that it exists."""
     return f"{adapter.path}/dev_" + device_mac.strip().upper().replace(":", "_")
@@ -888,11 +915,6 @@ def _act(
     if code == 0:
         return True, path
     return False, f"{path}: {err.strip() or 'exit ' + str(code)}"
-
-
-# A2DP Sink. Connecting this profile specifically, rather than everything a device offers,
-# is what keeps a speaker from also becoming an HFP endpoint.
-A2DP_SINK_UUID = "0000110b-0000-1000-8000-00805f9b34fb"
 
 
 def connect(

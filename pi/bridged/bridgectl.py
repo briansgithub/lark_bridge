@@ -261,6 +261,8 @@ def phone_status_view(status: dict[str, Any]) -> dict[str, Any]:
         )
     elif repair_state in {"requested", "preparing"}:
         instructions = "Pairing repair is starting; keep the Pixel unlocked and nearby."
+    elif bond_state == "profile_pending":
+        instructions = "Completing Pixel audio profiles; no action required."
     elif block.get("connected"):
         instructions = "No action required."
     else:
@@ -292,6 +294,13 @@ def phone_status_view(status: dict[str, Any]) -> dict[str, Any]:
                 ),
                 "pending_deadline_monotonic": watchdog.get(
                     "connect_pending_deadline_monotonic"
+                ),
+                "profile_ready": watchdog.get("profile_ready"),
+                "profile_pending_since_monotonic": watchdog.get(
+                    "profile_pending_since_monotonic"
+                ),
+                "profile_completion_attempts": watchdog.get(
+                    "profile_completion_attempts"
                 ),
             },
             "instructions": instructions,

@@ -187,6 +187,9 @@ class StatusParsingTests(unittest.TestCase):
             "reconnect_next_monotonic": 0.0,
             "connect_pending_since_monotonic": None,
             "connect_pending_deadline_monotonic": None,
+            "profile_ready": True,
+            "profile_pending_since_monotonic": None,
+            "profile_completion_attempts": 0,
         }
         with (
             mock.patch.object(bridgectl, "read_status", return_value={"phone": block}),
@@ -203,9 +206,33 @@ class StatusParsingTests(unittest.TestCase):
         self.assertEqual(report["watchdog_action"], "connected")
         self.assertEqual(report["reconnect_timing"]["attempts"], 0)
         self.assertEqual(report["reconnect_timing"]["connected_monotonic"], 18.5)
+        self.assertTrue(report["reconnect_timing"]["profile_ready"])
         self.assertEqual(report["instructions"], "No action required.")
         with self.assertRaises(SystemExit):
             bridgectl.main(["phone", "set"])
+
+    def test_phone_status_explains_profile_completion_without_pairing_action(
+        self,
+    ) -> None:
+        watchdog = {
+            "bond_state": "profile_pending",
+            "repair_state": "idle",
+            "last_action": "profile-completing",
+            "profile_ready": False,
+            "profile_pending_since_monotonic": 20.0,
+            "profile_completion_attempts": 1,
+        }
+        with mock.patch.object(
+            bridgectl, "read_phone_watchdog_state", return_value=watchdog
+        ):
+            report = bridgectl.phone_status_view(
+                {"phone": {"connected": True, "transport": "DEGRADED"}}
+            )
+
+        self.assertEqual(report["bond_state"], "profile_pending")
+        self.assertEqual(report["watchdog_action"], "profile-completing")
+        self.assertFalse(report["reconnect_timing"]["profile_ready"])
+        self.assertIn("Completing Pixel audio profiles", report["instructions"])
 
     def test_phone_repair_signals_only_the_call_watchdog_as_root(self) -> None:
         completed = mock.Mock(returncode=0, stdout="", stderr="")

@@ -8,6 +8,13 @@ request is still pending, the watchdog cancels only the configured Pixel object 
 This keeps a normal car boot within the 25-second connection target without resetting Bluetooth,
 PipeWire, WirePlumber, another adapter, or another bond.
 
+A raw Bluetooth ACL is not treated as a usable connection. After the link appears, the watchdog
+waits one second for the Pixel's audio profiles and then makes at most two exact A2DP Source profile
+requests, one second apart. Readiness requires an `idle` or `active` BlueZ media transport under the
+configured Pixel object on the configured BT500. A busy profile request is ordinary profile
+negotiation: it is never promoted to the stale-bond signature and never deletes the bond. Exhausting
+the profile requests enters a 15-second cooldown before another bounded attempt.
+
 ## When automatic repair is allowed
 
 Automatic bond replacement requires one narrow signature on the same healthy controller:
@@ -48,3 +55,11 @@ sudo bridgectl phone repair
 Status includes `bond_state`, `repair_state`, the repair trigger and deadline, reconnect timing,
 the watchdog action, and current instructions. Outside a repair window, readiness requires the
 BT500 to report `Pairable: no` and `Discoverable: no`.
+
+## Android fallback ownership
+
+The Pi is the primary connection owner. A Pixel automation may provide one delayed fallback attempt
+after 25 seconds, but it must recheck that the phone is still disconnected before calling Android's
+Bluetooth connect action. It must not race the Pi during boot, loop rapidly, or use Bluetooth-near
+polling. This avoids Android and BlueZ issuing overlapping page/profile requests while preserving a
+single recovery attempt if the Pi does not establish the connection.

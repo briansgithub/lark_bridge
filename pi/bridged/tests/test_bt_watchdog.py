@@ -72,9 +72,11 @@ def phone_tree(
     paired: bool = True,
     bonded: bool = True,
     trusted: bool = True,
+    profile_ready: bool = False,
 ) -> dict:
-    return {
-        btadapters.path_for(resolved, PHONE_ADDRESS): {
+    device_path = btadapters.path_for(resolved, PHONE_ADDRESS)
+    tree = {
+        device_path: {
             "org.bluez.Device1": {
                 "Address": {"data": PHONE_ADDRESS},
                 "Connected": {"data": connected},
@@ -84,6 +86,15 @@ def phone_tree(
             }
         }
     }
+    if profile_ready:
+        tree[device_path + "/sep1/fd0"] = {
+            "org.bluez.MediaTransport1": {
+                "Device": {"data": device_path},
+                "UUID": {"data": btadapters.A2DP_SINK_UUID},
+                "State": {"data": "idle"},
+            }
+        }
+    return tree
 
 
 class ResolutionTests(unittest.TestCase):
@@ -323,7 +334,7 @@ class ReconnectTests(unittest.TestCase):
             mock.patch.object(
                 bt_watchdog.btadapters,
                 "managed_objects",
-                return_value=phone_tree(BT500, connected=True),
+                return_value=phone_tree(BT500, connected=True, profile_ready=True),
             ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
         ):
@@ -414,7 +425,7 @@ class ReconnectTests(unittest.TestCase):
                 bt_watchdog.btadapters, "connect", return_value=(True, "connected")
             ) as connect,
         ):
-            self.assertTrue(
+            self.assertFalse(
                 bt_watchdog.service_reconnect(roles(), "call", state, now=100.0)
             )
         self.assertGreaterEqual(resolve.call_count, 2)
@@ -424,7 +435,116 @@ class ReconnectTests(unittest.TestCase):
             timeout=bt_watchdog.CONNECT_REQUEST_TIMEOUT,
             cancelled=None,
         )
-        self.assertEqual(state.reconnect_attempts, 0)
+        self.assertEqual(state.reconnect_attempts, 1)
+        self.assertEqual(state.bond_state, "profile_pending")
+        self.assertEqual(state.last_action, "profile-settling")
+
+    def test_bare_acl_is_not_connected_and_completes_exact_pixel_profile(self) -> None:
+        state = bt_watchdog.RecoveryState("call")
+        tree = phone_tree(BT500, connected=True)
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters, "managed_objects", return_value=tree
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "connect_profile",
+                return_value=(False, "Call failed: br-connection-busy"),
+            ) as profile,
+        ):
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=100.0)
+            )
+            self.assertFalse(
+                bt_watchdog.service_reconnect(
+                    roles(),
+                    "call",
+                    state,
+                    now=100.0 + bt_watchdog.PROFILE_COMPLETION_GRACE,
+                )
+            )
+
+        profile.assert_called_once_with(
+            PHONE_ADDRESS,
+            BT500,
+            uuid=btadapters.A2DP_SOURCE_UUID,
+            timeout=bt_watchdog.CONNECT_REQUEST_TIMEOUT,
+            cancelled=None,
+        )
+        self.assertEqual(state.bond_state, "profile_pending")
+        self.assertFalse(state.profile_ready)
+        self.assertEqual(state.profile_completion_attempts, 1)
+        self.assertEqual(state.last_action, "profile-completing")
+        self.assertIn("br-connection-busy", state.last_error or "")
+
+    def test_ready_media_profile_completes_connection_and_clears_pending_state(
+        self,
+    ) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            bond_state="profile_pending",
+            profile_pending_since=100.0,
+            profile_pending_target=bt_watchdog._adapter_runtime_target(BT500),
+            profile_completion_attempts=1,
+        )
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(
+                    BT500, connected=True, profile_ready=True
+                ),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect_profile"
+            ) as profile,
+        ):
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=102.0)
+            )
+
+        profile.assert_not_called()
+        self.assertEqual(state.bond_state, "connected")
+        self.assertTrue(state.profile_ready)
+        self.assertIsNone(state.profile_pending_since)
+        self.assertEqual(state.profile_completion_attempts, 0)
+
+    def test_profile_completion_is_bounded_without_erasing_the_bond(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            bond_state="profile_pending",
+            reconnect_next=100.0,
+            profile_pending_since=90.0,
+            profile_pending_target=bt_watchdog._adapter_runtime_target(BT500),
+            profile_completion_attempts=bt_watchdog.PROFILE_COMPLETION_ATTEMPTS,
+        )
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500, connected=True),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect_profile"
+            ) as profile,
+            mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
+            mock.patch.object(bt_watchdog.btadapters, "remove_device") as remove,
+        ):
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=100.0)
+            )
+
+        profile.assert_not_called()
+        disconnect.assert_not_called()
+        remove.assert_not_called()
+        self.assertEqual(state.bond_state, "profile_pending")
+        self.assertEqual(state.last_action, "profile-pending")
+        self.assertEqual(
+            state.reconnect_next, 100.0 + bt_watchdog.PROFILE_COMPLETION_COOLDOWN
+        )
 
     def test_shutdown_between_power_and_connect_stops_reconnect(self) -> None:
         state = bt_watchdog.RecoveryState("call")
@@ -553,7 +673,7 @@ class ReconnectTests(unittest.TestCase):
             reconnect_next=100.0 + bt_watchdog.CONNECT_PENDING_TIMEOUT,
             last_error="Call failed: In Progress",
         )
-        tree = phone_tree(BT500, connected=True)
+        tree = phone_tree(BT500, connected=True, profile_ready=True)
         with (
             mock.patch.object(
                 bt_watchdog.btadapters, "managed_objects", return_value=tree
@@ -626,7 +746,7 @@ class ReconnectTests(unittest.TestCase):
             ) as connect,
             mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect_again,
         ):
-            self.assertTrue(
+            self.assertFalse(
                 bt_watchdog.service_reconnect(roles(), "call", state, now=165.0)
             )
 
@@ -638,6 +758,7 @@ class ReconnectTests(unittest.TestCase):
         )
         disconnect_again.assert_not_called()
         self.assertEqual(state.connect_collision_cancellations, 0)
+        self.assertEqual(state.bond_state, "profile_pending")
 
     def test_changed_pending_target_settles_without_cancelling_new_adapter(
         self,
@@ -996,7 +1117,7 @@ class ReconnectTests(unittest.TestCase):
             mock.patch.object(
                 bt_watchdog.btadapters,
                 "managed_objects",
-                return_value=phone_tree(BT500, connected=True),
+                return_value=phone_tree(BT500, connected=True, profile_ready=True),
             ),
             mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
             mock.patch.object(

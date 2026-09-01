@@ -60,6 +60,18 @@ CONNECT_PENDING_TIMEOUT = float(
 )
 PAIRING_WINDOW_SECONDS = float(os.environ.get("BRIDGE_WD_PAIRING_WINDOW", "120"))
 POST_CANCEL_RETRY_DELAY = float(os.environ.get("BRIDGE_WD_POST_CANCEL_RETRY", "1"))
+PROFILE_COMPLETION_GRACE = float(
+    os.environ.get("BRIDGE_WD_PROFILE_COMPLETION_GRACE", "1")
+)
+PROFILE_COMPLETION_RETRY = float(
+    os.environ.get("BRIDGE_WD_PROFILE_COMPLETION_RETRY", "1")
+)
+PROFILE_COMPLETION_COOLDOWN = float(
+    os.environ.get("BRIDGE_WD_PROFILE_COMPLETION_COOLDOWN", "15")
+)
+PROFILE_COMPLETION_ATTEMPTS = int(
+    os.environ.get("BRIDGE_WD_PROFILE_COMPLETION_ATTEMPTS", "2")
+)
 PAIRING_SEAL_TIMER = "bridge-pairing-seal.timer"
 PAIRING_SEAL_SERVICE = "bridge-pairing-seal.service"
 PAIRING_SEAL_ATTEMPTS = 3
@@ -105,6 +117,10 @@ class RecoveryState:
     connect_pending_target: str | None = None
     connect_collision_cancellations: int = 0
     stale_connect_signatures: int = 0
+    profile_ready: bool = False
+    profile_pending_since: float | None = None
+    profile_pending_target: str | None = None
+    profile_completion_attempts: int = 0
     bond_state: str = "unknown"
     repair_state: str = "idle"
     repair_trigger: str | None = None
@@ -138,6 +154,10 @@ class RecoveryState:
             "connect_pending_target": self.connect_pending_target,
             "connect_collision_cancellations": self.connect_collision_cancellations,
             "stale_connect_signatures": self.stale_connect_signatures,
+            "profile_ready": self.profile_ready,
+            "profile_pending_since_monotonic": self.profile_pending_since,
+            "profile_pending_target": self.profile_pending_target,
+            "profile_completion_attempts": self.profile_completion_attempts,
             "bond_state": self.bond_state,
             "repair_state": self.repair_state,
             "repair_trigger": self.repair_trigger,
@@ -505,6 +525,29 @@ def _clear_connect_collision(state: RecoveryState) -> None:
     state.connect_collision_cancellations = 0
 
 
+def _clear_profile_completion(state: RecoveryState) -> None:
+    state.profile_ready = False
+    state.profile_pending_since = None
+    state.profile_pending_target = None
+    state.profile_completion_attempts = 0
+
+
+def _begin_profile_settling(
+    state: RecoveryState, adapter: btadapters.Adapter, observed: float
+) -> None:
+    _clear_connect_collision(state)
+    target = _adapter_runtime_target(adapter)
+    if state.profile_pending_target != target or state.profile_pending_since is None:
+        state.profile_pending_since = observed
+        state.profile_pending_target = target
+        state.profile_completion_attempts = 0
+    state.profile_ready = False
+    state.bond_state = "profile_pending"
+    state.reconnect_next = observed + PROFILE_COMPLETION_GRACE
+    state.last_action = "profile-settling"
+    state.last_error = None
+
+
 def _mark_device_connected(
     state: RecoveryState,
     *,
@@ -517,6 +560,10 @@ def _mark_device_connected(
     state.reconnect_next = 0.0
     _clear_connect_collision(state)
     state.stale_connect_signatures = 0
+    state.profile_ready = True
+    state.profile_pending_since = None
+    state.profile_pending_target = None
+    state.profile_completion_attempts = 0
     state.bond_state = "connected"
     state.repair_state = "idle"
     state.repair_trigger = None
@@ -574,7 +621,7 @@ def service_reconnect(
         state.last_action = "resolve"
         state.last_error = state.identity_error
         return False
-    previously_connected = state.bond_state == "connected"
+    previously_connected = state.bond_state == "connected" and state.profile_ready
     properties = btadapters.device_properties(adapter, address, tree)
     if not properties or not btadapters.paired_on(adapter, address, tree):
         state.bond_state = "missing"
@@ -621,12 +668,60 @@ def service_reconnect(
             return False
         state.bond_state = "trusted"
     if btadapters.connected_on(adapter, address, tree):
-        _mark_device_connected(
-            state,
-            observed=observed,
-            record_time=not previously_connected,
-        )
-        return True
+        if btadapters.media_profile_ready_on(adapter, address, tree):
+            _mark_device_connected(
+                state,
+                observed=observed,
+                record_time=not previously_connected,
+            )
+            return True
+
+        target = _adapter_runtime_target(adapter)
+        if (
+            state.profile_pending_target != target
+            or state.profile_pending_since is None
+        ):
+            _begin_profile_settling(state, adapter, observed)
+            return False
+
+        state.profile_ready = False
+        state.bond_state = "profile_pending"
+        grace_deadline = state.profile_pending_since + PROFILE_COMPLETION_GRACE
+        if observed < grace_deadline:
+            state.reconnect_next = grace_deadline
+            state.last_action = "profile-settling"
+            return False
+        if observed < state.reconnect_next:
+            return False
+        if state.profile_completion_attempts >= PROFILE_COMPLETION_ATTEMPTS:
+            state.reconnect_next = observed + PROFILE_COMPLETION_COOLDOWN
+            state.last_action = "profile-pending"
+            state.last_error = (
+                "Pixel has a raw ACL link but no ready A2DP transport on "
+                f"{adapter.hci}"
+            )
+            return False
+
+        try:
+            _before_mutation(cancelled)
+            state.profile_completion_attempts += 1
+            state.last_action = "profile-completing"
+            ok, detail = btadapters.connect_profile(
+                address,
+                adapter,
+                uuid=btadapters.A2DP_SOURCE_UUID,
+                timeout=CONNECT_REQUEST_TIMEOUT,
+                cancelled=cancelled,
+            )
+        except (RecoveryCancelled, btadapters.BluetoothOperationCancelled) as exc:
+            state.last_action = "cancelled"
+            state.last_error = str(exc)
+            return False
+        state.reconnect_next = observed + PROFILE_COMPLETION_RETRY
+        state.last_error = None if ok else detail
+        return False
+
+    _clear_profile_completion(state)
 
     if state.connect_pending_since is not None:
         pending_deadline = state.connect_pending_since + CONNECT_PENDING_TIMEOUT
@@ -773,8 +868,7 @@ def service_reconnect(
     state.last_action = "device-reconnect"
     state.last_error = None if ok else detail
     if ok:
-        _mark_device_connected(state, observed=observed)
-        return True
+        _begin_profile_settling(state, adapter, observed)
     return False
 
 
@@ -794,7 +888,7 @@ def service_startup_reconnect(
         state.reconnect_next = 0.0
         service_reconnect(roles, role, state, now=now, cancelled=cancelled)
         if (
-            state.bond_state != "connected"
+            state.bond_state not in {"connected", "profile_pending"}
             and state.repair_state == "idle"
             and state.connect_pending_since is None
         ):
