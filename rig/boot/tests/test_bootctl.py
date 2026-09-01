@@ -26,9 +26,7 @@ def microphone_probe(
     ready: bool = True,
 ) -> dict:
     node = (
-        "alsa_input.usb-LARK"
-        if candidate_id == "lark-a1"
-        else "alsa_input.usb-FIFINE"
+        "alsa_input.usb-LARK" if candidate_id == "lark-a1" else "alsa_input.usb-FIFINE"
     )
     return {
         "boot_id": boot_id,
@@ -89,9 +87,7 @@ def mocked_boot_run(
 
     with (
         mock.patch.object(bootctl, "Ssh", FakeSsh),
-        mock.patch.object(
-            bootctl, "git_metadata", return_value={"tracked_status": []}
-        ),
+        mock.patch.object(bootctl, "git_metadata", return_value={"tracked_status": []}),
         mock.patch.object(bootctl, "wait_for_port", return_value=True),
         mock.patch.object(bootctl, "start_serial", return_value=None),
         mock.patch.object(bootctl, "confirm_trial", return_value={"ok": True}),
@@ -127,6 +123,10 @@ class BootCtlTests(unittest.TestCase):
         self.assertIn(
             '"/etc/systemd/system/bridge-btwatchdog@.service"',
             bootctl.REMOTE_MANIFEST,
+        )
+        self.assertIn(
+            'run(["bluetoothctl", "show", call_address])',
+            bootctl.REMOTE_PROBE,
         )
         self.assertNotIn("bridge-btfw.service", bootctl.REMOTE_MANIFEST)
 
@@ -214,9 +214,7 @@ class BootCtlTests(unittest.TestCase):
         self.assertEqual(result["observed_microphone"]["id"], "fifine-k054")
         self.assertTrue(result["microphone_evidence"]["idle"]["matches"])
         self.assertEqual(manifest["microphone"]["expected_id"], "fifine-k054")
-        self.assertEqual(
-            manifest["microphone"]["idle"]["observed_id"], "fifine-k054"
-        )
+        self.assertEqual(manifest["microphone"]["idle"]["observed_id"], "fifine-k054")
 
     def test_run_boot_rejects_ready_probe_with_wrong_microphone(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -230,6 +228,74 @@ class BootCtlTests(unittest.TestCase):
         self.assertIn("expected 'lark-a1'", result["failure"])
         self.assertEqual(result["observed_microphone"]["id"], "fifine-k054")
         self.assertFalse(manifest["microphone"]["idle"]["matches"])
+
+    def test_manual_cold_phone_run_uses_watchdog_boot_timestamp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            inventory = root / "inventory.toml"
+            inventory.write_text(
+                'pi_host = "pi"\n' 'boot_functional_probe_command = ["must-not-run"]\n',
+                encoding="utf-8",
+            )
+            config = bootctl.Config.load(inventory, root / "artifacts")
+            before = microphone_probe("lark-a1", boot_id="old-boot")
+            ready = microphone_probe("lark-a1", boot_id="new-boot")
+            ready.update(
+                {
+                    "phone_ready": True,
+                    "phone_failures": [],
+                    "call_watchdog": {"connected_monotonic": 19.125},
+                }
+            )
+
+            class FakeSsh:
+                def __init__(self, _config):
+                    self.probes = [before, ready]
+
+                def manifest(self):
+                    return {"fixture": True}
+
+                def probe(self, expected=None):
+                    self.assert_expected(expected)
+                    return self.probes.pop(0)
+
+                @staticmethod
+                def assert_expected(expected):
+                    if expected != "lark-a1":
+                        raise AssertionError(expected)
+
+                def run(self, *_args, **_kwargs):
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            def collect(_ssh, run_directory):
+                (run_directory / "journal.txt").write_text("", encoding="utf-8")
+
+            with (
+                mock.patch.object(bootctl, "Ssh", FakeSsh),
+                mock.patch.object(
+                    bootctl, "git_metadata", return_value={"tracked_status": []}
+                ),
+                mock.patch.object(bootctl, "wait_for_port", return_value=True),
+                mock.patch.object(bootctl, "start_serial", return_value=None),
+                mock.patch.object(bootctl, "confirm_trial", return_value={"ok": True}),
+                mock.patch.object(bootctl, "collect_evidence", side_effect=collect),
+                mock.patch.object(bootctl, "run_hook") as run_hook,
+                mock.patch.object(bootctl.time, "sleep"),
+            ):
+                path = bootctl.run_boot(
+                    config,
+                    mode="cold",
+                    candidate="phone-fixture",
+                    require_functional=False,
+                    manual_power=True,
+                    readiness_profile="phone",
+                )
+
+            result = json.loads((path / "result.json").read_text(encoding="utf-8"))
+            self.assertEqual(result["verdict"], "PASS")
+            self.assertEqual(result["readiness_level"], "phone")
+            self.assertEqual(result["timings_s"]["phone_connected"], 19.125)
+            run_hook.assert_not_called()
 
     def test_percentile_interpolates(self):
         self.assertEqual(bootctl.percentile([1, 2, 3], 0.5), 2)
@@ -262,6 +328,36 @@ class BootCtlTests(unittest.TestCase):
                 [*arguments, "--expected-microphone", "fifine-k054"]
             )
             self.assertEqual(parsed.expected_microphone, "fifine-k054")
+
+    def test_phone_campaign_options_are_explicit(self):
+        parsed = bootctl.parser().parse_args(
+            [
+                "baseline",
+                "--mode",
+                "cold",
+                "--candidate",
+                "phone-baseline",
+                "--manual-power",
+                "--readiness-profile",
+                "phone",
+            ]
+        )
+        self.assertTrue(parsed.manual_power)
+        self.assertEqual(parsed.readiness_profile, "phone")
+
+        compared = bootctl.parser().parse_args(
+            [
+                "compare",
+                "--baseline",
+                "phone-baseline",
+                "--candidate",
+                "phone-candidate",
+                "--allow-phone",
+                "--mode",
+                "cold",
+            ]
+        )
+        self.assertTrue(compared.allow_phone)
 
     def test_config_rejects_string_command(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -423,6 +519,7 @@ class BootCtlTests(unittest.TestCase):
                     "base",
                     "candidate",
                     False,
+                    False,
                     "warm",
                 )
             self.assertEqual(verdict, 1)
@@ -459,6 +556,7 @@ class BootCtlTests(unittest.TestCase):
                     "base",
                     "candidate",
                     True,
+                    False,
                     "warm",
                 )
             self.assertEqual(verdict, 1)
@@ -466,6 +564,74 @@ class BootCtlTests(unittest.TestCase):
                 json.loads(output.getvalue())["verdict"],
                 "PROVISIONAL_IDLE_IMPROVEMENT",
             )
+
+    def test_compare_accepts_reliable_phone_campaign(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for label, timing in (("base", 20.0), ("candidate", 19.5)):
+                for index in range(10):
+                    run = root / f"boot-run-{label}-{index}"
+                    run.mkdir()
+                    (run / "result.json").write_text(
+                        json.dumps(
+                            {
+                                "candidate": label,
+                                "mode": "cold",
+                                "verdict": "PASS",
+                                "readiness_level": "phone",
+                                "timings_s": {"phone_connected": timing},
+                                "health_events": {},
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                verdict = bootctl.compare(
+                    SimpleNamespace(artifacts=root),
+                    "base",
+                    "candidate",
+                    False,
+                    True,
+                    "cold",
+                )
+            report = json.loads(output.getvalue())
+            self.assertEqual(verdict, 0)
+            self.assertEqual(report["verdict"], "PHONE_ACCEPT")
+            self.assertLessEqual(report["candidate"]["p95_s"], 25.0)
+
+    def test_compare_rejects_phone_campaign_above_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for label, timing in (("base", 24.0), ("candidate", 25.1)):
+                for index in range(10):
+                    run = root / f"boot-run-{label}-{index}"
+                    run.mkdir()
+                    (run / "result.json").write_text(
+                        json.dumps(
+                            {
+                                "candidate": label,
+                                "mode": "cold",
+                                "verdict": "PASS",
+                                "readiness_level": "phone",
+                                "timings_s": {"phone_connected": timing},
+                                "health_events": {},
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                verdict = bootctl.compare(
+                    SimpleNamespace(artifacts=root),
+                    "base",
+                    "candidate",
+                    False,
+                    True,
+                    "cold",
+                )
+            self.assertEqual(verdict, 1)
+            self.assertEqual(json.loads(output.getvalue())["verdict"], "REJECT")
 
 
 if __name__ == "__main__":
