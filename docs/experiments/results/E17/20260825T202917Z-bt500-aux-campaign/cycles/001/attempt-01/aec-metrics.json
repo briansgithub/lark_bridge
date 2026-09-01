@@ -1,0 +1,51 @@
+{
+  "clean": {
+    "channel": 0,
+    "clipped_pct": 0.0,
+    "dc_offset": 1e-05,
+    "peak_dbfs": -11.33,
+    "rms_dbfs": -38.42
+  },
+  "clean_correlated_dbfs": -38.42,
+  "components": [
+    {
+      "clean_correlated_dbfs": -38.42,
+      "clean_correlation": 0.0938,
+      "clean_lag_ms": 670.0,
+      "incremental_clean_latency_ms": null,
+      "latency_reliable": false,
+      "raw_correlated_dbfs": -33.96,
+      "raw_correlation": 0.5781,
+      "raw_lag_ms": 470.0
+    }
+  ],
+  "failures": [
+    "suppression 4.46 dB is below 10.00 dB"
+  ],
+  "raw": {
+    "channel": 0,
+    "clipped_pct": 0.0,
+    "dc_offset": -2e-05,
+    "peak_dbfs": -9.62,
+    "rms_dbfs": -33.96
+  },
+  "raw_correlated_dbfs": -33.96,
+  "reference": {
+    "channel": 0,
+    "clipped_pct": 0.0,
+    "dc_offset": -3e-05,
+    "peak_dbfs": -10.77,
+    "rms_dbfs": -31.34
+  },
+  "signal": "speech",
+  "skip_start_s": 2.0,
+  "suppression_db": 4.46,
+  "thresholds": {
+    "max_incremental_latency_ms": null,
+    "min_raw_tone_dbfs": -55.0,
+    "min_suppression_db": 10.0
+  },
+  "tone_hz": 1000.0,
+  "trailing_silence": null,
+  "verdict": "FAIL"
+}

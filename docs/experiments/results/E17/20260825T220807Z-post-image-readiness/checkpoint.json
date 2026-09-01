@@ -1,0 +1,18 @@
+{
+  "baseline": {
+    "artifact": "baseline",
+    "completed_utc": "20260825T220811Z",
+    "status": "passed"
+  },
+  "campaign_id": "20260825T220807Z-post-image-readiness",
+  "created_utc": "20260825T220807Z",
+  "cycles": [],
+  "sample_seconds": 5.0,
+  "schema_version": 1,
+  "soak": {
+    "status": "pending"
+  },
+  "soak_seconds": 3600,
+  "target_cycles": 5,
+  "verdict": "IN_PROGRESS"
+}

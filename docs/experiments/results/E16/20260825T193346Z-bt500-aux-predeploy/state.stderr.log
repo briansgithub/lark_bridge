@@ -1,0 +1,4 @@
+jq: error (at /run/user/1000/bridge-status.json:39): Cannot iterate over null (null)
+jq: error (at /run/user/1000/bridge-status.json:39): Cannot iterate over null (null)
+jq: error (at /run/user/1000/bridge-status.json:39): Cannot iterate over null (null)
+jq: error (at /run/user/1000/bridge-status.json:39): Cannot iterate over null (null)

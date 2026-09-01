@@ -1,0 +1,56 @@
+6.877s NetworkManager.service
+2.437s dev-mmcblk0p2.device
+2.066s user@1000.service
+1.782s e2scrub_reap.service
+1.626s systemd-fsck@dev-disk-by\x2dpartuuid-75b951e4\x2d01.service
+1.449s systemd-fsck@dev-disk-by\x2dlabel-LARKDATA.service
+1.020s bridge-storage-guard.service
+ 833ms keyboard-setup.service
+ 793ms systemd-udev-trigger.service
+ 586ms polkit.service
+ 570ms systemd-journald.service
+ 494ms modprobe@drm.service
+ 494ms wpa_supplicant.service
+ 436ms bluetooth.service
+ 429ms avahi-daemon.service
+ 397ms systemd-hostnamed.service
+ 396ms systemd-logind.service
+ 393ms systemd-modules-load.service
+ 376ms systemd-udevd.service
+ 365ms dbus.service
+ 362ms modprobe@fuse.service
+ 347ms dev-mqueue.mount
+ 346ms run-lock.mount
+ 343ms systemd-zram-setup@zram0.service
+ 340ms sys-kernel-debug.mount
+ 325ms sys-kernel-tracing.mount
+ 325ms systemd-tmpfiles-setup-dev-early.service
+ 315ms ssh.service
+ 314ms systemd-timesyncd.service
+ 309ms systemd-udev-load-credentials.service
+ 276ms bridge-tuning.service
+ 259ms systemd-rfkill.service
+ 257ms kmod-static-nodes.service
+ 254ms modprobe@configfs.service
+ 253ms sshswitch.service
+ 230ms rpi-eeprom-update.service
+ 203ms systemd-sysctl.service
+ 168ms systemd-random-seed.service
+ 164ms dev-zram0.swap
+ 149ms systemd-binfmt.service
+ 147ms rtkit-daemon.service
+ 143ms systemd-tmpfiles-setup-dev.service
+ 142ms systemd-tmpfiles-setup.service
+ 133ms alsa-restore.service
+ 122ms boot-firmware.mount
+ 112ms var-lib-larkbridge\x2dpersist.mount
+ 110ms systemd-user-sessions.service
+ 104ms user-runtime-dir@1000.service
+  79ms sys-fs-fuse-connections.mount
+  76ms sys-kernel-config.mount
+  73ms proc-sys-fs-binfmt_misc.mount
+  69ms var-lib-bluetooth.mount
+  69ms systemd-journal-flush.service
+  67ms modprobe@efi_pstore.service
+  66ms tmp.mount
+  62ms console-setup.service

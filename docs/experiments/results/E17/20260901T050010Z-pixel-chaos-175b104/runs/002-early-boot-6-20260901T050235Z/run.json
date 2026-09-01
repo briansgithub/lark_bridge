@@ -1,0 +1,22 @@
+{
+  "boot_id_after": "888ffc17-a526-4c26-8541-a298c7fe49f8",
+  "boot_id_before": "32ce3088-c230-463a-add5-c9afb88990bc",
+  "category": "early-boot-6",
+  "completed": "20260901T050442Z",
+  "context": "early-boot-6",
+  "created": "20260901T050235Z",
+  "cut_prompt_unix_ns": 1788238988638782200,
+  "early_delay_seconds": 6,
+  "minimum_off_seconds": 12.0,
+  "off_detected_unix_ns": 1788238994415318500,
+  "off_seconds": 20.254,
+  "phase": "PASSED",
+  "power_connected_unix_ns": 1788238982637158200,
+  "preparatory_off_unix_ns": 1788238957358550100,
+  "randomized_delay_seconds": null,
+  "reconnect_prompt_unix_ns": 1788239014669801300,
+  "run_id": "002-early-boot-6-20260901T050235Z",
+  "schedule_index": 2,
+  "schema": 1,
+  "seed": null
+}

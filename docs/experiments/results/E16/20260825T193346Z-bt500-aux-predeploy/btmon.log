@@ -1,0 +1,23 @@
+Bluetooth monitor ver 5.82
+btmon[26093]: = Note: Linux version 6.18.34+rpt-..   2026-08-25 15:33:48.301442
+btmon[26093]: = Note: Bluetooth subsystem versio..   2026-08-25 15:33:48.301453
+= New Index: A0:AD:9F:7.. (Primary,USB,hci0)  [hci0] 2026-08-25 15:33:48.301457
+= Open Index: A0:AD:9F:73:6C:24               [hci0] 2026-08-25 15:33:48.301460
+= Index Info: A0:AD:9F:73:6C:24               [hci0] 2026-08-25 15:33:48.301461
+= New Index: B8:27:EB:.. (Primary,UART,hci2)  [hci2] 2026-08-25 15:33:48.301466
+= Open Index: B8:27:EB:43:8D:51               [hci2] 2026-08-25 15:33:48.301467
+= Index Info: B8:27.. (Broadcom Corporation)  [hci2] 2026-08-25 15:33:48.301468
+bluetoothd[503]: @ MGMT Open: bluetoothd    {0x0001} 2026-08-25 15:33:48.301478
+hciconfig[26149]: @ RAW Open: hciconfig     {0x0002} 2026-08-25 15:33:51.544459
+hciconfig[26149]: @ RAW Open: hc..   {0x0003} [hci2] 2026-08-25 15:33:51.544520
+hciconfig[26149]: < HCI Command: Read...   #1 [hci2] 2026-08-25 15:33:51.544579
+> HCI Event: Command Com.. (0x0e) plen 12  #2 [hci2] 2026-08-25 15:33:51.545115
+      Read Local Version Information (0x04|0x0001) ncmd 1
+        Status: Success (0x00)
+        HCI version: Bluetooth 4.1 (0x07) - Revision 508 (0x01fc)
+        LMP version: Bluetooth 4.1 (0x07) - Subversion 8713 (0x2209)
+        Manufacturer: Broadcom Corporation (15)
+          Firmware: 001.002.009
+          Build: 0508
+hciconfig[26149]: @ RAW Close: h..   {0x0003} [hci2] 2026-08-25 15:33:51.545439
+hciconfig[26149]: @ RAW Close: hciconfig    {0x0002} 2026-08-25 15:33:51.545489

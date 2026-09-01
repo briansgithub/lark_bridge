@@ -1,0 +1,883 @@
+[    9.665961] larkbridge kernel: Booting Linux on physical CPU 0x0000000000 [0x410fd034]
+[    9.666128] larkbridge kernel: Linux version 6.18.34+rpt-rpi-v8 (serge@raspberrypi.com) (aarch64-linux-gnu-gcc-14 (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #1 SMP PREEMPT Debian 1:6.18.34-1+rpt1 (2026-06-09)
+[    9.666194] larkbridge kernel: KASLR enabled
+[    9.666244] larkbridge kernel: random: crng init done
+[    9.666292] larkbridge kernel: Machine model: Raspberry Pi 3 Model B Rev 1.2
+[    9.666342] larkbridge kernel: efi: UEFI not found.
+[    9.666403] larkbridge kernel: Reserved memory: created CMA memory pool at 0x000000001e400000, size 256 MiB
+[    9.666476] larkbridge kernel: OF: reserved mem: initialized node linux,cma, compatible id shared-dma-pool
+[    9.666529] larkbridge kernel: OF: reserved mem: 0x000000001e400000..0x000000002e3fffff (262144 KiB) map reusable linux,cma
+[    9.666577] larkbridge kernel: NUMA: Faking a node at [mem 0x0000000000000000-0x000000003b3fffff]
+[    9.666647] larkbridge kernel: NODE_DATA(0) allocated [mem 0x3b1fdd80-0x3b200aff]
+[    9.666696] larkbridge kernel: Zone ranges:
+[    9.666763] larkbridge kernel:   DMA      [mem 0x0000000000000000-0x000000003b3fffff]
+[    9.666812] larkbridge kernel:   DMA32    empty
+[    9.666874] larkbridge kernel:   Normal   empty
+[    9.666920] larkbridge kernel: Movable zone start for each node
+[    9.666969] larkbridge kernel: Early memory node ranges
+[    9.667017] larkbridge kernel:   node   0: [mem 0x0000000000000000-0x000000003b3fffff]
+[    9.667070] larkbridge kernel: Initmem setup node 0 [mem 0x0000000000000000-0x000000003b3fffff]
+[    9.667118] larkbridge kernel: On node 0, zone DMA: 19456 pages in unavailable ranges
+[    9.667166] larkbridge kernel: percpu: Embedded 33 pages/cpu s95512 r8192 d31464 u135168
+[    9.667242] larkbridge kernel: Detected VIPT I-cache on CPU0
+[    9.667290] larkbridge kernel: CPU features: kernel page table isolation forced ON by KASLR
+[    9.667351] larkbridge kernel: CPU features: detected: Kernel page table isolation (KPTI)
+[    9.667401] larkbridge kernel: CPU features: detected: ARM erratum 843419
+[    9.667468] larkbridge kernel: CPU features: detected: ARM erratum 845719
+[    9.667517] larkbridge kernel: alternatives: applying boot alternatives
+[    9.667586] larkbridge kernel: Kernel command line: coherent_pool=1M 8250.nr_uarts=1 snd_bcm2835.enable_headphones=0 cgroup_disable=memory snd_bcm2835.enable_headphones=1 snd_bcm2835.enable_hdmi=1 snd_bcm2835.enable_hdmi=0  vc_mem.mem_base=0x3ec00000 vc_mem.mem_size=0x40000000  console=ttyAMA0,115200 console=tty1 root=PARTUUID=75b951e4-02 rootfstype=ext4 fsck.repair=yes rootwait cfg80211.ieee80211_regdom=US ds=nocloud;i=rpi-imager-1786896896453
+[    9.667637] larkbridge kernel: cgroup: Disabling memory control group subsystem
+[    9.667685] larkbridge kernel: Unknown kernel command line parameters "ds=nocloud;i=rpi-imager-1786896896453", will be passed to user space.
+[    9.667733] larkbridge kernel: printk: log buffer data + meta data: 131072 + 458752 = 589824 bytes
+[    9.667781] larkbridge kernel: Dentry cache hash table entries: 131072 (order: 8, 1048576 bytes, linear)
+[    9.667828] larkbridge kernel: Inode-cache hash table entries: 65536 (order: 7, 524288 bytes, linear)
+[    9.667874] larkbridge kernel: Fallback order for Node 0: 0 
+[    9.667921] larkbridge kernel: Built 1 zonelists, mobility grouping on.  Total pages: 242688
+[    9.667967] larkbridge kernel: Policy zone: DMA
+[    9.668141] larkbridge kernel: mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    9.668196] larkbridge kernel: SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=4, Nodes=1
+[    9.668259] larkbridge kernel: ftrace: allocating 46711 entries in 184 pages
+[    9.668308] larkbridge kernel: ftrace: allocated 184 pages with 4 groups
+[    9.668369] larkbridge kernel: rcu: Preemptible hierarchical RCU implementation.
+[    9.668425] larkbridge kernel: rcu:         RCU event tracing is enabled.
+[    9.668490] larkbridge kernel:         Trampoline variant of Tasks RCU enabled.
+[    9.668538] larkbridge kernel:         Rude variant of Tasks RCU enabled.
+[    9.668598] larkbridge kernel:         Tracing variant of Tasks RCU enabled.
+[    9.668646] larkbridge kernel: rcu: RCU calculated value of scheduler-enlistment delay is 25 jiffies.
+[    9.668695] larkbridge kernel: RCU Tasks: Setting shift to 2 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=4.
+[    9.668743] larkbridge kernel: RCU Tasks Rude: Setting shift to 2 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=4.
+[    9.668792] larkbridge kernel: RCU Tasks Trace: Setting shift to 2 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=4.
+[    9.668838] larkbridge kernel: NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+[    9.668885] larkbridge kernel: Root IRQ handler: bcm2836_arm_irqchip_handle_irq
+[    9.668932] larkbridge kernel: rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    9.668979] larkbridge kernel: arch_timer: cp15 timer running at 19.20MHz (phys).
+[    9.669028] larkbridge kernel: clocksource: arch_sys_counter: mask: 0xffffffffffffff max_cycles: 0x46d987e47, max_idle_ns: 440795202767 ns
+[    9.669083] larkbridge kernel: sched_clock: 56 bits at 19MHz, resolution 52ns, wraps every 4398046511078ns
+[    9.669132] larkbridge kernel: Console: colour dummy device 80x25
+[    9.669195] larkbridge kernel: printk: legacy console [tty1] enabled
+[    9.669249] larkbridge kernel: Calibrating delay loop (skipped), value calculated using timer frequency.. 38.40 BogoMIPS (lpj=76800)
+[    9.669300] larkbridge kernel: pid_max: default: 32768 minimum: 301
+[    9.669352] larkbridge kernel: LSM: initializing lsm=capability
+[    9.669404] larkbridge kernel: Mount-cache hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    9.669466] larkbridge kernel: Mountpoint-cache hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    9.669520] larkbridge kernel: rcu: Hierarchical SRCU implementation.
+[    9.669582] larkbridge kernel: rcu:         Max phase no-delay instances is 1000.
+[    9.669636] larkbridge kernel: Timer migration: 1 hierarchy levels; 8 children per group; 1 crossnode level
+[    9.669704] larkbridge kernel: EFI services will not be available.
+[    9.669757] larkbridge kernel: smp: Bringing up secondary CPUs ...
+[    9.669809] larkbridge kernel: Detected VIPT I-cache on CPU1
+[    9.669861] larkbridge kernel: CPU1: Booted secondary processor 0x0000000001 [0x410fd034]
+[    9.669914] larkbridge kernel: Detected VIPT I-cache on CPU2
+[    9.669967] larkbridge kernel: CPU2: Booted secondary processor 0x0000000002 [0x410fd034]
+[    9.670017] larkbridge kernel: Detected VIPT I-cache on CPU3
+[    9.670072] larkbridge kernel: CPU3: Booted secondary processor 0x0000000003 [0x410fd034]
+[    9.670125] larkbridge kernel: smp: Brought up 1 node, 4 CPUs
+[    9.670185] larkbridge kernel: SMP: Total of 4 processors activated.
+[    9.670238] larkbridge kernel: CPU: All CPU(s) started at EL2
+[    9.670291] larkbridge kernel: CPU features: detected: 32-bit EL0 Support
+[    9.670344] larkbridge kernel: CPU features: detected: 32-bit EL1 Support
+[    9.670398] larkbridge kernel: CPU features: detected: CRC32 instructions
+[    9.670461] larkbridge kernel: CPU features: detected: PMUv3
+[    9.670519] larkbridge kernel: alternatives: applying system-wide alternatives
+[    9.670581] larkbridge kernel: Memory: 645556K/970752K available (15040K kernel code, 2442K rwdata, 5084K rodata, 2048K init, 505K bss, 58020K reserved, 262144K cma-reserved)
+[    9.670634] larkbridge kernel: devtmpfs: initialized
+[    9.670701] larkbridge kernel: Enabled cp15_barrier support
+[    9.670757] larkbridge kernel: Enabled setend support
+[    9.670816] larkbridge kernel: clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    9.670870] larkbridge kernel: posixtimers hash table entries: 2048 (order: 3, 32768 bytes, linear)
+[    9.670922] larkbridge kernel: futex hash table entries: 1024 (65536 bytes on 1 NUMA nodes, total 64 KiB, linear).
+[    9.670980] larkbridge kernel: 2G module region forced by RANDOMIZE_MODULE_REGION_FULL
+[    9.671033] larkbridge kernel: 0 pages in range for non-PLT usage
+[    9.671087] larkbridge kernel: 517952 pages in range for PLT usage
+[    9.671141] larkbridge kernel: pinctrl core: initialized pinctrl subsystem
+[    9.671209] larkbridge kernel: DMI not present or invalid.
+[    9.671263] larkbridge kernel: NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    9.671320] larkbridge kernel: DMA: preallocated 1024 KiB GFP_KERNEL pool for atomic allocations
+[    9.671376] larkbridge kernel: DMA: preallocated 1024 KiB GFP_KERNEL|GFP_DMA pool for atomic allocations
+[    9.671429] larkbridge kernel: DMA: preallocated 1024 KiB GFP_KERNEL|GFP_DMA32 pool for atomic allocations
+[    9.671483] larkbridge kernel: audit: initializing netlink subsys (disabled)
+[    9.671535] larkbridge kernel: audit: type=2000 audit(0.028:1): state=initialized audit_enabled=0 res=1
+[    9.671593] larkbridge kernel: thermal_sys: Registered thermal governor 'step_wise'
+[    9.671657] larkbridge kernel: cpuidle: using governor menu
+[    9.671710] larkbridge kernel: hw-breakpoint: found 6 breakpoint and 4 watchpoint registers.
+[    9.671761] larkbridge kernel: ASID allocator initialised with 32768 entries
+[    9.671816] larkbridge kernel: Serial: AMBA PL011 UART driver
+[    9.672883] larkbridge kernel: bcm2835-mbox 3f00b880.mailbox: mailbox enabled
+[    9.673715] larkbridge kernel: raspberrypi-firmware soc:firmware: Attached to firmware from 2026-05-21T11:21:57, variant start
+[    9.674443] larkbridge kernel: raspberrypi-firmware soc:firmware: Firmware hash is 288930ab4712b99596f32732664aaaeb881ef1e0
+[    9.675174] larkbridge kernel: bcm2835-dma 3f007000.dma-controller: DMA legacy API manager, dmachans=0x1
+[    9.675252] larkbridge kernel: iommu: Default domain type: Translated
+[    9.675311] larkbridge kernel: iommu: DMA domain TLB invalidation policy: strict mode
+[    9.675364] larkbridge kernel: SCSI subsystem initialized
+[    9.675417] larkbridge kernel: usbcore: registered new interface driver usbfs
+[    9.675469] larkbridge kernel: usbcore: registered new interface driver hub
+[    9.675524] larkbridge kernel: usbcore: registered new device driver usb
+[    9.675581] larkbridge kernel: pps_core: LinuxPPS API ver. 1 registered
+[    9.675634] larkbridge kernel: pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    9.675702] larkbridge kernel: PTP clock support registered
+[    9.675755] larkbridge kernel: vgaarb: loaded
+[    9.675831] larkbridge kernel: clocksource: Switched to clocksource arch_sys_counter
+[    9.675894] larkbridge kernel: VFS: Disk quotas dquot_6.6.0
+[    9.675948] larkbridge kernel: VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+[    9.676209] larkbridge kernel: NET: Registered PF_INET protocol family
+[    9.676292] larkbridge kernel: IP idents hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    9.676359] larkbridge kernel: tcp_listen_portaddr_hash hash table entries: 512 (order: 1, 8192 bytes, linear)
+[    9.676416] larkbridge kernel: Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    9.676476] larkbridge kernel: TCP established hash table entries: 8192 (order: 4, 65536 bytes, linear)
+[    9.676562] larkbridge kernel: TCP bind hash table entries: 8192 (order: 6, 262144 bytes, linear)
+[    9.676624] larkbridge kernel: TCP: Hash tables configured (established 8192 bind 8192)
+[    9.676682] larkbridge kernel: MPTCP token hash table entries: 1024 (order: 3, 24576 bytes, linear)
+[    9.676741] larkbridge kernel: UDP hash table entries: 512 (order: 3, 32768 bytes, linear)
+[    9.677014] larkbridge kernel: UDP-Lite hash table entries: 512 (order: 3, 32768 bytes, linear)
+[    9.677082] larkbridge kernel: NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    9.677157] larkbridge kernel: RPC: Registered named UNIX socket transport module.
+[    9.677222] larkbridge kernel: RPC: Registered udp transport module.
+[    9.677278] larkbridge kernel: RPC: Registered tcp transport module.
+[    9.677332] larkbridge kernel: RPC: Registered tcp-with-tls transport module.
+[    9.677391] larkbridge kernel: RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    9.677449] larkbridge kernel: PCI: CLS 0 bytes, default 64
+[    9.677520] larkbridge kernel: Trying to unpack rootfs image as initramfs...
+[    9.677578] larkbridge kernel: kvm [1]: nv: 568 coarse grained trap handlers
+[    9.677637] larkbridge kernel: kvm [1]: IPA Size Limit: 40 bits
+[    9.677720] larkbridge kernel: kvm [1]: Hyp nVHE mode initialized successfully
+[    9.677775] larkbridge kernel: Initialise system trusted keyrings
+[    9.677829] larkbridge kernel: workingset: timestamp_bits=42 max_order=18 bucket_order=0
+[    9.677884] larkbridge kernel: NFS: Registering the id_resolver key type
+[    9.677937] larkbridge kernel: Key type id_resolver registered
+[    9.677989] larkbridge kernel: Key type id_legacy registered
+[    9.678043] larkbridge kernel: nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[    9.678106] larkbridge kernel: nfs4flexfilelayout_init: NFSv4 Flexfile Layout Driver Registering...
+[    9.678160] larkbridge kernel: Key type asymmetric registered
+[    9.678232] larkbridge kernel: Asymmetric key parser 'x509' registered
+[    9.678286] larkbridge kernel: Block layer SCSI generic (bsg) driver version 0.4 loaded (major 246)
+[    9.678340] larkbridge kernel: io scheduler mq-deadline registered
+[    9.678393] larkbridge kernel: io scheduler kyber registered
+[    9.678453] larkbridge kernel: io scheduler bfq registered
+[    9.679344] larkbridge kernel: pinctrl-bcm2835 3f200000.gpio: GPIO_OUT persistence: yes
+[    9.679486] larkbridge kernel: Freeing initrd memory: 12048K
+[    9.679546] larkbridge kernel: ledtrig-cpu: registered to indicate activity on CPUs
+[    9.680696] larkbridge kernel: simple-framebuffer 3eaa9000.framebuffer: framebuffer at 0x3eaa9000, 0x151800 bytes
+[    9.681887] larkbridge kernel: simple-framebuffer 3eaa9000.framebuffer: format=a8r8g8b8, mode=720x480x32, linelength=2880
+[    9.682060] larkbridge kernel: Console: switching to colour frame buffer device 90x30
+[    9.683519] larkbridge kernel: simple-framebuffer 3eaa9000.framebuffer: fb0: simplefb registered!
+[    9.683687] larkbridge kernel: Serial: 8250/16550 driver, 1 ports, IRQ sharing enabled
+[    9.684616] larkbridge kernel: bcm2835-rng 3f104000.rng: hwrng registered
+[    9.684738] larkbridge kernel: vc-mem: phys_addr:0x00000000 mem_base=0x3ec00000 mem_size:0x40000000(1024 MiB)
+[    9.684820] larkbridge kernel: brd: module loaded
+[    9.684875] larkbridge kernel: loop: module loaded
+[    9.684928] larkbridge kernel: Loading iSCSI transport class v2.0-870.
+[    9.684981] larkbridge kernel: usbcore: registered new interface driver lan78xx
+[    9.685035] larkbridge kernel: usbcore: registered new interface driver smsc95xx
+[    9.685088] larkbridge kernel: dwc_otg: version 3.00a 10-AUG-2012 (platform bus)
+[    9.685141] larkbridge kernel: Core Release: 2.80a
+[    9.685203] larkbridge kernel: Setting default values for core params
+[    9.685260] larkbridge kernel: Finished setting default values for core params
+[    9.685327] larkbridge kernel: Using Buffer DMA mode
+[    9.685383] larkbridge kernel: Periodic Transfer Interrupt Enhancement - disabled
+[    9.685436] larkbridge kernel: Multiprocessor Interrupt Enhancement - disabled
+[    9.685499] larkbridge kernel: OTG VER PARAM: 0, OTG VER FLAG: 0
+[    9.685551] larkbridge kernel: Dedicated Tx FIFOs mode
+[    9.685605] larkbridge kernel: INFO:: FIQ DMA bounce buffers: virt = ffffffc080cab000 dma = 0x00000000de800000 len=9024
+[    9.685665] larkbridge kernel: FIQ FSM acceleration enabled for :
+                                  Non-periodic Split Transactions
+                                  Periodic Split Transactions
+                                  High-Speed Isochronous Endpoints
+                                  Interrupt/Control Split Transaction hack enabled
+[    9.685739] larkbridge kernel: INFO:: MPHI regs_base at ffffffc080075000
+[    9.686583] larkbridge kernel: dwc_otg 3f980000.usb: DWC OTG Controller
+[    9.687400] larkbridge kernel: dwc_otg 3f980000.usb: new USB bus registered, assigned bus number 1
+[    9.688370] larkbridge kernel: dwc_otg 3f980000.usb: irq 74, io mem 0x00000000
+[    9.688494] larkbridge kernel: Init: Port Power? op_state=1
+[    9.688552] larkbridge kernel: Init: Power Port (0)
+[    9.689619] larkbridge kernel: usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.18
+[    9.690925] larkbridge kernel: usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    9.692115] larkbridge kernel: usb usb1: Product: DWC OTG Controller
+[    9.693480] larkbridge kernel: usb usb1: Manufacturer: Linux 6.18.34+rpt-rpi-v8 dwc_otg_hcd
+[    9.694644] larkbridge kernel: usb usb1: SerialNumber: 3f980000.usb
+[    9.695761] larkbridge kernel: hub 1-0:1.0: USB hub found
+[    9.697063] larkbridge kernel: hub 1-0:1.0: 1 port detected
+[    9.697267] larkbridge kernel: usbcore: registered new interface driver uas
+[    9.697341] larkbridge kernel: usbcore: registered new interface driver usb-storage
+[    9.697399] larkbridge kernel: mousedev: PS/2 mouse device common for all mice
+[    9.697492] larkbridge kernel: sdhci: Secure Digital Host Controller Interface driver
+[    9.697546] larkbridge kernel: sdhci: Copyright(c) Pierre Ossman
+[    9.697606] larkbridge kernel: sdhci-pltfm: SDHCI platform and OF driver helper
+[    9.697661] larkbridge kernel: hid: raw HID events driver (C) Jiri Kosina
+[    9.697715] larkbridge kernel: usbcore: registered new interface driver usbhid
+[    9.697768] larkbridge kernel: usbhid: USB HID core driver
+[    9.697848] larkbridge kernel: hw perfevents: enabled with armv8_cortex_a53 PMU driver, 7 (0,8000003f) counters available
+[    9.697902] larkbridge kernel: NET: Registered PF_PACKET protocol family
+[    9.697955] larkbridge kernel: Key type dns_resolver registered
+[    9.698022] larkbridge kernel: registered taskstats version 1
+[    9.698075] larkbridge kernel: Loading compiled-in X.509 certificates
+[    9.698130] larkbridge kernel: Demotion targets for Node 0: null
+[    9.698182] larkbridge kernel: Key type .fscrypt registered
+[    9.698234] larkbridge kernel: Key type fscrypt-provisioning registered
+[    9.699072] larkbridge kernel: bcm2835-wdt bcm2835-wdt: Broadcom BCM2835 watchdog timer
+[    9.699899] larkbridge kernel: bcm2835-power bcm2835-power: Broadcom BCM2835 power domains driver
+[    9.700885] larkbridge kernel: uart-pl011 3f201000.serial: there is not valid maps for state default
+[    9.701823] larkbridge kernel: uart-pl011 3f201000.serial: cts_event_workaround enabled
+[    9.701955] larkbridge kernel: 3f201000.serial: ttyAMA0 at MMIO 0x3f201000 (irq = 99, base_baud = 0) is a PL011 rev2
+[    9.702017] larkbridge kernel: printk: console [ttyAMA0] enabled
+[    9.702076] larkbridge kernel: of_cfs_init
+[    9.702130] larkbridge kernel: of_cfs_init: OK
+[    9.702182] larkbridge kernel: clk: Disabling unused clocks
+[    9.702235] larkbridge kernel: PM: genpd: Disabling unused power domains
+[    9.702314] larkbridge kernel: Indeed it is in host mode hprt0 = 00021501
+[    9.703170] larkbridge kernel: sdhost-bcm2835 3f202000.mmc: loaded - DMA enabled (>1)
+[    9.703302] larkbridge kernel: Freeing unused kernel memory: 2048K
+[    9.703366] larkbridge kernel: Run /init as init process
+[    9.704970] larkbridge kernel: usb 1-1: new high-speed USB device number 2 using dwc_otg
+[    9.705116] larkbridge kernel: mmc0: host does not support reading read-only switch, assuming write-enable
+[    9.705176] larkbridge kernel: Indeed it is in host mode hprt0 = 00001101
+[    9.705231] larkbridge kernel: mmc0: new high speed SDHC card at address 59b4
+[    9.705313] larkbridge kernel: mmcblk0: mmc0:59b4 USDU1 15.0 GiB
+[    9.705366] larkbridge kernel:  mmcblk0: p1 p2 p3
+[    9.705419] larkbridge kernel: mmcblk0: mmc0:59b4 USDU1 15.0 GiB
+[    9.706384] larkbridge kernel: usb 1-1: New USB device found, idVendor=0424, idProduct=9514, bcdDevice= 2.00
+[    9.707261] larkbridge kernel: usb 1-1: New USB device strings: Mfr=0, Product=0, SerialNumber=0
+[    9.708280] larkbridge kernel: hub 1-1:1.0: USB hub found
+[    9.709347] larkbridge kernel: hub 1-1:1.0: 5 ports detected
+[    9.710884] larkbridge kernel: usb 1-1.1: new high-speed USB device number 3 using dwc_otg
+[    9.712177] larkbridge kernel: usb 1-1.1: New USB device found, idVendor=0424, idProduct=ec00, bcdDevice= 2.00
+[    9.713440] larkbridge kernel: usb 1-1.1: New USB device strings: Mfr=0, Product=0, SerialNumber=0
+[    9.713574] larkbridge kernel: smsc95xx v2.0.0
+[    9.714508] larkbridge kernel: SMSC LAN8700 usb-001:003:01: attached PHY driver (mii_bus:phy_addr=usb-001:003:01, irq=184)
+[    9.715592] larkbridge kernel: smsc95xx 1-1.1:1.0 eth0: register 'smsc95xx' at usb-3f980000.usb-1.1, smsc95xx USB 2.0 Ethernet, b8:27:eb:e9:27:fb
+[    9.717116] larkbridge kernel: usb 1-1.3: new full-speed USB device number 4 using dwc_otg
+[    9.718475] larkbridge kernel: usb 1-1.3: New USB device found, idVendor=0c76, idProduct=161e, bcdDevice= 1.00
+[    9.719583] larkbridge kernel: usb 1-1.3: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+[    9.720719] larkbridge kernel: usb 1-1.3: Product: USB PnP Audio Device
+[    9.720881] larkbridge kernel: input: USB PnP Audio Device as /devices/platform/soc/3f980000.usb/usb1/1-1/1-1.3/1-1.3:1.2/0003:0C76:161E.0001/input/input0
+[    9.721775] larkbridge kernel: hid-generic 0003:0C76:161E.0001: input,hidraw0: USB HID v1.00 Device [USB PnP Audio Device] on usb-3f980000.usb-1.3/input2
+[    9.722974] larkbridge kernel: usb 1-1.4: new full-speed USB device number 5 using dwc_otg
+[    9.724099] larkbridge kernel: usb 1-1.4: New USB device found, idVendor=3547, idProduct=0407, bcdDevice= 1.00
+[    9.725357] larkbridge kernel: usb 1-1.4: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[    9.726354] larkbridge kernel: usb 1-1.4: Product: Wireless Microphone
+[    9.727403] larkbridge kernel: usb 1-1.4: Manufacturer: Shenzhen Hollyland Technology Co.,Ltd
+[    9.728743] larkbridge kernel: usb 1-1.4: SerialNumber: Wireless Microphone
+[    9.728900] larkbridge kernel: input: Shenzhen Hollyland Technology Co.,Ltd Wireless Microphone Consumer Control as /devices/platform/soc/3f980000.usb/usb1/1-1/1-1.4/1-1.4:1.0/0003:3547:0407.0002/input/input1
+[    9.728985] larkbridge kernel: input: Shenzhen Hollyland Technology Co.,Ltd Wireless Microphone as /devices/platform/soc/3f980000.usb/usb1/1-1/1-1.4/1-1.4:1.0/0003:3547:0407.0002/input/input2
+[    9.729927] larkbridge kernel: hid-generic 0003:3547:0407.0002: input,hiddev96,hidraw1: USB HID v1.11 Device [Shenzhen Hollyland Technology Co.,Ltd Wireless Microphone] on usb-3f980000.usb-1.4/input0
+[    9.730052] larkbridge kernel: EXT4-fs (mmcblk0p2): orphan cleanup on readonly fs
+[    9.730116] larkbridge kernel: EXT4-fs (mmcblk0p2): mounted filesystem 15f4c6be-1102-4331-9904-f78e78afd1fd ro with ordered data mode. Quota mode: none.
+[    9.731333] larkbridge kernel: usb 1-1.5: new full-speed USB device number 6 using dwc_otg
+[    9.732533] larkbridge kernel: usb 1-1.5: New USB device found, idVendor=0b05, idProduct=1bf6, bcdDevice= 2.00
+[    9.733585] larkbridge kernel: usb 1-1.5: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+[    9.734609] larkbridge kernel: usb 1-1.5: Product: Bluetooth Controller
+[    9.735560] larkbridge kernel: usb 1-1.5: Manufacturer: Realtek
+[    9.735725] larkbridge systemd[1]: System time advanced to timestamp on /var/lib/systemd/timesync/clock: Sun 2026-08-23 07:18:48 EDT
+[    9.735800] larkbridge kernel: NET: Registered PF_INET6 protocol family
+[    9.735855] larkbridge kernel: Segment Routing with IPv6
+[    9.735910] larkbridge kernel: In-situ OAM (IOAM) with IPv6
+[    9.735978] larkbridge systemd[1]: systemd 257.13-1~deb13u1 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +IPE +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBCRYPTSETUP_PLUGINS +LIBFDISK +PCRE2 +PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD +BPF_FRAMEWORK +BTF -XKBCOMMON -UTMP +SYSVINIT +LIBARCHIVE)
+[    9.736177] larkbridge systemd[1]: Detected architecture arm64.
+[    9.736241] larkbridge systemd[1]: Hostname set to <larkbridge>.
+[    9.736302] larkbridge systemd[1]: bpf-restrict-fs: BPF LSM hook not enabled in the kernel, BPF LSM not supported.
+[    9.738652] larkbridge systemd[1]: Using hardware watchdog 'Broadcom BCM2835 Watchdog timer', version 0, device /dev/watchdog0
+[    9.738788] larkbridge systemd[1]: Watchdog running with a hardware timeout of 1min.
+[    9.738861] larkbridge systemd-fstab-generator[205]: Checking was requested for "/media/root-ro/", but it is not a device.
+[    9.738931] larkbridge zram_generator::config[216]: zram0: system has too much memory (905MB), limit is 0MB, ignoring.
+[    9.739031] larkbridge systemd[1]: Queued start job for default target multi-user.target.
+[    9.739098] larkbridge systemd[1]: Created slice system-bridge\x2dbtwatchdog.slice - Slice /system/bridge-btwatchdog.
+[    9.739161] larkbridge systemd[1]: Created slice system-getty.slice - Slice /system/getty.
+[    9.739225] larkbridge systemd[1]: Created slice system-modprobe.slice - Slice /system/modprobe.
+[    9.739290] larkbridge systemd[1]: Created slice system-serial\x2dgetty.slice - Slice /system/serial-getty.
+[    9.739361] larkbridge systemd[1]: Created slice system-systemd\x2dfsck.slice - Slice /system/systemd-fsck.
+[    9.739428] larkbridge systemd[1]: Created slice system-systemd\x2dzram\x2dsetup.slice - Slice /system/systemd-zram-setup.
+[    9.739491] larkbridge systemd[1]: Created slice user.slice - User and Session Slice.
+[    9.739575] larkbridge systemd[1]: Started systemd-ask-password-console.path - Dispatch Password Requests to Console Directory Watch.
+[    9.739637] larkbridge systemd[1]: Started systemd-ask-password-wall.path - Forward Password Requests to Wall Directory Watch.
+[    9.739699] larkbridge systemd[1]: Set up automount proc-sys-fs-binfmt_misc.automount - Arbitrary Executable File Formats File System Automount Point.
+[    9.739760] larkbridge systemd[1]: Expecting device dev-disk-by\x2dlabel-LARKDATA.device - /dev/disk/by-label/LARKDATA...
+[    9.739826] larkbridge systemd[1]: Expecting device dev-disk-by\x2dpartuuid-75b951e4\x2d01.device - /dev/disk/by-partuuid/75b951e4-01...
+[    9.739888] larkbridge systemd[1]: Expecting device dev-ttyAMA0.device - /dev/ttyAMA0...
+[    9.739949] larkbridge systemd[1]: Expecting device dev-zram0.device - /dev/zram0...
+[    9.740092] larkbridge systemd[1]: Reached target paths.target - Path Units.
+[    9.740184] larkbridge systemd[1]: Reached target remote-fs.target - Remote File Systems.
+[    9.740245] larkbridge systemd[1]: Reached target slices.target - Slice Units.
+[    9.740307] larkbridge systemd[1]: Listening on systemd-creds.socket - Credential Encryption/Decryption.
+[    9.740369] larkbridge systemd[1]: Listening on systemd-initctl.socket - initctl Compatibility Named Pipe.
+[    9.740431] larkbridge systemd[1]: Listening on systemd-journald-dev-log.socket - Journal Socket (/dev/log).
+[    9.740498] larkbridge systemd[1]: Listening on systemd-journald.socket - Journal Sockets.
+[    9.740561] larkbridge systemd[1]: systemd-pcrextend.socket - TPM PCR Measurements skipped, unmet condition check ConditionSecurity=measured-uki
+[    9.740623] larkbridge systemd[1]: systemd-pcrlock.socket - Make TPM PCR Policy skipped, unmet condition check ConditionSecurity=measured-uki
+[    9.740706] larkbridge systemd[1]: Listening on systemd-udevd-control.socket - udev Control Socket.
+[    9.740768] larkbridge systemd[1]: Listening on systemd-udevd-kernel.socket - udev Kernel Socket.
+[    9.740830] larkbridge systemd[1]: dev-hugepages.mount - Huge Pages File System skipped, unmet condition check ConditionPathExists=/sys/kernel/mm/hugepages
+[    9.740890] larkbridge systemd[1]: Mounting dev-mqueue.mount - POSIX Message Queue File System...
+[    9.740950] larkbridge systemd[1]: Mounting run-lock.mount - Legacy Locks Directory /run/lock...
+[    9.741010] larkbridge systemd[1]: Mounting sys-kernel-debug.mount - Kernel Debug File System...
+[    9.741073] larkbridge systemd[1]: Mounting sys-kernel-tracing.mount - Kernel Trace File System...
+[    9.741133] larkbridge systemd[1]: Starting keyboard-setup.service - Set the console keyboard layout...
+[    9.741213] larkbridge systemd[1]: Starting kmod-static-nodes.service - Create List of Static Device Nodes...
+[    9.741277] larkbridge systemd[1]: Starting modprobe@configfs.service - Load Kernel Module configfs...
+[    9.741340] larkbridge systemd[1]: Starting modprobe@drm.service - Load Kernel Module drm...
+[    9.741402] larkbridge systemd[1]: Starting modprobe@efi_pstore.service - Load Kernel Module efi_pstore...
+[    9.741469] larkbridge systemd[1]: Starting modprobe@fuse.service - Load Kernel Module fuse...
+[    9.741536] larkbridge systemd[1]: regenerate_ssh_host_keys.service - Regenerate SSH host keys skipped, unmet condition check ConditionFirstBoot=yes
+[    9.741617] larkbridge systemd[1]: systemd-hibernate-clear.service - Clear Stale Hibernate Storage Info skipped, unmet condition check ConditionPathExists=/sys/firmware/efi/efivars/HibernateLocation-8cf2644b-4b0b-428f-9387-6d876050dc67
+[    9.741694] larkbridge systemd[1]: systemd-hwdb-update.service - Rebuild Hardware Database skipped, unmet condition check ConditionNeedsUpdate=/etc
+[    9.741754] larkbridge systemd[1]: Starting systemd-journald.service - Journal Service...
+[    9.741813] larkbridge systemd[1]: Starting systemd-modules-load.service - Load Kernel Modules...
+[    9.741875] larkbridge systemd[1]: systemd-pcrmachine.service - TPM PCR Machine ID Measurement skipped, unmet condition check ConditionSecurity=measured-uki
+[    9.741937] larkbridge systemd[1]: systemd-tpm2-setup-early.service - Early TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+[    9.742001] larkbridge systemd[1]: systemd-tpm2-setup.service - TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+[    9.742067] larkbridge systemd[1]: Starting systemd-udev-load-credentials.service - Load udev Rules from Credentials...
+[    9.742139] larkbridge systemd[1]: Starting systemd-udev-trigger.service - Coldplug All udev Devices...
+[    9.742202] larkbridge systemd[1]: Mounted dev-mqueue.mount - POSIX Message Queue File System.
+[    9.742262] larkbridge systemd[1]: Mounted run-lock.mount - Legacy Locks Directory /run/lock.
+[    9.742320] larkbridge kernel: fuse: init (API version 7.45)
+[    9.742377] larkbridge systemd[1]: Mounted sys-kernel-debug.mount - Kernel Debug File System.
+[    9.742454] larkbridge systemd[1]: Mounted sys-kernel-tracing.mount - Kernel Trace File System.
+[    9.742516] larkbridge systemd[1]: Finished kmod-static-nodes.service - Create List of Static Device Nodes.
+[    9.742591] larkbridge systemd[1]: modprobe@configfs.service: Deactivated successfully.
+[    9.742651] larkbridge systemd[1]: Finished modprobe@configfs.service - Load Kernel Module configfs.
+[    9.742722] larkbridge systemd[1]: modprobe@efi_pstore.service: Deactivated successfully.
+[    9.742783] larkbridge systemd[1]: Finished modprobe@efi_pstore.service - Load Kernel Module efi_pstore.
+[    9.742845] larkbridge systemd[1]: modprobe@fuse.service: Deactivated successfully.
+[    9.742908] larkbridge systemd[1]: Finished modprobe@fuse.service - Load Kernel Module fuse.
+[    9.742969] larkbridge systemd[1]: Mounting sys-fs-fuse-connections.mount - FUSE Control File System...
+[    9.743030] larkbridge systemd[1]: Mounting sys-kernel-config.mount - Kernel Configuration File System...
+[    9.743099] larkbridge systemd[1]: systemd-pstore.service - Platform Persistent Storage Archival skipped, unmet condition check ConditionDirectoryNotEmpty=/sys/fs/pstore
+[    9.743163] larkbridge systemd[1]: Starting systemd-tmpfiles-setup-dev-early.service - Create Static Device Nodes in /dev gracefully...
+[    9.743238] larkbridge systemd[1]: Mounted sys-fs-fuse-connections.mount - FUSE Control File System.
+[    9.743299] larkbridge systemd[1]: Mounted sys-kernel-config.mount - Kernel Configuration File System.
+[    9.743360] larkbridge systemd[1]: Finished systemd-udev-load-credentials.service - Load udev Rules from Credentials.
+[    9.743418] larkbridge kernel: zram: Added device: zram0
+[    9.743497] larkbridge systemd[1]: Finished systemd-modules-load.service - Load Kernel Modules.
+[    9.743572] larkbridge systemd[1]: Starting systemd-sysctl.service - Apply Kernel Variables...
+[    9.743634] larkbridge systemd[1]: modprobe@drm.service: Deactivated successfully.
+[    9.743694] larkbridge systemd[1]: Finished modprobe@drm.service - Load Kernel Module drm.
+[    9.743884] larkbridge systemd-journald[259]: Collecting audit messages is disabled.
+[    9.744182] larkbridge systemd[1]: Finished systemd-sysctl.service - Apply Kernel Variables.
+[    9.744273] larkbridge systemd-journald[259]: Journal started
+[    9.744390] larkbridge systemd-journald[259]: Runtime Journal (/run/log/journal/fbfc34151e3c473aa45a5c58fccbdb41) is 2M, max 16M, 14M free.
+[    9.562058] larkbridge systemd-modules-load[264]: Inserted module 'zram'
+[    9.748295] larkbridge systemd[1]: Started systemd-journald.service - Journal Service.
+[    9.764162] larkbridge systemd[1]: Finished systemd-tmpfiles-setup-dev-early.service - Create Static Device Nodes in /dev gracefully.
+[    9.789446] larkbridge systemd[1]: systemd-sysusers.service - Create System Users skipped, no trigger condition checks were met.
+[    9.797203] larkbridge systemd[1]: Starting systemd-timesyncd.service - Network Time Synchronization...
+[    9.808664] larkbridge systemd[1]: Starting systemd-tmpfiles-setup-dev.service - Create Static Device Nodes in /dev...
+[    9.856756] larkbridge systemd[1]: Finished keyboard-setup.service - Set the console keyboard layout.
+[    9.907608] larkbridge systemd[1]: Finished systemd-tmpfiles-setup-dev.service - Create Static Device Nodes in /dev.
+[    9.910127] larkbridge systemd[1]: Reached target local-fs-pre.target - Preparation for Local File Systems.
+[    9.916931] larkbridge systemd[1]: Starting systemd-udevd.service - Rule-based Manager for Device Events and Files...
+[    9.979623] larkbridge systemd[1]: Finished systemd-udev-trigger.service - Coldplug All udev Devices.
+[   10.066200] larkbridge systemd[1]: Started systemd-timesyncd.service - Network Time Synchronization.
+[   10.068989] larkbridge systemd[1]: Reached target time-set.target - System Time Set.
+[   10.133143] larkbridge systemd-udevd[304]: Using default interface naming scheme 'v257'.
+[   10.258794] larkbridge systemd-udevd[304]: /usr/lib/udev/rules.d/90-alsa-restore.rules:18 GOTO="alsa_restore_std" has no matching label, ignoring.
+[   10.258825] larkbridge systemd-udevd[304]: /usr/lib/udev/rules.d/90-alsa-restore.rules:18 The line has no effect any more, dropping.
+[   10.258840] larkbridge systemd-udevd[304]: /usr/lib/udev/rules.d/90-alsa-restore.rules:22 GOTO="alsa_restore_std" has no matching label, ignoring.
+[   10.258852] larkbridge systemd-udevd[304]: /usr/lib/udev/rules.d/90-alsa-restore.rules:22 The line has no effect any more, dropping.
+[   10.277096] larkbridge systemd[1]: Started systemd-udevd.service - Rule-based Manager for Device Events and Files.
+[   10.322203] larkbridge systemd[1]: Found device dev-zram0.device - /dev/zram0.
+[   10.333087] larkbridge systemd[1]: Starting systemd-zram-setup@zram0.service - Create swap on /dev/zram0...
+[   10.404077] larkbridge kernel: zram0: detected capacity change from 0 to 1853440
+[   10.466217] larkbridge systemd-makefs[318]: /dev/zram0 successfully formatted as swap (label "zram0", uuid c89215e7-d78e-40db-a800-a1ebb000418a)
+[   10.476626] larkbridge systemd[1]: Finished systemd-zram-setup@zram0.service - Create swap on /dev/zram0.
+[   10.550881] larkbridge systemd[1]: Activating swap dev-zram0.swap - rpi-swap managed swap device (zram)...
+[   10.755491] larkbridge systemd[1]: Found device dev-ttyAMA0.device - /dev/ttyAMA0.
+[   10.757042] larkbridge kernel: Adding 926716k swap on /dev/zram0.  Priority:100 extents:1 across:926716k SS
+[   10.772924] larkbridge systemd[1]: Activated swap dev-zram0.swap - rpi-swap managed swap device (zram).
+[   10.779825] larkbridge systemd[1]: Reached target swap.target - Swaps.
+[   10.786958] larkbridge systemd[1]: tmp.mount: Directory /tmp to mount over is not empty, mounting anyway.
+[   10.792937] larkbridge systemd[1]: Mounting tmp.mount - Temporary Directory /tmp...
+[   10.891044] larkbridge mtp-probe[337]: checking bus 1, device 4: "/sys/devices/platform/soc/3f980000.usb/usb1/1-1/1-1.3"
+[   10.893407] larkbridge mtp-probe[335]: checking bus 1, device 3: "/sys/devices/platform/soc/3f980000.usb/usb1/1-1/1-1.1"
+[   10.894205] larkbridge mtp-probe[336]: checking bus 1, device 5: "/sys/devices/platform/soc/3f980000.usb/usb1/1-1/1-1.4"
+[   10.898245] larkbridge mtp-probe[337]: bus: 1, device: 4 was not an MTP device
+[   10.912508] larkbridge mtp-probe[336]: bus: 1, device: 5 was not an MTP device
+[   10.913230] larkbridge systemd[1]: Mounted tmp.mount - Temporary Directory /tmp.
+[   11.022060] larkbridge mtp-probe[335]: bus: 1, device: 3 was not an MTP device
+[   11.120124] larkbridge kernel: mc: Linux media interface: v0.10
+[   11.201487] larkbridge kernel: rpi-gpiomem 3f200000.gpiomem: window base 0x3f200000 size 0x00001000
+[   11.202774] larkbridge kernel: rpi-gpiomem 3f200000.gpiomem: initialised 1 regions as /dev/gpiomem
+[   11.209066] larkbridge kernel: snd_bcm2835: module is from the staging directory, the quality is unknown, you have been warned.
+[   11.236210] larkbridge kernel: videodev: Linux video capture interface: v2.00
+[   11.228067] larkbridge systemd[1]: Found device dev-disk-by\x2dlabel-LARKDATA.device - /dev/disk/by-label/LARKDATA.
+[   11.240280] larkbridge kernel: bcm2835-audio bcm2835-audio: card created with 8 channels
+[   11.247747] larkbridge systemd[1]: Starting systemd-fsck@dev-disk-by\x2dlabel-LARKDATA.service - File System Check on /dev/disk/by-label/LARKDATA...
+[   11.308098] larkbridge kernel: vc_sm_cma: module is from the staging directory, the quality is unknown, you have been warned.
+[   11.313388] larkbridge systemd[1]: Found device dev-disk-by\x2dpartuuid-75b951e4\x2d01.device - /dev/disk/by-partuuid/75b951e4-01.
+[   11.316171] larkbridge kernel: bcm2835_vc_sm_cma_probe: Videocore shared memory driver
+[   11.316413] larkbridge kernel: [vc_sm_connected_init]: start
+[   11.320096] larkbridge kernel: [vc_sm_connected_init]: installed successfully
+[   11.326986] larkbridge systemd[1]: Starting systemd-fsck@dev-disk-by\x2dpartuuid-75b951e4\x2d01.service - File System Check on /dev/disk/by-partuuid/75b951e4-01...
+[   11.352163] larkbridge kernel: bcm2835_mmal_vchiq: module is from the staging directory, the quality is unknown, you have been warned.
+[   11.391475] larkbridge kernel: bcm2835_isp: module is from the staging directory, the quality is unknown, you have been warned.
+[   11.391682] larkbridge kernel: bcm2835_v4l2: module is from the staging directory, the quality is unknown, you have been warned.
+[   11.396085] larkbridge kernel: bcm2835_codec: module is from the staging directory, the quality is unknown, you have been warned.
+[   11.404525] larkbridge kernel: bcm2835-codec bcm2835-codec: Device registered as /dev/video10
+[   11.404837] larkbridge kernel: bcm2835-codec bcm2835-codec: Loaded V4L2 decode
+[   11.409272] larkbridge kernel: bcm2835-isp bcm2835-isp: Device node output[0] registered as /dev/video13
+[   11.409544] larkbridge kernel: bcm2835-codec bcm2835-codec: Device registered as /dev/video11
+[   11.409630] larkbridge kernel: bcm2835-codec bcm2835-codec: Loaded V4L2 encode
+[   11.409702] larkbridge kernel: bcm2835-isp bcm2835-isp: Device node capture[0] registered as /dev/video14
+[   11.417819] larkbridge kernel: bcm2835-isp bcm2835-isp: Device node capture[1] registered as /dev/video15
+[   11.418011] larkbridge kernel: bcm2835-isp bcm2835-isp: Device node stats[2] registered as /dev/video16
+[   11.418089] larkbridge kernel: bcm2835-isp bcm2835-isp: Register output node 0 with media controller
+[   11.418157] larkbridge kernel: bcm2835-isp bcm2835-isp: Register capture node 1 with media controller
+[   11.418223] larkbridge kernel: bcm2835-isp bcm2835-isp: Register capture node 2 with media controller
+[   11.418291] larkbridge kernel: bcm2835-isp bcm2835-isp: Register capture node 3 with media controller
+[   11.422851] larkbridge kernel: bcm2835-isp bcm2835-isp: Device node output[0] registered as /dev/video20
+[   11.428146] larkbridge kernel: bcm2835-isp bcm2835-isp: Device node capture[0] registered as /dev/video21
+[   11.435213] larkbridge kernel: bcm2835-codec bcm2835-codec: Device registered as /dev/video12
+[   11.435460] larkbridge kernel: bcm2835-codec bcm2835-codec: Loaded V4L2 isp
+[   11.435556] larkbridge kernel: bcm2835-isp bcm2835-isp: Device node capture[1] registered as /dev/video22
+[   11.436184] larkbridge kernel: bcm2835-isp bcm2835-isp: Device node stats[2] registered as /dev/video23
+[   11.436816] larkbridge kernel: bcm2835-isp bcm2835-isp: Register output node 0 with media controller
+[   11.437004] larkbridge kernel: bcm2835-isp bcm2835-isp: Register capture node 1 with media controller
+[   11.437084] larkbridge kernel: bcm2835-isp bcm2835-isp: Register capture node 2 with media controller
+[   11.437152] larkbridge kernel: bcm2835-isp bcm2835-isp: Register capture node 3 with media controller
+[   11.441197] larkbridge kernel: bcm2835-isp bcm2835-isp: Loaded V4L2 bcm2835-isp
+[   11.457158] larkbridge kernel: bcm2835-codec bcm2835-codec: Device registered as /dev/video18
+[   11.457380] larkbridge kernel: bcm2835-codec bcm2835-codec: Loaded V4L2 image_fx
+[   11.462720] larkbridge kernel: bcm2835-codec bcm2835-codec: Device registered as /dev/video31
+[   11.463033] larkbridge kernel: bcm2835-codec bcm2835-codec: Loaded V4L2 encode_image
+[   11.636160] larkbridge kernel: usb 1-1.3: Warning! Unlikely big volume range (=496), cval->res is probably wrong.
+[   11.641009] larkbridge kernel: usb 1-1.3: [50] FU [Mic Capture Volume] ch = 1, val = 0/7936/16
+[   11.645136] larkbridge kernel: Bluetooth: Core ver 2.22
+[   11.645251] larkbridge kernel: NET: Registered PF_BLUETOOTH protocol family
+[   11.645366] larkbridge kernel: Bluetooth: HCI device and connection manager initialized
+[   11.645488] larkbridge kernel: Bluetooth: HCI socket layer initialized
+[   11.645559] larkbridge kernel: Bluetooth: L2CAP socket layer initialized
+[   11.645647] larkbridge kernel: Bluetooth: SCO socket layer initialized
+[   11.656098] larkbridge kernel: usb 1-1.4: 2:1: cannot get freq at ep 0x87
+[   11.658550] larkbridge kernel: usb 1-1.4: 2:2: cannot get freq at ep 0x87
+[   11.664285] larkbridge kernel: usbcore: registered new interface driver snd-usb-audio
+[   11.786789] larkbridge systemd-fsck[409]: e2fsck 1.47.2 (1-Jan-2025)
+[   11.880106] larkbridge kernel: usbcore: registered new interface driver btusb
+[   11.946043] larkbridge systemd-fsck[409]: LARKDATA: recovering journal
+[   12.052297] larkbridge kernel: Bluetooth: hci0: Failed to read codec capabilities (-22)
+[   12.094081] larkbridge systemd[1]: Listening on systemd-rfkill.socket - Load/Save RF Kill Switch Status /dev/rfkill Watch.
+[   12.109765] larkbridge systemd[1]: Starting systemd-rfkill.service - Load/Save RF Kill Switch Status...
+[   12.267052] larkbridge systemd[1]: dev-hugepages.mount - Huge Pages File System skipped, unmet condition check ConditionPathExists=/sys/kernel/mm/hugepages
+[   12.277650] larkbridge systemd[1]: Starting modprobe@efi_pstore.service - Load Kernel Module efi_pstore...
+[   12.280775] larkbridge systemd[1]: regenerate_ssh_host_keys.service - Regenerate SSH host keys skipped, unmet condition check ConditionFirstBoot=yes
+[   12.285068] larkbridge systemd[1]: systemd-hibernate-clear.service - Clear Stale Hibernate Storage Info skipped, unmet condition check ConditionPathExists=/sys/firmware/efi/efivars/HibernateLocation-8cf2644b-4b0b-428f-9387-6d876050dc67
+[   12.285827] larkbridge systemd[1]: systemd-hwdb-update.service - Rebuild Hardware Database skipped, unmet condition check ConditionNeedsUpdate=/etc
+[   12.286137] larkbridge systemd[1]: systemd-pcrmachine.service - TPM PCR Machine ID Measurement skipped, unmet condition check ConditionSecurity=measured-uki
+[   12.286711] larkbridge systemd[1]: systemd-sysusers.service - Create System Users skipped, no trigger condition checks were met.
+[   12.286941] larkbridge systemd[1]: systemd-tpm2-setup-early.service - Early TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+[   12.288293] larkbridge systemd[1]: systemd-tpm2-setup.service - TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+[   12.294094] larkbridge systemd[1]: Started systemd-rfkill.service - Load/Save RF Kill Switch Status.
+[   12.295305] larkbridge kernel: Console: switching to colour dummy device 80x25
+[   12.320084] larkbridge kernel: vc4-drm soc:gpu: bound 3f400000.hvs (ops vc4_hvs_ops [vc4])
+[   12.323226] larkbridge kernel: Registered IR keymap rc-cec
+[   12.323409] larkbridge kernel: rc rc0: vc4-hdmi as /devices/platform/soc/3f902000.hdmi/rc/rc0
+[   12.325538] larkbridge kernel: input: vc4-hdmi as /devices/platform/soc/3f902000.hdmi/rc/rc0/input3
+[   12.336246] larkbridge kernel: input: vc4-hdmi HDMI Jack as /devices/platform/soc/3f902000.hdmi/sound/card3/input4
+[   12.340157] larkbridge kernel: vc4-drm soc:gpu: bound 3f902000.hdmi (ops vc4_hdmi_ops [vc4])
+[   12.341753] larkbridge kernel: vc4-drm soc:gpu: bound 3f004000.txp (ops vc4_txp_ops [vc4])
+[   12.343771] larkbridge kernel: vc4-drm soc:gpu: bound 3f206000.pixelvalve (ops vc4_crtc_ops [vc4])
+[   12.348860] larkbridge kernel: vc4-drm soc:gpu: bound 3f207000.pixelvalve (ops vc4_crtc_ops [vc4])
+[   12.356340] larkbridge kernel: vc4-drm soc:gpu: bound 3f807000.pixelvalve (ops vc4_crtc_ops [vc4])
+[   12.357475] larkbridge kernel: vc4-drm soc:gpu: bound 3fc00000.v3d (ops vc4_v3d_ops [vc4])
+[   12.354700] larkbridge systemd[1]: modprobe@efi_pstore.service: Deactivated successfully.
+[   12.360363] larkbridge systemd[1]: Finished modprobe@efi_pstore.service - Load Kernel Module efi_pstore.
+[   12.375297] larkbridge kernel: [drm] Initialized vc4 0.0.0 for soc:gpu on minor 0
+[   12.375541] larkbridge kernel: vc4-drm soc:gpu: [drm] Cannot find any crtc or sizes
+[   12.380207] larkbridge kernel: vc4-drm soc:gpu: [drm] Cannot find any crtc or sizes
+[   12.429780] larkbridge (udev-worker)[308]: controlC1: Process '/usr/sbin/alsactl -E HOME=/run/alsa -E XDG_RUNTIME_DIR=/run/alsa/runtime restore 1' failed with exit code 99.
+[   12.502461] larkbridge systemd[1]: dev-hugepages.mount - Huge Pages File System skipped, unmet condition check ConditionPathExists=/sys/kernel/mm/hugepages
+[   12.506496] larkbridge systemd[1]: Starting modprobe@efi_pstore.service - Load Kernel Module efi_pstore...
+[   12.506873] larkbridge systemd[1]: regenerate_ssh_host_keys.service - Regenerate SSH host keys skipped, unmet condition check ConditionFirstBoot=yes
+[   12.507260] larkbridge systemd[1]: systemd-hibernate-clear.service - Clear Stale Hibernate Storage Info skipped, unmet condition check ConditionPathExists=/sys/firmware/efi/efivars/HibernateLocation-8cf2644b-4b0b-428f-9387-6d876050dc67
+[   12.507776] larkbridge systemd[1]: systemd-hwdb-update.service - Rebuild Hardware Database skipped, unmet condition check ConditionNeedsUpdate=/etc
+[   12.508086] larkbridge systemd[1]: systemd-pcrmachine.service - TPM PCR Machine ID Measurement skipped, unmet condition check ConditionSecurity=measured-uki
+[   12.508569] larkbridge systemd[1]: systemd-sysusers.service - Create System Users skipped, no trigger condition checks were met.
+[   12.508783] larkbridge systemd[1]: systemd-tpm2-setup-early.service - Early TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+[   12.508871] larkbridge systemd[1]: systemd-tpm2-setup.service - TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-uki
+[   12.566508] larkbridge systemd[1]: modprobe@efi_pstore.service: Deactivated successfully.
+[   12.567134] larkbridge systemd[1]: Finished modprobe@efi_pstore.service - Load Kernel Module efi_pstore.
+[   12.568502] larkbridge systemd[1]: systemd-pstore.service - Platform Persistent Storage Archival skipped, unmet condition check ConditionDirectoryNotEmpty=/sys/fs/pstore
+[   12.683508] larkbridge systemd-fsck[409]: LARKDATA: clean, 183/65536 files, 15858/262144 blocks
+[   12.770534] larkbridge systemd[1]: Finished systemd-fsck@dev-disk-by\x2dlabel-LARKDATA.service - File System Check on /dev/disk/by-label/LARKDATA.
+[   12.781923] larkbridge systemd[1]: Mounting var-lib-larkbridge\x2dpersist.mount - /var/lib/larkbridge-persist...
+[   12.904100] larkbridge kernel: EXT4-fs (mmcblk0p3): mounted filesystem 4f98b162-82a9-46ba-9a61-8945092796b8 r/w with ordered data mode. Quota mode: none.
+[   12.907130] larkbridge systemd[1]: Mounted var-lib-larkbridge\x2dpersist.mount - /var/lib/larkbridge-persist.
+[   12.916805] larkbridge systemd[1]: Mounting var-lib-bluetooth.mount - /var/lib/bluetooth...
+[   12.921252] larkbridge systemd[1]: Starting systemd-random-seed.service - Load/Save OS Random Seed...
+[   12.971083] larkbridge systemd-fsck[410]: fsck.fat 4.2 (2021-01-31)
+[   12.971083] larkbridge systemd-fsck[410]: /dev/mmcblk0p1: 427 files, 137012/1032408 clusters
+[   12.985988] larkbridge systemd[1]: Finished systemd-fsck@dev-disk-by\x2dpartuuid-75b951e4\x2d01.service - File System Check on /dev/disk/by-partuuid/75b951e4-01.
+[   12.987428] larkbridge systemd[1]: Mounted var-lib-bluetooth.mount - /var/lib/bluetooth.
+[   12.998152] larkbridge systemd[1]: Mounting boot-firmware.mount - /boot/firmware...
+[   13.092110] larkbridge systemd[1]: Finished systemd-random-seed.service - Load/Save OS Random Seed.
+[   13.103332] larkbridge systemd[1]: Mounted boot-firmware.mount - /boot/firmware.
+[   13.105523] larkbridge systemd[1]: Reached target local-fs.target - Local File Systems.
+[   13.111839] larkbridge systemd[1]: Listening on systemd-sysext.socket - System Extension Image Management.
+[   13.111991] larkbridge systemd-timesyncd[297]: Network configuration changed, trying to establish connection.
+[   13.112594] larkbridge systemd[1]: apparmor.service - Load AppArmor profiles skipped, unmet condition check ConditionSecurity=apparmor
+[   13.116583] larkbridge systemd[1]: Starting bridge-storage-guard.service - LarkBridge persistent storage guard...
+[   13.120957] larkbridge systemd[1]: Starting console-setup.service - Set console font and keymap...
+[   13.130172] larkbridge systemd[1]: Starting systemd-binfmt.service - Set Up Additional Binary Formats...
+[   13.172326] larkbridge systemd-timesyncd[297]: Network configuration changed, trying to establish connection.
+[   13.180823] larkbridge systemd[1]: Finished console-setup.service - Set console font and keymap.
+[   13.191384] larkbridge systemd[1]: proc-sys-fs-binfmt_misc.automount: Got automount request for /proc/sys/fs/binfmt_misc, triggered by 471 (systemd-binfmt)
+[   13.195231] larkbridge systemd[1]: Mounting proc-sys-fs-binfmt_misc.mount - Arbitrary Executable File Formats File System...
+[   13.255585] larkbridge systemd[1]: Mounted proc-sys-fs-binfmt_misc.mount - Arbitrary Executable File Formats File System.
+[   13.263759] larkbridge systemd[1]: Finished systemd-binfmt.service - Set Up Additional Binary Formats.
+[   14.044152] larkbridge python3[469]: {"config_slot": "a", "config_source": "slot-a", "mount": "/dev/mmcblk0p3 mounted ext4,rw", "pairing_action": "live-valid", "pairing_slot": null, "persistent": true, "reasons": [], "schema": 1, "seed_action": "existing", "state": "READY"}
+[   14.133904] larkbridge systemd[1]: Finished bridge-storage-guard.service - LarkBridge persistent storage guard.
+[   14.138611] larkbridge systemd[1]: Starting systemd-journal-flush.service - Flush Journal to Persistent Storage...
+[   14.215039] larkbridge systemd-journald[259]: Runtime Journal (/run/log/journal/fbfc34151e3c473aa45a5c58fccbdb41) is 2M, max 16M, 14M free.
+[   14.216043] larkbridge systemd-journald[259]: Received client request to flush runtime journal.
+[   14.219922] larkbridge systemd[1]: Finished systemd-journal-flush.service - Flush Journal to Persistent Storage.
+[   14.224712] larkbridge systemd[1]: Starting systemd-tmpfiles-setup.service - Create System Files and Directories...
+[   14.297672] larkbridge systemd-tmpfiles[483]: /usr/lib/tmpfiles.d/legacy.conf:14: Duplicate line for path "/run/lock", ignoring.
+[   14.354478] larkbridge systemd-timesyncd[297]: Network configuration changed, trying to establish connection.
+[   14.354773] larkbridge systemd-timesyncd[297]: Network configuration changed, trying to establish connection.
+[   14.354973] larkbridge systemd-timesyncd[297]: Network configuration changed, trying to establish connection.
+[   14.360285] larkbridge systemd-tmpfiles[483]: Setting file flags is only supported on regular files and directories, cannot set on '/var/log/journal'.
+[   14.371320] larkbridge systemd[1]: Finished systemd-tmpfiles-setup.service - Create System Files and Directories.
+[   14.377399] larkbridge systemd[1]: ldconfig.service - Rebuild Dynamic Linker Cache skipped, no trigger condition checks were met.
+[   14.377547] larkbridge systemd[1]: systemd-firstboot.service - First Boot Wizard skipped, unmet condition check ConditionFirstBoot=yes
+[   14.377631] larkbridge systemd[1]: first-boot-complete.target - First Boot Complete skipped, unmet condition check ConditionFirstBoot=yes
+[   14.377961] larkbridge systemd[1]: systemd-journal-catalog-update.service - Rebuild Journal Catalog skipped, unmet condition check ConditionNeedsUpdate=/var
+[   14.378160] larkbridge systemd[1]: systemd-machine-id-commit.service - Save Transient machine-id to Disk skipped, unmet condition check ConditionPathIsMountPoint=/etc/machine-id
+[   14.378476] larkbridge systemd[1]: systemd-update-done.service - Update is Completed skipped, no trigger condition checks were met.
+[   14.378622] larkbridge systemd[1]: Reached target sysinit.target - System Initialization.
+[   14.379212] larkbridge systemd[1]: Started bridge-pairing-seal.timer - Periodically seal stable LarkBridge pairing state.
+[   14.381097] larkbridge systemd[1]: Started dpkg-db-backup.timer - Daily dpkg database backup timer.
+[   14.382374] larkbridge systemd[1]: Started e2scrub_all.timer - Periodic ext4 Online Metadata Check for All Filesystems.
+[   14.383496] larkbridge systemd[1]: Started fstrim.timer - Discard unused filesystem blocks once a week.
+[   14.384246] larkbridge systemd[1]: Started logrotate.timer - Daily rotation of log files.
+[   14.384918] larkbridge systemd[1]: Started man-db.timer - Daily man-db regeneration.
+[   14.385291] larkbridge systemd[1]: Started systemd-tmpfiles-clean.timer - Daily Cleanup of Temporary Directories.
+[   14.385675] larkbridge systemd[1]: Reached target timers.target - Timer Units.
+[   14.386411] larkbridge systemd[1]: Listening on avahi-daemon.socket - Avahi mDNS/DNS-SD Stack Activation Socket.
+[   14.387576] larkbridge systemd[1]: Listening on dbus.socket - D-Bus System Message Bus Socket.
+[   14.394035] larkbridge systemd[1]: Listening on sshd-unix-local.socket - OpenSSH Server Socket (systemd-ssh-generator, AF_UNIX Local).
+[   14.394877] larkbridge systemd[1]: Listening on systemd-hostnamed.socket - Hostname Service Socket.
+[   14.395291] larkbridge systemd[1]: Reached target sockets.target - Socket Units.
+[   14.396023] larkbridge systemd[1]: systemd-pcrphase-sysinit.service - TPM PCR Barrier (Initialization) skipped, unmet condition check ConditionSecurity=measured-uki
+[   14.396122] larkbridge systemd[1]: Reached target basic.target - Basic System.
+[   14.397141] larkbridge systemd[1]: System is tainted: unmerged-bin
+[   14.397374] larkbridge systemd[1]: alsa-state.service - Manage Sound Card State (restore and store) skipped, unmet condition check ConditionPathExists=/etc/alsa/state-daemon.conf
+[   14.401115] larkbridge systemd[1]: Starting alsa-restore.service - Save/Restore Sound Card State...
+[   14.405496] larkbridge systemd[1]: Starting avahi-daemon.service - Avahi mDNS/DNS-SD Stack...
+[   14.410369] larkbridge systemd[1]: Starting bridge-tuning.service - rpi-lark-bridge real-time audio latency tuning...
+[   14.418243] larkbridge systemd[1]: Started cron.service - Regular background program processing daemon.
+[   14.429260] larkbridge systemd[1]: Starting dbus.service - D-Bus System Message Bus...
+[   14.442741] larkbridge systemd[1]: Starting e2scrub_reap.service - Remove Stale Online ext4 Metadata Check Snapshots...
+[   14.443586] larkbridge systemd[1]: getty-static.service - getty on tty2-tty6 if dbus and logind are not available skipped, unmet condition check ConditionPathExists=!/usr/bin/dbus-daemon
+[   14.473727] larkbridge systemd[1]: Starting rpi-eeprom-update.service - Check for Raspberry Pi EEPROM updates...
+[   14.474767] larkbridge systemd[1]: sshd-keygen.service - Generate sshd host keys on first boot skipped, unmet condition check ConditionFirstBoot=yes
+[   14.480613] larkbridge systemd[1]: Starting sshswitch.service - Turn on SSH if /boot/ssh or /boot/firmware/ssh is present...
+[   14.486756] larkbridge alsactl[486]: alsa-lib main.c:1554:(snd_use_case_mgr_open) error: failed to import hw:0 use case configuration -2
+[   14.496352] larkbridge cron[489]: (CRON) INFO (pidfile fd = 3)
+[   14.504120] larkbridge alsactl[486]: No state is present for card Device
+[   14.502736] larkbridge systemd[1]: Starting systemd-logind.service - User Login Management...
+[   14.503121] larkbridge systemd[1]: systemd-pcrphase.service - TPM PCR Barrier (User) skipped, unmet condition check ConditionSecurity=measured-uki
+[   14.508180] larkbridge alsactl[486]: Found hardware: "USB-Audio" "USB Mixer" "USB0c76:161e" "" ""
+[   14.508180] larkbridge alsactl[486]: Hardware is initialized using a generic method
+[   14.509398] larkbridge alsactl[486]: No state is present for card Device
+[   14.528118] larkbridge alsactl[486]: alsa-lib main.c:1554:(snd_use_case_mgr_open) error: failed to import hw:3 use case configuration -2
+[   14.525472] larkbridge systemd[1]: Finished alsa-restore.service - Save/Restore Sound Card State.
+[   14.530533] larkbridge systemd[1]: Reached target sound.target - Sound Card.
+[   14.538769] larkbridge cron[489]: (CRON) INFO (Running @reboot jobs)
+[   14.630775] larkbridge avahi-daemon[487]: Found user 'avahi' (UID 101) and group 'avahi' (GID 104).
+[   14.631121] larkbridge avahi-daemon[487]: Successfully dropped root privileges.
+[   14.631997] larkbridge avahi-daemon[487]: avahi-daemon 0.8 starting up.
+[   14.643186] larkbridge systemd[1]: Finished bridge-tuning.service - rpi-lark-bridge real-time audio latency tuning.
+[   14.651551] larkbridge systemd[1]: Starting bluetooth.service - Bluetooth service...
+[   14.692655] larkbridge rpi-eeprom-update[492]: Device does not a have a Raspberry Pi bootloader EEPROM (e.g. Pi 4 or Pi 5). Skipping bootloader update.
+[   14.696644] larkbridge systemd[1]: Finished rpi-eeprom-update.service - Check for Raspberry Pi EEPROM updates.
+[   14.701225] larkbridge (uetoothd)[514]: bluetooth.service: ConfigurationDirectory 'bluetooth' already exists but the mode is different. (File system: 755 ConfigurationDirectoryMode: 555)
+[   14.731849] larkbridge systemd[1]: sshswitch.service: Deactivated successfully.
+[   14.732888] larkbridge systemd[1]: Finished sshswitch.service - Turn on SSH if /boot/ssh or /boot/firmware/ssh is present.
+[   14.789602] larkbridge systemd[1]: Started dbus.service - D-Bus System Message Bus.
+[   14.807622] larkbridge systemd[1]: Starting NetworkManager.service - Network Manager...
+[   14.813549] larkbridge systemd[1]: Starting wpa_supplicant.service - WPA supplicant...
+[   14.839947] larkbridge systemd-logind[494]: New seat seat0.
+[   14.844322] larkbridge systemd[1]: Started avahi-daemon.service - Avahi mDNS/DNS-SD Stack.
+[   14.847234] larkbridge avahi-daemon[487]: Successfully called chroot().
+[   14.847306] larkbridge avahi-daemon[487]: Successfully dropped remaining capabilities.
+[   14.849228] larkbridge avahi-daemon[487]: No service file found in /etc/avahi/services.
+[   14.850982] larkbridge avahi-daemon[487]: Joining mDNS multicast group on interface lo.IPv6 with address ::1.
+[   14.851070] larkbridge avahi-daemon[487]: New relevant interface lo.IPv6 for mDNS.
+[   14.851086] larkbridge avahi-daemon[487]: Joining mDNS multicast group on interface lo.IPv4 with address 127.0.0.1.
+[   14.851122] larkbridge avahi-daemon[487]: New relevant interface lo.IPv4 for mDNS.
+[   14.851135] larkbridge avahi-daemon[487]: Network interface enumeration completed.
+[   14.851160] larkbridge avahi-daemon[487]: Registering new address record for ::1 on lo.*.
+[   14.851298] larkbridge avahi-daemon[487]: Registering new address record for 127.0.0.1 on lo.IPv4.
+[   14.855015] larkbridge systemd-logind[494]: Watching system buttons on /dev/input/event3 (vc4-hdmi)
+[   14.882553] larkbridge systemd[1]: Created slice user-1000.slice - User Slice of UID 1000.
+[   14.894000] larkbridge systemd[1]: Started systemd-logind.service - User Login Management.
+[   14.901714] larkbridge systemd[1]: Starting user-runtime-dir@1000.service - User Runtime Directory /run/user/1000...
+[   14.981377] larkbridge bluetoothd[514]: Bluetooth daemon 5.82
+[   15.021943] larkbridge systemd[1]: Finished user-runtime-dir@1000.service - User Runtime Directory /run/user/1000.
+[   15.026351] larkbridge systemd[1]: Started bluetooth.service - Bluetooth service.
+[   15.030314] larkbridge systemd[1]: Reached target bluetooth.target - Bluetooth Support.
+[   15.036938] larkbridge systemd[1]: Started bridge-btwatchdog@call.service - rpi-lark-bridge Bluetooth call-controller watchdog.
+[   15.047235] larkbridge systemd[1]: Starting user@1000.service - User Manager for UID 1000...
+[   15.049732] larkbridge bluetoothd[514]: Starting SDP server
+[   15.201185] larkbridge kernel: Bluetooth: BNEP (Ethernet Emulation) ver 1.3
+[   15.201450] larkbridge kernel: Bluetooth: BNEP filters: protocol multicast
+[   15.201595] larkbridge kernel: Bluetooth: BNEP socket layer initialized
+[   15.237205] larkbridge bluetoothd[514]: Bluetooth management interface 1.23 initialized
+[   15.238974] larkbridge dbus-daemon[490]: [system] Activating via systemd: service name='org.freedesktop.hostname1' unit='dbus-org.freedesktop.hostname1.service' requested by ':1.5' (uid=0 pid=514 comm="/usr/libexec/bluetooth/bluetoothd")
+[   15.240654] larkbridge kernel: Bluetooth: MGMT ver 1.23
+[   15.240661] larkbridge bluetoothd[514]: Battery Provider Manager created
+[   15.254807] larkbridge systemd[1]: Starting systemd-hostnamed.service - Hostname Service...
+[   15.272200] larkbridge kernel: NET: Registered PF_ALG protocol family
+[   15.282313] larkbridge systemd[1]: Started wpa_supplicant.service - WPA supplicant.
+[   15.293228] larkbridge wpa_supplicant[524]: Successfully initialized wpa_supplicant
+[   15.465294] larkbridge (systemd)[535]: pam_unix(systemd-user:session): session opened for user admin(uid=1000) by admin(uid=0)
+[   15.499284] larkbridge systemd-logind[494]: New session 1 of user admin.
+[   15.659143] larkbridge kernel: Bluetooth: RFCOMM TTY layer initialized
+[   15.659400] larkbridge kernel: Bluetooth: RFCOMM socket layer initialized
+[   15.659597] larkbridge kernel: Bluetooth: RFCOMM ver 1.11
+[   15.685617] larkbridge systemd[1]: Started systemd-hostnamed.service - Hostname Service.
+[   15.686986] larkbridge bluetoothd[514]: Failed to set mode: Failed (0x03)
+[   15.688709] larkbridge dbus-daemon[490]: [system] Successfully activated service 'org.freedesktop.hostname1'
+[   15.689744] larkbridge avahi-daemon[487]: Server startup complete. Host name is larkbridge.local. Local service cookie is 298016210.
+[   16.144407] larkbridge python3[534]: INFO watching call controller A0:AD:9F:73:6C:24 (USB)
+[   16.264486] larkbridge NetworkManager[523]: <info>  [1787483939.2047] NetworkManager (version 1.52.1) is starting... (boot:b00dbeb7-0539-4de2-8dbc-f85178d6f0df)
+[   16.264542] larkbridge NetworkManager[523]: <info>  [1787483939.2048] Read config: /etc/NetworkManager/NetworkManager.conf, /usr/lib/NetworkManager/conf.d/{no-mac-addr-change.conf,rpi-no-scan-rand-mac-address.conf}, /run/NetworkManager/conf.d/10-globally-managed-devices.conf
+[   16.319937] larkbridge systemd[1]: e2scrub_reap.service: Deactivated successfully.
+[   16.321277] larkbridge systemd[1]: Finished e2scrub_reap.service - Remove Stale Online ext4 Metadata Check Snapshots.
+[   16.322645] larkbridge NetworkManager[523]: <info>  [1787483939.2629] manager[0x55a5bdd2a0]: monitoring kernel firmware directory '/lib/firmware'.
+[   16.322782] larkbridge NetworkManager[523]: <info>  [1787483939.2631] monitoring ifupdown state file '/run/network/ifstate'.
+[   16.346262] larkbridge NetworkManager[523]: <info>  [1787483939.2865] hostname: hostname: using hostnamed
+[   16.346322] larkbridge NetworkManager[523]: <info>  [1787483939.2866] hostname: static hostname changed from (none) to "larkbridge"
+[   16.347954] larkbridge NetworkManager[523]: <info>  [1787483939.2882] dns-mgr: init: dns=default,systemd-resolved rc-manager=symlink (auto)
+[   16.359281] larkbridge NetworkManager[523]: <info>  [1787483939.2996] manager[0x55a5bdd2a0]: rfkill: Wi-Fi hardware radio set disabled
+[   16.359372] larkbridge NetworkManager[523]: <info>  [1787483939.2997] manager[0x55a5bdd2a0]: rfkill: WWAN hardware radio set enabled
+[   16.462684] larkbridge NetworkManager[523]: <info>  [1787483939.4029] Loaded device plugin: NMBluezManager (/usr/lib/aarch64-linux-gnu/NetworkManager/1.52.1/libnm-device-plugin-bluetooth.so)
+[   16.468678] larkbridge NetworkManager[523]: <info>  [1787483939.4089] Loaded device plugin: NMWwanFactory (/usr/lib/aarch64-linux-gnu/NetworkManager/1.52.1/libnm-device-plugin-wwan.so)
+[   16.488166] larkbridge NetworkManager[523]: <info>  [1787483939.4284] Loaded device plugin: NMTeamFactory (/usr/lib/aarch64-linux-gnu/NetworkManager/1.52.1/libnm-device-plugin-team.so)
+[   16.505083] larkbridge NetworkManager[523]: <info>  [1787483939.4453] Loaded device plugin: NMWifiFactory (/usr/lib/aarch64-linux-gnu/NetworkManager/1.52.1/libnm-device-plugin-wifi.so)
+[   16.510833] larkbridge NetworkManager[523]: <info>  [1787483939.4511] Loaded device plugin: NMAtmManager (/usr/lib/aarch64-linux-gnu/NetworkManager/1.52.1/libnm-device-plugin-adsl.so)
+[   16.511881] larkbridge NetworkManager[523]: <info>  [1787483939.4522] manager: rfkill: Wi-Fi enabled by radio killswitch; disabled by state file
+[   16.513464] larkbridge dbus-daemon[490]: [system] Activating via systemd: service name='org.freedesktop.nm_dispatcher' unit='dbus-org.freedesktop.nm-dispatcher.service' requested by ':1.11' (uid=0 pid=523 comm="/usr/sbin/NetworkManager --no-daemon")
+[   16.512157] larkbridge NetworkManager[523]: <info>  [1787483939.4524] manager: rfkill: WWAN enabled by radio killswitch; enabled by state file
+[   16.512328] larkbridge NetworkManager[523]: <info>  [1787483939.4526] manager: Networking is enabled by state file
+[   16.526021] larkbridge NetworkManager[523]: <info>  [1787483939.4663] settings: Loaded settings plugin: ifupdown ("/usr/lib/aarch64-linux-gnu/NetworkManager/1.52.1/libnm-settings-plugin-ifupdown.so")
+[   16.526173] larkbridge NetworkManager[523]: <info>  [1787483939.4665] settings: Loaded settings plugin: keyfile (internal)
+[   16.526240] larkbridge NetworkManager[523]: <info>  [1787483939.4666] ifupdown: management mode: unmanaged
+[   16.530052] larkbridge NetworkManager[523]: <info>  [1787483939.4703] ifupdown: interfaces file /etc/network/interfaces doesn't exist
+[   16.530402] larkbridge systemd[1]: Starting NetworkManager-dispatcher.service - Network Manager Script Dispatcher Service...
+[   16.702935] larkbridge dbus-daemon[490]: [system] Successfully activated service 'org.freedesktop.nm_dispatcher'
+[   16.704103] larkbridge systemd[1]: Started NetworkManager-dispatcher.service - Network Manager Script Dispatcher Service.
+[   16.752723] larkbridge systemd[535]: Queued start job for default target default.target.
+[   16.780141] larkbridge systemd[535]: Created slice app.slice - User Application Slice.
+[   16.782031] larkbridge systemd[535]: Created slice session.slice - User Core Session Slice.
+[   16.782299] larkbridge systemd[535]: Reached target paths.target - Paths.
+[   16.782646] larkbridge systemd[535]: Reached target timers.target - Timers.
+[   16.786822] larkbridge systemd[535]: Starting dbus.socket - D-Bus User Message Bus Socket...
+[   16.787650] larkbridge systemd[535]: Listening on dirmngr.socket - GnuPG network certificate management daemon.
+[   16.787955] larkbridge rfkill[579]: unblock set for id 0
+[   16.788494] larkbridge systemd[535]: Listening on gpg-agent-browser.socket - GnuPG cryptographic agent and passphrase cache (access for web browsers).
+[   16.789200] larkbridge systemd[535]: Listening on gpg-agent-extra.socket - GnuPG cryptographic agent and passphrase cache (restricted).
+[   16.793683] larkbridge systemd[535]: Starting gpg-agent-ssh.socket - GnuPG cryptographic agent (ssh-agent emulation)...
+[   16.809229] larkbridge systemd[535]: Starting gpg-agent.socket - GnuPG cryptographic agent and passphrase cache...
+[   16.810894] larkbridge systemd[535]: Listening on keyboxd.socket - GnuPG public key management service.
+[   16.816401] larkbridge systemd[535]: Listening on pipewire-pulse.socket - PipeWire PulseAudio.
+[   16.817402] larkbridge systemd[535]: Listening on pipewire.socket - PipeWire Multimedia System Sockets.
+[   16.840593] larkbridge systemd[535]: Starting ssh-agent.socket - OpenSSH Agent socket...
+[   16.960211] larkbridge kernel: Bluetooth: hci0: Failed to read codec capabilities (-22)
+[   17.001196] larkbridge systemd[535]: Listening on gpg-agent-ssh.socket - GnuPG cryptographic agent (ssh-agent emulation).
+[   17.009209] larkbridge systemd[535]: Listening on dbus.socket - D-Bus User Message Bus Socket.
+[   17.010593] larkbridge systemd[535]: Listening on gpg-agent.socket - GnuPG cryptographic agent and passphrase cache.
+[   17.011495] larkbridge systemd[535]: Listening on ssh-agent.socket - OpenSSH Agent socket.
+[   17.019688] larkbridge systemd[535]: Reached target sockets.target - Sockets.
+[   17.020227] larkbridge systemd[535]: Reached target basic.target - Basic System.
+[   17.021079] larkbridge systemd[1]: Started user@1000.service - User Manager for UID 1000.
+[   17.024614] larkbridge systemd[535]: Starting dbus.service - D-Bus User Message Bus...
+[   17.031317] larkbridge systemd[535]: Started pipewire.service - PipeWire Multimedia Service.
+[   17.037970] larkbridge systemd[535]: Started filter-chain.service - PipeWire filter chain daemon.
+[   17.049166] larkbridge systemd[535]: Started wireplumber.service - Multimedia Service Session Manager.
+[   17.061301] larkbridge systemd[535]: Started bridge-supervisor.service - rpi-lark-bridge audio path supervisor.
+[   17.109880] larkbridge systemd[535]: Started pipewire-pulse.service - PipeWire PulseAudio.
+[   17.202281] larkbridge bluetoothd[514]: src/service.c:btd_service_connect() a2dp-source profile connect failed for 5C:33:7B:CB:BF:C5: Protocol not available
+[   17.344927] larkbridge systemd[535]: Started dbus.service - D-Bus User Message Bus.
+[   17.375492] larkbridge systemd[535]: Started mpris-proxy.service - Bluetooth mpris proxy.
+[   17.375728] larkbridge systemd[535]: Reached target default.target - Main User Target.
+[   17.375937] larkbridge systemd[535]: Startup finished in 1.827s.
+[   17.442075] larkbridge dbus-daemon[490]: [system] Activating via systemd: service name='org.freedesktop.RealtimeKit1' unit='rtkit-daemon.service' requested by ':1.25' (uid=1000 pid=597 comm="/usr/bin/pipewire")
+[   17.470443] larkbridge systemd[1]: Starting rtkit-daemon.service - RealtimeKit Scheduling Policy Service...
+[   17.624741] larkbridge dbus-daemon[490]: [system] Successfully activated service 'org.freedesktop.RealtimeKit1'
+[   17.631218] larkbridge systemd[1]: Started rtkit-daemon.service - RealtimeKit Scheduling Policy Service.
+[   17.649530] larkbridge dbus-daemon[490]: [system] Activating via systemd: service name='org.freedesktop.PolicyKit1' unit='polkit.service' requested by ':1.30' (uid=0 pid=611 comm="/usr/libexec/rtkit-daemon")
+[   17.673210] larkbridge systemd[1]: Starting polkit.service - Authorization Manager...
+[   17.679687] larkbridge wireplumber[599]: wp-internal-comp-loader: Loading profile 'main'
+[   18.121520] larkbridge polkitd[618]: Started polkitd version 126
+[   18.161092] larkbridge polkitd[618]: Loading rules from directory /etc/polkit-1/rules.d
+[   18.169399] larkbridge polkitd[618]: Loading rules from directory /run/polkit-1/rules.d
+[   18.169759] larkbridge polkitd[618]: Error opening rules directory: Error opening directory “/run/polkit-1/rules.d”: No such file or directory (g-file-error-quark, 4)
+[   18.177396] larkbridge polkitd[618]: Loading rules from directory /usr/local/share/polkit-1/rules.d
+[   18.177620] larkbridge polkitd[618]: Error opening rules directory: Error opening directory “/usr/local/share/polkit-1/rules.d”: No such file or directory (g-file-error-quark, 4)
+[   18.177879] larkbridge polkitd[618]: Loading rules from directory /usr/share/polkit-1/rules.d
+[   18.214065] larkbridge polkitd[618]: Finished loading, compiling and executing 3 rules
+[   18.216145] larkbridge systemd[1]: Started polkit.service - Authorization Manager.
+[   18.221954] larkbridge dbus-daemon[490]: [system] Successfully activated service 'org.freedesktop.PolicyKit1'
+[   18.225238] larkbridge polkitd[618]: Acquired the name org.freedesktop.PolicyKit1 on the system bus
+[   19.044135] larkbridge kernel: usb 1-1.4: 2:2: cannot get freq at ep 0x87
+[   19.079536] larkbridge systemd[1]: Reload requested from client PID 641 ('systemctl') (unit NetworkManager.service)...
+[   19.079613] larkbridge systemd[1]: Reloading...
+[   19.401086] larkbridge wireplumber[599]: default: Failed to get percentage from UPower: org.freedesktop.DBus.Error.NameHasNoOwner
+[   19.506581] larkbridge bluetoothd[514]: Endpoint registered: sender=:1.33 path=/MediaEndpoint/A2DPSink/sbc
+[   19.510962] larkbridge bluetoothd[514]: Endpoint registered: sender=:1.33 path=/MediaEndpoint/A2DPSource/sbc
+[   19.614144] larkbridge python3[600]: INFO Lark transmitter PCM detection enabled with FIFINE fallback
+[   19.614144] larkbridge python3[600]: INFO watching HFP nodes bluez_output.5C_33_7B_CB_BF_C5.1 / bluez_input.5C_33_7B_CB_BF_C5.0; AEC enabled
+[   19.656191] larkbridge systemd-fstab-generator[679]: Checking was requested for "/media/root-ro/", but it is not a device.
+[   20.215115] larkbridge python3[600]: INFO monitoring Lark transmitter audio on alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo
+[   20.266405] larkbridge python3[600]: INFO output resolved to alsa_output.platform-3f00b840.mailbox.stereo-fallback (desired wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback)
+[   20.456625] larkbridge wireplumber[599]: wp-device: SPA handle 'api.libcamera.enum.manager' could not be loaded; is it installed?
+[   20.456710] larkbridge wireplumber[599]: s-monitors-libcamera: PipeWire's libcamera SPA plugin is missing or broken. Some camera types may not be supported.
+[   20.516086] larkbridge systemd[535]: Reached target bluetooth.target - Bluetooth.
+[   20.644137] larkbridge kernel: Bluetooth: Unexpected continuation frame (len 0)
+[   21.143809] larkbridge systemd[1]: Reloading finished in 2061 ms.
+[   21.336491] larkbridge wireplumber[599]: m-portal-permissionstore: <WpPortalPermissionStorePlugin:0x55c0eb56d0> Lookup: The name org.freedesktop.impl.portal.PermissionStore was not provided by any .service files (org.freedesktop.DBus.Error.ServiceUnknown)
+[   21.342031] larkbridge wireplumber[599]: m-portal-permissionstore: <WpPortalPermissionStorePlugin:0x55c0eb56d0> Lookup: The name org.freedesktop.impl.portal.PermissionStore was not provided by any .service files (org.freedesktop.DBus.Error.ServiceUnknown)
+[   21.350048] larkbridge kernel: input: Pixel 7a (AVRCP) as /devices/virtual/input/input5
+[   21.352474] larkbridge wireplumber[599]: m-portal-permissionstore: <WpPortalPermissionStorePlugin:0x55c0eb56d0> Lookup: The name org.freedesktop.impl.portal.PermissionStore was not provided by any .service files (org.freedesktop.DBus.Error.ServiceUnknown)
+[   21.361727] larkbridge wireplumber[599]: m-portal-permissionstore: <WpPortalPermissionStorePlugin:0x55c0eb56d0> Lookup: The name org.freedesktop.impl.portal.PermissionStore was not provided by any .service files (org.freedesktop.DBus.Error.ServiceUnknown)
+[   21.398980] larkbridge systemd-logind[494]: Watching system buttons on /dev/input/event5 (Pixel 7a (AVRCP))
+[   21.801244] larkbridge systemd[1]: systemd-rfkill.service: Deactivated successfully.
+[   21.985278] larkbridge NetworkManager[523]: <info>  [1787483944.9255] dhcp: init: Using DHCP client 'internal'
+[   21.986460] larkbridge NetworkManager[523]: <info>  [1787483944.9267] manager: (lo): new Loopback device (/org/freedesktop/NetworkManager/Devices/1)
+[   21.991677] larkbridge NetworkManager[523]: <info>  [1787483944.9320] device (lo): state change: unmanaged -> unavailable (reason 'connection-assumed', managed-type: 'external')
+[   21.993776] larkbridge NetworkManager[523]: <info>  [1787483944.9340] device (lo): state change: unavailable -> disconnected (reason 'connection-assumed', managed-type: 'external')
+[   22.000577] larkbridge NetworkManager[523]: <info>  [1787483944.9408] device (lo): Activation: starting connection 'lo' (ff5cdbec-43cf-4d61-b7ab-9f86f2c56f92)
+[   22.005062] larkbridge NetworkManager[523]: <info>  [1787483944.9453] manager: (eth0): new Ethernet device (/org/freedesktop/NetworkManager/Devices/2)
+[   22.006656] larkbridge NetworkManager[523]: <info>  [1787483944.9469] device (eth0): state change: unmanaged -> unavailable (reason 'managed', managed-type: 'external')
+[   22.032091] larkbridge kernel: smsc95xx 1-1.1:1.0 eth0: hardware isn't capable of remote wakeup
+[   22.033726] larkbridge kernel: smsc95xx 1-1.1:1.0 eth0: Link is Down
+[   22.145116] larkbridge NetworkManager[523]: <info>  [1787483945.0854] failed to open /run/network/ifstate
+[   22.147289] larkbridge systemd[1]: Started NetworkManager.service - Network Manager.
+[   22.147626] larkbridge NetworkManager[523]: <info>  [1787483945.0879] bus-manager: acquired D-Bus service "org.freedesktop.NetworkManager"
+[   22.150099] larkbridge systemd[1]: Reached target network.target - Network.
+[   22.242555] larkbridge systemd[1]: Starting ssh.service - OpenBSD Secure Shell server...
+[   22.248658] larkbridge systemd[1]: Starting systemd-user-sessions.service - Permit User Sessions...
+[   22.456981] larkbridge systemd[1]: Finished systemd-user-sessions.service - Permit User Sessions.
+[   22.465210] larkbridge systemd[1]: Started getty@tty1.service - Getty on tty1.
+[   22.473483] larkbridge systemd[1]: Started serial-getty@ttyAMA0.service - Serial Getty on ttyAMA0.
+[   22.475593] larkbridge systemd[1]: Reached target getty.target - Login Prompts.
+[   22.576939] larkbridge NetworkManager[523]: <info>  [1787483945.5172] device (lo): state change: disconnected -> prepare (reason 'none', managed-type: 'external')
+[   22.578031] larkbridge NetworkManager[523]: <info>  [1787483945.5183] device (lo): state change: prepare -> config (reason 'none', managed-type: 'external')
+[   22.578901] larkbridge NetworkManager[523]: <info>  [1787483945.5192] device (lo): state change: config -> ip-config (reason 'none', managed-type: 'external')
+[   22.580963] larkbridge NetworkManager[523]: <info>  [1787483945.5212] modem-manager: oFono is not available
+[   22.581385] larkbridge NetworkManager[523]: <info>  [1787483945.5216] device (lo): state change: ip-config -> ip-check (reason 'none', managed-type: 'external')
+[   22.615307] larkbridge NetworkManager[523]: <info>  [1787483945.5556] device (lo): state change: ip-check -> secondaries (reason 'none', managed-type: 'external')
+[   22.616180] larkbridge NetworkManager[523]: <info>  [1787483945.5563] device (lo): state change: secondaries -> activated (reason 'none', managed-type: 'external')
+[   22.618142] larkbridge NetworkManager[523]: <info>  [1787483945.5584] device (lo): Activation: successful, device activated.
+[   22.683893] larkbridge NetworkManager[523]: <info>  [1787483945.6241] manager: (5C:33:7B:CB:BF:C5): new Bluetooth device (/org/freedesktop/NetworkManager/Devices/3)
+[   22.685319] larkbridge NetworkManager[523]: <info>  [1787483945.6256] device (5C:33:7B:CB:BF:C5): state change: unmanaged -> unavailable (reason 'managed', managed-type: 'external')
+[   22.688427] larkbridge NetworkManager[523]: <info>  [1787483945.6286] device (5C:33:7B:CB:BF:C5): state change: unavailable -> disconnected (reason 'none', managed-type: 'full')
+[   22.848621] larkbridge bluetoothd[514]: /org/bluez/hci0/dev_5C_33_7B_CB_BF_C5/sep1/fd0: fd(31) ready
+[   22.851587] larkbridge sshd[753]: Server listening on 0.0.0.0 port 22.
+[   22.851777] larkbridge sshd[753]: Server listening on :: port 22.
+[   22.854433] larkbridge systemd[1]: Started ssh.service - OpenBSD Secure Shell server.
+[   22.856824] larkbridge systemd[1]: Reached target multi-user.target - Multi-User System.
+[   22.864329] larkbridge systemd[1]: Startup finished in 5.791s (kernel) + 17.072s (userspace) = 22.864s.
+[   23.730456] larkbridge NetworkManager[523]: <info>  [1787483946.6707] device (eth0): carrier: link connected
+[   23.732194] larkbridge kernel: smsc95xx 1-1.1:1.0 eth0: Link is Up - 100Mbps/Full - flow control rx/tx
+[   23.731771] larkbridge NetworkManager[523]: <info>  [1787483946.6720] device (eth0): state change: unavailable -> disconnected (reason 'carrier-changed', managed-type: 'full')
+[   23.734373] larkbridge NetworkManager[523]: <info>  [1787483946.6747] policy: auto-activating connection 'Wired connection 1' (ebb9d008-bdcc-360a-8e27-ff884b906180)
+[   23.736159] larkbridge NetworkManager[523]: <info>  [1787483946.6764] device (eth0): Activation: starting connection 'Wired connection 1' (ebb9d008-bdcc-360a-8e27-ff884b906180)
+[   23.736557] larkbridge NetworkManager[523]: <info>  [1787483946.6768] device (eth0): state change: disconnected -> prepare (reason 'none', managed-type: 'full')
+[   23.737631] larkbridge NetworkManager[523]: <info>  [1787483946.6779] manager: NetworkManager state is now CONNECTING
+[   23.738235] larkbridge NetworkManager[523]: <info>  [1787483946.6785] device (eth0): state change: prepare -> config (reason 'none', managed-type: 'full')
+[   23.741774] larkbridge NetworkManager[523]: <info>  [1787483946.6820] device (eth0): state change: config -> ip-config (reason 'none', managed-type: 'full')
+[   23.743688] larkbridge NetworkManager[523]: <info>  [1787483946.6840] dhcp4 (eth0): activation: beginning transaction (timeout in 15 seconds)
+[   23.749214] larkbridge avahi-daemon[487]: Joining mDNS multicast group on interface eth0.IPv6 with address fe80::36ae:a8f9:d4f7:df23.
+[   23.749333] larkbridge avahi-daemon[487]: New relevant interface eth0.IPv6 for mDNS.
+[   23.749506] larkbridge avahi-daemon[487]: Registering new address record for fe80::36ae:a8f9:d4f7:df23 on eth0.*.
+[   26.724334] larkbridge systemd[1]: NetworkManager-dispatcher.service: Deactivated successfully.
+[   46.383891] larkbridge systemd[1]: systemd-hostnamed.service: Deactivated successfully.
+[   55.732422] larkbridge NetworkManager[523]: <info>  [1787483978.6727] device (eth0): state change: ip-config -> failed (reason 'ip-config-unavailable', managed-type: 'full')
+[   55.734039] larkbridge NetworkManager[523]: <info>  [1787483978.6743] manager: NetworkManager state is now DISCONNECTED
+[   55.735214] larkbridge NetworkManager[523]: <warn>  [1787483978.6755] device (eth0): Activation: failed for connection 'Wired connection 1'
+[   55.736549] larkbridge NetworkManager[523]: <info>  [1787483978.6768] device (eth0): state change: failed -> disconnected (reason 'none', managed-type: 'full')
+[   55.737492] larkbridge avahi-daemon[487]: Withdrawing address record for fe80::36ae:a8f9:d4f7:df23 on eth0.
+[   55.737642] larkbridge avahi-daemon[487]: Leaving mDNS multicast group on interface eth0.IPv6 with address fe80::36ae:a8f9:d4f7:df23.
+[   55.737748] larkbridge avahi-daemon[487]: Interface eth0.IPv6 no longer relevant for mDNS.
+[   55.760288] larkbridge NetworkManager[523]: <info>  [1787483978.7005] dhcp4 (eth0): canceled DHCP transaction
+[   55.760332] larkbridge NetworkManager[523]: <info>  [1787483978.7006] dhcp4 (eth0): activation: beginning transaction (timeout in 15 seconds)
+[   55.760390] larkbridge NetworkManager[523]: <info>  [1787483978.7007] dhcp4 (eth0): state changed no lease
+[   55.766848] larkbridge NetworkManager[523]: <info>  [1787483978.7071] policy: auto-activating connection 'larkbridge-direct' (fffde734-18eb-4c03-824e-16c43cbf9671)
+[   55.769461] larkbridge NetworkManager[523]: <info>  [1787483978.7097] device (eth0): Activation: starting connection 'larkbridge-direct' (fffde734-18eb-4c03-824e-16c43cbf9671)
+[   55.770606] larkbridge NetworkManager[523]: <info>  [1787483978.7108] device (eth0): state change: disconnected -> prepare (reason 'none', managed-type: 'full')
+[   55.772406] larkbridge NetworkManager[523]: <info>  [1787483978.7127] manager: NetworkManager state is now CONNECTING
+[   55.773132] larkbridge NetworkManager[523]: <info>  [1787483978.7134] device (eth0): state change: prepare -> config (reason 'none', managed-type: 'full')
+[   55.776961] larkbridge NetworkManager[523]: <info>  [1787483978.7172] device (eth0): state change: config -> ip-config (reason 'none', managed-type: 'full')
+[   55.781837] larkbridge avahi-daemon[487]: Joining mDNS multicast group on interface eth0.IPv6 with address fe80::46d6:e08d:b1ae:6f13.
+[   55.782756] larkbridge avahi-daemon[487]: New relevant interface eth0.IPv6 for mDNS.
+[   55.783508] larkbridge avahi-daemon[487]: Registering new address record for fe80::46d6:e08d:b1ae:6f13 on eth0.*.
+[   55.896427] larkbridge avahi-daemon[487]: Joining mDNS multicast group on interface eth0.IPv4 with address 192.168.7.2.
+[   55.896623] larkbridge avahi-daemon[487]: New relevant interface eth0.IPv4 for mDNS.
+[   55.896752] larkbridge avahi-daemon[487]: Registering new address record for 192.168.7.2 on eth0.IPv4.
+[   55.897620] larkbridge NetworkManager[523]: <info>  [1787483978.8379] device (eth0): state change: ip-config -> ip-check (reason 'none', managed-type: 'full')
+[   55.900801] larkbridge dbus-daemon[490]: [system] Activating via systemd: service name='org.freedesktop.nm_dispatcher' unit='dbus-org.freedesktop.nm-dispatcher.service' requested by ':1.11' (uid=0 pid=523 comm="/usr/sbin/NetworkManager --no-daemon")
+[   55.914541] larkbridge systemd[1]: Starting NetworkManager-dispatcher.service - Network Manager Script Dispatcher Service...
+[   55.984530] larkbridge dbus-daemon[490]: [system] Successfully activated service 'org.freedesktop.nm_dispatcher'
+[   55.985403] larkbridge systemd[1]: Started NetworkManager-dispatcher.service - Network Manager Script Dispatcher Service.
+[   55.989992] larkbridge NetworkManager[523]: <info>  [1787483978.9302] device (eth0): state change: ip-check -> secondaries (reason 'none', managed-type: 'full')
+[   55.990760] larkbridge NetworkManager[523]: <info>  [1787483978.9310] device (eth0): state change: secondaries -> activated (reason 'none', managed-type: 'full')
+[   55.991935] larkbridge NetworkManager[523]: <info>  [1787483978.9322] manager: NetworkManager state is now CONNECTED_LOCAL
+[   55.994609] larkbridge NetworkManager[523]: <info>  [1787483978.9349] device (eth0): Activation: successful, device activated.
+[   55.997505] larkbridge NetworkManager[523]: <info>  [1787483978.9377] manager: startup complete
+[   56.527205] larkbridge sshd-session[867]: Connection closed by 192.168.7.1 port 61738
+[   57.975301] larkbridge sshd-session[868]: Accepted publickey for admin from fe80::a9b9:e326:5e43:6e3a%eth0 port 61740 ssh2: ED25519 SHA256:qGme++X9/MydL8MGvzHBrRvhSsX2dkh5T68mbZKCRE0
+[   57.995527] larkbridge sshd-session[868]: pam_unix(sshd:session): session opened for user admin(uid=1000) by admin(uid=0)
+[   58.013407] larkbridge systemd-logind[494]: New session 2 of user admin.
+[   58.040879] larkbridge systemd[1]: Started session-2.scope - Session 2 of User admin.
+[   58.872787] larkbridge sshd-session[885]: Received disconnect from fe80::a9b9:e326:5e43:6e3a%eth0 port 61740:11: disconnected by user
+[   58.873306] larkbridge sshd-session[885]: Disconnected from user admin fe80::a9b9:e326:5e43:6e3a%eth0 port 61740
+[   58.875578] larkbridge sshd-session[868]: pam_unix(sshd:session): session closed for user admin
+[   58.885226] larkbridge systemd[1]: session-2.scope: Deactivated successfully.
+[   58.890570] larkbridge systemd-logind[494]: Session 2 logged out. Waiting for processes to exit.
+[   58.894644] larkbridge systemd-logind[494]: Removed session 2.
+[   59.163573] larkbridge sshd-session[902]: Accepted publickey for admin from fe80::a9b9:e326:5e43:6e3a%eth0 port 61743 ssh2: ED25519 SHA256:qGme++X9/MydL8MGvzHBrRvhSsX2dkh5T68mbZKCRE0
+[   59.169539] larkbridge sshd-session[902]: pam_unix(sshd:session): session opened for user admin(uid=1000) by admin(uid=0)
+[   59.185573] larkbridge systemd-logind[494]: New session 3 of user admin.
+[   59.212687] larkbridge systemd[1]: Started session-3.scope - Session 3 of User admin.
+[   59.373729] larkbridge sudo[915]:    admin : PWD=/home/admin ; USER=root ; COMMAND=/usr/local/lib/rpi-lark-bridge/boot-trial.sh confirm
+[   59.375246] larkbridge sudo[915]: pam_unix(sudo:session): session opened for user root(uid=0) by admin(uid=1000)
+[   59.389381] larkbridge sudo[915]: pam_unix(sudo:session): session closed for user root
+[   59.399892] larkbridge sshd-session[914]: Received disconnect from fe80::a9b9:e326:5e43:6e3a%eth0 port 61743:11: disconnected by user
+[   59.400327] larkbridge sshd-session[914]: Disconnected from user admin fe80::a9b9:e326:5e43:6e3a%eth0 port 61743
+[   59.402640] larkbridge sshd-session[902]: pam_unix(sshd:session): session closed for user admin
+[   59.412618] larkbridge systemd[1]: session-3.scope: Deactivated successfully.
+[   59.415894] larkbridge systemd-logind[494]: Session 3 logged out. Waiting for processes to exit.
+[   59.421748] larkbridge systemd-logind[494]: Removed session 3.
+[   59.659077] larkbridge sshd-session[919]: Accepted publickey for admin from fe80::a9b9:e326:5e43:6e3a%eth0 port 50465 ssh2: ED25519 SHA256:qGme++X9/MydL8MGvzHBrRvhSsX2dkh5T68mbZKCRE0
+[   59.665259] larkbridge sshd-session[919]: pam_unix(sshd:session): session opened for user admin(uid=1000) by admin(uid=0)
+[   59.681160] larkbridge systemd-logind[494]: New session 4 of user admin.
+[   59.708751] larkbridge systemd[1]: Started session-4.scope - Session 4 of User admin.
+[   59.818846] larkbridge sshd-session[931]: Received disconnect from fe80::a9b9:e326:5e43:6e3a%eth0 port 50465:11: disconnected by user
+[   59.819227] larkbridge sshd-session[931]: Disconnected from user admin fe80::a9b9:e326:5e43:6e3a%eth0 port 50465
+[   59.821696] larkbridge sshd-session[919]: pam_unix(sshd:session): session closed for user admin
+[   59.831226] larkbridge systemd[1]: session-4.scope: Deactivated successfully.
+[   59.836656] larkbridge systemd-logind[494]: Session 4 logged out. Waiting for processes to exit.
+[   59.840875] larkbridge systemd-logind[494]: Removed session 4.
+[   60.078695] larkbridge sshd-session[934]: Accepted publickey for admin from fe80::a9b9:e326:5e43:6e3a%eth0 port 50466 ssh2: ED25519 SHA256:qGme++X9/MydL8MGvzHBrRvhSsX2dkh5T68mbZKCRE0
+[   60.084609] larkbridge sshd-session[934]: pam_unix(sshd:session): session opened for user admin(uid=1000) by admin(uid=0)
+[   60.100729] larkbridge systemd-logind[494]: New session 5 of user admin.
+[   60.128740] larkbridge systemd[1]: Started session-5.scope - Session 5 of User admin.
+[   65.110269] larkbridge sshd-session[946]: Received disconnect from fe80::a9b9:e326:5e43:6e3a%eth0 port 50466:11: disconnected by user
+[   65.110747] larkbridge sshd-session[946]: Disconnected from user admin fe80::a9b9:e326:5e43:6e3a%eth0 port 50466
+[   65.113592] larkbridge sshd-session[934]: pam_unix(sshd:session): session closed for user admin
+[   65.125332] larkbridge systemd[1]: session-5.scope: Deactivated successfully.
+[   65.131648] larkbridge systemd-logind[494]: Session 5 logged out. Waiting for processes to exit.
+[   65.141170] larkbridge systemd-logind[494]: Removed session 5.
+[   65.403592] larkbridge sshd-session[966]: Accepted publickey for admin from fe80::a9b9:e326:5e43:6e3a%eth0 port 50468 ssh2: ED25519 SHA256:qGme++X9/MydL8MGvzHBrRvhSsX2dkh5T68mbZKCRE0
+[   65.409689] larkbridge sshd-session[966]: pam_unix(sshd:session): session opened for user admin(uid=1000) by admin(uid=0)
+[   65.425988] larkbridge systemd-logind[494]: New session 6 of user admin.
+[   65.452711] larkbridge systemd[1]: Started session-6.scope - Session 6 of User admin.
+[   66.002563] larkbridge systemd[1]: NetworkManager-dispatcher.service: Deactivated successfully.
+[   68.786233] larkbridge sshd-session[979]: Received disconnect from fe80::a9b9:e326:5e43:6e3a%eth0 port 50468:11: disconnected by user
+[   68.786624] larkbridge sshd-session[979]: Disconnected from user admin fe80::a9b9:e326:5e43:6e3a%eth0 port 50468
+[   68.789088] larkbridge sshd-session[966]: pam_unix(sshd:session): session closed for user admin
+[   68.799089] larkbridge systemd[1]: session-6.scope: Deactivated successfully.
+[   68.804726] larkbridge systemd-logind[494]: Session 6 logged out. Waiting for processes to exit.
+[   68.808920] larkbridge systemd-logind[494]: Removed session 6.
+[   71.771075] larkbridge sshd-session[1000]: Accepted publickey for admin from fe80::a9b9:e326:5e43:6e3a%eth0 port 50469 ssh2: ED25519 SHA256:qGme++X9/MydL8MGvzHBrRvhSsX2dkh5T68mbZKCRE0
+[   71.776982] larkbridge sshd-session[1000]: pam_unix(sshd:session): session opened for user admin(uid=1000) by admin(uid=0)
+[   71.793287] larkbridge systemd-logind[494]: New session 7 of user admin.
+[   71.824736] larkbridge systemd[1]: Started session-7.scope - Session 7 of User admin.

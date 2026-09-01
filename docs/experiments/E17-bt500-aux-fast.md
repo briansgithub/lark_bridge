@@ -163,7 +163,8 @@ The Pixel 7a later returned for qualification of the hardened reconnect changes 
 `892af46bd30e56b08816fc21b46d0e8c0227bd3d`. Five user-accepted genuine cold starts passed with
 the phone locked, Bluetooth enabled, and no pairing interaction. Their Pi-monotonic
 power-to-connected times were 19.701, 19.556, 19.406, 19.433, and 19.312 seconds: 5/5 below the
-25-second requirement.
+25-second requirement. The five accepted boot records are retained in
+[`20260901T043143Z-pixel-cold-connect`](results/E17/20260901T043143Z-pixel-cold-connect/).
 
 Commit `175b104` adds a seeded `pixel-chaos` profile to the host power-loss controller. It keeps
 the mandatory hashed-backup/physically-booted-recovery-card gate, records the complete five-cut
@@ -171,9 +172,9 @@ schedule before starting, enforces at least 12 seconds cold-off, and requires ev
 retain the exact pairing identity, pass the full hardened-storage probe, leave pairing repair
 idle, and reconnect the Pixel within 25 seconds.
 
-The completed seed-`20260901` campaign is retained locally at
-`.artifacts/powerloss/pixel-chaos-175b104-restart-1`. One operator-missed sequence is preserved in
-the separate original campaign and is not counted. The completed campaign produced:
+The completed seed-`20260901` campaign is retained in
+[`20260901T050010Z-pixel-chaos-175b104`](results/E17/20260901T050010Z-pixel-chaos-175b104/).
+One operator-missed sequence was not counted. The completed campaign produced:
 
 | Abrupt cut | Pixel connected | Storage | Pairing identity | Result |
 |---|---:|---|---|---|
@@ -189,6 +190,16 @@ idle, `/boot/firmware` read-only, `/media/root-ro` read-only, and the expected w
 overlay plus journaled `LARKDATA`. These are approximate human-timed physical cuts, not a
 programmable brownout waveform or a long cumulative-durability campaign; no claim is made for
 subsecond voltage sag or dozens of repeated cuts.
+
+### Evidence retention
+
+Compact state, timing, Bluetooth transport, AEC metric, accepted cold-boot, and completed
+power-loss records are retained for audit and regression comparison. The 2026-09-01 cleanup
+discarded transient Android UI dumps and images, repeated diagnostic boot logs, the operator-missed
+power-cut run, reproducible release ZIPs, a full personal Tasker backup and superseded partial
+export, and duplicated raw WAV/`pwtop` captures. Those files supported live operation or manual
+diagnosis but were not automated test fixtures; the scoped Tasker export, numeric AEC results, and
+accepted hardware outcomes remain in the repository.
 
 ## Remaining gates
 

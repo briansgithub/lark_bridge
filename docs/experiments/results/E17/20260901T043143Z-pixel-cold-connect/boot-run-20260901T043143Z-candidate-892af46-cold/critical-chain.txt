@@ -1,0 +1,21 @@
+The time when unit became active or started is printed after the "@" character.
+The time the unit took to start is printed after the "+" character.
+
+multi-user.target @16.984s
+└─ssh.service @16.593s +388ms
+  └─network.target @16.566s
+    └─NetworkManager.service @9.328s +7.235s
+      └─dbus.service @8.982s +329ms
+        └─basic.target @8.944s
+          └─sockets.target @8.943s
+            └─systemd-hostnamed.socket @8.943s
+              └─sysinit.target @8.927s
+                └─systemd-tmpfiles-setup.service @8.756s +163ms
+                  └─systemd-journal-flush.service @8.680s +71ms
+                    └─bridge-storage-guard.service @7.645s +1.030s
+                      └─local-fs.target @7.633s
+                        └─run-user-1000.mount @9.566s
+                          └─swap.target @5.008s
+                            └─dev-zram0.swap @4.809s +192ms
+                              └─systemd-zram-setup@zram0.service @4.553s +242ms
+                                └─dev-zram0.device @4.537s

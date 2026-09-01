@@ -1,0 +1,18 @@
+{
+  "baseline": {
+    "artifact": "baseline",
+    "completed_utc": "20260825T213029Z",
+    "status": "passed"
+  },
+  "campaign_id": "20260825T213025Z-bt500-aux-post-c63c-readiness",
+  "created_utc": "20260825T213025Z",
+  "cycles": [],
+  "sample_seconds": 5.0,
+  "schema_version": 1,
+  "soak": {
+    "status": "pending"
+  },
+  "soak_seconds": 3600,
+  "target_cycles": 5,
+  "verdict": "IN_PROGRESS"
+}

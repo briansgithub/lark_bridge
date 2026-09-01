@@ -1,0 +1,18 @@
+{
+  "baseline": {
+    "artifact": "baseline",
+    "completed_utc": "20260825T212549Z",
+    "status": "passed"
+  },
+  "campaign_id": "20260825T212545Z-bt500-aux-postboot-readiness-retest",
+  "created_utc": "20260825T212545Z",
+  "cycles": [],
+  "sample_seconds": 5.0,
+  "schema_version": 1,
+  "soak": {
+    "status": "pending"
+  },
+  "soak_seconds": 3600,
+  "target_cycles": 5,
+  "verdict": "IN_PROGRESS"
+}

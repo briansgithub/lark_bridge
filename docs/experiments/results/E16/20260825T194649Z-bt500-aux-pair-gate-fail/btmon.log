@@ -1,0 +1,21 @@
+Bluetooth monitor ver 5.82
+btmon[28878]: = Note: Linux version 6.18.34+rpt-..   2026-08-25 15:46:51.607041
+btmon[28878]: = Note: Bluetooth subsystem versio..   2026-08-25 15:46:51.607051
+= New Index: A0:AD:9F:7.. (Primary,USB,hci0)  [hci0] 2026-08-25 15:46:51.607055
+= Open Index: A0:AD:9F:73:6C:24               [hci0] 2026-08-25 15:46:51.607057
+= Index Info: A0:AD:9F:73:6C:24               [hci0] 2026-08-25 15:46:51.607059
+= New Index: B8:27:EB:.. (Primary,UART,hci2)  [hci2] 2026-08-25 15:46:51.607062
+bluetoothctl[28042]: @ MGMT Open: bluet..   {0x0002} 2026-08-25 15:46:51.607066
+bluetoothd[503]: @ MGMT Open: bluetoothd    {0x0001} 2026-08-25 15:46:51.607069
+> HCI Event: Vendor (0xff) plen 9          #1 [hci0] 2026-08-25 15:46:52.853859
+        58 c5 bf cb 7b 33 5c 20 0b                       X...{3\ .       
+> HCI Event: Disconnect C.. (0x05) plen 4  #2 [hci0] 2026-08-25 15:46:52.855842
+        Status: Success (0x00)
+        Handle: 10
+        Reason: Remote User Terminated Connection (0x13)
+@ MGMT Event: Dev.. (0x000c) plen 8  {0x0002} [hci0] 2026-08-25 15:46:52.855870
+        BR/EDR Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Reason: Connection terminated by remote host (0x03)
+@ MGMT Event: Dev.. (0x000c) plen 8  {0x0001} [hci0] 2026-08-25 15:46:52.855870
+        BR/EDR Address: 5C:33:7B:CB:BF:C5 (Google, Inc.)
+        Reason: Connection terminated by remote host (0x03)

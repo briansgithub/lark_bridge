@@ -1,0 +1,98 @@
+{
+  "candidate": "candidate-892af46",
+  "git": {
+    "branch": "codex/bt500-aux-fast",
+    "full_status": "?? .artifacts/\n?? docs/experiments/results/E16/20260825T193346Z-bt500-aux-predeploy/\n?? docs/experiments/results/E16/20260825T194649Z-bt500-aux-pair-gate-fail/\n?? docs/experiments/results/E16/20260825T200431Z-bt500-aux-pair-success/\n?? docs/experiments/results/E16/20260825T201035Z-bt500-aux-aec-disabled-transport/\n?? docs/experiments/results/E17/",
+    "head": "892af46bd30e56b08816fc21b46d0e8c0227bd3d",
+    "tracked_status": ""
+  },
+  "manual_power": true,
+  "microphone": {
+    "expected_id": "lark-a1",
+    "functional": null,
+    "idle": {
+      "error": null,
+      "expected_id": "lark-a1",
+      "matches": false,
+      "observed": {
+        "format": {
+          "channels": 1,
+          "format": "S16LE",
+          "rate": 48000
+        },
+        "id": "fifine-k054",
+        "identity": {
+          "device_object_serial": "51",
+          "pipewire_object_serial": "60",
+          "usb_instance_generation": "1-1.3@4",
+          "usb_port_path": "1-1.3",
+          "usb_product": "USB PnP Audio Device",
+          "usb_product_id": "161e",
+          "usb_serial": null,
+          "usb_vendor_id": "0c76"
+        },
+        "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.3@4\"]",
+        "label": "FIFINE K054",
+        "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+        "priority": 1
+      },
+      "observed_id": "fifine-k054"
+    },
+    "preboot": {
+      "error": null,
+      "expected_id": "lark-a1",
+      "matches": false,
+      "observed": {
+        "format": {
+          "channels": 1,
+          "format": "S16LE",
+          "rate": 48000
+        },
+        "id": "fifine-k054",
+        "identity": {
+          "device_object_serial": "51",
+          "pipewire_object_serial": "60",
+          "usb_instance_generation": "1-1.3@4",
+          "usb_port_path": "1-1.3",
+          "usb_product": "USB PnP Audio Device",
+          "usb_product_id": "161e",
+          "usb_serial": null,
+          "usb_vendor_id": "0c76"
+        },
+        "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.3@4\"]",
+        "label": "FIFINE K054",
+        "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+        "priority": 1
+      },
+      "observed_id": "fifine-k054"
+    }
+  },
+  "mode": "cold",
+  "readiness_profile": "phone",
+  "remote": {
+    "default_target": "multi-user.target",
+    "file_sha256": {
+      "/boot/firmware/cmdline.txt": "6b4acc2e003f80f600f50cc1eee2b58f4e07369209098dc1bdf232e10e03aadc",
+      "/boot/firmware/config.txt": "dda12e139ea2ef68e90b2cfc58f540aff4ec7cb8886a78e217742f84981560c8",
+      "/etc/systemd/system/NetworkManager.service.d/10-larkbridge-netplan-startup.conf": "",
+      "/etc/systemd/system/bridge-btwatchdog@.service": "87dd322e71c70798f889f38965abd7c0dcc4ee5f4e67f31ddd5ee1579b41b237",
+      "/etc/systemd/system/bridge-tuning.service": "222ae39919c6c0594da42d9099ba02fc7df3f1220a4c8dd52431907a25d3d67d",
+      "/usr/local/lib/rpi-lark-bridge/boot-path/netplan": "",
+      "/usr/local/lib/rpi-lark-bridge/set-sco-routing.sh": "b1dd43ac951095f306122e03312f94d38cc7cdefa4e25f900fc3beb3343efc9c"
+    },
+    "firmware": "May 21 2026 11:21:57 \nCopyright (c) 2012 Broadcom\nversion 288930ab4712b99596f32732664aaaeb881ef1e0 (clean) (release) (start)",
+    "kernel": "Linux larkbridge 6.18.34+rpt-rpi-v8 #1 SMP PREEMPT Debian 1:6.18.34-1+rpt1 (2026-06-09) aarch64 GNU/Linux",
+    "machine_id_sha256": "2fd9bdb151998d361a8b81d85e94bc147868095a712e503418ca7befff306e07",
+    "model": "Raspberry Pi 3 Model B Rev 1.2",
+    "os_release": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nVERSION=\"13 (trixie)\"\nVERSION_CODENAME=trixie\nDEBIAN_VERSION_FULL=13.5\nID=debian\nHOME_URL=\"https://www.debian.org/\"\nSUPPORT_URL=\"https://www.debian.org/support\"\nBUG_REPORT_URL=\"https://bugs.debian.org/\"",
+    "packages": {
+      "bluez": "5.82-1.1+rpt2",
+      "cloud-init": "25.2-1~bpo13+1+rpt20",
+      "network-manager": "1.52.1-1+rpt4",
+      "pipewire": "1.4.2-1+rpt3",
+      "systemd": "257.13-1~deb13u1",
+      "wireplumber": "0.5.8-2"
+    }
+  },
+  "run_id": "20260901T043648Z-candidate-892af46-cold"
+}

@@ -1,0 +1,10 @@
+{
+  "acceptance_eligible": true,
+  "confirmed_utc": "20260825T205353Z",
+  "independent_double_talk": true,
+  "near_end_speech": true,
+  "near_end_speech_seconds_min": 15,
+  "operator_report": "no crackle, dropout, or unintelligible audio",
+  "schema_version": 1,
+  "source": "user-confirmed"
+}

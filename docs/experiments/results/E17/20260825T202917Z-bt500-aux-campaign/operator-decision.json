@@ -1,0 +1,14 @@
+{
+  "accepted_aec_provisionally": true,
+  "acceptance_cycles_completed": [
+    1,
+    2
+  ],
+  "decision_utc": "20260825T205812Z",
+  "full_five_cycle_gate_completed": false,
+  "original_cycle_target": 5,
+  "remaining_interactive_cycles_deferred": true,
+  "schema_version": 1,
+  "source": "user",
+  "user_statement": "that will be the last test. AEC is acceptable for now."
+}
