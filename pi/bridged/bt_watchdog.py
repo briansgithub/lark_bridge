@@ -50,6 +50,8 @@ RECONNECT_RETRY = float(os.environ.get("BRIDGE_WD_RECONNECT_RETRY", "30"))
 STARTUP_RECONNECT_RETRY = float(
     os.environ.get("BRIDGE_WD_STARTUP_RECONNECT_RETRY", "2")
 )
+STARTUP_PROFILE_WAIT = float(os.environ.get("BRIDGE_WD_STARTUP_PROFILE_WAIT", "6"))
+STARTUP_PROFILE_POLL = float(os.environ.get("BRIDGE_WD_STARTUP_PROFILE_POLL", "0.2"))
 CALL_RECONNECT_ATTEMPTS = int(os.environ.get("BRIDGE_WD_CALL_ATTEMPTS", "3"))
 CALL_RECONNECT_COOLDOWN = float(os.environ.get("BRIDGE_WD_CALL_COOLDOWN", "120"))
 CONNECT_REQUEST_TIMEOUT = float(
@@ -72,6 +74,9 @@ PAIRING_SEAL_COMMAND = Path(
 )
 BACKOFF_START = 60.0
 BACKOFF_MAX = 900.0
+REQUIRED_LOCAL_PROFILE_UUIDS = frozenset(
+    (btadapters.A2DP_SINK_UUID, btadapters.HFP_HF_UUID)
+)
 
 log = logging.getLogger("bt-watchdog")
 
@@ -101,6 +106,13 @@ class RecoveryState:
     reconnect_attempts: int = 0
     reconnect_next: float = 0.0
     connected_monotonic: float | None = None
+    first_connect_request_monotonic: float | None = None
+    startup_connect_attempts: int = 0
+    startup_phase: str = "idle"
+    startup_profile_wait_started: float | None = None
+    startup_profile_deadline: float | None = None
+    startup_profile_ready: float | None = None
+    startup_missing_local_uuids: tuple[str, ...] = ()
     connect_pending_since: float | None = None
     connect_pending_target: str | None = None
     connect_collision_cancellations: int = 0
@@ -129,6 +141,15 @@ class RecoveryState:
             "reconnect_attempts": self.reconnect_attempts,
             "reconnect_next_monotonic": self.reconnect_next,
             "connected_monotonic": self.connected_monotonic,
+            "first_connect_request_monotonic": self.first_connect_request_monotonic,
+            "startup_connect_attempts": self.startup_connect_attempts,
+            "startup_phase": self.startup_phase,
+            "startup_profile_wait_started_monotonic": (
+                self.startup_profile_wait_started
+            ),
+            "startup_profile_deadline_monotonic": self.startup_profile_deadline,
+            "startup_profile_ready_monotonic": self.startup_profile_ready,
+            "startup_missing_local_uuids": list(self.startup_missing_local_uuids),
             "connect_pending_since_monotonic": self.connect_pending_since,
             "connect_pending_deadline_monotonic": (
                 self.connect_pending_since + CONNECT_PENDING_TIMEOUT
@@ -521,6 +542,9 @@ def _mark_device_connected(
     state.repair_state = "idle"
     state.repair_trigger = None
     state.repair_deadline = None
+    state.startup_phase = "complete"
+    state.startup_profile_deadline = None
+    state.startup_missing_local_uuids = ()
     state.identity_error = None
     state.last_action = "connected"
     state.last_error = None
@@ -542,6 +566,31 @@ def _connect_operation_pending(ok: bool, detail: str) -> bool:
     return btadapters.connect_in_progress(ok, detail) or (
         not ok and detail.strip().casefold().endswith("timed out")
     )
+
+
+def _connect_profile_unavailable(detail: str | None) -> bool:
+    normalized = str(detail or "").casefold()
+    return any(
+        marker in normalized
+        for marker in (
+            "protocol not available",
+            "br-connection-profile-unavailable",
+            "connection-profile-unavailable",
+        )
+    )
+
+
+def _missing_local_profiles(
+    adapter: btadapters.Adapter, objects: dict[str, dict] | None = None
+) -> tuple[str, ...]:
+    observed = btadapters.adapter_uuids(adapter, objects)
+    return tuple(sorted(REQUIRED_LOCAL_PROFILE_UUIDS - observed))
+
+
+def _clear_startup_profile_wait(state: RecoveryState) -> None:
+    state.startup_profile_wait_started = None
+    state.startup_profile_deadline = None
+    state.startup_missing_local_uuids = ()
 
 
 def service_reconnect(
@@ -727,6 +776,14 @@ def service_reconnect(
             state.last_error = detail
             return False
         _before_mutation(cancelled)
+        if state.startup_phase in {
+            "immediate_connect",
+            "retry_profiles_ready",
+            "retry_profile_timeout",
+        }:
+            state.startup_connect_attempts += 1
+            if state.first_connect_request_monotonic is None:
+                state.first_connect_request_monotonic = observed
         state.last_action = "connecting"
         ok, detail = btadapters.connect(
             address,
@@ -791,16 +848,112 @@ def service_startup_reconnect(
     """Issue one immediate reconnect when an exact runtime controller first resolves."""
     target = _adapter_runtime_target(adapter)
     if target != previous_target:
+        state.startup_phase = "immediate_connect"
+        state.startup_connect_attempts = 0
+        state.first_connect_request_monotonic = None
+        state.startup_profile_ready = None
+        _clear_startup_profile_wait(state)
         state.reconnect_next = 0.0
-        service_reconnect(roles, role, state, now=now, cancelled=cancelled)
+        connected = service_reconnect(roles, role, state, now=now, cancelled=cancelled)
+        if connected:
+            return target
+        observed = time.monotonic() if now is None else now
+        if _connect_profile_unavailable(state.last_error):
+            missing = _missing_local_profiles(adapter)
+            if missing:
+                state.startup_phase = "waiting_local_profiles"
+                state.startup_profile_wait_started = observed
+                state.startup_profile_deadline = observed + STARTUP_PROFILE_WAIT
+                state.startup_missing_local_uuids = missing
+                state.reconnect_next = observed + STARTUP_PROFILE_POLL
+                state.last_action = "waiting_local_profiles"
+                return target
+            state.startup_profile_ready = observed
+            state.startup_phase = "retry_profiles_ready"
+            state.reconnect_next = 0.0
+            connected = service_reconnect(
+                roles, role, state, now=observed, cancelled=cancelled
+            )
+            if not connected and state.startup_phase != "complete":
+                state.startup_phase = "fallback"
+                if state.last_action == "device-reconnect":
+                    state.last_action = "startup_retry"
+            return target
+        state.startup_phase = "fallback"
         if (
             state.bond_state != "connected"
             and state.repair_state == "idle"
             and state.connect_pending_since is None
         ):
-            observed = time.monotonic() if now is None else now
             state.reconnect_next = observed + STARTUP_RECONNECT_RETRY
     return target
+
+
+def service_startup_profile_wait(
+    roles: controller_roles.ControllerRoles,
+    role: str,
+    state: RecoveryState,
+    adapter: btadapters.Adapter,
+    *,
+    now: float | None = None,
+    cancelled: Callable[[], bool] | None = None,
+) -> bool:
+    """Retry once when local phone profiles appear, bounded by one startup deadline."""
+    if state.startup_phase != "waiting_local_profiles":
+        return False
+    observed = time.monotonic() if now is None else now
+    try:
+        tree = btadapters.managed_objects(cancelled=cancelled)
+        current = resolve_role(roles, role, objects=tree)
+    except (RecoveryCancelled, btadapters.BluetoothOperationCancelled) as exc:
+        state.startup_phase = "fallback"
+        state.last_action = "cancelled"
+        state.last_error = str(exc)
+        return False
+    except controller_roles.ControllerRoleError as exc:
+        state.startup_phase = "controller_unavailable"
+        state.identity_error = f"{exc.code}: {exc.detail}"
+        state.last_action = "resolve"
+        state.last_error = state.identity_error
+        return False
+    if _adapter_runtime_target(current) != _adapter_runtime_target(adapter):
+        state.startup_phase = "controller_unavailable"
+        _clear_startup_profile_wait(state)
+        state.reconnect_next = observed + RECONNECT_DELAY
+        state.last_action = "device-connect-target-refreshed"
+        state.last_error = "BT500 runtime target changed during local-profile wait"
+        return False
+    address = recovery_device(roles, role)
+    if address and btadapters.connected_on(current, address, tree):
+        _mark_device_connected(state, observed=observed)
+        return True
+
+    missing = _missing_local_profiles(current, tree)
+    state.startup_missing_local_uuids = missing
+    deadline = state.startup_profile_deadline or observed
+    ready = not missing
+    expired = observed >= deadline
+    if not ready and not expired:
+        state.reconnect_next = min(deadline, observed + STARTUP_PROFILE_POLL)
+        state.last_action = "waiting_local_profiles"
+        return False
+
+    state.startup_profile_deadline = None
+    state.reconnect_next = 0.0
+    if ready:
+        state.startup_profile_ready = observed
+        state.startup_phase = "retry_profiles_ready"
+        state.startup_missing_local_uuids = ()
+        log.info("local BT500 phone profiles ready; retrying Pixel connection")
+    else:
+        state.startup_phase = "retry_profile_timeout"
+        log.warning("local BT500 phone profiles did not become ready before deadline")
+    connected = service_reconnect(roles, role, state, now=observed, cancelled=cancelled)
+    if not connected and state.startup_phase != "complete":
+        state.startup_phase = "fallback"
+        if state.last_action == "device-reconnect":
+            state.last_action = "startup_retry" if ready else "startup_profile_timeout"
+    return connected
 
 
 def service_sleep_interval(state: RecoveryState, *, now: float | None = None) -> float:
@@ -1063,6 +1216,8 @@ def main(argv: list[str] | None = None) -> int:
                 adapter = None
                 pairing_closed_target = None
                 startup_connect_target = None
+                state.startup_phase = "controller_unavailable"
+                _clear_startup_profile_wait(state)
                 state.probe = ProbeStatus.UNKNOWN.value
                 _clear_pending_connect(state)
                 state.reconnect_next = time.monotonic() + RECONNECT_DELAY
@@ -1109,7 +1264,18 @@ def main(argv: list[str] | None = None) -> int:
                     and time.monotonic() - state.last_attempt > BACKOFF_MAX
                 ):
                     state.backoff = BACKOFF_START
-                service_reconnect(roles, args.role, state, cancelled=lambda: stopping)
+                if state.startup_phase == "waiting_local_profiles":
+                    service_startup_profile_wait(
+                        roles,
+                        args.role,
+                        state,
+                        adapter,
+                        cancelled=lambda: stopping,
+                    )
+                else:
+                    service_reconnect(
+                        roles, args.role, state, cancelled=lambda: stopping
+                    )
                 if state.repair_state == "requested" and not stopping:
                     repaired = repair_phone_bond(
                         roles,

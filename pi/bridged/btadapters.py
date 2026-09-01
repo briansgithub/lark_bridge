@@ -673,6 +673,27 @@ def device_property(
     return (device_properties(adapter, device_mac, objects).get(name) or {}).get("data")
 
 
+def adapter_property(
+    adapter: Adapter, name: str, objects: dict[str, dict] | None = None
+):
+    """Return one property from an already-resolved adapter."""
+    tree = objects if objects is not None else managed_objects()
+    interface = (tree.get(adapter.path) or {}).get("org.bluez.Adapter1") or {}
+    return (interface.get(name) or {}).get("data")
+
+
+def adapter_uuids(
+    adapter: Adapter, objects: dict[str, dict] | None = None
+) -> frozenset[str]:
+    """Return normalized local service UUIDs advertised by one exact adapter."""
+    value = adapter_property(adapter, "UUIDs", objects)
+    if not isinstance(value, list):
+        return frozenset()
+    return frozenset(
+        str(item).strip().casefold() for item in value if str(item).strip()
+    )
+
+
 def paired_on(
     adapter: Adapter, device_mac: str, objects: dict[str, dict] | None = None
 ) -> bool:
@@ -893,6 +914,7 @@ def _act(
 # A2DP Sink. Connecting this profile specifically, rather than everything a device offers,
 # is what keeps a speaker from also becoming an HFP endpoint.
 A2DP_SINK_UUID = "0000110b-0000-1000-8000-00805f9b34fb"
+HFP_HF_UUID = "0000111e-0000-1000-8000-00805f9b34fb"
 
 
 def connect(

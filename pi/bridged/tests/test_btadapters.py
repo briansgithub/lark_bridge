@@ -20,6 +20,25 @@ def path(hci: str) -> str:
 
 
 class TrustPinTests(unittest.TestCase):
+    def test_adapter_uuids_are_exact_normalized_and_missing_safe(self) -> None:
+        tree = {
+            TARGET.path: {
+                "org.bluez.Adapter1": {
+                    "UUIDs": {
+                        "data": [
+                            btadapters.A2DP_SINK_UUID.upper(),
+                            btadapters.HFP_HF_UUID,
+                        ]
+                    }
+                }
+            }
+        }
+        self.assertEqual(
+            btadapters.adapter_uuids(TARGET, tree),
+            frozenset((btadapters.A2DP_SINK_UUID, btadapters.HFP_HF_UUID)),
+        )
+        self.assertEqual(btadapters.adapter_uuids(TARGET, {}), frozenset())
+
     def test_target_is_trusted_before_duplicates_are_untrusted(self) -> None:
         tree = {path("hci0"): device(True), path("hci1"): device(False)}
         calls: list[tuple[str, bool]] = []

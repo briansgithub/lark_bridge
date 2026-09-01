@@ -152,6 +152,10 @@ def call_bluetooth_failures(
             failures.append(
                 "configured call adapter is discoverable outside a repair window"
             )
+        if "0000110b-0000-1000-8000-00805f9b34fb" not in output:
+            failures.append("configured call adapter lacks the local A2DP Sink role")
+        if "0000111e-0000-1000-8000-00805f9b34fb" not in output:
+            failures.append("configured call adapter lacks the local Handsfree role")
 
     required = {
         "bond_state",
@@ -160,6 +164,9 @@ def call_bluetooth_failures(
         "repair_deadline_monotonic",
         "reconnect_attempts",
         "reconnect_next_monotonic",
+        "startup_phase",
+        "startup_connect_attempts",
+        "startup_missing_local_uuids",
         "last_action",
     }
     if watchdog.get("error"):

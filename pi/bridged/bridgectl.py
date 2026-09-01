@@ -278,6 +278,22 @@ def phone_status_view(status: dict[str, Any]) -> dict[str, Any]:
                 else None
             ),
             "watchdog_action": watchdog.get("last_action"),
+            "startup": {
+                "phase": watchdog.get("startup_phase"),
+                "connect_attempts": watchdog.get("startup_connect_attempts"),
+                "first_connect_request_monotonic": watchdog.get(
+                    "first_connect_request_monotonic"
+                ),
+                "local_profiles_ready_monotonic": watchdog.get(
+                    "startup_profile_ready_monotonic"
+                ),
+                "profile_wait_deadline_monotonic": watchdog.get(
+                    "startup_profile_deadline_monotonic"
+                ),
+                "missing_local_profile_uuids": watchdog.get(
+                    "startup_missing_local_uuids"
+                ),
+            },
             "reconnect_timing": {
                 "attempts": watchdog.get("reconnect_attempts"),
                 "connected_monotonic": watchdog.get("connected_monotonic"),
@@ -326,6 +342,11 @@ def do_phone_status(args: argparse.Namespace) -> int:
     print(
         f"bond: {block['bond_state']}  repair: {block['repair_state']}  "
         f"action: {block.get('watchdog_action') or '-'}"
+    )
+    startup = block.get("startup") or {}
+    print(
+        f"startup: {startup.get('phase') or '-'}  "
+        f"connect attempts: {startup.get('connect_attempts') or 0}"
     )
     print(str(block["instructions"]))
     return 0
