@@ -8,13 +8,6 @@ request is still pending, the watchdog cancels only the configured Pixel object 
 This keeps a normal car boot within the 25-second connection target without resetting Bluetooth,
 PipeWire, WirePlumber, another adapter, or another bond.
 
-If that immediate request explicitly reports `ProfileUnavailable`, the watchdog checks the local
-service UUIDs on that exact BT500. When either the A2DP Sink or Handsfree role is still being
-registered during boot, it polls at 200 ms intervals for at most 6 seconds and retries the Pixel as
-soon as both roles appear. There is one final retry at the deadline. This adaptive wait is not used
-for page timeout, refusal, an absent phone, disabled phone Bluetooth, or a controller identity
-change, and it cannot request bond repair.
-
 ## When automatic repair is allowed
 
 Automatic bond replacement requires one narrow signature on the same healthy controller:
@@ -53,6 +46,5 @@ sudo bridgectl phone repair
 ```
 
 Status includes `bond_state`, `repair_state`, the repair trigger and deadline, reconnect timing,
-the startup phase and exact connect-attempt count, missing local-profile UUIDs, the watchdog
-action, and current instructions. Outside a repair window, readiness requires the BT500 to report
-`Pairable: no` and `Discoverable: no`.
+the watchdog action, and current instructions. Outside a repair window, readiness requires the
+BT500 to report `Pairable: no` and `Discoverable: no`.
