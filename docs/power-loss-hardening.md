@@ -218,6 +218,37 @@ rig powerloss status --campaign CAMPAIGN
 Any failed run prevents campaign completion. Preserve its evidence and diagnose it; do
 not simply delete or relabel the run.
 
+### Pixel car-chaos profile
+
+Use the compact Pixel profile after clean cold-boot timing has passed and before image
+acceptance. It preserves the same backup/recovery-card safety gate while reducing the
+campaign to five high-risk cuts whose exact schedule is recorded before the first cut:
+
+- one cut one second after power-on;
+- one seeded cut three to seven seconds after power-on;
+- one seeded cut 12 to 18 seconds after power-on, during service and Bluetooth startup;
+- one seeded cut during Bluetooth recovery; and
+- one seeded cut during a synchronized persistent-state write.
+
+Create the campaign with a recorded seed, then arm its cases in order:
+
+```sh
+rig powerloss campaign-init \
+  --profile pixel-chaos \
+  --seed 20260901 \
+  --safety-evidence /safe/larkbridge-safety-evidence.json
+rig powerloss arm-next --campaign CAMPAIGN
+```
+
+For early-boot cases, follow the printed `early-start`, `observe-off`, and `reconnect`
+commands. For the two running-system cases, follow the printed `observe-off` and
+`reconnect` commands. The profile enforces a 12-second cold-off interval. Every recovery
+must pass the full read-only/storage/service/config/pairing acceptance probe, preserve
+the exact pairing identity, report the Pixel connected with no active repair transaction,
+and show a boot-to-Pixel connection time of at most 25 seconds. `arm-next` refuses to
+advance past an active or failed case, so mistimed cuts remain visible rather than being
+silently replaced.
+
 If an armed sequence is interrupted without a physical cut, close it explicitly with
 `rig powerloss abort --campaign CAMPAIGN --reason REASON`. The run remains failed and
 auditable; begin a fresh campaign after correcting the interruption.
