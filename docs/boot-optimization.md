@@ -10,6 +10,10 @@ powered Bluetooth adapter, the bridge health report, and a stable Lark endpoint.
   It is useful for preliminary profiling but cannot accept an optimization.
 - **Functional readiness** additionally runs the bench-specific call/audio hook. Only functional
   results can produce `PROVISIONAL_ACCEPT`, and the recovery/soak gates are still required.
+- **Phone readiness** is a deliberately narrower cold-boot campaign. It requires the exact BT500,
+  both local phone-profile UUIDs, a closed pairing surface, the configured Pixel connected, an
+  idle repair state, read-only hardened mounts, and a watchdog connection timestamp no later than
+  25 seconds after power-on. Ten passing baseline and candidate cycles are required.
 
 The controller refuses to time a checkout with tracked modifications. Untracked operator notes
 are recorded in the manifest but do not invalidate a run.
@@ -33,9 +37,11 @@ boot_functional_probe_command = [] # may use {run_dir}, {run_id}, {candidate}
 boot_variant_apply_command = [] # may use {candidate}, {revision}, {run_dir}, {run_id}
 ```
 
-Cold runs are refused until both power commands exist. Serial capture and the functional hook are
-bench-specific so the generic controller does not guess a relay protocol, COM port, call service,
-or far-end endpoint.
+Automated cold runs are refused until both power commands exist. `--manual-power` instead prompts
+the operator to turn real car power off, waits for SSH to disappear and the configured cold-off
+interval, then prompts for power on. Serial capture and the functional hook are bench-specific so
+the generic controller does not guess a relay protocol, COM port, call service, or far-end
+endpoint.
 
 ## Commands
 
@@ -44,16 +50,21 @@ rig boot doctor
 rig boot run --mode warm --candidate baseline
 rig boot baseline --mode warm --candidate baseline --count 20 --require-functional
 rig boot baseline --mode cold --candidate baseline --count 10 --require-functional
+rig boot baseline --mode cold --candidate phone-baseline --count 10 \
+  --manual-power --readiness-profile phone
 rig boot compare --baseline baseline --candidate candidate-name
 rig boot compare --baseline baseline --candidate candidate-name --mode warm
+rig boot compare --baseline phone-baseline --candidate phone-candidate \
+  --allow-phone --mode cold
 rig boot screen --baseline baseline --baseline-rev REV --candidate candidate-name \
   --candidate-rev REV --pairs 10 --mode warm --require-functional
 rig boot trial status
 ```
 
 Artifacts are written under `artifacts/boot-run-*` and include the event timeline, manifest,
-pre-boot and ready probes, systemd timing, unit state, and the complete boot journal. Full logs stay
-ignored; accepted experiment summaries belong in a later curated report.
+pre-boot and ready probes, systemd timing, unit state, watchdog startup/reconnect state, and the
+complete boot journal. Full logs stay ignored; accepted experiment summaries belong in a later
+curated report.
 
 ## Current limitation
 

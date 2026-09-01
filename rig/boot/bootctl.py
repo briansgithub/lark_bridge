@@ -26,6 +26,7 @@ REPO = Path(__file__).resolve().parents[2]
 DEFAULT_INVENTORY = REPO / "rig" / "inventory.toml"
 DEFAULT_ARTIFACTS = REPO / "artifacts"
 DEFAULT_EXPECTED_MICROPHONE = "lark-a1"
+PHONE_CONNECT_LIMIT_S = 25.0
 SYSTEM_UNITS = (
     "bluetooth.service",
     "bridge-btwatchdog@call.service",
@@ -65,6 +66,12 @@ try:
     bridge = json.loads(status_path.read_text(encoding="utf-8"))
 except (OSError, json.JSONDecodeError) as exc:
     bridge = {"error": str(exc)}
+
+watchdog_path = pathlib.Path("/run/larkbridge/bt-watchdog/call.json")
+try:
+    call_watchdog = json.loads(watchdog_path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError) as exc:
+    call_watchdog = {"error": str(exc)}
 
 bt_list = run(["bluetoothctl", "list"])
 bt_show = run(["bluetoothctl", "show"])
@@ -144,20 +151,86 @@ power = run(["vcgencmd", "get_throttled"])
 if power["rc"] == 0 and power["stdout"] != "throttled=0x0":
     failures.append(f"power flags are not clear: {power['stdout']}")
 
+phone_failures = []
+phone_failures += [
+    f"{name}={state or 'unknown'}" for name, state in system.items()
+    if state != "active"
+]
+phone_failures += [
+    f"user:{name}={state or 'unknown'}" for name, state in user.items()
+    if state != "active"
+]
+if failed_units["stdout"]:
+    phone_failures.append("failed systemd units are present")
+phone = bridge.get("phone") or {}
+call_controller = (bridge.get("controllers") or {}).get("call") or {}
+call_address = call_controller.get("configured_address")
+bt_call_show = (
+    run(["bluetoothctl", "show", call_address])
+    if call_address
+    else {"rc": 127, "stdout": "", "stderr": "configured call address is absent"}
+)
+show_output = bt_call_show["stdout"]
+for required, reason in (
+    ("Powered: yes", "configured BT500 is not powered"),
+    ("Pairable: no", "configured BT500 remains pairable"),
+    ("Discoverable: no", "configured BT500 remains discoverable"),
+    ("0000110b-0000-1000-8000-00805f9b34fb", "local A2DP Sink role is missing"),
+    ("0000111e-0000-1000-8000-00805f9b34fb", "local Handsfree role is missing"),
+):
+    if required not in show_output:
+        phone_failures.append(reason)
+if bridge.get("error"):
+    phone_failures.append("bridge status is unavailable")
+elif phone.get("connected") is not True:
+    phone_failures.append("Pixel is not connected")
+if call_controller.get("ready") is not True:
+    phone_failures.append("configured call controller is not ready")
+if call_controller.get("observed_address") != call_controller.get("configured_address"):
+    phone_failures.append("call controller identity does not match configuration")
+if call_watchdog.get("error"):
+    phone_failures.append("call watchdog status is unavailable")
+else:
+    if call_watchdog.get("bond_state") != "connected":
+        phone_failures.append("Pixel bond is not connected")
+    if call_watchdog.get("repair_state") != "idle":
+        phone_failures.append("Pixel repair state is not idle")
+    if call_watchdog.get("startup_missing_local_uuids"):
+        phone_failures.append("watchdog still reports missing local phone profiles")
+    watchdog_controller = call_watchdog.get("controller") or {}
+    if watchdog_controller.get("address") != call_controller.get("configured_address"):
+        phone_failures.append("watchdog is not bound to the configured BT500")
+
+mounts = {
+    name: run(["findmnt", "-n", "-o", "OPTIONS", "--target", target])
+    for name, target in (
+        ("root_lower", "/media/root-ro"),
+        ("boot", "/boot/firmware"),
+    )
+}
+for name, report in mounts.items():
+    options = set(report["stdout"].split(","))
+    if report["rc"] != 0 or "ro" not in options:
+        phone_failures.append(f"{name} is not mounted read-only")
+
 print(json.dumps({
     "boot_id": pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
     "uptime_s": float(pathlib.Path("/proc/uptime").read_text().split()[0]),
     "system_units": system,
     "user_units": user,
-    "bluetooth": {"list": bt_list, "show": bt_show},
+    "bluetooth": {"list": bt_list, "show": bt_show, "call_show": bt_call_show},
     "failed_units": failed_units,
     "bridge": bridge,
+    "call_watchdog": call_watchdog,
     "microphone": {
         "expected_id": expected_microphone,
         "observed": selected_microphone,
         "error": microphone_error,
     },
     "power": power,
+    "mounts": mounts,
+    "phone_ready": not phone_failures,
+    "phone_failures": phone_failures,
     "ready": not failures,
     "failures": failures,
 }))
@@ -209,7 +282,9 @@ def utc_stamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
-def selected_microphone(bridge: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+def selected_microphone(
+    bridge: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
     """Interpret current and legacy bridge status without reviving stale endpoints."""
 
     endpoints = bridge.get("endpoints") or {}
@@ -222,7 +297,8 @@ def selected_microphone(bridge: dict[str, Any]) -> tuple[dict[str, Any] | None, 
         selected = microphone.get("selected")
         if not isinstance(selected, dict):
             return None, str(
-                microphone.get("selection_reason") or "no microphone candidate is selected"
+                microphone.get("selection_reason")
+                or "no microphone candidate is selected"
             )
         candidate_id = selected.get("id")
         node = selected.get("node")
@@ -573,7 +649,13 @@ def run_boot(
     candidate: str,
     require_functional: bool,
     expected_microphone: str | None = None,
+    manual_power: bool = False,
+    readiness_profile: str = "full",
 ) -> Path:
+    if readiness_profile not in {"full", "phone"}:
+        raise ValueError(f"unsupported readiness profile: {readiness_profile}")
+    if readiness_profile == "phone" and require_functional:
+        raise ValueError("phone readiness cannot require the full functional probe")
     expected = (expected_microphone or config.expected_microphone).strip()
     if not expected:
         raise ValueError("expected microphone id cannot be empty")
@@ -596,6 +678,8 @@ def run_boot(
             "idle": None,
             "functional": None,
         },
+        "manual_power": manual_power,
+        "readiness_profile": readiness_profile,
     }
     write_json(directory / "manifest.json", manifest)
     result: dict[str, Any] = {
@@ -607,6 +691,8 @@ def run_boot(
         "timings_s": {},
         "git": meta,
         "expected_microphone": expected,
+        "manual_power": manual_power,
+        "readiness_profile": readiness_profile,
         "observed_microphone": None,
         "microphone_evidence": {
             "preboot": None,
@@ -631,11 +717,21 @@ def run_boot(
 
         if mode == "cold":
             recorder.event("power_off_requested")
-            hook = run_hook(
-                config.power_off, timeout=30, run_dir=str(directory), run_id=run_id
-            )
-            if hook.returncode != 0:
-                raise RuntimeError(f"power-off hook exited {hook.returncode}")
+            if manual_power:
+                print(
+                    "MANUAL POWER: turn the car/Pi power OFF now.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            else:
+                hook = run_hook(
+                    config.power_off,
+                    timeout=30,
+                    run_dir=str(directory),
+                    run_id=run_id,
+                )
+                if hook.returncode != 0:
+                    raise RuntimeError(f"power-off hook exited {hook.returncode}")
             if not wait_for_port(
                 config.probe_host, False, time.monotonic() + config.shutdown_timeout_s
             ):
@@ -645,11 +741,21 @@ def run_boot(
             serial = start_serial(config, directory, run_id)
             recorder.started = time.perf_counter()
             recorder.event("power_on_requested")
-            hook = run_hook(
-                config.power_on, timeout=30, run_dir=str(directory), run_id=run_id
-            )
-            if hook.returncode != 0:
-                raise RuntimeError(f"power-on hook exited {hook.returncode}")
+            if manual_power:
+                print(
+                    "MANUAL POWER: turn the car/Pi power ON now.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            else:
+                hook = run_hook(
+                    config.power_on,
+                    timeout=30,
+                    run_dir=str(directory),
+                    run_id=run_id,
+                )
+                if hook.returncode != 0:
+                    raise RuntimeError(f"power-on hook exited {hook.returncode}")
         else:
             serial = start_serial(config, directory, run_id)
             recorder.event("reboot_requested")
@@ -682,10 +788,18 @@ def run_boot(
                             "new_boot_ssh"
                         )
                         ssh_seen = True
-                    if probe.get("ready"):
+                    probe_ready = (
+                        probe.get("phone_ready")
+                        if readiness_profile == "phone"
+                        else probe.get("ready")
+                    )
+                    if probe_ready:
                         ready = probe
                         break
-                    last_error = "; ".join(probe.get("failures", []))
+                    failure_key = (
+                        "phone_failures" if readiness_profile == "phone" else "failures"
+                    )
+                    last_error = "; ".join(probe.get(failure_key, []))
             except (RuntimeError, subprocess.TimeoutExpired) as exc:
                 last_error = str(exc)
             time.sleep(1)
@@ -698,11 +812,25 @@ def run_boot(
         result["microphone_evidence"]["idle"] = idle_microphone
         result["observed_microphone"] = idle_microphone["observed"]
         write_json(directory / "manifest.json", manifest)
-        require_expected_microphone(ready, expected)
-        result["timings_s"]["idle_ready"] = recorder.event("idle_ready")
-        result["readiness_level"] = "idle"
+        if readiness_profile == "phone":
+            watchdog = ready.get("call_watchdog") or {}
+            connected = watchdog.get("connected_monotonic")
+            if not isinstance(connected, (int, float)):
+                raise RuntimeError("watchdog lacks the phone connection time")
+            result["timings_s"]["phone_connected"] = float(connected)
+            if float(connected) > PHONE_CONNECT_LIMIT_S:
+                raise RuntimeError(
+                    f"Pixel connected at {float(connected):.3f}s, "
+                    f"exceeding {PHONE_CONNECT_LIMIT_S:.0f}s"
+                )
+            result["readiness_level"] = "phone"
+            recorder.event("phone_ready", connected_monotonic=float(connected))
+        else:
+            require_expected_microphone(ready, expected)
+            result["timings_s"]["idle_ready"] = recorder.event("idle_ready")
+            result["readiness_level"] = "idle"
 
-        if config.functional_probe:
+        if readiness_profile != "phone" and config.functional_probe:
             watermark = "LB-" + hashlib.sha256(run_id.encode()).hexdigest()[:16]
             hook = run_hook(
                 config.functional_probe,
@@ -813,7 +941,10 @@ def load_results(
         timings = result.get("timings_s", {})
         if result.get("verdict") != "PASS":
             continue
-        if "functional_ready" in timings:
+        if "phone_connected" in timings:
+            level = "phone"
+            values.append(float(timings["phone_connected"]))
+        elif "functional_ready" in timings:
             values.append(float(timings["functional_ready"]))
         elif "idle_ready" in timings:
             level = "idle"
@@ -826,6 +957,7 @@ def compare(
     baseline_label: str,
     candidate_label: str,
     allow_idle: bool,
+    allow_phone: bool,
     mode: str | None,
 ) -> int:
     base_runs, baseline, base_level = load_results(
@@ -836,7 +968,15 @@ def compare(
     )
     if len(baseline) < 10 or len(candidate) < 10:
         raise SystemExit("comparison requires at least ten passing runs for each label")
-    if not allow_idle and (base_level != "functional" or cand_level != "functional"):
+    if "phone" in {base_level, cand_level} and not allow_phone:
+        raise SystemExit(
+            "phone-only results require --allow-phone for an acceptance verdict"
+        )
+    if (
+        "phone" not in {base_level, cand_level}
+        and not allow_idle
+        and (base_level != "functional" or cand_level != "functional")
+    ):
         raise SystemExit(
             "idle-only results cannot produce an acceptance verdict; use --allow-idle"
         )
@@ -890,9 +1030,20 @@ def compare(
         and ci[0] > 0
         and p95_candidate <= p95_base + 0.5
     )
-    accepted = performance_passes and cand_level == "functional"
+    phone_passes = (
+        cand_level == "phone"
+        and allow_phone
+        and candidate_failures == 0
+        and not health_regressions
+        and max(candidate) <= PHONE_CONNECT_LIMIT_S
+        and max(candidate) <= max(baseline) + 0.5
+        and cand_median <= base_median + 0.25
+    )
+    accepted = (performance_passes and cand_level == "functional") or phone_passes
     provisional_idle = performance_passes and cand_level == "idle" and allow_idle
-    if accepted:
+    if phone_passes:
+        verdict = "PHONE_ACCEPT"
+    elif accepted:
         verdict = "PROVISIONAL_ACCEPT"
     elif provisional_idle:
         verdict = "PROVISIONAL_IDLE_IMPROVEMENT"
@@ -921,9 +1072,13 @@ def compare(
         "minimum_effect_s": minimum,
         "bootstrap_95pct_ci_s": list(ci),
         "note": (
-            "Idle-ready evidence cannot accept the candidate; automated two-way call audio, robustness, and soak gates remain."
-            if provisional_idle
-            else "A provisional acceptance still requires the robustness and soak gates."
+            "Phone acceptance proves reconnect reliability and timing only; explicit Bluetooth-off, out-of-range, stale-bond, power-loss, and image gates remain."
+            if phone_passes
+            else (
+                "Idle-ready evidence cannot accept the candidate; automated two-way call audio, robustness, and soak gates remain."
+                if provisional_idle
+                else "A provisional acceptance still requires the robustness and soak gates."
+            )
         ),
     }
     print(json.dumps(report, indent=2))
@@ -1028,15 +1183,22 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--mode", choices=("warm", "cold"), default="warm")
     run.add_argument("--candidate", required=True)
     run.add_argument("--require-functional", action="store_true")
+    run.add_argument("--manual-power", action="store_true")
+    run.add_argument("--readiness-profile", choices=("full", "phone"), default="full")
     baseline = commands.add_parser("baseline")
     baseline.add_argument("--mode", choices=("warm", "cold"), default="warm")
     baseline.add_argument("--candidate", default="baseline")
     baseline.add_argument("--count", type=int, default=10)
     baseline.add_argument("--require-functional", action="store_true")
+    baseline.add_argument("--manual-power", action="store_true")
+    baseline.add_argument(
+        "--readiness-profile", choices=("full", "phone"), default="full"
+    )
     compare_cmd = commands.add_parser("compare")
     compare_cmd.add_argument("--baseline", required=True)
     compare_cmd.add_argument("--candidate", required=True)
     compare_cmd.add_argument("--allow-idle", action="store_true")
+    compare_cmd.add_argument("--allow-phone", action="store_true")
     compare_cmd.add_argument("--mode", choices=("warm", "cold"))
     screen_cmd = commands.add_parser("screen")
     screen_cmd.add_argument("--baseline", required=True)
@@ -1076,6 +1238,8 @@ def main() -> int:
             candidate=args.candidate,
             require_functional=args.require_functional,
             expected_microphone=expected_microphone,
+            manual_power=args.manual_power,
+            readiness_profile=args.readiness_profile,
         )
         result = json.loads((path / "result.json").read_text(encoding="utf-8"))
         return 0 if result["verdict"] == "PASS" else 1
@@ -1089,6 +1253,8 @@ def main() -> int:
                 candidate=args.candidate,
                 require_functional=args.require_functional,
                 expected_microphone=expected_microphone,
+                manual_power=args.manual_power,
+                readiness_profile=args.readiness_profile,
             )
             verdict = json.loads((path / "result.json").read_text(encoding="utf-8"))[
                 "verdict"
@@ -1098,7 +1264,12 @@ def main() -> int:
         return 1 if failures else 0
     if args.command == "compare":
         return compare(
-            config, args.baseline, args.candidate, args.allow_idle, args.mode
+            config,
+            args.baseline,
+            args.candidate,
+            args.allow_idle,
+            args.allow_phone,
+            args.mode,
         )
     if args.command == "screen":
         return screen(
