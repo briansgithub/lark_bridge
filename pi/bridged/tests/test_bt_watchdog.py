@@ -273,6 +273,30 @@ class RecoveryStateTests(unittest.TestCase):
                 ],
             )
 
+    def test_manual_hold_survives_service_restart_but_not_a_cold_boot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state_dir = Path(directory) / "watchdog"
+            held = bt_watchdog.RecoveryState(
+                "call",
+                manual_hold=True,
+                manual_hold_since=123.5,
+                manual_reject_deadline=140.0,
+                manual_restore_confirmed=True,
+            )
+            with mock.patch.object(bt_watchdog, "STATE_DIR", state_dir):
+                bt_watchdog.write_state(held, BT500)
+                restored = bt_watchdog.load_runtime_state("call")
+                (state_dir / "call.json").unlink()
+                cold_boot = bt_watchdog.load_runtime_state("call")
+
+        self.assertTrue(restored.manual_hold)
+        self.assertEqual(restored.manual_hold_since, 123.5)
+        self.assertEqual(restored.last_action, "manual_hold")
+        self.assertIsNone(restored.manual_reject_deadline)
+        self.assertFalse(restored.manual_restore_confirmed)
+        self.assertFalse(cold_boot.manual_hold)
+        self.assertIsNone(cold_boot.manual_hold_since)
+
     def test_recovery_waits_for_threshold_then_applies_backoff(self) -> None:
         state = bt_watchdog.RecoveryState("call", failures=1)
         recover = mock.Mock(
@@ -346,6 +370,270 @@ class ReconnectTests(unittest.TestCase):
             )
 
         self.assertEqual(state.connected_monotonic, 18.5)
+
+    def test_second_disconnection_after_restored_profile_enters_manual_hold(
+        self,
+    ) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call", bond_state="connected", profile_ready=True
+        )
+        trees = [
+            phone_tree(BT500),
+            phone_tree(BT500, connected=True, profile_ready=True),
+            phone_tree(BT500),
+        ]
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters, "managed_objects", side_effect=trees
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect", return_value=(True, "connected")
+            ) as connect,
+            mock.patch.object(bt_watchdog.btadapters, "connect_profile") as profile,
+            mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
+            mock.patch.object(bt_watchdog.btadapters, "remove_device") as remove,
+        ):
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=100.0)
+            )
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=102.0)
+            )
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=104.0)
+            )
+
+        connect.assert_called_once_with(
+            PHONE_ADDRESS,
+            BT500,
+            timeout=bt_watchdog.CONNECT_REQUEST_TIMEOUT,
+            cancelled=None,
+        )
+        profile.assert_not_called()
+        disconnect.assert_not_called()
+        remove.assert_not_called()
+        self.assertTrue(state.manual_hold)
+        self.assertEqual(state.manual_hold_since, 104.0)
+        self.assertEqual(state.last_action, "manual_hold")
+        self.assertEqual(state.bond_state, "trusted")
+        self.assertEqual(state.reconnect_attempts, 0)
+        self.assertEqual(state.reconnect_next, 0.0)
+        self.assertEqual(state.repair_state, "idle")
+
+    def test_second_profile_only_disconnection_enters_manual_hold(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call", bond_state="connected", profile_ready=True
+        )
+        trees = [
+            phone_tree(BT500, connected=True),
+            phone_tree(BT500, connected=True, profile_ready=True),
+            phone_tree(BT500, connected=True),
+        ]
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters, "managed_objects", side_effect=trees
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(bt_watchdog.btadapters, "connect_profile") as profile,
+            mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
+        ):
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=200.0)
+            )
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=202.0)
+            )
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=204.0)
+            )
+
+        profile.assert_not_called()
+        connect.assert_not_called()
+        self.assertTrue(state.manual_hold)
+        self.assertEqual(state.last_action, "manual_hold")
+
+    def test_expired_double_disconnect_window_reconnects_normally(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            bond_state="connected",
+            profile_ready=True,
+            manual_reject_deadline=105.0,
+            manual_reject_target=bt_watchdog._adapter_runtime_target(BT500),
+            manual_restore_confirmed=True,
+        )
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect", return_value=(True, "connected")
+            ) as connect,
+        ):
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=111.0)
+            )
+
+        connect.assert_called_once()
+        self.assertFalse(state.manual_hold)
+        self.assertEqual(
+            state.manual_reject_deadline,
+            111.0 + bt_watchdog.MANUAL_REJECT_WINDOW,
+        )
+        self.assertTrue(state.manual_restore_pending)
+        self.assertFalse(state.manual_restore_confirmed)
+
+    def test_controller_runtime_change_cannot_complete_disconnect_gesture(
+        self,
+    ) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call", bond_state="connected", profile_ready=True
+        )
+        moved = adapter("hci9", rfkill_index=9, usb_interface="1-1.5:1.0")
+        trees = [
+            phone_tree(BT500),
+            phone_tree(moved, connected=True, profile_ready=True),
+            phone_tree(moved),
+        ]
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters, "managed_objects", side_effect=trees
+            ),
+            mock.patch.object(
+                bt_watchdog,
+                "resolve_role",
+                side_effect=[BT500, BT500, moved, moved, moved],
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect", return_value=(True, "connected")
+            ) as connect,
+        ):
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=200.0)
+            )
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=202.0)
+            )
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=204.0)
+            )
+
+        self.assertEqual(connect.call_count, 2)
+        self.assertFalse(state.manual_hold)
+        self.assertEqual(
+            state.manual_reject_target,
+            bt_watchdog._adapter_runtime_target(moved),
+        )
+        self.assertTrue(state.manual_restore_pending)
+        self.assertFalse(state.manual_restore_confirmed)
+
+    def test_failed_reconnects_never_count_as_a_second_disconnection(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call", bond_state="connected", profile_ready=True
+        )
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "connect",
+                return_value=(False, "page timeout"),
+            ) as connect,
+            mock.patch.object(bt_watchdog.btadapters, "remove_device") as remove,
+        ):
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=300.0)
+            )
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=330.0)
+            )
+
+        self.assertEqual(connect.call_count, 2)
+        remove.assert_not_called()
+        self.assertFalse(state.manual_hold)
+        self.assertFalse(state.manual_restore_confirmed)
+        self.assertEqual(state.repair_state, "idle")
+
+    def test_manual_hold_suppresses_every_pi_connection_mutation(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            manual_hold=True,
+            manual_hold_since=400.0,
+            bond_state="trusted",
+        )
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(bt_watchdog.btadapters, "power_on") as power,
+            mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
+            mock.patch.object(bt_watchdog.btadapters, "connect_profile") as profile,
+            mock.patch.object(bt_watchdog.btadapters, "disconnect") as disconnect,
+            mock.patch.object(bt_watchdog.btadapters, "remove_device") as remove,
+        ):
+            self.assertFalse(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=405.0)
+            )
+
+        power.assert_not_called()
+        connect.assert_not_called()
+        profile.assert_not_called()
+        disconnect.assert_not_called()
+        remove.assert_not_called()
+        self.assertTrue(state.manual_hold)
+        self.assertEqual(state.last_action, "manual_hold")
+
+    def test_android_ready_connection_resumes_from_manual_hold(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            manual_hold=True,
+            manual_hold_since=400.0,
+            bond_state="trusted",
+        )
+        with (
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(
+                    BT500, connected=True, profile_ready=True
+                ),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(bt_watchdog.btadapters, "connect") as connect,
+            mock.patch.object(bt_watchdog.btadapters, "connect_profile") as profile,
+        ):
+            self.assertTrue(
+                bt_watchdog.service_reconnect(roles(), "call", state, now=410.0)
+            )
+
+        connect.assert_not_called()
+        profile.assert_not_called()
+        self.assertFalse(state.manual_hold)
+        self.assertIsNone(state.manual_hold_since)
+        self.assertEqual(state.bond_state, "connected")
+        self.assertEqual(state.last_action, "connected")
 
     def test_first_exact_runtime_target_connects_before_liveness_gating(self) -> None:
         state = bt_watchdog.RecoveryState("call", reconnect_next=999.0)

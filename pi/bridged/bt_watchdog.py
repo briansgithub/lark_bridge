@@ -73,6 +73,9 @@ PROFILE_COMPLETION_COOLDOWN = float(
 PROFILE_COMPLETION_ATTEMPTS = int(
     os.environ.get("BRIDGE_WD_PROFILE_COMPLETION_ATTEMPTS", "2")
 )
+MANUAL_REJECT_WINDOW = float(
+    os.environ.get("BRIDGE_WD_MANUAL_REJECT_WINDOW", "10")
+)
 PAIRING_SEAL_TIMER = "bridge-pairing-seal.timer"
 PAIRING_SEAL_SERVICE = "bridge-pairing-seal.service"
 PAIRING_SEAL_ATTEMPTS = 3
@@ -122,6 +125,12 @@ class RecoveryState:
     profile_pending_since: float | None = None
     profile_pending_target: str | None = None
     profile_completion_attempts: int = 0
+    manual_hold: bool = False
+    manual_hold_since: float | None = None
+    manual_reject_deadline: float | None = None
+    manual_reject_target: str | None = None
+    manual_restore_pending: bool = False
+    manual_restore_confirmed: bool = False
     bond_state: str = "unknown"
     repair_state: str = "idle"
     repair_trigger: str | None = None
@@ -159,6 +168,12 @@ class RecoveryState:
             "profile_pending_since_monotonic": self.profile_pending_since,
             "profile_pending_target": self.profile_pending_target,
             "profile_completion_attempts": self.profile_completion_attempts,
+            "manual_hold": self.manual_hold,
+            "manual_hold_since_monotonic": self.manual_hold_since,
+            "manual_reject_deadline_monotonic": self.manual_reject_deadline,
+            "manual_reject_target": self.manual_reject_target,
+            "manual_restore_pending": self.manual_restore_pending,
+            "manual_restore_confirmed": self.manual_restore_confirmed,
             "bond_state": self.bond_state,
             "repair_state": self.repair_state,
             "repair_trigger": self.repair_trigger,
@@ -214,6 +229,33 @@ def write_state(state: RecoveryState, adapter: btadapters.Adapter | None) -> Non
         temporary = Path(handle.name)
     os.replace(temporary, target)
     os.chmod(target, 0o644)
+
+
+def load_runtime_state(role: str) -> RecoveryState:
+    """Restore only a same-boot manual hold from the tmpfs status record."""
+    state = RecoveryState(role)
+    target = role_state_path(role)
+    try:
+        payload = json.loads(target.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return state
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        log.warning("ignoring unreadable %s runtime state: %s", role, exc)
+        return state
+
+    if not isinstance(payload, dict) or payload.get("role") != role:
+        log.warning("ignoring mismatched %s runtime state", role)
+        return state
+    if payload.get("manual_hold") is not True:
+        return state
+
+    state.manual_hold = True
+    hold_since = payload.get("manual_hold_since_monotonic")
+    if isinstance(hold_since, (int, float)) and not isinstance(hold_since, bool):
+        state.manual_hold_since = float(hold_since)
+    state.bond_state = "trusted"
+    state.last_action = "manual_hold"
+    return state
 
 
 def role_spec(
@@ -461,6 +503,7 @@ def attempt_recovery(
     state.connect_pending_since = None
     state.connect_pending_target = None
     state.connect_collision_cancellations = 0
+    _clear_manual_reject_window(state)
     result = recover()
     state.last_action = result.action
     state.last_error = None if result.ok else result.detail
@@ -533,6 +576,54 @@ def _clear_profile_completion(state: RecoveryState) -> None:
     state.profile_completion_attempts = 0
 
 
+def _clear_manual_reject_window(state: RecoveryState) -> None:
+    state.manual_reject_deadline = None
+    state.manual_reject_target = None
+    state.manual_restore_pending = False
+    state.manual_restore_confirmed = False
+
+
+def _manual_reject_window_active(
+    state: RecoveryState, observed: float, target: str
+) -> bool:
+    return (
+        state.manual_reject_deadline is not None
+        and observed <= state.manual_reject_deadline
+        and state.manual_reject_target == target
+    )
+
+
+def _arm_manual_reject_window(
+    state: RecoveryState, observed: float, target: str
+) -> None:
+    state.manual_reject_deadline = observed + MANUAL_REJECT_WINDOW
+    state.manual_reject_target = target
+    state.manual_restore_pending = True
+    state.manual_restore_confirmed = False
+
+
+def _clear_manual_hold(state: RecoveryState) -> None:
+    state.manual_hold = False
+    state.manual_hold_since = None
+
+
+def _enter_manual_hold(state: RecoveryState, observed: float) -> None:
+    """Suppress reconnects for this boot after two rejected ready connections."""
+    state.manual_hold = True
+    state.manual_hold_since = observed
+    _clear_manual_reject_window(state)
+    state.reconnect_attempts = 0
+    state.reconnect_next = 0.0
+    _clear_connect_collision(state)
+    _clear_profile_completion(state)
+    state.bond_state = "trusted"
+    state.repair_state = "idle"
+    state.repair_trigger = None
+    state.repair_deadline = None
+    state.last_action = "manual_hold"
+    state.last_error = None
+
+
 def _begin_profile_settling(
     state: RecoveryState, adapter: btadapters.Adapter, observed: float
 ) -> None:
@@ -551,12 +642,28 @@ def _begin_profile_settling(
 
 def _mark_device_connected(
     state: RecoveryState,
+    adapter: btadapters.Adapter,
     *,
     observed: float | None = None,
     record_time: bool = True,
 ) -> None:
+    connected_at = time.monotonic() if observed is None else observed
     if record_time:
-        state.connected_monotonic = time.monotonic() if observed is None else observed
+        state.connected_monotonic = connected_at
+    if state.manual_hold:
+        # While held, only Android can create a new usable profile connection because
+        # this watchdog issues no Connect or ConnectProfile requests.  Treat that as an
+        # explicit resume and start with a clean double-disconnect gesture.
+        _clear_manual_hold(state)
+        _clear_manual_reject_window(state)
+    elif _manual_reject_window_active(
+        state, connected_at, _adapter_runtime_target(adapter)
+    ):
+        if state.manual_restore_pending:
+            state.manual_restore_pending = False
+            state.manual_restore_confirmed = True
+    else:
+        _clear_manual_reject_window(state)
     state.reconnect_attempts = 0
     state.reconnect_next = 0.0
     _clear_connect_collision(state)
@@ -617,6 +724,7 @@ def service_reconnect(
         return False
     except controller_roles.ControllerRoleError as exc:
         _clear_pending_connect(state)
+        _clear_manual_reject_window(state)
         state.reconnect_next = observed + RECONNECT_DELAY
         state.identity_error = f"{exc.code}: {exc.detail}"
         state.last_action = "resolve"
@@ -625,6 +733,8 @@ def service_reconnect(
     previously_connected = state.bond_state == "connected" and state.profile_ready
     properties = btadapters.device_properties(adapter, address, tree)
     if not properties or not btadapters.paired_on(adapter, address, tree):
+        _clear_manual_hold(state)
+        _clear_manual_reject_window(state)
         state.bond_state = "missing"
         if state.repair_state not in {
             "requested",
@@ -637,6 +747,8 @@ def service_reconnect(
             state.last_error = f"no paired Pixel object on {adapter.hci}"
         return False
     if not btadapters.bonded_on(adapter, address, tree):
+        _clear_manual_hold(state)
+        _clear_manual_reject_window(state)
         state.bond_state = "unbonded"
         if state.repair_state not in {
             "requested",
@@ -668,10 +780,36 @@ def service_reconnect(
             state.reconnect_next = observed + RECONNECT_DELAY
             return False
         state.bond_state = "trusted"
-    if btadapters.connected_on(adapter, address, tree):
-        if btadapters.media_profile_ready_on(adapter, address, tree):
+    connected_now = btadapters.connected_on(adapter, address, tree)
+    runtime_target = _adapter_runtime_target(adapter)
+    profile_ready_now = connected_now and btadapters.media_profile_ready_on(
+        adapter, address, tree
+    )
+    if previously_connected and not profile_ready_now:
+        if (
+            _manual_reject_window_active(state, observed, runtime_target)
+            and state.manual_restore_confirmed
+        ):
+            _enter_manual_hold(state, observed)
+            return False
+        _arm_manual_reject_window(state, observed, runtime_target)
+
+    if state.manual_hold:
+        if profile_ready_now:
+            _mark_device_connected(state, adapter, observed=observed)
+            return True
+        state.profile_ready = False
+        state.bond_state = "trusted"
+        state.reconnect_next = 0.0
+        state.last_action = "manual_hold"
+        state.last_error = None
+        return False
+
+    if connected_now:
+        if profile_ready_now:
             _mark_device_connected(
                 state,
+                adapter,
                 observed=observed,
                 record_time=not previously_connected,
             )
@@ -894,6 +1032,7 @@ def service_startup_reconnect(
             state.bond_state not in {"connected", "profile_pending"}
             and state.repair_state == "idle"
             and state.connect_pending_since is None
+            and not state.manual_hold
         ):
             observed = time.monotonic() if now is None else now
             state.reconnect_next = observed + STARTUP_RECONNECT_RETRY
@@ -983,6 +1122,8 @@ def repair_phone_bond(
     cancelled: Callable[[], bool] | None = None,
 ) -> bool:
     """Replace only the configured Pixel bond in one recoverable transaction."""
+    _clear_manual_hold(state)
+    _clear_manual_reject_window(state)
     address = roles.phone_address
     trigger = state.repair_trigger or "manual"
     state.last_action = (
@@ -1119,7 +1260,7 @@ def main(argv: list[str] | None = None) -> int:
         log.error("%s: %s", exc.code, exc.detail)
         return 4
 
-    state = RecoveryState(args.role)
+    state = load_runtime_state(args.role)
     stopping = False
     repair_requested = False
 
@@ -1190,6 +1331,8 @@ def main(argv: list[str] | None = None) -> int:
 
             if repair_requested:
                 repair_requested = False
+                _clear_manual_hold(state)
+                _clear_manual_reject_window(state)
                 state.repair_state = "requested"
                 state.repair_trigger = "manual"
                 state.last_action = "pairing_required"
