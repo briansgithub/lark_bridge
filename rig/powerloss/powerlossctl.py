@@ -38,10 +38,49 @@ REQUIREMENTS = {
     **{context: 5 for context in CONTEXTS},
     "random": 10,
 }
+PIXEL_CHAOS_PROFILE = "pixel-chaos"
+PIXEL_CHAOS_OFF_SECONDS = 12.0
+PHONE_CONNECT_LIMIT_SECONDS = 25.0
 
 
 def stamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+
+
+def pixel_chaos_schedule(seed: int) -> list[dict[str, Any]]:
+    """Build a compact, reproducible set of high-risk car-power cuts."""
+    rng = random.Random(seed)
+    early_delays = (1, rng.randint(3, 7), rng.randint(12, 18))
+    schedule = [
+        {
+            "case": f"early-boot-{delay}",
+            "state": f"early-boot-{delay}",
+            "random_context": None,
+            "seed": None,
+        }
+        for delay in early_delays
+    ]
+    for context in ("bluetooth-recovery", "persistent-write"):
+        case_seed = rng.randrange(1, 2**31)
+        schedule.append(
+            {
+                "case": f"random-{context}",
+                "state": "random",
+                "random_context": context,
+                "seed": case_seed,
+            }
+        )
+    for index, case in enumerate(schedule, start=1):
+        case["index"] = index
+    return schedule
+
+
+def schedule_requirements(schedule: list[dict[str, Any]]) -> dict[str, int]:
+    requirements: dict[str, int] = {}
+    for case in schedule:
+        category = str(case["state"])
+        requirements[category] = requirements.get(category, 0) + 1
+    return requirements
 
 
 def write_json(path: Path, document: dict[str, Any]) -> None:
@@ -215,16 +254,32 @@ def campaign_init(arguments: argparse.Namespace) -> None:
         raise ControllerError(f"campaign directory already exists: {campaign_path}")
     campaign_path.mkdir(parents=True)
     (campaign_path / "runs").mkdir()
+    profile = getattr(arguments, "profile", "full")
+    if profile == PIXEL_CHAOS_PROFILE:
+        schedule = pixel_chaos_schedule(arguments.seed)
+        requirements = schedule_requirements(schedule)
+        minimum_off_seconds = PIXEL_CHAOS_OFF_SECONDS
+        require_phone = True
+    else:
+        schedule = []
+        requirements = REQUIREMENTS
+        minimum_off_seconds = 10
+        require_phone = False
     write_json(
         campaign_path / "campaign.json",
         {
             "backup_sha256": evidence_result["backup_sha256"],
             "created": stamp(),
-            "minimum_off_seconds": 10,
-            "requirements": REQUIREMENTS,
+            "minimum_off_seconds": minimum_off_seconds,
+            "phone_connect_limit_seconds": PHONE_CONNECT_LIMIT_SECONDS,
+            "profile": profile,
+            "require_phone": require_phone,
+            "requirements": requirements,
+            "schedule": schedule,
+            "seed": arguments.seed if schedule else None,
             "safety_evidence": str(evidence),
             "safety_evidence_sha256": file_sha256(evidence),
-            "schema": 1,
+            "schema": 2,
         },
     )
     print(campaign_path.resolve())
@@ -346,6 +401,7 @@ def arm(arguments: argparse.Namespace) -> None:
         "phase": "PREP_OFF" if early_delay else "ARMED",
         "randomized_delay_seconds": randomized_delay,
         "run_id": run_id,
+        "schedule_index": getattr(arguments, "schedule_index", None),
         "schema": 1,
         "seed": arguments.seed if category == "random" else None,
     }
@@ -437,9 +493,40 @@ def observe_off(arguments: argparse.Namespace) -> None:
     )
 
 
+def phone_recovery_acceptance(
+    document: dict[str, Any], limit_seconds: float
+) -> dict[str, Any]:
+    """Require the configured Pixel to reconnect quickly after the recovery boot."""
+    details = document.get("details") or {}
+    watchdog = details.get("call_watchdog") or {}
+    bridge = details.get("bridge") or {}
+    phone = bridge.get("phone") or {}
+    connected_at = watchdog.get("connected_monotonic")
+    failures: list[str] = []
+    if watchdog.get("bond_state") != "connected":
+        failures.append("configured Pixel bond is not connected")
+    if watchdog.get("repair_state") != "idle":
+        failures.append("Pixel repair transaction is not idle")
+    if phone.get("connected") is not True:
+        failures.append("bridge does not report the Pixel connected")
+    if not isinstance(connected_at, (int, float)):
+        failures.append("Pixel connection time is unavailable")
+    elif float(connected_at) > limit_seconds:
+        failures.append(
+            f"Pixel connected at {float(connected_at):.3f}s, exceeding "
+            f"{limit_seconds:.0f}s"
+        )
+    return {
+        "connected_monotonic": connected_at,
+        "failures": failures,
+        "limit_seconds": limit_seconds,
+        "ready": not failures,
+    }
+
+
 def reconnect(arguments: argparse.Namespace) -> None:
     campaign_path = arguments.campaign.resolve()
-    load_campaign(campaign_path)
+    campaign = load_campaign(campaign_path)
     run_path, document = active_run(campaign_path)
     if document["phase"] != "OFF_HOLD":
         raise ControllerError("active run is not in the enforced power-off hold")
@@ -458,6 +545,13 @@ def reconnect(arguments: argparse.Namespace) -> None:
         "RECONNECT THE PI POWER NOW. Waiting for SSH and full validation...", flush=True
     )
     controller = Controller(arguments.inventory)
+    require_phone = bool(
+        campaign.get("require_phone") or getattr(arguments, "require_phone", False)
+    )
+    phone_limit = float(
+        campaign.get("phone_connect_limit_seconds")
+        or getattr(arguments, "phone_connect_limit", PHONE_CONNECT_LIMIT_SECONDS)
+    )
     if not controller.wait_port(True, controller.boot_timeout):
         document["phase"] = "FAILED"
         document["failure"] = "SSH did not return before the boot timeout"
@@ -471,8 +565,18 @@ def reconnect(arguments: argparse.Namespace) -> None:
             post = controller.verify()
         except ControllerError as error:
             post = {"failures": [str(error)], "ready": False}
+        if require_phone and post.get("ready"):
+            post["phone_acceptance"] = phone_recovery_acceptance(post, phone_limit)
         attempts.append(post)
-        if post.get("ready"):
+        if post.get("ready") and (
+            not require_phone or post["phone_acceptance"]["ready"]
+        ):
+            break
+        if (
+            require_phone
+            and post.get("ready")
+            and float(post.get("uptime_s") or 0) >= phone_limit
+        ):
             break
         time.sleep(5)
     write_json(run_path / "post-cut-attempts.json", {"attempts": attempts})
@@ -493,6 +597,12 @@ def reconnect(arguments: argparse.Namespace) -> None:
     if pre_config and pre_config != post_config:
         post.setdefault("failures", []).append("configuration changed across the cut")
         post["ready"] = False
+    if require_phone:
+        phone_acceptance = phone_recovery_acceptance(post, phone_limit)
+        post["phone_acceptance"] = phone_acceptance
+        if not phone_acceptance["ready"]:
+            post.setdefault("failures", []).extend(phone_acceptance["failures"])
+            post["ready"] = False
     pre_pairing = pre_details.get("pairing_identity") or {}
     post_pairing = post_details.get("pairing_identity") or {}
     if any(post_pairing.get(path) != digest for path, digest in pre_pairing.items()):
@@ -521,13 +631,15 @@ def reconnect(arguments: argparse.Namespace) -> None:
 def status(arguments: argparse.Namespace) -> None:
     campaign_path = arguments.campaign.resolve()
     campaign = load_campaign(campaign_path)
-    counts = {category: 0 for category in REQUIREMENTS}
+    counts = {category: 0 for category in campaign["requirements"]}
     failed: list[str] = []
     active: list[str] = []
     for path in run_files(campaign_path):
         document = read_json(path)
         if document["phase"] == "PASSED":
-            counts[document["category"]] += 1
+            category = document["category"]
+            if category in counts:
+                counts[category] += 1
         elif document["phase"] == "FAILED":
             failed.append(document["run_id"])
         else:
@@ -552,6 +664,45 @@ def status(arguments: argparse.Namespace) -> None:
     )
 
 
+def arm_next(arguments: argparse.Namespace) -> None:
+    campaign_path = arguments.campaign.resolve()
+    campaign = load_campaign(campaign_path)
+    schedule = campaign.get("schedule") or []
+    if not schedule:
+        raise ControllerError("campaign has no ordered schedule")
+    if incomplete_run(campaign_path):
+        raise ControllerError("finish the active run before arming another")
+    completed: set[int] = set()
+    for path in run_files(campaign_path):
+        document = read_json(path)
+        if document.get("phase") == "FAILED":
+            raise ControllerError(
+                f"campaign contains failed run {document.get('run_id')}"
+            )
+        index = document.get("schedule_index")
+        if isinstance(index, int):
+            completed.add(index)
+    case = next((item for item in schedule if item["index"] not in completed), None)
+    if case is None:
+        print("Campaign schedule is complete.")
+        return
+    print(
+        f"Arming chaos case {case['index']}/{len(schedule)}: {case['case']}",
+        flush=True,
+    )
+    arm(
+        argparse.Namespace(
+            ack_state_ready=False,
+            campaign=campaign_path,
+            inventory=arguments.inventory,
+            random_context=case.get("random_context"),
+            schedule_index=case["index"],
+            seed=case.get("seed") or campaign.get("seed") or 0,
+            state=case["state"],
+        )
+    )
+
+
 def abort(arguments: argparse.Namespace) -> None:
     campaign_path = arguments.campaign.resolve()
     load_campaign(campaign_path)
@@ -572,6 +723,10 @@ def parser() -> argparse.ArgumentParser:
     initialize = commands.add_parser("campaign-init")
     initialize.add_argument("--safety-evidence", type=Path, required=True)
     initialize.add_argument("--output", type=Path)
+    initialize.add_argument(
+        "--profile", choices=("full", PIXEL_CHAOS_PROFILE), default="full"
+    )
+    initialize.add_argument("--seed", type=int, default=20260901)
     initialize.set_defaults(function=campaign_init)
     arm_command = commands.add_parser("arm")
     arm_command.add_argument("--campaign", type=Path, required=True)
@@ -580,6 +735,9 @@ def parser() -> argparse.ArgumentParser:
     arm_command.add_argument("--seed", type=int, default=20260819)
     arm_command.add_argument("--ack-state-ready", action="store_true")
     arm_command.set_defaults(function=arm)
+    arm_next_command = commands.add_parser("arm-next")
+    arm_next_command.add_argument("--campaign", type=Path, required=True)
+    arm_next_command.set_defaults(function=arm_next)
     early = commands.add_parser("early-start")
     early.add_argument("--campaign", type=Path, required=True)
     early.add_argument("--ack-power-connected-now", action="store_true")
@@ -590,6 +748,12 @@ def parser() -> argparse.ArgumentParser:
     off.set_defaults(function=observe_off)
     reconnect_command = commands.add_parser("reconnect")
     reconnect_command.add_argument("--campaign", type=Path, required=True)
+    reconnect_command.add_argument("--require-phone", action="store_true")
+    reconnect_command.add_argument(
+        "--phone-connect-limit",
+        type=float,
+        default=PHONE_CONNECT_LIMIT_SECONDS,
+    )
     reconnect_command.set_defaults(function=reconnect)
     status_command = commands.add_parser("status")
     status_command.add_argument("--campaign", type=Path, required=True)
