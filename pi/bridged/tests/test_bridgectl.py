@@ -166,7 +166,6 @@ class StatusParsingTests(unittest.TestCase):
         self.assertIn("phone connected", report)
         self.assertIn("microphone transport closed", report)
         self.assertIn("Android has not opened", report)
-        self.assertIn("startup:", report)
         self.assertNotIn("microphone live", report.lower())
 
     def test_phone_cli_is_read_only_and_supports_json(self) -> None:
@@ -183,12 +182,6 @@ class StatusParsingTests(unittest.TestCase):
             "repair_state": "idle",
             "repair_trigger": None,
             "last_action": "connected",
-            "startup_phase": "complete",
-            "startup_connect_attempts": 2,
-            "first_connect_request_monotonic": 16.9,
-            "startup_profile_ready_monotonic": 18.6,
-            "startup_profile_deadline_monotonic": None,
-            "startup_missing_local_uuids": [],
             "reconnect_attempts": 0,
             "connected_monotonic": 18.5,
             "reconnect_next_monotonic": 0.0,
@@ -208,9 +201,6 @@ class StatusParsingTests(unittest.TestCase):
         self.assertEqual(report["bond_state"], "connected")
         self.assertEqual(report["repair_state"], "idle")
         self.assertEqual(report["watchdog_action"], "connected")
-        self.assertEqual(report["startup"]["phase"], "complete")
-        self.assertEqual(report["startup"]["connect_attempts"], 2)
-        self.assertEqual(report["startup"]["local_profiles_ready_monotonic"], 18.6)
         self.assertEqual(report["reconnect_timing"]["attempts"], 0)
         self.assertEqual(report["reconnect_timing"]["connected_monotonic"], 18.5)
         self.assertEqual(report["instructions"], "No action required.")

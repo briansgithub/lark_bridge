@@ -117,11 +117,9 @@ replacement-unit identity, acoustic performance, and AEC endurance remain field-
 
 ## Pixel connection and pairing repair
 
-The call watchdog connects the configured Pixel through the USB-BT500 immediately at boot. If
-BlueZ reports that its local phone profiles are not ready, the watchdog waits up to six seconds for
-the exact BT500's A2DP Sink and Handsfree roles and retries as soon as they appear. It may replace a
-bond automatically only after the exact repeated-`InProgress` stale-key signature; an out-of-range
-phone or disabled phone Bluetooth never causes bond deletion. Inspect the live bond, startup phase,
+The call watchdog connects the configured Pixel through the USB-BT500 immediately at boot. It may
+replace a bond automatically only after the exact repeated-`InProgress` stale-key signature; an
+out-of-range phone or disabled phone Bluetooth never causes bond deletion. Inspect the live bond,
 repair deadline, reconnect timing, and instructions with:
 
 ```bash

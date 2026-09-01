@@ -72,13 +72,8 @@ def phone_tree(
     paired: bool = True,
     bonded: bool = True,
     trusted: bool = True,
-    local_uuids: tuple[str, ...] = (
-        btadapters.A2DP_SINK_UUID,
-        btadapters.HFP_HF_UUID,
-    ),
 ) -> dict:
     return {
-        resolved.path: {"org.bluez.Adapter1": {"UUIDs": {"data": list(local_uuids)}}},
         btadapters.path_for(resolved, PHONE_ADDRESS): {
             "org.bluez.Device1": {
                 "Address": {"data": PHONE_ADDRESS},
@@ -87,7 +82,7 @@ def phone_tree(
                 "Bonded": {"data": bonded},
                 "Trusted": {"data": trusted},
             }
-        },
+        }
     }
 
 
@@ -322,236 +317,6 @@ class RecoveryStateTests(unittest.TestCase):
 
 
 class ReconnectTests(unittest.TestCase):
-    def test_profile_unavailable_classifier_is_narrow(self) -> None:
-        self.assertTrue(
-            bt_watchdog._connect_profile_unavailable(
-                "org.bluez.Error.Failed: br-connection-profile-unavailable"
-            )
-        )
-        self.assertTrue(
-            bt_watchdog._connect_profile_unavailable("Protocol not available")
-        )
-        self.assertFalse(
-            bt_watchdog._connect_profile_unavailable(
-                "org.bluez.Error.AuthenticationRejected"
-            )
-        )
-        self.assertFalse(bt_watchdog._connect_profile_unavailable("request timed out"))
-
-    def test_profile_unavailable_waits_only_for_missing_local_roles(self) -> None:
-        state = bt_watchdog.RecoveryState("call")
-
-        def unavailable(*_args, **_kwargs):
-            state.bond_state = "trusted"
-            state.last_action = "device-reconnect"
-            state.last_error = "br-connection-profile-unavailable"
-            return False
-
-        with (
-            mock.patch.object(
-                bt_watchdog, "service_reconnect", side_effect=unavailable
-            ),
-            mock.patch.object(
-                bt_watchdog,
-                "_missing_local_profiles",
-                return_value=(btadapters.HFP_HF_UUID,),
-            ),
-        ):
-            target = bt_watchdog.service_startup_reconnect(
-                roles(), "call", state, BT500, None, now=100.0
-            )
-
-        self.assertEqual(target, bt_watchdog._adapter_runtime_target(BT500))
-        self.assertEqual(state.startup_phase, "waiting_local_profiles")
-        self.assertEqual(state.startup_profile_wait_started, 100.0)
-        self.assertEqual(
-            state.startup_profile_deadline,
-            100.0 + bt_watchdog.STARTUP_PROFILE_WAIT,
-        )
-        self.assertEqual(state.reconnect_next, 100.0 + bt_watchdog.STARTUP_PROFILE_POLL)
-        self.assertEqual(state.last_action, "waiting_local_profiles")
-
-    def test_profile_unavailable_retries_immediately_if_roles_appeared(self) -> None:
-        state = bt_watchdog.RecoveryState("call")
-        results = iter((False, True))
-
-        def reconnect(*_args, **_kwargs):
-            result = next(results)
-            if result:
-                bt_watchdog._mark_device_connected(state, observed=100.0)
-            else:
-                state.bond_state = "trusted"
-                state.last_action = "device-reconnect"
-                state.last_error = "br-connection-profile-unavailable"
-            return result
-
-        with (
-            mock.patch.object(
-                bt_watchdog, "service_reconnect", side_effect=reconnect
-            ) as service,
-            mock.patch.object(bt_watchdog, "_missing_local_profiles", return_value=()),
-        ):
-            bt_watchdog.service_startup_reconnect(
-                roles(), "call", state, BT500, None, now=100.0
-            )
-
-        self.assertEqual(service.call_count, 2)
-        self.assertEqual(state.startup_phase, "complete")
-        self.assertEqual(state.startup_profile_ready, 100.0)
-
-    def test_profile_wait_polls_without_duplicate_connect(self) -> None:
-        state = bt_watchdog.RecoveryState(
-            "call",
-            bond_state="trusted",
-            startup_phase="waiting_local_profiles",
-            startup_profile_deadline=106.0,
-        )
-        tree = phone_tree(BT500, local_uuids=())
-        with (
-            mock.patch.object(
-                bt_watchdog.btadapters, "managed_objects", return_value=tree
-            ),
-            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(bt_watchdog, "service_reconnect") as reconnect,
-        ):
-            self.assertFalse(
-                bt_watchdog.service_startup_profile_wait(
-                    roles(), "call", state, BT500, now=101.0
-                )
-            )
-
-        reconnect.assert_not_called()
-        self.assertEqual(state.startup_phase, "waiting_local_profiles")
-        self.assertEqual(state.reconnect_next, 101.0 + bt_watchdog.STARTUP_PROFILE_POLL)
-        self.assertEqual(
-            state.startup_missing_local_uuids,
-            tuple(sorted(bt_watchdog.REQUIRED_LOCAL_PROFILE_UUIDS)),
-        )
-
-    def test_profile_wait_retries_immediately_when_local_roles_appear(self) -> None:
-        state = bt_watchdog.RecoveryState(
-            "call",
-            bond_state="trusted",
-            startup_phase="waiting_local_profiles",
-            startup_profile_deadline=106.0,
-        )
-        tree = phone_tree(BT500)
-
-        def connected(*_args, **_kwargs):
-            bt_watchdog._mark_device_connected(state, observed=101.0)
-            return True
-
-        with (
-            mock.patch.object(
-                bt_watchdog.btadapters, "managed_objects", return_value=tree
-            ),
-            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(
-                bt_watchdog, "service_reconnect", side_effect=connected
-            ) as reconnect,
-        ):
-            self.assertTrue(
-                bt_watchdog.service_startup_profile_wait(
-                    roles(), "call", state, BT500, now=101.0
-                )
-            )
-
-        reconnect.assert_called_once_with(
-            roles(), "call", state, now=101.0, cancelled=None
-        )
-        self.assertEqual(state.startup_phase, "complete")
-        self.assertEqual(state.startup_profile_ready, 101.0)
-        self.assertEqual(state.connected_monotonic, 101.0)
-
-    def test_profile_wait_timeout_falls_back_without_requesting_repair(self) -> None:
-        state = bt_watchdog.RecoveryState(
-            "call",
-            bond_state="trusted",
-            startup_phase="waiting_local_profiles",
-            startup_profile_deadline=106.0,
-        )
-        tree = phone_tree(BT500, local_uuids=())
-
-        def failed(*_args, **_kwargs):
-            state.last_action = "device-reconnect"
-            state.last_error = "br-connection-profile-unavailable"
-            return False
-
-        with (
-            mock.patch.object(
-                bt_watchdog.btadapters, "managed_objects", return_value=tree
-            ),
-            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(
-                bt_watchdog, "service_reconnect", side_effect=failed
-            ) as reconnect,
-        ):
-            self.assertFalse(
-                bt_watchdog.service_startup_profile_wait(
-                    roles(), "call", state, BT500, now=106.0
-                )
-            )
-
-        reconnect.assert_called_once()
-        self.assertEqual(state.startup_phase, "fallback")
-        self.assertEqual(state.last_action, "startup_profile_timeout")
-        self.assertEqual(state.repair_state, "idle")
-        self.assertIsNone(state.repair_trigger)
-        self.assertEqual(state.stale_connect_signatures, 0)
-
-    def test_profile_wait_accepts_inbound_connection_without_retry(self) -> None:
-        state = bt_watchdog.RecoveryState(
-            "call",
-            bond_state="trusted",
-            startup_phase="waiting_local_profiles",
-            startup_profile_deadline=106.0,
-        )
-        tree = phone_tree(BT500, connected=True, local_uuids=())
-        with (
-            mock.patch.object(
-                bt_watchdog.btadapters, "managed_objects", return_value=tree
-            ),
-            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
-            mock.patch.object(bt_watchdog, "service_reconnect") as reconnect,
-        ):
-            self.assertTrue(
-                bt_watchdog.service_startup_profile_wait(
-                    roles(), "call", state, BT500, now=101.0
-                )
-            )
-
-        reconnect.assert_not_called()
-        self.assertEqual(state.startup_phase, "complete")
-        self.assertEqual(state.connected_monotonic, 101.0)
-
-    def test_profile_wait_rejects_a_changed_runtime_target(self) -> None:
-        state = bt_watchdog.RecoveryState(
-            "call",
-            bond_state="trusted",
-            startup_phase="waiting_local_profiles",
-            startup_profile_deadline=106.0,
-        )
-        moved = adapter(usb_interface="1-1.3:1.0")
-        with (
-            mock.patch.object(
-                bt_watchdog.btadapters,
-                "managed_objects",
-                return_value=phone_tree(moved),
-            ),
-            mock.patch.object(bt_watchdog, "resolve_role", return_value=moved),
-            mock.patch.object(bt_watchdog, "service_reconnect") as reconnect,
-        ):
-            self.assertFalse(
-                bt_watchdog.service_startup_profile_wait(
-                    roles(), "call", state, BT500, now=101.0
-                )
-            )
-
-        reconnect.assert_not_called()
-        self.assertEqual(state.startup_phase, "controller_unavailable")
-        self.assertEqual(state.last_action, "device-connect-target-refreshed")
-        self.assertEqual(state.repair_state, "idle")
-
     def test_connected_time_records_only_connection_transitions(self) -> None:
         state = bt_watchdog.RecoveryState("call")
         with (
@@ -573,9 +338,7 @@ class ReconnectTests(unittest.TestCase):
 
     def test_first_exact_runtime_target_connects_before_liveness_gating(self) -> None:
         state = bt_watchdog.RecoveryState("call", reconnect_next=999.0)
-        with mock.patch.object(
-            bt_watchdog, "service_reconnect", return_value=False
-        ) as reconnect:
+        with mock.patch.object(bt_watchdog, "service_reconnect") as reconnect:
             observed = bt_watchdog.service_startup_reconnect(
                 roles(), "call", state, BT500, None, now=100.0
             )
