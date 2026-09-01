@@ -366,19 +366,31 @@ class ReconnectTests(unittest.TestCase):
             roles(), "call", state, now=100.0, cancelled=None
         )
 
-    def test_disconnected_poll_wakes_for_boot_retry_deadline(self) -> None:
+    def test_disconnected_poll_is_capped_by_fast_service_interval(self) -> None:
         state = bt_watchdog.RecoveryState(
             "call", bond_state="trusted", reconnect_next=102.0
         )
-        self.assertEqual(bt_watchdog.service_sleep_interval(state, now=100.0), 2.0)
+        self.assertEqual(
+            bt_watchdog.service_sleep_interval(state, now=100.0),
+            bt_watchdog.SERVICE_INTERVAL,
+        )
 
-    def test_connected_poll_keeps_normal_probe_interval(self) -> None:
+    def test_connected_poll_uses_fast_service_interval(self) -> None:
         state = bt_watchdog.RecoveryState(
             "call", bond_state="connected", reconnect_next=102.0
         )
         self.assertEqual(
             bt_watchdog.service_sleep_interval(state, now=100.0),
-            bt_watchdog.PROBE_INTERVAL,
+            bt_watchdog.SERVICE_INTERVAL,
+        )
+
+    def test_overdue_profile_retry_still_uses_fast_service_interval(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call", bond_state="profile_pending", reconnect_next=99.0
+        )
+        self.assertEqual(
+            bt_watchdog.service_sleep_interval(state, now=100.0),
+            bt_watchdog.SERVICE_INTERVAL,
         )
 
     def test_missing_pixel_object_requires_operator_pairing_without_auto_repair(
@@ -477,6 +489,60 @@ class ReconnectTests(unittest.TestCase):
         self.assertEqual(state.profile_completion_attempts, 1)
         self.assertEqual(state.last_action, "profile-completing")
         self.assertIn("br-connection-busy", state.last_error or "")
+
+    def test_profile_retry_deadline_starts_after_blocking_profile_call(self) -> None:
+        state = bt_watchdog.RecoveryState(
+            "call",
+            bond_state="profile_pending",
+            profile_pending_since=90.0,
+            profile_pending_target=bt_watchdog._adapter_runtime_target(BT500),
+        )
+        with (
+            mock.patch.object(bt_watchdog.time, "monotonic", side_effect=[100.0, 108.0]),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500, connected=True),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "connect_profile",
+                return_value=(False, "Call failed: br-connection-busy"),
+            ),
+        ):
+            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state))
+
+        self.assertEqual(
+            state.reconnect_next, 108.0 + bt_watchdog.PROFILE_COMPLETION_RETRY
+        )
+
+    def test_profile_settling_starts_after_blocking_device_connect(self) -> None:
+        state = bt_watchdog.RecoveryState("call")
+        with (
+            mock.patch.object(bt_watchdog.time, "monotonic", side_effect=[100.0, 108.0]),
+            mock.patch.object(
+                bt_watchdog.btadapters,
+                "managed_objects",
+                return_value=phone_tree(BT500),
+            ),
+            mock.patch.object(bt_watchdog, "resolve_role", return_value=BT500),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connected_on", return_value=False
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "power_on", return_value=(True, "on")
+            ),
+            mock.patch.object(
+                bt_watchdog.btadapters, "connect", return_value=(True, "connected")
+            ),
+        ):
+            self.assertFalse(bt_watchdog.service_reconnect(roles(), "call", state))
+
+        self.assertEqual(state.profile_pending_since, 108.0)
+        self.assertEqual(
+            state.reconnect_next, 108.0 + bt_watchdog.PROFILE_COMPLETION_GRACE
+        )
 
     def test_ready_media_profile_completes_connection_and_clears_pending_state(
         self,

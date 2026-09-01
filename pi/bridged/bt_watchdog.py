@@ -43,6 +43,7 @@ SYS_USB_DRIVERS = Path("/sys/bus/usb/drivers")
 USB_INTERFACE_RE = re.compile(r"^[A-Za-z0-9._-]+:\d+\.\d+$")
 
 PROBE_INTERVAL = float(os.environ.get("BRIDGE_WD_INTERVAL", "15"))
+SERVICE_INTERVAL = float(os.environ.get("BRIDGE_WD_SERVICE_INTERVAL", "1"))
 FAILURES_TO_ACT = int(os.environ.get("BRIDGE_WD_FAILURES", "2"))
 PROBE_TIMEOUT = float(os.environ.get("BRIDGE_WD_PROBE_TIMEOUT", "20"))
 RECONNECT_DELAY = float(os.environ.get("BRIDGE_WD_RECONNECT_DELAY", "20"))
@@ -717,7 +718,8 @@ def service_reconnect(
             state.last_action = "cancelled"
             state.last_error = str(exc)
             return False
-        state.reconnect_next = observed + PROFILE_COMPLETION_RETRY
+        retry_started = observed if now is not None else time.monotonic()
+        state.reconnect_next = retry_started + PROFILE_COMPLETION_RETRY
         state.last_error = None if ok else detail
         return False
 
@@ -868,7 +870,8 @@ def service_reconnect(
     state.last_action = "device-reconnect"
     state.last_error = None if ok else detail
     if ok:
-        _begin_profile_settling(state, adapter, observed)
+        settling_started = observed if now is not None else time.monotonic()
+        _begin_profile_settling(state, adapter, settling_started)
     return False
 
 
@@ -898,11 +901,11 @@ def service_startup_reconnect(
 
 
 def service_sleep_interval(state: RecoveryState, *, now: float | None = None) -> float:
-    """Wake for a pending reconnect deadline without accelerating idle polling."""
+    """Poll connection state promptly while active HCI probes remain independent."""
     observed = time.monotonic() if now is None else now
     if state.bond_state != "connected" and state.reconnect_next > observed:
-        return max(0.1, min(PROBE_INTERVAL, state.reconnect_next - observed))
-    return PROBE_INTERVAL
+        return max(0.1, min(SERVICE_INTERVAL, state.reconnect_next - observed))
+    return SERVICE_INTERVAL
 
 
 def _set_production_pairing_closed(
@@ -1148,6 +1151,9 @@ def main(argv: list[str] | None = None) -> int:
         adapter: btadapters.Adapter | None = None
         pairing_closed_target: str | None = None
         startup_connect_target: str | None = None
+        probe_target: str | None = None
+        next_controller_probe = 0.0
+        last_probe = ProbeStatus.UNKNOWN
         while not stopping:
             try:
                 tree = btadapters.managed_objects()
@@ -1157,13 +1163,16 @@ def main(argv: list[str] | None = None) -> int:
                 adapter = None
                 pairing_closed_target = None
                 startup_connect_target = None
+                probe_target = None
+                next_controller_probe = 0.0
+                last_probe = ProbeStatus.UNKNOWN
                 state.probe = ProbeStatus.UNKNOWN.value
                 _clear_pending_connect(state)
                 state.reconnect_next = time.monotonic() + RECONNECT_DELAY
                 state.identity_error = f"{exc.code}: {exc.detail}"
                 state.last_error = state.identity_error
                 write_state(state, None)
-                time.sleep(PROBE_INTERVAL)
+                time.sleep(SERVICE_INTERVAL)
                 continue
 
             target = _adapter_runtime_target(adapter)
@@ -1194,7 +1203,17 @@ def main(argv: list[str] | None = None) -> int:
                 cancelled=lambda: stopping,
             )
 
-            result = probe_controller(adapter)
+            probe_observed = time.monotonic()
+            probe_due = (
+                target != probe_target or probe_observed >= next_controller_probe
+            )
+            if probe_due:
+                result = probe_controller(adapter)
+                last_probe = result
+                probe_target = target
+                next_controller_probe = time.monotonic() + PROBE_INTERVAL
+            else:
+                result = last_probe
             state.probe = result.value
             if result is ProbeStatus.ANSWERED:
                 state.failures = 0
@@ -1219,13 +1238,15 @@ def main(argv: list[str] | None = None) -> int:
                             state,
                             cancelled=lambda: stopping,
                         )
-            elif result is ProbeStatus.FAILED:
+            elif result is ProbeStatus.FAILED and probe_due:
                 record_failure_and_recover(
                     roles,
                     args.role,
                     state,
                     cancelled=lambda: stopping,
                 )
+                last_probe = ProbeStatus.UNKNOWN
+                next_controller_probe = 0.0
             write_state(state, adapter)
             time.sleep(service_sleep_interval(state))
 
