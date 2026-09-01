@@ -15,6 +15,11 @@ configured Pixel object on the configured BT500. A busy profile request is ordin
 negotiation: it is never promoted to the stale-bond signature and never deletes the bond. Exhausting
 the profile requests enters a 15-second cooldown before another bounded attempt.
 
+The watchdog checks the exact Pixel connection and profile state once per second so an Android
+disconnect is noticed promptly. The more expensive active HCI controller-health probe remains on
+its independent 15-second cadence; faster reconnect detection therefore does not add continuous
+radio resets or aggressive Bluetooth traffic.
+
 ## When automatic repair is allowed
 
 Automatic bond replacement requires one narrow signature on the same healthy controller:
