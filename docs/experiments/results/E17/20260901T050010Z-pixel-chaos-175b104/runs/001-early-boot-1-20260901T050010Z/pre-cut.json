@@ -1,0 +1,480 @@
+{
+  "boot_id": "5dff08a6-4bee-43ed-9b37-ce215a9879c8",
+  "details": {
+    "bluetooth": {
+      "rc": 0,
+      "stderr": "",
+      "stdout": "Controller A0:AD:9F:73:6C:24 (public)\n\tManufacturer: 0x005d (93)\n\tVersion: 0x0d (13)\n\tName: larkbridge\n\tAlias: LarkBridge BT500\n\tClass: 0x006c0408 (7078920)\n\tPowered: yes\n\tPowerState: on\n\tDiscoverable: no\n\tDiscoverableTimeout: 0x00000000 (0)\n\tPairable: no\n\tUUID: A/V Remote Control        (0000110e-0000-1000-8000-00805f9b34fb)\n\tUUID: PnP Information           (00001200-0000-1000-8000-00805f9b34fb)\n\tUUID: Audio Source              (0000110a-0000-1000-8000-00805f9b34fb)\n\tUUID: SIM Access                (0000112d-0000-1000-8000-00805f9b34fb)\n\tUUID: Headset                   (00001108-0000-1000-8000-00805f9b34fb)\n\tUUID: A/V Remote Control Target (0000110c-0000-1000-8000-00805f9b34fb)\n\tUUID: Generic Access Profile    (00001800-0000-1000-8000-00805f9b34fb)\n\tUUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)\n\tUUID: Audio Sink                (0000110b-0000-1000-8000-00805f9b34fb)\n\tUUID: Device Information        (0000180a-0000-1000-8000-00805f9b34fb)\n\tUUID: Vendor specific           (03b80e5a-ede8-4b33-a751-6ce34ec4c700)\n\tUUID: Handsfree                 (0000111e-0000-1000-8000-00805f9b34fb)\n\tModalias: usb:v1D6Bp0246d0552\n\tDiscovering: no\n\tRoles: central\n\tRoles: peripheral\nAdvertising Features:\n\tActiveInstances: 0x00 (0)\n\tSupportedInstances: 0x04 (4)\n\tSupportedIncludes: tx-power\n\tSupportedIncludes: appearance\n\tSupportedIncludes: local-name\n\tSupportedSecondaryChannels: 1M\n\tSupportedSecondaryChannels: 2M\n\tSupportedCapabilities.MinTxPower: 0x0000 (0)\n\tSupportedCapabilities.MaxTxPower: 0x000a (10)\n\tSupportedCapabilities.MaxAdvLen: 0xfb (251)\n\tSupportedCapabilities.MaxScnRspLen: 0xfb (251)\n\tSupportedFeatures: CanSetTxPower\n\tSupportedFeatures: HardwareOffload"
+    },
+    "bridge": {
+      "aec": {
+        "channels": 1,
+        "enabled": true,
+        "method": "webrtc",
+        "module_backend": "native-pw-cli",
+        "node_latency_frames": 1920,
+        "owner_pid": null,
+        "play_delay_frames": null,
+        "rate": 48000,
+        "verified": false
+      },
+      "attempts": 0,
+      "call": {
+        "controller_binding_accepted": true,
+        "controller_binding_error": null,
+        "hfp_nodes_present": false,
+        "raw_hfp_nodes_present": false
+      },
+      "config_path": "/home/admin/rpi-lark-bridge/config/bridge.toml",
+      "controllers": {
+        "call": {
+          "bluez_path": "/org/bluez/hci0",
+          "configured": true,
+          "configured_address": "A0:AD:9F:73:6C:24",
+          "driver": "btusb",
+          "error": null,
+          "expected_bus": "USB",
+          "expected_product": "ASUS USB-BT500",
+          "expected_usb_id": "0b05:1bf6",
+          "hci": "hci0",
+          "manufacturer": "Realtek",
+          "observed_address": "A0:AD:9F:73:6C:24",
+          "observed_bus": "USB",
+          "observed_usb_id": "0b05:1bf6",
+          "product": "Bluetooth Controller",
+          "ready": true,
+          "reason": null,
+          "required": true,
+          "rfkill_index": 0,
+          "sysfs_path": "1-1.5",
+          "usb_interface": "1-1.5:1.0",
+          "usb_parent": "1-1.5"
+        },
+        "output": {
+          "bluez_path": null,
+          "configured": false,
+          "configured_address": null,
+          "driver": null,
+          "error": null,
+          "expected_bus": null,
+          "expected_product": null,
+          "expected_usb_id": null,
+          "hci": null,
+          "manufacturer": null,
+          "observed_address": null,
+          "observed_bus": null,
+          "observed_usb_id": null,
+          "product": null,
+          "ready": true,
+          "reason": "wired-output",
+          "required": false,
+          "rfkill_index": null,
+          "sysfs_path": null,
+          "usb_interface": null,
+          "usb_parent": null
+        },
+        "policy": "transitional",
+        "ready": true,
+        "transitional_uart_call": false
+      },
+      "endpoints": {
+        "hfp_sink": null,
+        "hfp_source": null,
+        "lark": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+        "microphone": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+        "wired_output": "alsa_output.platform-3f00b840.mailbox.stereo-fallback"
+      },
+      "generation": 1,
+      "graph": {
+        "expected_links": [],
+        "missing_links": [],
+        "unexpected_links": []
+      },
+      "last_failure": null,
+      "microphone": {
+        "blocked": false,
+        "candidates": [
+          {
+            "format": {
+              "channels": 2,
+              "format": "S16LE",
+              "rate": 48000
+            },
+            "id": "lark-a1",
+            "identity": {
+              "device_object_serial": "52",
+              "pipewire_object_serial": "75",
+              "usb_instance_generation": "1-1.4@5",
+              "usb_port_path": "1-1.4",
+              "usb_product": "Wireless Microphone",
+              "usb_product_id": "0407",
+              "usb_serial": "Wireless Microphone",
+              "usb_vendor_id": "3547"
+            },
+            "label": "Hollyland Lark A1",
+            "liveness": {
+              "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"75\",\"52\",\"1-1.4@5\"]",
+              "reason": "Lark receiver is present, but no transmitter audio is detected",
+              "state": "inactive"
+            },
+            "matched_nodes": [
+              "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo"
+            ],
+            "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+            "priority": 0,
+            "reason": "Lark receiver is present, but no transmitter audio is detected",
+            "state": "capability_mismatch",
+            "unavailable_reason": "Lark receiver is present, but no transmitter audio is detected"
+          },
+          {
+            "format": {
+              "channels": 1,
+              "format": "S16LE",
+              "rate": 48000
+            },
+            "id": "fifine-k054",
+            "identity": {
+              "device_object_serial": "51",
+              "pipewire_object_serial": "60",
+              "usb_instance_generation": "1-1.3@4",
+              "usb_port_path": "1-1.3",
+              "usb_product": "USB PnP Audio Device",
+              "usb_product_id": "161e",
+              "usb_serial": null,
+              "usb_vendor_id": "0c76"
+            },
+            "label": "FIFINE K054",
+            "matched_nodes": [
+              "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+            ],
+            "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+            "priority": 1,
+            "reason": "highest-priority usable microphone",
+            "state": "selected",
+            "unavailable_reason": null
+          }
+        ],
+        "lark_transmitter": {
+          "active": false,
+          "active_after_ms": 360,
+          "detector": "pcm_exact_zero",
+          "enabled": true,
+          "inactive_after_ms": 1760,
+          "instance_token": "[\"lark-a1\",\"alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo\",\"75\",\"52\",\"1-1.4@5\"]",
+          "link_verified": true,
+          "node": "alsa_input.usb-Shenzhen_Hollyland_Technology_Co._Ltd_Wireless_Microphone_Wireless_Microphone-01.analog-stereo",
+          "owner_pid": 727,
+          "reason": "Lark receiver is present, but no transmitter audio is detected",
+          "state": "inactive"
+        },
+        "selected": {
+          "format": {
+            "channels": 1,
+            "format": "S16LE",
+            "rate": 48000
+          },
+          "id": "fifine-k054",
+          "identity": {
+            "device_object_serial": "51",
+            "pipewire_object_serial": "60",
+            "usb_instance_generation": "1-1.3@4",
+            "usb_port_path": "1-1.3",
+            "usb_product": "USB PnP Audio Device",
+            "usb_product_id": "161e",
+            "usb_serial": null,
+            "usb_vendor_id": "0c76"
+          },
+          "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.3@4\"]",
+          "label": "FIFINE K054",
+          "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+          "priority": 1
+        },
+        "selection_reason": "lark-a1 capability_mismatch: Lark receiver is present, but no transmitter audio is detected; using fifine-k054"
+      },
+      "microphone_control": {
+        "desired_gain_db": 0.0,
+        "desired_muted": false,
+        "error": null,
+        "observed_gain_db": null,
+        "observed_muted": null,
+        "target": null,
+        "verified": false
+      },
+      "mode": "bluetooth-wired",
+      "output": {
+        "candidates": [
+          {
+            "adapter": null,
+            "adapter_address": null,
+            "address": null,
+            "connected": true,
+            "id": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+            "kind": "wired",
+            "label": "Built-in Audio Stereo",
+            "node": "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+            "present": true,
+            "setup_state": "ready"
+          },
+          {
+            "adapter": "hci0",
+            "adapter_address": "A0:AD:9F:73:6C:24",
+            "address": "C9:5C:FD:6E:28:46",
+            "connected": false,
+            "id": "a2dp:C9:5C:FD:6E:28:46",
+            "kind": "a2dp",
+            "label": "Boombox",
+            "node": null,
+            "present": false,
+            "setup_state": "needs_setup"
+          },
+          {
+            "adapter": "hci0",
+            "adapter_address": "A0:AD:9F:73:6C:24",
+            "address": "50:D7:1B:74:34:D6",
+            "connected": false,
+            "id": "a2dp:50:D7:1B:74:34:D6",
+            "kind": "a2dp",
+            "label": "iWorld",
+            "node": null,
+            "present": false,
+            "setup_state": "needs_setup"
+          },
+          {
+            "adapter": "hci0",
+            "adapter_address": "A0:AD:9F:73:6C:24",
+            "address": "98:47:44:CD:73:DE",
+            "connected": false,
+            "id": "a2dp:98:47:44:CD:73:DE",
+            "kind": "a2dp",
+            "label": "Soundcore Space A40",
+            "node": null,
+            "present": false,
+            "setup_state": "needs_setup"
+          }
+        ],
+        "chosen": {
+          "adapter": null,
+          "adapter_address": null,
+          "address": null,
+          "connected": true,
+          "id": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+          "kind": "wired",
+          "label": "Built-in Audio Stereo",
+          "node": "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+          "present": true,
+          "setup_state": "ready"
+        },
+        "desired_available": true,
+        "desired_id": "wired:alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+        "reason": "desired output is available"
+      },
+      "phone": {
+        "android_microphone_transport": false,
+        "connected": true,
+        "connection_state": "connected",
+        "controller_binding_accepted": true,
+        "controller_binding_error": null,
+        "expected_target": "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+        "failure_reason": null,
+        "media_node": null,
+        "media_routed": false,
+        "microphone_transport_reason": "Android has not opened an HFP/SCO communication transport",
+        "route_verified": false,
+        "target_volume": {
+          "desired": 0.95,
+          "error": null,
+          "observed": 0.95,
+          "required": true,
+          "verified": true
+        },
+        "transition_reason": "phone is connected and no media stream is active",
+        "transport": "MEDIA_READY"
+      },
+      "state": "CALL_DOWN",
+      "system": {
+        "arm_clock": "frequency(48)=1199998000",
+        "mem_available_kib": 723252,
+        "temperature_c": 45.62,
+        "throttled": "throttled=0x0"
+      },
+      "timestamp": 1787484053.3074443,
+      "wired_output_volume": {
+        "desired": 0.95,
+        "error": null,
+        "observed": 0.95,
+        "required": true,
+        "target": "alsa_output.platform-3f00b840.mailbox.stereo-fallback",
+        "verified": true
+      }
+    },
+    "call_controller_address": {
+      "rc": 0,
+      "stderr": "",
+      "stdout": "A0:AD:9F:73:6C:24"
+    },
+    "call_watchdog": {
+      "backoff_seconds": 60.0,
+      "bond_state": "connected",
+      "configured_state": "single-call",
+      "connect_collision_cancellations": 0,
+      "connect_pending_deadline_monotonic": null,
+      "connect_pending_since_monotonic": null,
+      "connect_pending_target": null,
+      "connected_monotonic": 18.88118645,
+      "controller": {
+        "address": "A0:AD:9F:73:6C:24",
+        "bus": "USB",
+        "driver": "btusb",
+        "hci": "hci0",
+        "rfkill_index": 0,
+        "usb_id": "0b05:1bf6",
+        "usb_interface": "1-1.5:1.0"
+      },
+      "failures": 0,
+      "identity_error": null,
+      "last_action": "connected",
+      "last_attempt_monotonic": 0.0,
+      "last_error": null,
+      "last_recovery_monotonic": 0.0,
+      "pairing_timer_paused": false,
+      "probe": "answered",
+      "reconnect_attempts": 0,
+      "reconnect_next_monotonic": 0.0,
+      "recoveries": 0,
+      "repair_deadline_monotonic": null,
+      "repair_state": "idle",
+      "repair_trigger": null,
+      "role": "call",
+      "stale_connect_signatures": 0,
+      "timestamp": 1787484049.3951678
+    },
+    "config": {
+      "failures": [],
+      "sha256": "73aa5203ab5cb23500e940d101fbffc2b87dcc74996e621fbc378d7c88b21361",
+      "slot": "a"
+    },
+    "critical_log_lines": [],
+    "data_label": {
+      "rc": 0,
+      "stderr": "",
+      "stdout": "LARKDATA"
+    },
+    "entropy_available": "256",
+    "failed_units": {
+      "rc": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "journal_verify": {
+      "rc": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "ledger_records": 989,
+    "microphone": {
+      "format": {
+        "channels": 1,
+        "format": "S16LE",
+        "rate": 48000
+      },
+      "id": "fifine-k054",
+      "identity": {
+        "device_object_serial": "51",
+        "pipewire_object_serial": "60",
+        "usb_instance_generation": "1-1.3@4",
+        "usb_port_path": "1-1.3",
+        "usb_product": "USB PnP Audio Device",
+        "usb_product_id": "161e",
+        "usb_serial": null,
+        "usb_vendor_id": "0c76"
+      },
+      "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.3@4\"]",
+      "label": "FIFINE K054",
+      "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+      "priority": 1
+    },
+    "mounts": {
+      "boot": {
+        "fstype": "vfat",
+        "options": "ro,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=ascii,shortname=mixed,errors=remount-ro",
+        "source": "/dev/mmcblk0p1"
+      },
+      "data": {
+        "fstype": "ext4",
+        "options": "rw,nosuid,nodev,noexec,noatime,errors=remount-ro,commit=1",
+        "source": "/dev/mmcblk0p3"
+      },
+      "root": {
+        "fstype": "overlay",
+        "options": "rw,relatime,lowerdir=/media/root-ro,upperdir=/media/root-rw/overlay,workdir=/media/root-rw/overlay-workdir/_,uuid=on",
+        "source": "overlayroot"
+      },
+      "root_lower": {
+        "fstype": "ext4",
+        "options": "ro,relatime",
+        "source": "/dev/mmcblk0p2"
+      }
+    },
+    "pairing_identity": {
+      "A0:AD:9F:73:6C:24/50:D7:1B:74:34:D6/info": "a999379fa651d7b79d6d484103358b33d5dec455e71ac6036eaddde16634082b",
+      "A0:AD:9F:73:6C:24/5C:33:7B:CB:BF:C5/info": "12fb01997ef964dfaba283d971f8ab08ce9b08e8a03c7eb07764671e69d80837",
+      "A0:AD:9F:73:6C:24/98:47:44:CD:73:DE/info": "d1a7de9a1ff8392bc058b118f2f53ce71920393034ea854aa4914a0f96a41c24",
+      "A0:AD:9F:73:6C:24/C9:5C:FD:6E:28:46/info": "7e1ec62f3b56622f33e3d783bd53dfffc713a57bf49f7f86394104c59a5b5c30",
+      "B0:82:E2:25:18:36/5C:33:7B:CB:BF:C5/info": "c920e267414581f845c03a5e0ed164526e7cb812df9d26a890a7d842f0863dac",
+      "B8:27:EB:43:8D:51/50:D7:1B:74:34:D6/info": "16e5839f343084c2c79bafc4722fc282a717f2c758eafc1d0a7526aee66237d8",
+      "B8:27:EB:43:8D:51/5C:33:7B:CB:BF:C5/info": "fcf6114f82407eb77afb664bd3916959c5393690535484e772e5d6b1ae55d6f3",
+      "B8:27:EB:43:8D:51/98:47:44:CD:73:DE/info": "c25215a1efcf279d241e6d0ab58fabd491ff5f420f205d2bc47d3d325a6720cf"
+    },
+    "power": {
+      "rc": 0,
+      "stderr": "",
+      "stdout": "throttled=0x0"
+    },
+    "random_seed": {
+      "mode": "0o600",
+      "size": 32
+    },
+    "service_restart_count": 0,
+    "ssh_identity_sha256": {
+      "/etc/ssh/ssh_host_ecdsa_key.pub": "fd2f00e6c71bcc4ec91199d87679ea4f6155cd9153bf97116994dee3426baec4",
+      "/etc/ssh/ssh_host_ed25519_key.pub": "301716617dd411d1665ea15e5f7f1253fc2e26ebd63f1ea48584094300cdb665",
+      "/etc/ssh/ssh_host_rsa_key.pub": "1cce6762374f8290e0b85936fa07bd8f08be44f1c96143c9b6ee008c429567ec"
+    },
+    "storage": {
+      "config_slot": "a",
+      "config_source": "slot-a",
+      "mount": "/dev/mmcblk0p3 mounted ext4,rw",
+      "pairing_action": "live-valid",
+      "pairing_slot": null,
+      "persistent": true,
+      "reasons": [],
+      "schema": 1,
+      "seed_action": "existing",
+      "state": "READY"
+    },
+    "system_units": {
+      "NetworkManager.service": "active",
+      "bluetooth.service": "active",
+      "bridge-btwatchdog@call.service": "active",
+      "bridge-pairing-seal.timer": "active",
+      "bridge-storage-guard.service": "active",
+      "bridge-tuning.service": "active",
+      "ssh.service": "active"
+    },
+    "temperature": {
+      "rc": 0,
+      "stderr": "",
+      "stdout": "temp=47.2'C"
+    },
+    "user_units": {
+      "bridge-supervisor.service": "active",
+      "pipewire.service": "active",
+      "wireplumber.service": "active"
+    }
+  },
+  "failures": [],
+  "ready": true,
+  "remote_rc": 0,
+  "schema": 1,
+  "uptime_s": 132.52
+}

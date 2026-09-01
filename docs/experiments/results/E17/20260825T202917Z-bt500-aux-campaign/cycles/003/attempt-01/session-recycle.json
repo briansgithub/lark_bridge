@@ -1,0 +1,11 @@
+{
+  "active_observed": true,
+  "adapter_address": "A0:AD:9F:73:6C:24",
+  "call_down_observed": true,
+  "connect_returncode": 1,
+  "elapsed_s": 12.152,
+  "hci_after": "hci0",
+  "hci_before": "hci0",
+  "phone_address": "5C:33:7B:CB:BF:C5",
+  "verdict": "PASS"
+}

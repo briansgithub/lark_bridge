@@ -1,0 +1,141 @@
+{
+  "candidate": "candidate-892af46",
+  "events": [
+    {
+      "elapsed_s": 5.019,
+      "event": "power_off_requested"
+    },
+    {
+      "elapsed_s": 13.495,
+      "event": "ssh_down"
+    },
+    {
+      "elapsed_s": 0.0,
+      "event": "power_on_requested"
+    },
+    {
+      "elapsed_s": 69.189,
+      "event": "ssh_port_open"
+    },
+    {
+      "elapsed_s": 73.102,
+      "event": "new_boot_ssh"
+    },
+    {
+      "connected_monotonic": 19.312109367,
+      "elapsed_s": 73.106,
+      "event": "phone_ready"
+    },
+    {
+      "detail": "[boot-trial] no pending transaction",
+      "elapsed_s": 73.622,
+      "event": "trial_confirmed"
+    }
+  ],
+  "expected_microphone": "lark-a1",
+  "git": {
+    "branch": "codex/bt500-aux-fast",
+    "full_status": "?? .artifacts/\n?? docs/experiments/results/E16/20260825T193346Z-bt500-aux-predeploy/\n?? docs/experiments/results/E16/20260825T194649Z-bt500-aux-pair-gate-fail/\n?? docs/experiments/results/E16/20260825T200431Z-bt500-aux-pair-success/\n?? docs/experiments/results/E16/20260825T201035Z-bt500-aux-aec-disabled-transport/\n?? docs/experiments/results/E17/",
+    "head": "892af46bd30e56b08816fc21b46d0e8c0227bd3d",
+    "tracked_status": ""
+  },
+  "health_events": {
+    "filesystem": 0,
+    "hci_failure": 4,
+    "service_restart": 0,
+    "undervoltage": 0,
+    "xrun": 0
+  },
+  "manual_power": true,
+  "microphone_evidence": {
+    "functional": null,
+    "idle": {
+      "error": null,
+      "expected_id": "lark-a1",
+      "matches": false,
+      "observed": {
+        "format": {
+          "channels": 1,
+          "format": "S16LE",
+          "rate": 48000
+        },
+        "id": "fifine-k054",
+        "identity": {
+          "device_object_serial": "51",
+          "pipewire_object_serial": "60",
+          "usb_instance_generation": "1-1.3@4",
+          "usb_port_path": "1-1.3",
+          "usb_product": "USB PnP Audio Device",
+          "usb_product_id": "161e",
+          "usb_serial": null,
+          "usb_vendor_id": "0c76"
+        },
+        "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.3@4\"]",
+        "label": "FIFINE K054",
+        "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+        "priority": 1
+      },
+      "observed_id": "fifine-k054"
+    },
+    "preboot": {
+      "error": null,
+      "expected_id": "lark-a1",
+      "matches": false,
+      "observed": {
+        "format": {
+          "channels": 1,
+          "format": "S16LE",
+          "rate": 48000
+        },
+        "id": "fifine-k054",
+        "identity": {
+          "device_object_serial": "51",
+          "pipewire_object_serial": "60",
+          "usb_instance_generation": "1-1.3@4",
+          "usb_port_path": "1-1.3",
+          "usb_product": "USB PnP Audio Device",
+          "usb_product_id": "161e",
+          "usb_serial": null,
+          "usb_vendor_id": "0c76"
+        },
+        "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.3@4\"]",
+        "label": "FIFINE K054",
+        "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+        "priority": 1
+      },
+      "observed_id": "fifine-k054"
+    }
+  },
+  "mode": "cold",
+  "observed_microphone": {
+    "format": {
+      "channels": 1,
+      "format": "S16LE",
+      "rate": 48000
+    },
+    "id": "fifine-k054",
+    "identity": {
+      "device_object_serial": "51",
+      "pipewire_object_serial": "60",
+      "usb_instance_generation": "1-1.3@4",
+      "usb_port_path": "1-1.3",
+      "usb_product": "USB PnP Audio Device",
+      "usb_product_id": "161e",
+      "usb_serial": null,
+      "usb_vendor_id": "0c76"
+    },
+    "instance_token": "[\"fifine-k054\",\"alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback\",\"60\",\"51\",\"1-1.3@4\"]",
+    "label": "FIFINE K054",
+    "node": "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback",
+    "priority": 1
+  },
+  "readiness_level": "phone",
+  "readiness_profile": "phone",
+  "run_id": "20260901T044311Z-candidate-892af46-cold",
+  "timings_s": {
+    "new_boot_ssh": 73.102,
+    "phone_connected": 19.312109367,
+    "ssh_port_open": 69.189
+  },
+  "verdict": "PASS"
+}

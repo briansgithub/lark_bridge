@@ -1,0 +1,9 @@
+{
+  "acceptance_eligible": false,
+  "confirmed_utc": "20260825T204604Z",
+  "independent_double_talk": false,
+  "near_end_speech": false,
+  "reason": "The user explicitly reported that they did not speak during this capture.",
+  "schema_version": 1,
+  "source": "user-confirmed"
+}

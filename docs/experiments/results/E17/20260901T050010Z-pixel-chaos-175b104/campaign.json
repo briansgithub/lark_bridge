@@ -1,0 +1,55 @@
+{
+  "backup_sha256": "847b4d34d112cbef497304885494780a15a5104e29ff69e1339ede306202f6bc",
+  "created": "20260901T045959Z",
+  "minimum_off_seconds": 12.0,
+  "phone_connect_limit_seconds": 25.0,
+  "profile": "pixel-chaos",
+  "require_phone": true,
+  "requirements": {
+    "early-boot-1": 1,
+    "early-boot-12": 1,
+    "early-boot-6": 1,
+    "random": 2
+  },
+  "safety_evidence": "B:\\Desktop\\W\\Hardware_write\\larkbridge-state-backup\\host-safety-evidence.json",
+  "safety_evidence_sha256": "0df88da46333f045b6681cd587e26b6a2942811edec6e7d50958ea5bbdacda0f",
+  "schedule": [
+    {
+      "case": "early-boot-1",
+      "index": 1,
+      "random_context": null,
+      "seed": null,
+      "state": "early-boot-1"
+    },
+    {
+      "case": "early-boot-6",
+      "index": 2,
+      "random_context": null,
+      "seed": null,
+      "state": "early-boot-6"
+    },
+    {
+      "case": "early-boot-12",
+      "index": 3,
+      "random_context": null,
+      "seed": null,
+      "state": "early-boot-12"
+    },
+    {
+      "case": "random-bluetooth-recovery",
+      "index": 4,
+      "random_context": "bluetooth-recovery",
+      "seed": 1795159402,
+      "state": "random"
+    },
+    {
+      "case": "random-persistent-write",
+      "index": 5,
+      "random_context": "persistent-write",
+      "seed": 1086481714,
+      "state": "random"
+    }
+  ],
+  "schema": 2,
+  "seed": 20260901
+}

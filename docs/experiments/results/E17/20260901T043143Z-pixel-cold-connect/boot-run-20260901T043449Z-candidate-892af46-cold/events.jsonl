@@ -1,0 +1,7 @@
+{"elapsed_s": 5.092, "event": "power_off_requested"}
+{"elapsed_s": 14.513, "event": "ssh_down"}
+{"elapsed_s": 0.0, "event": "power_on_requested"}
+{"elapsed_s": 71.353, "event": "ssh_port_open"}
+{"elapsed_s": 75.273, "event": "new_boot_ssh"}
+{"connected_monotonic": 19.555983377, "elapsed_s": 75.282, "event": "phone_ready"}
+{"detail": "[boot-trial] no pending transaction", "elapsed_s": 75.822, "event": "trial_confirmed"}

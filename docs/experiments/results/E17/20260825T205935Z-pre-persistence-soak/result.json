@@ -1,0 +1,18 @@
+{
+  "active_call_soak_completed": false,
+  "active_call_soak_started": false,
+  "call_controller": {
+    "address": "A0:AD:9F:73:6C:24",
+    "hci": "hci0",
+    "ready": true,
+    "sysfs_path": "1-1.5",
+    "usb_id": "0b05:1bf6"
+  },
+  "collection_errors": [],
+  "duration_observed_s": 0,
+  "pixel_connected": false,
+  "reason": "The Pixel became unavailable after the final session recycle, so the opening snapshot was CALL_DOWN and the active-call soak correctly refused to begin.",
+  "schema_version": 1,
+  "status": "not-started-hardware-unavailable",
+  "usb_errors": []
+}

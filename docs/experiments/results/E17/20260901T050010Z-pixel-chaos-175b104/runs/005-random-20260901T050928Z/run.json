@@ -1,0 +1,19 @@
+{
+  "boot_id_after": "35ee38eb-3535-42b4-bc2f-98349babc59c",
+  "boot_id_before": "00c7977d-a94b-45c5-915a-fa428addfaf3",
+  "category": "random",
+  "completed": "20260901T051107Z",
+  "context": "persistent-write",
+  "created": "20260901T050928Z",
+  "early_delay_seconds": null,
+  "minimum_off_seconds": 12.0,
+  "off_detected_unix_ns": 1788239381684561000,
+  "off_seconds": 21.162,
+  "phase": "PASSED",
+  "randomized_delay_seconds": 6.893,
+  "reconnect_prompt_unix_ns": 1788239402846850200,
+  "run_id": "005-random-20260901T050928Z",
+  "schedule_index": 5,
+  "schema": 1,
+  "seed": 1086481714
+}

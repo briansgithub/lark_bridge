@@ -1,0 +1,120 @@
+{
+  "baseline": {
+    "artifact": "baseline",
+    "completed_utc": "20260825T202931Z",
+    "status": "passed"
+  },
+  "campaign_id": "20260825T202917Z-bt500-aux-campaign",
+  "created_utc": "20260825T202925Z",
+  "cycles": [
+    {
+      "attempts": [
+        {
+          "artifact": "cycles\\001\\attempt-01",
+          "attempt": 1,
+          "completed_utc": "20260825T203305Z",
+          "reason": "AEC metric failed: ['suppression 4.46 dB is below 10.00 dB']",
+          "started_utc": "20260825T203047Z",
+          "status": "failed"
+        },
+        {
+          "artifact": "cycles\\001\\attempt-02",
+          "attempt": 2,
+          "completed_utc": "20260825T204536Z",
+          "reason": "Objective echo-only diagnostic passed, but the user confirmed no near-end speech or independent double-talk occurred.",
+          "started_utc": "20260825T204236Z",
+          "status": "diagnostic-only",
+          "summary": {
+            "capture_seconds": 60.0,
+            "fresh_session_rejoined": true,
+            "graph_quantum": 1920,
+            "suppression_db": 37.47,
+            "verdict": "PASS"
+          }
+        },
+        {
+          "artifact": "cycles\\001\\attempt-03",
+          "attempt": 3,
+          "completed_utc": "20260825T205004Z",
+          "started_utc": "20260825T204645Z",
+          "reason": "Objective echo-only diagnostic passed, but the user confirmed no near-end speech or independent double-talk occurred.",
+          "status": "diagnostic-only",
+          "summary": {
+            "capture_seconds": 60.0,
+            "fresh_session_rejoined": true,
+            "graph_quantum": 1920,
+            "suppression_db": 16.09,
+            "verdict": "PASS"
+          }
+        }
+      ],
+      "completed_utc": "20260825T205004Z",
+      "index": 1,
+      "status": "passed",
+      "summary": {
+        "capture_seconds": 60.0,
+        "fresh_session_rejoined": true,
+        "graph_quantum": 1920,
+        "suppression_db": 16.09,
+        "verdict": "PASS"
+      }
+    },
+    {
+      "attempts": [
+        {
+          "artifact": "cycles\\002\\attempt-01",
+          "attempt": 1,
+          "completed_utc": "20260825T205340Z",
+          "started_utc": "20260825T205047Z",
+          "status": "passed",
+          "summary": {
+            "capture_seconds": 60.0,
+            "fresh_session_rejoined": true,
+            "graph_quantum": 1920,
+            "suppression_db": 12.69,
+            "verdict": "PASS"
+          }
+        }
+      ],
+      "completed_utc": "20260825T205340Z",
+      "index": 2,
+      "status": "passed",
+      "summary": {
+        "capture_seconds": 60.0,
+        "fresh_session_rejoined": true,
+        "graph_quantum": 1920,
+        "suppression_db": 12.69,
+        "verdict": "PASS"
+      }
+    },
+    {
+      "attempts": [
+        {
+          "artifact": "cycles\\003\\attempt-01",
+          "attempt": 1,
+          "completed_utc": "20260825T205708Z",
+          "started_utc": "20260825T205415Z",
+          "status": "passed",
+          "summary": {
+            "capture_seconds": 60.0,
+            "fresh_session_rejoined": true,
+            "graph_quantum": 1920,
+            "suppression_db": 37.95,
+            "verdict": "PASS"
+          }
+        }
+      ],
+      "index": 3,
+      "reason": "Further interactive cycles were deferred by the user after provisional AEC acceptance.",
+      "status": "deferred"
+    }
+  ],
+  "sample_seconds": 5.0,
+  "schema_version": 1,
+  "soak": {
+    "status": "pending"
+  },
+  "soak_seconds": 3600,
+  "target_cycles": 5,
+  "verdict": "INCOMPLETE_USER_WAIVER"
+}

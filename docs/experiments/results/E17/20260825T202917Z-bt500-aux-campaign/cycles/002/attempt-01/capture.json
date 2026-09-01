@@ -1,0 +1,79 @@
+{
+  "aec_before": {
+    "channels": 1,
+    "enabled": true,
+    "method": "webrtc",
+    "module_backend": "native-pw-cli",
+    "node_latency_frames": 1920,
+    "owner_pid": 41588,
+    "play_delay_frames": null,
+    "rate": 48000,
+    "verified": true
+  },
+  "health_after": {
+    "loadavg": [
+      "0.66",
+      "0.92",
+      "0.79"
+    ],
+    "temperature": "temp=35.4'C",
+    "throttled": "throttled=0x0"
+  },
+  "health_before": {
+    "loadavg": [
+      "0.77",
+      "1.01",
+      "0.81"
+    ],
+    "temperature": "temp=36.5'C",
+    "throttled": "throttled=0x0"
+  },
+  "label": "bt500-aux-002-a01",
+  "links_verified": true,
+  "mode": "echo",
+  "pwtop": {
+    "alsa_output.platform-3f00b840.mailbox.stereo-fallback": {
+      "err_delta": 0,
+      "err_first": 5,
+      "err_last": 5,
+      "quantum": 0,
+      "snapshots": 65
+    },
+    "bridge.aec.sink": {
+      "err_delta": 0,
+      "err_first": 0,
+      "err_last": 0,
+      "quantum": 1920,
+      "snapshots": 65
+    },
+    "bridge.aec.source": {
+      "err_delta": 0,
+      "err_first": 5,
+      "err_last": 5,
+      "quantum": 1920,
+      "snapshots": 65
+    },
+    "echo-cancel-capture": {
+      "err_delta": 0,
+      "err_first": 0,
+      "err_last": 0,
+      "quantum": 1920,
+      "snapshots": 65
+    },
+    "echo-cancel-playback": {
+      "err_delta": 0,
+      "err_first": 4,
+      "err_last": 4,
+      "quantum": 1920,
+      "snapshots": 65
+    }
+  },
+  "seconds": 60.0,
+  "state_after": "ACTIVE",
+  "state_before": "ACTIVE",
+  "wavs": {
+    "bridge.e12.clean": "/var/tmp/bt500-aux/20260825T202917Z-bt500-aux-campaign/cycle-002/clean_bt500-aux-002-a01.wav",
+    "bridge.e12.raw": "/var/tmp/bt500-aux/20260825T202917Z-bt500-aux-campaign/cycle-002/raw_bt500-aux-002-a01.wav",
+    "bridge.e12.reference": "/var/tmp/bt500-aux/20260825T202917Z-bt500-aux-campaign/cycle-002/reference_bt500-aux-002-a01.wav"
+  }
+}

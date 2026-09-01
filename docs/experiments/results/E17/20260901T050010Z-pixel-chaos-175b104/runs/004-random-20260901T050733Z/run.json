@@ -1,0 +1,19 @@
+{
+  "boot_id_after": "00c7977d-a94b-45c5-915a-fa428addfaf3",
+  "boot_id_before": "6a873fbf-ac87-42d3-9117-00badabf0ae9",
+  "category": "random",
+  "completed": "20260901T050909Z",
+  "context": "bluetooth-recovery",
+  "created": "20260901T050733Z",
+  "early_delay_seconds": null,
+  "minimum_off_seconds": 12.0,
+  "off_detected_unix_ns": 1788239262663142100,
+  "off_seconds": 20.931,
+  "phase": "PASSED",
+  "randomized_delay_seconds": 1.727,
+  "reconnect_prompt_unix_ns": 1788239283594496300,
+  "run_id": "004-random-20260901T050733Z",
+  "schedule_index": 4,
+  "schema": 1,
+  "seed": 1795159402
+}

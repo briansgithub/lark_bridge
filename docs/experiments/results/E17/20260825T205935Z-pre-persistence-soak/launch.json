@@ -1,0 +1,11 @@
+{
+  "duration_s": 3600,
+  "interval_s": 5.0,
+  "launch_response": {
+    "remote_out": "/var/tmp/bt500-aux/pre-persistence-20260825T205935Z",
+    "status": "running",
+    "unit": "bt500-aux-pre-persistence-20260825T205935Z"
+  },
+  "schema_version": 1,
+  "started_utc": "20260825T205935Z"
+}
