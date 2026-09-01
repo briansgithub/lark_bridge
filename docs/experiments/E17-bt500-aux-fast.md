@@ -157,6 +157,39 @@ passes and establishes:
 This is a persisted idle-readiness result. Because the Pixel is unavailable, it does not prove a
 fresh post-reboot HFP/SCO session, AEC graph, call teardown/rejoin, or active-call endurance.
 
+## 2026-09-01 Pixel reconnect and abrupt-power qualification
+
+The Pixel 7a later returned for qualification of the hardened reconnect changes deployed at
+`892af46bd30e56b08816fc21b46d0e8c0227bd3d`. Five user-accepted genuine cold starts passed with
+the phone locked, Bluetooth enabled, and no pairing interaction. Their Pi-monotonic
+power-to-connected times were 19.701, 19.556, 19.406, 19.433, and 19.312 seconds: 5/5 below the
+25-second requirement.
+
+Commit `175b104` adds a seeded `pixel-chaos` profile to the host power-loss controller. It keeps
+the mandatory hashed-backup/physically-booted-recovery-card gate, records the complete five-cut
+schedule before starting, enforces at least 12 seconds cold-off, and requires every recovery to
+retain the exact pairing identity, pass the full hardened-storage probe, leave pairing repair
+idle, and reconnect the Pixel within 25 seconds.
+
+The completed seed-`20260901` campaign is retained locally at
+`.artifacts/powerloss/pixel-chaos-175b104-restart-1`. One operator-missed sequence is preserved in
+the separate original campaign and is not counted. The completed campaign produced:
+
+| Abrupt cut | Pixel connected | Storage | Pairing identity | Result |
+|---|---:|---|---|---|
+| 1 second after power-on | 19.169 s | `READY` | unchanged | Pass |
+| 6 seconds after power-on | 19.138 s | `READY` | unchanged | Pass |
+| 12 seconds after power-on | 19.067 s | `READY` | unchanged | Pass |
+| During seeded Bluetooth recovery | 19.601 s | `READY` | unchanged | Pass |
+| During seeded persistent-state write | 19.387 s | `READY` | unchanged | Pass |
+
+Campaign status reports five passed, zero failed, zero active, and zero remaining. The final
+standalone verifier also reports `ready=true`, no failures, Pixel `bond_state=connected`, repair
+idle, `/boot/firmware` read-only, `/media/root-ro` read-only, and the expected writable tmpfs root
+overlay plus journaled `LARKDATA`. These are approximate human-timed physical cuts, not a
+programmable brownout waveform or a long cumulative-durability campaign; no claim is made for
+subsecond voltage sag or dozens of repeated cuts.
+
 ## Remaining gates
 
 1. With the Pixel available, establish a fresh post-reboot Discord call and re-verify the exact
