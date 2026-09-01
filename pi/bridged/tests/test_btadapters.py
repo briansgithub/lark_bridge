@@ -9,6 +9,7 @@ import btadapters
 
 SPEAKER = "C9:5C:FD:6E:28:46"
 TARGET = btadapters.Adapter("hci1", "A0:AD:9F:73:6C:24", "USB", 1)
+PHONE = "5C:33:7B:CB:BF:C5"
 
 
 def device(trusted: bool) -> dict:
@@ -17,6 +18,54 @@ def device(trusted: bool) -> dict:
 
 def path(hci: str) -> str:
     return f"/org/bluez/{hci}/dev_{SPEAKER.replace(':', '_')}"
+
+
+class MediaProfileReadinessTests(unittest.TestCase):
+    def test_bare_connected_device_is_not_profile_ready(self) -> None:
+        device_path = btadapters.path_for(TARGET, PHONE)
+        tree = {
+            device_path: {
+                "org.bluez.Device1": {"Connected": {"data": True}}
+            }
+        }
+        self.assertFalse(btadapters.media_profile_ready_on(TARGET, PHONE, tree))
+
+    def test_idle_a2dp_transport_is_profile_ready_for_exact_device(self) -> None:
+        device_path = btadapters.path_for(TARGET, PHONE)
+        tree = {
+            device_path: {
+                "org.bluez.Device1": {"Connected": {"data": True}}
+            },
+            device_path + "/sep1/fd0": {
+                "org.bluez.MediaTransport1": {
+                    "Device": {"data": device_path},
+                    "UUID": {"data": btadapters.A2DP_SINK_UUID},
+                    "State": {"data": "idle"},
+                }
+            },
+        }
+        self.assertTrue(btadapters.media_profile_ready_on(TARGET, PHONE, tree))
+
+    def test_foreign_or_pending_transport_is_rejected(self) -> None:
+        device_path = btadapters.path_for(TARGET, PHONE)
+        foreign = btadapters.path_for(TARGET, SPEAKER)
+        tree = {
+            device_path + "/sep1/fd0": {
+                "org.bluez.MediaTransport1": {
+                    "Device": {"data": device_path},
+                    "UUID": {"data": btadapters.A2DP_SINK_UUID},
+                    "State": {"data": "pending"},
+                }
+            },
+            foreign + "/sep1/fd1": {
+                "org.bluez.MediaTransport1": {
+                    "Device": {"data": foreign},
+                    "UUID": {"data": btadapters.A2DP_SINK_UUID},
+                    "State": {"data": "active"},
+                }
+            },
+        }
+        self.assertFalse(btadapters.media_profile_ready_on(TARGET, PHONE, tree))
 
 
 class TrustPinTests(unittest.TestCase):
