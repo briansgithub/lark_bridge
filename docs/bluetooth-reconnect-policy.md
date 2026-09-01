@@ -82,4 +82,6 @@ The Pi is the primary connection owner. A Pixel automation may provide one delay
 after 25 seconds, but it must recheck that the phone is still disconnected before calling Android's
 Bluetooth connect action. It must not race the Pi during boot, loop rapidly, or use Bluetooth-near
 polling. This avoids Android and BlueZ issuing overlapping page/profile requests while preserving a
-single recovery attempt if the Pi does not establish the connection.
+single recovery attempt if the Pi does not establish the connection. The Pixel policy mirrors the
+same restored-between-presses deadline and suppresses that fallback during `manual_hold`; a visible
+window-title check is not reliable enough to identify the operator's second Disconnect.
