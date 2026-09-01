@@ -20,6 +20,20 @@ disconnect is noticed promptly. The more expensive active HCI controller-health 
 its independent 15-second cadence; faster reconnect detection therefore does not add continuous
 radio resets or aggressive Bluetooth traffic.
 
+## Manual disconnect gesture
+
+To keep a deliberate phone-side Disconnect from turning into a fight with automatic recovery,
+press **Disconnect** twice within 10 seconds. The first press follows the normal fast reconnect
+path. If that restored, fully usable profile connection is rejected a second time inside the
+window, the watchdog enters `manual_hold` and issues no further device or profile connection
+requests for the rest of that powered session.
+
+Repeated failed pages, an out-of-range phone, Bluetooth being off, and a connection that never
+became profile-ready cannot trigger the hold. The bond and trust remain intact. Tap **Connect** for
+LarkBridge on the Pixel to resume immediately, or turn the car/Pi off and back on; the hold is kept
+only in `/run` and therefore clears on a cold boot. A watchdog service restart during the same boot
+preserves the hold.
+
 ## When automatic repair is allowed
 
 Automatic bond replacement requires one narrow signature on the same healthy controller:
@@ -58,8 +72,9 @@ sudo bridgectl phone repair
 ```
 
 Status includes `bond_state`, `repair_state`, the repair trigger and deadline, reconnect timing,
-the watchdog action, and current instructions. Outside a repair window, readiness requires the
-BT500 to report `Pairable: no` and `Discoverable: no`.
+`manual_hold`, the temporary double-Disconnect deadline, the watchdog action, and current
+instructions. Outside a repair window, readiness requires the BT500 to report `Pairable: no` and
+`Discoverable: no`.
 
 ## Android fallback ownership
 

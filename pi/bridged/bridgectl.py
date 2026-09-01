@@ -250,8 +250,15 @@ def phone_status_view(status: dict[str, Any]) -> dict[str, Any]:
     bond_state = str(watchdog.get("bond_state") or "unknown")
     deadline = watchdog.get("repair_deadline_monotonic")
     reconnect_next = watchdog.get("reconnect_next_monotonic")
+    manual_hold = watchdog.get("manual_hold") is True
+    manual_reject_deadline = watchdog.get("manual_reject_deadline_monotonic")
 
-    if repair_state == "pairing_window":
+    if manual_hold:
+        instructions = (
+            "Reconnect is paused for this drive. Tap Connect for LarkBridge on the "
+            "Pixel to resume, or restart the car/Pi."
+        )
+    elif repair_state == "pairing_window":
         instructions = (
             "On the Pixel, open Bluetooth, tap LarkBridge BT500, and approve Pair."
         )
@@ -280,6 +287,16 @@ def phone_status_view(status: dict[str, Any]) -> dict[str, Any]:
                 else None
             ),
             "watchdog_action": watchdog.get("last_action"),
+            "manual_hold": manual_hold,
+            "manual_hold_since_monotonic": watchdog.get(
+                "manual_hold_since_monotonic"
+            ),
+            "manual_reject_deadline_monotonic": manual_reject_deadline,
+            "manual_reject_remaining_seconds": (
+                max(0.0, float(manual_reject_deadline) - time.monotonic())
+                if isinstance(manual_reject_deadline, (int, float))
+                else None
+            ),
             "reconnect_timing": {
                 "attempts": watchdog.get("reconnect_attempts"),
                 "connected_monotonic": watchdog.get("connected_monotonic"),
@@ -334,6 +351,7 @@ def do_phone_status(args: argparse.Namespace) -> int:
     )
     print(
         f"bond: {block['bond_state']}  repair: {block['repair_state']}  "
+        f"hold: {'active' if block.get('manual_hold') else 'off'}  "
         f"action: {block.get('watchdog_action') or '-'}"
     )
     print(str(block["instructions"]))

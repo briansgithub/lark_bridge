@@ -234,6 +234,31 @@ class StatusParsingTests(unittest.TestCase):
         self.assertFalse(report["reconnect_timing"]["profile_ready"])
         self.assertIn("Completing Pixel audio profiles", report["instructions"])
 
+    def test_phone_status_explains_manual_hold_and_resume(self) -> None:
+        watchdog = {
+            "bond_state": "trusted",
+            "repair_state": "idle",
+            "last_action": "manual_hold",
+            "manual_hold": True,
+            "manual_hold_since_monotonic": 50.0,
+            "manual_reject_deadline_monotonic": None,
+            "reconnect_attempts": 0,
+            "reconnect_next_monotonic": 0.0,
+            "profile_ready": False,
+        }
+        with mock.patch.object(
+            bridgectl, "read_phone_watchdog_state", return_value=watchdog
+        ):
+            report = bridgectl.phone_status_view(
+                {"phone": {"connected": False, "transport": "DISCONNECTED"}}
+            )
+
+        self.assertTrue(report["manual_hold"])
+        self.assertEqual(report["manual_hold_since_monotonic"], 50.0)
+        self.assertEqual(report["watchdog_action"], "manual_hold")
+        self.assertIn("Tap Connect", report["instructions"])
+        self.assertIn("restart the car/Pi", report["instructions"])
+
     def test_phone_repair_signals_only_the_call_watchdog_as_root(self) -> None:
         completed = mock.Mock(returncode=0, stdout="", stderr="")
         output = StringIO()
