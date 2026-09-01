@@ -134,6 +134,8 @@ if [ "$call_controller" = usb-bt500 ]; then
     if grep -Fq 'Powered: yes' <<<"$call_radio"; then ok "call adapter powered"; else bad "call adapter is not powered"; fi
     if grep -Fq 'Pairable: no' <<<"$call_radio"; then ok "call adapter pairability closed"; else bad "call adapter remains pairable"; fi
     if grep -Fq 'Discoverable: no' <<<"$call_radio"; then ok "call adapter discovery closed"; else bad "call adapter remains discoverable"; fi
+    if grep -Fq '0000110b-0000-1000-8000-00805f9b34fb' <<<"$call_radio"; then ok "call adapter A2DP Sink role ready"; else bad "call adapter A2DP Sink role missing"; fi
+    if grep -Fq '0000111e-0000-1000-8000-00805f9b34fb' <<<"$call_radio"; then ok "call adapter Handsfree role ready"; else bad "call adapter Handsfree role missing"; fi
     watchdog_state=/run/larkbridge/bt-watchdog/call.json
     if python3 - "$watchdog_state" <<'PY'
 import json
@@ -148,6 +150,9 @@ required = {
     "repair_deadline_monotonic",
     "reconnect_attempts",
     "reconnect_next_monotonic",
+    "startup_phase",
+    "startup_connect_attempts",
+    "startup_missing_local_uuids",
 }
 if required - state.keys():
     raise SystemExit(1)

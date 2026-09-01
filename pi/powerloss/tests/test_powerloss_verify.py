@@ -25,7 +25,11 @@ def test_call_bluetooth_ready_requires_closed_adapter_and_trusted_bond() -> None
     adapter = {
         "rc": 0,
         "stderr": "",
-        "stdout": "Powered: yes\nPairable: no\nDiscoverable: no\n",
+        "stdout": (
+            "Powered: yes\nPairable: no\nDiscoverable: no\n"
+            "UUID: Audio Sink (0000110b-0000-1000-8000-00805f9b34fb)\n"
+            "UUID: Handsfree (0000111e-0000-1000-8000-00805f9b34fb)\n"
+        ),
     }
     watchdog = {
         "bond_state": "trusted",
@@ -34,6 +38,9 @@ def test_call_bluetooth_ready_requires_closed_adapter_and_trusted_bond() -> None
         "repair_deadline_monotonic": None,
         "reconnect_attempts": 1,
         "reconnect_next_monotonic": 42.0,
+        "startup_phase": "complete",
+        "startup_connect_attempts": 2,
+        "startup_missing_local_uuids": [],
         "last_action": "device-reconnect",
     }
 
@@ -53,6 +60,9 @@ def test_call_bluetooth_ready_rejects_open_or_incomplete_repair_state() -> None:
         "repair_deadline_monotonic": 123.0,
         "reconnect_attempts": 0,
         "reconnect_next_monotonic": 0.0,
+        "startup_phase": "waiting_local_profiles",
+        "startup_connect_attempts": 1,
+        "startup_missing_local_uuids": ["0000110b-0000-1000-8000-00805f9b34fb"],
         "last_action": "pairing_window",
     }
 
