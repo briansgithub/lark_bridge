@@ -2,8 +2,8 @@
 Description=LarkBridge persistent storage guard
 Documentation=file:///home/admin/rpi-lark-bridge/docs/power-loss-hardening.md
 DefaultDependencies=no
-Wants=local-fs.target
-After=local-fs.target
+Wants=local-fs.target var-lib-larkbridge\x2dpersist.mount
+After=local-fs.target var-lib-larkbridge\x2dpersist.mount
 Before=systemd-journal-flush.service bluetooth.service bridge-btfw.service bridge-btwatchdog.service user@1000.service
 
 [Service]
