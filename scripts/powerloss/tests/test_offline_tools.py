@@ -24,6 +24,20 @@ safety = load("safety_evidence", ROOT / "scripts/powerloss/safety-evidence.py")
 
 
 class OfflineBootConfiguration(unittest.TestCase):
+    def test_storage_guard_waits_for_the_optional_persistent_mount(self) -> None:
+        unit = (
+            ROOT / "pi/systemd/system/bridge-storage-guard.service"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "Wants=local-fs.target var-lib-larkbridge\\x2dpersist.mount",
+            unit,
+        )
+        self.assertIn(
+            "After=local-fs.target var-lib-larkbridge\\x2dpersist.mount",
+            unit,
+        )
+
     def test_configures_read_only_mounts_and_initramfs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
