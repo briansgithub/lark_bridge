@@ -70,11 +70,13 @@ after reduction. PipeWire error counters did not increase and no sample clipped.
 | Hardware gain | Raw peak | Post-AEC peak | Verdict |
 |---:|---:|---:|---|
 | +20 dB | -20.71 dBFS | -21.31 dBFS | Too quiet |
-| +25 dB | -13.49 dBFS | -13.76 dBFS | Selected |
+| +23 dB | -31.74 dBFS | -36.04 dBFS | Operator-selected after listening check |
+| +25 dB | -13.49 dBFS | -13.76 dBFS | Best measured level |
 | +28 dB | -9.01 dBFS | -9.37 dBFS | Insufficient headroom |
 
 At +25 dB, the post-AEC silence floor was -50.69 dBFS, giving 21.56 dB measured SNR against
-the -29.13 dBFS speech RMS. The K053 therefore owns `Mic Capture Volume` at +25 dB. The ALSA
-control exposes 496 raw steps over 0–31 dB; the supervisor converts the configured dB value to
-the raw step and verifies a separate readback rather than trusting `amixer cset` to interpret a
-`dB` suffix.
+the -29.13 dBFS speech RMS. The operator subsequently selected +23 dB to reduce the far-end
+level further. The K053 control is notably non-linear: the two-dB requested reduction produced
+an approximately 18-dB raw peak reduction in the repeated acoustic test. The supervisor therefore
+converts the configured dB value to the device's advertised raw step and verifies that exact raw
+readback rather than trusting `amixer cset` to interpret a `dB` suffix.
