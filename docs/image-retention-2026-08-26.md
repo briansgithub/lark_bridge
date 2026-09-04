@@ -101,11 +101,12 @@ there are no byte-for-byte duplicate boot images.
 | `E:\larkbridge-images\20260827T204627Z\LarkBridge-bt500-aux-03df47e-20260827T204627Z.img` | `18349d99672237cc50f9aa28a9511f8f60b83e80f3bb821bd4b7843742019493` | Consistent full-card capture of deployed `03df47e`, including current configuration and unit identity | **Keep.** Capture/hash and source-Pi state restoration passed. Independent spare-card restore/boot remains pending; it is waived only for rapid development. |
 | `E:\larkbridge-source-20260823.img` | `847b4d34d112cbef497304885494780a15a5104e29ff69e1339ede306202f6bc` | Clean-shutdown, pre-hardening source state; its recovery card was physically boot-tested | **Keep permanently.** This is the documented last-resort rollback and preserves a hybrid deployed state that no Git commit fully represents. Keep `host-safety-evidence.json` and the recovery card with it. |
 | `rpi_lark_mic_bridge-mode1\artifacts\phase5\source-PhysicalDrive3-0123456789ABCDE.img` | `d61a145b91498df38973806eed6bf2aa1b76dc49bc72ef8c9cb02e9795c313db` | Verified pre-mutation rollback for the unfinished dual-USB/BT600 experiment | **Keep while that experiment may resume.** If the experiment is formally abandoned, it can be retired after retaining its evidence because the production rollback above remains available. |
-| `rpi_lark_mic_bridge-mode1\artifacts\phase5\candidate-preboot-PhysicalDrive3-0123456789ABCDE.img` | `c3fae02c5216f68f5179e8ff2592f67540882540deaf0922635d891f0a3a5d9e` | Mutated intermediate dual-USB/BT600 candidate from a non-production branch | **Best immediate retirement candidate.** It is not the source rollback, is not production, and its smaller evidence and Git history preserve the experiment. Reclaims 14.9834 GiB. |
+| `rpi_lark_mic_bridge-mode1\artifacts\phase5\candidate-preboot-PhysicalDrive3-0123456789ABCDE.img` | `c3fae02c5216f68f5179e8ff2592f67540882540deaf0922635d891f0a3a5d9e` | Mutated intermediate dual-USB/BT600 candidate from a non-production branch | **Removed 2026-09-04.** It was not the source rollback or a production image; its compact evidence and Git history remain. Reclaimed 14.9834 GiB. |
 | `rpi_lark_mic_bridge\artifacts\pi-images\20260825T214343Z\LarkBridge-pi3-bt500-aux-c63c823-20260825T214343Z.img` | `8ab6af1dcacdd40851e8ef9919cda8cec1ec69e786d768dfb3e7caac8a7c7dec` | Consistent hardened BT500/AUX image at commit `c63c823`; qualification was incomplete | **Keep temporarily.** Retire only after the current `03df47e` image passes capture/hash/restore/boot verification. Reclaims another 14.9834 GiB. |
 
-Removing the BT600 candidate now and the `c63c823` image after replacement would reclaim
-`32176603136` bytes (29.9668 GiB).
+The BT600 candidate removal reclaimed `16088301568` bytes (14.9834 GiB). The `c63c823` image
+can reclaim another 14.9834 GiB only after a current image passes independent restore/boot
+verification.
 
 ## Other saved artifacts
 
@@ -122,4 +123,5 @@ Removing the BT600 candidate now and the `c63c823` image after replacement would
 - Git tags, experiment reports, release/source archives, and compact evidence should remain
   even when a superseded raw image is retired. They preserve history at a small storage cost.
 
-No files were deleted as part of this review.
+No other files were deleted. Current, known-good rollback, pre-hardening source, and unfinished
+experiment source images remain retained.
