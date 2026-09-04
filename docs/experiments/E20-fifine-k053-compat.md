@@ -1,6 +1,6 @@
 # E20 — FIFINE K053 lavalier compatibility
 
-**Status:** host implementation complete; live routing qualification not yet run
+**Status:** deployed and accepted for abbreviated “good enough” use; extended qualification deferred
 
 **Observed:** 2026-09-03
 **Retail reference:** FIFINE K053, ASIN `B077VNGVL2`
@@ -78,3 +78,14 @@ the -29.13 dBFS speech RMS. The operator subsequently selected +23 dB to reduce 
 level further. The supervisor converts the configured dB value to the device's advertised raw
 step and verifies that exact raw readback rather than trusting `amixer cset` to interpret a `dB`
 suffix.
+
+## Deployment verdict
+
+Release commit `294735a188f67648f2c956e9ebef3ac0af00fd09` was installed transactionally with
+the preserved configuration set to +23 dB, then rebooted. The hardened verifier returned
+`ready: true` with no failures or service restarts; boot and lower-root remained read-only,
+K053 capture remained present, its monitor sink remained absent, and AUX was the only output.
+The active-call gain sweep showed no clipping or growing PipeWire errors, and the operator
+accepted the resulting sound. A +23 dB capture made after the microphone was moved was excluded
+from the measurements above. The longer replacement-unit, endurance, and spare-card restore
+gates remain unclaimed.
