@@ -4,7 +4,7 @@
 
 The current appliance is release commit
 `294735a188f67648f2c956e9ebef3ac0af00fd09`. Its exact install archive is
-`archive/LarkBridge-bt500-aux-294735a188f6-20260904T155440Z.zip`, SHA-256
+`E:\larkbridge-images\releases\294735a188f6\LarkBridge-bt500-aux-294735a188f6-20260904T155440Z.zip`, SHA-256
 `a6e482dffa42737320cf2856e2eb0154910d25b8df1c9fc4872a4441a3eafc04`.
 
 The guarded full-card capture is
