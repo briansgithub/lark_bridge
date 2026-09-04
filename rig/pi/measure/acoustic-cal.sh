@@ -24,7 +24,7 @@ M="${MICROPHONE_CARD:-}"; B="${DONGLE_B_CARD:-}"
 
 case "$MICROPHONE_ID" in
   lark-a1) MICROPHONE_CHANNELS=2 ;;
-  fifine-k054) MICROPHONE_CHANNELS=1 ;;
+  fifine-k053|fifine-k054) MICROPHONE_CHANNELS=1 ;;
   *) echo "unsupported microphone identity: ${MICROPHONE_ID:-none}" >&2; exit 78 ;;
 esac
 

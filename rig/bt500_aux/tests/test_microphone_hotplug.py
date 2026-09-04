@@ -22,7 +22,10 @@ def service_counts(value: int = 0) -> dict[str, int]:
 
 
 def usb_topology(
-    *, lark: tuple[str, ...] = (), fifine: tuple[str, ...] = ("1-1.2@4",)
+    *,
+    lark: tuple[str, ...] = (),
+    k053: tuple[str, ...] = (),
+    fifine: tuple[str, ...] = ("1-1.2@4",),
 ) -> dict[str, list[dict]]:
     def devices(candidate_id: str, values: tuple[str, ...]) -> list[dict]:
         vendor_id, product_id = hotplug.core.USB_MICROPHONE_FINGERPRINTS[candidate_id]
@@ -49,6 +52,7 @@ def usb_topology(
 
     return {
         "lark-a1": devices("lark-a1", lark),
+        "fifine-k053": devices("fifine-k053", k053),
         "fifine-k054": devices("fifine-k054", fifine),
     }
 
@@ -57,7 +61,11 @@ def selected_for_topology(topology: dict[str, list[dict]]) -> dict | None:
     candidate_id = (
         "lark-a1"
         if len(topology["lark-a1"]) == 1
-        else ("fifine-k054" if len(topology["fifine-k054"]) == 1 else None)
+        else (
+            "fifine-k053"
+            if len(topology["fifine-k053"]) == 1
+            else ("fifine-k054" if len(topology["fifine-k054"]) == 1 else None)
+        )
     )
     if candidate_id is None:
         return None
@@ -565,6 +573,26 @@ class FakeStream:
 
 
 class MicrophoneHotplugHostTests(unittest.TestCase):
+    def test_k053_is_observed_without_changing_e18_campaign_targets(self) -> None:
+        topology = usb_topology(k053=("1-1.5@6",))
+        devices, error = hotplug.core._validated_usb_devices(
+            topology, "fifine-k053"
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(devices[0]["usb_product_id"], "161f")  # type: ignore[index]
+        selected = selected_for_topology(topology)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["id"], "fifine-k053")  # type: ignore[index]
+        self.assertEqual(
+            hotplug.core.E18_CAMPAIGN_CANDIDATE_IDS,
+            ("lark-a1", "fifine-k054"),
+        )
+        self.assertEqual(
+            hotplug.core.USB_FINAL_SELECTED_CANDIDATE["fallback"],
+            "fifine-k054",
+        )
+
     def test_host_mark_action_rejects_missing_remote_stream(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

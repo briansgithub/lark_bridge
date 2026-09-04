@@ -76,8 +76,13 @@ CONNECTION_LAYOUT_HANDOFF_PHASE = "connection_layout_handoff"
 CONNECTION_LAYOUT_BOUNDARY_CYCLE = 10
 USB_MICROPHONE_FINGERPRINTS = {
     "lark-a1": ("3547", "0407"),
+    "fifine-k053": ("0c76", "161f"),
     "fifine-k054": ("0c76", "161e"),
 }
+# The existing E18 campaigns remain specifically about Lark/K054 transitions. The
+# raw sampler inventories every known microphone, including K053, without silently
+# changing those historical campaign gates or their artifact interpretation.
+E18_CAMPAIGN_CANDIDATE_IDS = ("lark-a1", "fifine-k054")
 USB_GATE_BY_PHASE = {
     "lark_promotion": "promotion",
     "lark_fallback": "fallback",
@@ -249,7 +254,7 @@ def read_usb_microphones(
     *,
     descriptor_cache: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], str | None]:
-    """Read the E18 microphone fingerprints directly from USB sysfs.
+    """Read known bridge microphone fingerprints directly from USB sysfs.
 
     ALSA card numbers and PipeWire enumeration order are deliberately absent. The
     port plus USB ``devnum`` forms an instance generation that changes on replug.
@@ -440,7 +445,7 @@ def stable_usb_baseline_from_samples(
         raise CampaignAbort("USB action baseline source monotonic samples are gapped")
     if snapshots[0]["usb_microphones"] != snapshots[1]["usb_microphones"]:
         raise CampaignAbort("USB action baseline topology is unstable")
-    for candidate_id in USB_MICROPHONE_FINGERPRINTS:
+    for candidate_id in E18_CAMPAIGN_CANDIDATE_IDS:
         _devices, error = _validated_usb_devices(
             snapshots[-1]["usb_microphones"], candidate_id
         )
@@ -1899,7 +1904,7 @@ def _usb_generation_topology(
 ) -> tuple[dict[str, tuple[str, ...]] | None, str | None]:
     """Reduce raw USB evidence to the physical generations present per candidate."""
     generations: dict[str, tuple[str, ...]] = {}
-    for candidate_id in USB_MICROPHONE_FINGERPRINTS:
+    for candidate_id in E18_CAMPAIGN_CANDIDATE_IDS:
         devices, error = _validated_usb_devices(topology, candidate_id)
         if error or devices is None:
             return None, error or f"USB topology omitted {candidate_id}"
@@ -3470,7 +3475,7 @@ def summarize_connection_layout_gate(
             shared_external_ancestor = False
             for topology in topologies:
                 candidate_ancestors: dict[str, set[str]] = {}
-                for candidate_id in USB_MICROPHONE_FINGERPRINTS:
+                for candidate_id in E18_CAMPAIGN_CANDIDATE_IDS:
                     devices, device_error = _validated_usb_devices(
                         topology, candidate_id
                     )
@@ -3514,7 +3519,7 @@ def summarize_connection_layout_gate(
                             )
                 if all(
                     candidate_ancestors.get(item)
-                    for item in USB_MICROPHONE_FINGERPRINTS
+                    for item in E18_CAMPAIGN_CANDIDATE_IDS
                 ):
                     shared_external_ancestor = bool(
                         candidate_ancestors["lark-a1"]

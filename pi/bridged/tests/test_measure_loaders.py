@@ -47,5 +47,15 @@ def test_standalone_measurement_loader_exposes_supervisor_siblings(
 
     assert [candidate.id for candidate in settings.microphone_candidates] == [
         "lark-a1",
+        "fifine-k053",
         "fifine-k054",
     ]
+    k053 = settings.microphone_candidates[1]
+    assert (k053.usb_vendor_id, k053.usb_product_id) == ("0c76", "161f")
+    assert k053.required_capability is not None
+    assert k053.required_capability.as_dict() == {
+        "rate": 48_000,
+        "format": "S16LE",
+        "channels": 1,
+    }
+    assert k053.capture_only is False

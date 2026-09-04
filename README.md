@@ -4,8 +4,8 @@ Abrupt-power-loss image preparation and the manual 50-cut acceptance campaign ar
 documented in [`docs/power-loss-hardening.md`](docs/power-loss-hardening.md).
 
 Make a **Hollyland Lark A1** USB-C lavalier microphone work as the preferred call microphone on a
-**Google Pixel 7a** (Android 14), with a wired **FIFINE K054** as the fallback and call audio
-routed somewhere else entirely.
+**Google Pixel 7a** (Android 14), with a wired **FIFINE K053** lavalier and **FIFINE K054**
+gooseneck as ordered fallbacks and call audio routed somewhere else entirely.
 
 Android will not treat the Lark's receiver as a communication headset, because it enumerates as a
 **capture-only** USB Audio Class device with no playback endpoint. This project builds an external
@@ -13,12 +13,15 @@ bridge that presents Android with a device it *will* accept — either a Bluetoo
 full-duplex USB headset — while splitting the microphone and playback sides behind the scenes.
 
 ```
-  Lark A1 ──USB──┐
-                 ├──► Raspberry Pi 3B ──┬── Bluetooth HFP ──► Pixel 7a  (Mode 1 / 1W)
-  FIFINE K054 ───┘                      └── Pi Pico ──USB──► Pixel 7a   (Mode 2)
+  Lark A1 ─────USB──┐
+  FIFINE K053 ─USB──┼──► Raspberry Pi 3B ──┬── Bluetooth HFP ──► Pixel 7a  (Mode 1 / 1W)
+  FIFINE K054 ─USB──┘                      └── Pi Pico ──USB──► Pixel 7a   (Mode 2)
 ```
 
-**Current branch status (`codex/fifine-k054-compat`, 2026-08-25): implementation complete; FIFINE
+**Current branch status (`codex/fifine-k053-compat`, 2026-09-03): K053 implementation and host
+regression coverage are complete; live routing qualification has not yet run.**
+
+**Prior K054 baseline (`codex/fifine-k054-compat`, 2026-08-25): implementation complete; FIFINE
 field qualification pending.** Ordered resolution and fail-closed Lark/FIFINE switching pass the
 host suites, and a read-only live resolver preflight selected the attached Lark while reporting the
 attached K054 as a native mono S16LE/48 kHz usable fallback with no USB serial. The Pi still runs
@@ -52,6 +55,7 @@ forwarding are deliberately deferred. See
 | ASUS USB-BT500 | Required call controller for the current branch (`0b05:1bf6`) |
 | Raspberry Pi Pico (RP2040) | USB device capability; presents as the USB headset in Mode 2 |
 | Hollyland Lark A1 | USB-C receiver, capture-only UAC device |
+| FIFINE K053 | Wired USB lavalier, mono fallback with an unused monitor output |
 | FIFINE K054 | Wired USB-A gooseneck, capture-only mono fallback; field qualification pending |
 | Google Pixel 7a | Android 14 |
 | AUX speaker | Pi 3.5 mm output; Harmony boombox is the current fixture |
@@ -65,8 +69,8 @@ to power the Pico that back-feeds the phone, and it is not obvious.
 
 | Mode | Microphone path | Call audio out | Radio does | Status |
 |---|---|---|---|---|
-| **1** Bluetooth bridge | preferred Lark, K054 fallback → Pi → HFP → Pixel | A2DP car stereo | HFP + A2DP | **Deferred on this branch.** No Bluetooth-output claim |
-| **1W** Bluetooth + wired | preferred Lark, K054 fallback → Pi → HFP → Pixel | Pi 3.5 mm jack | USB-BT500 HFP only | Lark baseline persisted; K054 field qualification pending |
+| **1** Bluetooth bridge | Lark, K053, K054 priority → Pi → HFP → Pixel | A2DP car stereo | HFP + A2DP | **Deferred on this branch.** No Bluetooth-output claim |
+| **1W** Bluetooth + wired | Lark, K053, K054 priority → Pi → HFP → Pixel | Pi 3.5 mm jack | USB-BT500 HFP only | K053 qualification pending |
 | **2** USB headset bridge | selected microphone → Pi → Pico → Pixel | Pixel → Pico → Pi → any sink | nothing | Independent track |
 | **3** Diagnostics | raw devices exposed | — | — | Always available |
 
@@ -101,19 +105,20 @@ of selection state.
 
 ## Microphone priority
 
-Microphone order is configuration, not enumeration order: the Lark A1 is selected whenever it is
-uniquely usable; otherwise the bridge falls back to the K054. A higher-priority ambiguous match
-holds the uplink safe instead of silently choosing a different microphone. Inspect the live choice
-and every candidate with:
+Microphone order is configuration, not enumeration order: a live Lark A1 is selected first, then
+the K053 lavalier, then the K054 gooseneck. A higher-priority ambiguous match holds the uplink safe
+instead of silently choosing a different microphone. Inspect the live choice and every candidate
+with:
 
 ```bash
 python3 pi/bridged/bridgectl.py microphone list
 python3 pi/bridged/bridgectl.py microphone status --json
 ```
 
-The K054 implementation uses its verified native S16LE/48 kHz/mono mode, but physical controls,
-replacement-unit identity, acoustic performance, and AEC endurance remain field-QA gates; see
-[`E18`](docs/experiments/E18-fifine-k054-compat.md).
+Both FIFINE implementations use verified native S16LE/48 kHz/mono capture. The K053 monitor sink is
+disabled so it cannot replace the Pi AUX output. Qualification evidence is kept per microphone in
+[`E18`](docs/experiments/E18-fifine-k054-compat.md) and
+[`E20`](docs/experiments/E20-fifine-k053-compat.md).
 
 ## Pixel connection and pairing repair
 

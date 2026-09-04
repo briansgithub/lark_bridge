@@ -356,7 +356,9 @@ def load_resume_evidence(path: Path) -> tuple[dict[str, Any], list[dict[str, Any
                 f"predecessor {kind} cycle {cycle} timing evidence is invalid: {timing_error}"
             )
         for topology in core._transition_usb_topologies(item):
-            for candidate_id in core.USB_MICROPHONE_FINGERPRINTS:
+            # E18 remains a Lark/K054 campaign even though the streamed raw USB
+            # inventory now also records the K053 for safety and later E20 review.
+            for candidate_id in core.E18_CAMPAIGN_CANDIDATE_IDS:
                 devices, device_error = core._validated_usb_devices(
                     topology, candidate_id
                 )

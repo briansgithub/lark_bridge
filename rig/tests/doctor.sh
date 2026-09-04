@@ -20,7 +20,7 @@ if [ "$fail" -eq 0 ]; then
     > "$DIR/versions.txt" 2>&1 || fail=1
   pi 'systemctl is-active bluetooth bridge-btfw bridge-btwatchdog bridge-tuning; systemctl --user is-active pipewire wireplumber bridge-supervisor' \
     > "$DIR/services.txt" 2>&1 || fail=1
-  pi "cd ~/rpi-lark-bridge && LARK_USB_ID='$(inv lark_usb_id 3547:0407)' LARK_USB_SERIAL='$(inv lark_usb_serial '')' FIFINE_USB_ID='$(inv fifine_usb_id 0c76:161e)' FIFINE_USB_SERIAL='$(inv fifine_usb_serial '')' FIFINE_PORT='$(inv fifine_port_path '')' bash rig/pi/measure/devices.sh" \
+  pi "cd ~/rpi-lark-bridge && LARK_USB_ID='$(inv lark_usb_id 3547:0407)' LARK_USB_SERIAL='$(inv lark_usb_serial '')' FIFINE_K053_USB_ID='$(inv fifine_k053_usb_id 0c76:161f)' FIFINE_K053_USB_SERIAL='$(inv fifine_k053_usb_serial '')' FIFINE_K053_PORT='$(inv fifine_k053_port_path '')' FIFINE_USB_ID='$(inv fifine_usb_id 0c76:161e)' FIFINE_USB_SERIAL='$(inv fifine_usb_serial '')' FIFINE_PORT='$(inv fifine_port_path '')' bash rig/pi/measure/devices.sh" \
     > "$DIR/devices.txt" 2>&1 || fail=1
   pi 'cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bridge-status.json"' \
     > "$DIR/bridge-status.json" 2>&1 || fail=1
