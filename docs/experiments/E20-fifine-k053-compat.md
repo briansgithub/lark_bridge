@@ -1,7 +1,8 @@
 # E20 — FIFINE K053 lavalier compatibility
 
-**Status:** host implementation complete; live routing qualification not yet run  
-**Observed:** 2026-09-03  
+**Status:** host implementation complete; live routing qualification not yet run
+
+**Observed:** 2026-09-03
 **Retail reference:** FIFINE K053, ASIN `B077VNGVL2`
 
 ## Objective
