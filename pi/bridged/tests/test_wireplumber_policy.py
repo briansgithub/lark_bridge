@@ -12,7 +12,20 @@ def test_hfp_nodes_are_not_autoconnected() -> None:
     assert "node.autoconnect = false" in policy
     assert "a2dp-source" not in policy
     assert "Lark A1" in policy
+    assert "FIFINE K053" in policy
     assert "FIFINE K054" in policy
+
+
+def test_fifine_k053_monitor_output_is_disabled_without_disabling_capture() -> None:
+    policy = (
+        POLICY_ROOT / "68-bridge-fifine-k053-monitor-output.conf"
+    ).read_text(encoding="utf-8")
+
+    assert 'media.class = "Audio/Sink"' in policy
+    assert 'alsa.components = "USB0c76:161f"' in policy
+    assert "node.disabled = true" in policy
+    assert 'media.class = "Audio/Source"' not in policy
+    assert "USB0c76:161e" not in policy
 
 
 def test_phone_media_targets_aux_without_disabling_acquisition() -> None:

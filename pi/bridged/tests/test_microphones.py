@@ -104,6 +104,39 @@ def fifine_source(**overrides: object) -> microphones.ObservedSource:
     return source(**values)  # type: ignore[arg-type]
 
 
+def k053_candidate(**overrides: object) -> microphones.MicrophoneCandidate:
+    values: dict[str, object] = {
+        "candidate_id": "fifine-k053",
+        "node": FIFINE_NODE,
+        "vendor": "0c76",
+        "product_id": "161f",
+        "product": "USB PnP Audio Device",
+        "channels": 1,
+        "capture_only": False,
+    }
+    values.update(overrides)
+    return candidate(**values)  # type: ignore[arg-type]
+
+
+def k053_source(**overrides: object) -> microphones.ObservedSource:
+    values: dict[str, object] = {
+        "node": FIFINE_NODE,
+        "vendor": "0c76",
+        "product_id": "161f",
+        "product": "USB PnP Audio Device",
+        "port": "1-1.5",
+        "generation": "1-1.5@6",
+        "device_id": "61",
+        "device_serial": "600",
+        "object_serial": "601",
+        "channels": 1,
+        "component": "USB0c76:161f",
+        "playback": True,
+    }
+    values.update(overrides)
+    return source(**values)  # type: ignore[arg-type]
+
+
 class NormalizationTests(unittest.TestCase):
     def test_usb_ids_accept_common_spellings(self) -> None:
         self.assertEqual(microphones.normalize_usb_id("0xC76"), "0c76")
@@ -140,6 +173,20 @@ class ConfigurationTests(unittest.TestCase):
                         "capture_only": True,
                     },
                     {
+                        "id": "fifine-k053",
+                        "label": "FIFINE K053 Lavalier",
+                        "node_name": FIFINE_NODE,
+                        "usb_vendor_id": "0C76",
+                        "usb_product_id": "161F",
+                        "usb_product": "USB PnP Audio Device",
+                        "usb_serial": "",
+                        "usb_port_path": "",
+                        "required_rate": 48_000,
+                        "required_format": "S16_LE",
+                        "required_channels": 1,
+                        "capture_only": False,
+                    },
+                    {
                         "id": "fifine-k054",
                         "label": "FIFINE K054",
                         "node_name": FIFINE_NODE,
@@ -160,10 +207,16 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_explicit_array_preserves_priority_and_ignores_legacy_table(self) -> None:
         parsed = microphones.parse_microphone_candidates(self.explicit_document(), {})
-        self.assertEqual([item.id for item in parsed], ["lark-a1", "fifine-k054"])
+        self.assertEqual(
+            [item.id for item in parsed],
+            ["lark-a1", "fifine-k053", "fifine-k054"],
+        )
         self.assertEqual(parsed[1].usb_vendor_id, "0c76")
+        self.assertEqual(parsed[1].usb_product_id, "161f")
         self.assertEqual(parsed[1].required_format, "S16LE")
         self.assertIsNone(parsed[1].usb_serial)
+        self.assertFalse(parsed[1].capture_only)
+        self.assertTrue(parsed[2].capture_only)
         self.assertFalse(any(item.legacy for item in parsed))
 
     def test_environment_changes_only_explicit_lark_profile_not_hard_identity(self) -> None:
@@ -175,6 +228,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(parsed[0].alsa_component, "USB9999:0001")
         self.assertEqual((parsed[0].usb_vendor_id, parsed[0].usb_product_id), ("3547", "0407"))
         self.assertEqual(parsed[1].node_name, FIFINE_NODE)
+        self.assertEqual(parsed[2].node_name, FIFINE_NODE)
 
     def test_missing_array_synthesizes_legacy_lark(self) -> None:
         parsed = microphones.parse_microphone_candidates({}, {})
@@ -409,8 +463,10 @@ class ObservationTests(unittest.TestCase):
 class ResolutionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.lark = candidate()
+        self.k053 = k053_candidate()
         self.fifine = fifine_candidate()
         self.lark_source = source()
+        self.k053_source = k053_source()
         self.fifine_source = fifine_source()
 
     def lark_availability(
@@ -574,6 +630,85 @@ class ResolutionTests(unittest.TestCase):
         self.assertEqual([item.state for item in result.diagnostics], ["selected", "usable"])
         self.assertEqual(result.reason, "using lark-a1")
 
+    def test_three_candidate_order_uses_identity_when_fifines_share_node_name(self) -> None:
+        candidates = [self.lark, self.k053, self.fifine]
+        observations = [self.fifine_source, self.lark_source, self.k053_source]
+
+        result = microphones.resolve(candidates, observations)
+
+        assert result.selected is not None
+        self.assertEqual(result.selected.candidate.id, "lark-a1")
+        self.assertEqual(
+            [item.state for item in result.diagnostics],
+            ["selected", "usable", "usable"],
+        )
+        self.assertEqual(
+            [item.matched_sources[0].usb_product_id for item in result.diagnostics],
+            ["0407", "161f", "161e"],
+        )
+        reversed_result = microphones.resolve(candidates, list(reversed(observations)))
+        self.assertEqual(result.as_dict(), reversed_result.as_dict())
+
+    def test_inactive_lark_selects_k053_before_k054(self) -> None:
+        candidates = [self.lark, self.k053, self.fifine]
+        observations = [self.lark_source, self.k053_source, self.fifine_source]
+        availability = self.lark_availability(
+            "inactive", "Lark receiver has no active transmitter"
+        )
+
+        result = microphones.resolve(
+            candidates,
+            observations,
+            dynamic_availability=availability,
+        )
+
+        assert result.selected is not None
+        self.assertEqual(result.selected.candidate.id, "fifine-k053")
+        self.assertEqual(result.selected.priority, 1)
+        self.assertEqual(
+            [item.state for item in result.diagnostics],
+            ["capability_mismatch", "selected", "usable"],
+        )
+        self.assertTrue(result.reason.endswith("using fifine-k053"))
+
+    def test_absent_k053_falls_through_to_k054(self) -> None:
+        result = microphones.resolve(
+            [self.lark, self.k053, self.fifine],
+            [self.fifine_source],
+        )
+
+        assert result.selected is not None
+        self.assertEqual(result.selected.candidate.id, "fifine-k054")
+        self.assertEqual(result.selected.priority, 2)
+        self.assertEqual(
+            [item.state for item in result.diagnostics],
+            ["absent", "absent", "selected"],
+        )
+        self.assertEqual(
+            result.reason,
+            "lark-a1 absent; fifine-k053 absent; using fifine-k054",
+        )
+
+    def test_duplicate_k053_blocks_k054_fallback(self) -> None:
+        duplicate = k053_source(
+            port="1-1.6",
+            generation="1-1.6@7",
+            device_id="62",
+            device_serial="610",
+            object_serial="611",
+        )
+
+        result = microphones.resolve(
+            [self.lark, self.k053, self.fifine],
+            [self.k053_source, duplicate, self.fifine_source],
+        )
+
+        self.assertTrue(result.blocked)
+        self.assertIsNone(result.selected)
+        self.assertEqual(result.diagnostics[1].state, "ambiguous")
+        self.assertEqual(result.diagnostics[2].state, "usable")
+        self.assertIn("configure usb_serial or usb_port_path", result.reason)
+
     def test_reversed_enumeration_has_identical_resolution(self) -> None:
         forward = microphones.resolve(
             [self.lark, self.fifine], [self.lark_source, self.fifine_source]
@@ -718,6 +853,21 @@ class ResolutionTests(unittest.TestCase):
         self.assertNotEqual(before.instance_token, after.instance_token)
         self.assertIn("fifine-k054", after.instance_token or "")
         self.assertIn("1-1.2@19", after.instance_token or "")
+
+    def test_k053_replug_changes_instance_token_despite_same_generic_node(self) -> None:
+        before = microphones.resolve([self.k053], [self.k053_source])
+        replacement = k053_source(
+            object_serial="701",
+            device_serial="700",
+            generation="1-1.3@9",
+            port="1-1.3",
+        )
+
+        after = microphones.resolve([self.k053], [replacement])
+
+        self.assertNotEqual(before.instance_token, after.instance_token)
+        self.assertIn("fifine-k053", after.instance_token or "")
+        self.assertIn("1-1.3@9", after.instance_token or "")
 
     def test_status_shape_contains_identity_format_and_diagnostics(self) -> None:
         status = microphones.resolve([self.fifine], [self.fifine_source]).as_dict()

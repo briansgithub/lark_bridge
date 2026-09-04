@@ -927,13 +927,14 @@ class PcmActivityDebouncer:
 
 
 def automatic_lark_liveness_enabled(candidates: tuple[Any, ...]) -> bool:
-    """Limit the PCM heuristic to the explicit Lark-first/FIFINE-fallback deployment."""
-    lark = next((item for item in candidates if getattr(item, "id", None) == "lark-a1"), None)
-    fifine = next(
-        (item for item in candidates if getattr(item, "id", None) == "fifine-k054"),
-        None,
+    """Enable PCM liveness for an explicit Lark-first list with any fallback."""
+    if len(candidates) < 2:
+        return False
+    lark = candidates[0]
+    return bool(
+        getattr(lark, "id", None) == "lark-a1"
+        and not getattr(lark, "legacy", False)
     )
-    return bool(lark is not None and not getattr(lark, "legacy", False) and fifine is not None)
 
 
 class LarkPcmLivenessMonitor:
@@ -3200,7 +3201,7 @@ def main() -> int:
     lark_liveness = LarkPcmLivenessMonitor()
     lark_liveness_enabled = automatic_lark_liveness_enabled(settings.microphone_candidates)
     if lark_liveness_enabled:
-        log.info("Lark transmitter PCM detection enabled with FIFINE fallback")
+        log.info("Lark transmitter PCM detection enabled with configured microphone fallback")
     stopping = False
 
     def on_signal(signum: int, _frame: Any) -> None:

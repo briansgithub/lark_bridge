@@ -13,14 +13,14 @@ PY="$(command -v py 2>/dev/null || command -v python3)"
 J="$RIG_ROOT/analysis/jsonget.py"
 FIFINE_USB_ID="$(inv fifine_usb_id 0c76:161e)"
 FIFINE_USB_SERIAL="$(inv fifine_usb_serial '')"
-FIFINE_PORT="$(inv fifine_usb_port '')"
+FIFINE_PORT="$(inv fifine_port_path '')"
 
 CARD="$(pi "cd ~/rpi-lark-bridge && FIFINE_USB_ID='$FIFINE_USB_ID' FIFINE_USB_SERIAL='$FIFINE_USB_SERIAL' FIFINE_PORT='$FIFINE_PORT' bash -c '. rig/pi/measure/devices.sh; rig_resolve; echo \$FIFINE_CARD'")"
 case "$CARD" in
   [0-9]*) ;;
   AMBIGUOUS*)
     err "K054 identity is ambiguous: $CARD"
-    err "set fifine_usb_serial or fifine_usb_port in rig/inventory.toml"
+    err "set fifine_usb_serial or fifine_port_path in rig/inventory.toml"
     emit_result U16 FAIL "$DIR" candidate_id fifine-k054 usb_id "$FIFINE_USB_ID" reason ambiguous
     exit 1
     ;;

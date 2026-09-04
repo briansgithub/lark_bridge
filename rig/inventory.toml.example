@@ -20,7 +20,7 @@ boot_ssh_timeout_seconds = 8
 boot_shutdown_timeout_seconds = 30
 boot_timeout_seconds = 120
 boot_cold_off_seconds = 10
-boot_expected_microphone = "lark-a1" # use "fifine-k054" for a FIFINE campaign
+boot_expected_microphone = "lark-a1" # use "fifine-k053" or "fifine-k054" for a FIFINE campaign
 boot_power_off_command = []
 boot_power_on_command = []
 boot_serial_capture_command = []
@@ -43,8 +43,14 @@ lark_usb_id       = "3547:0407" # stable VID:PID; Lark may use any Pi USB port
 lark_usb_serial   = ""          # optional if a future receiver exposes a unique serial
 lark_port_path    = ""
 
-# K054 descriptors are generic and contain no serial on the characterized unit. Leave the port
+# K053 descriptors are generic and contain no serial on the characterized unit. Leave the port
 # blank for portable matching or set it to disambiguate another device with the same fingerprint.
+fifine_k053_usb_id       = "0c76:161f"
+fifine_k053_usb_serial   = ""
+fifine_k053_port_path    = ""
+
+# Backward-compatible K054 fields. These retain their established names so existing inventories
+# continue to identify the gooseneck microphone without migration.
 fifine_usb_id       = "0c76:161e"
 fifine_usb_serial   = ""
 fifine_port_path    = ""

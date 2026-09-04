@@ -58,6 +58,22 @@ required_channels = 2
 capture_only = true
 
 [[devices.microphones]]
+# The K053 exposes generic descriptors and no serial. Its playback interface is deliberately
+# disabled by WirePlumber; capture_only is false because the physical device does expose it.
+id = "fifine-k053"
+label = "FIFINE K053 Lavalier"
+node_name = "alsa_input.usb-0c76_USB_PnP_Audio_Device-00.mono-fallback"
+usb_vendor_id = "0c76"
+usb_product_id = "161f"
+usb_product = "USB PnP Audio Device"
+usb_serial = ""
+usb_port_path = ""
+required_rate = 48000
+required_format = "S16LE"
+required_channels = 1
+capture_only = false
+
+[[devices.microphones]]
 # The K054 exposes generic descriptors and no serial. Leaving usb_port_path blank permits moving it
 # between ports but cannot distinguish an unrelated device with the same complete fingerprint.
 id = "fifine-k054"

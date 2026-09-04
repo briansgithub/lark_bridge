@@ -58,12 +58,17 @@ def usb_device(
 def usb_topology(
     *,
     lark: tuple[str, ...] = (),
+    k053: tuple[str, ...] = (),
     fifine: tuple[str, ...] = ("1-1.2@4",),
     lark_hubs: tuple[str, ...] = (),
+    k053_hubs: tuple[str, ...] = (),
     fifine_hubs: tuple[str, ...] = (),
 ) -> dict[str, list[dict]]:
     return {
         "lark-a1": [usb_device("lark-a1", value, hubs=lark_hubs) for value in lark],
+        "fifine-k053": [
+            usb_device("fifine-k053", value, hubs=k053_hubs) for value in k053
+        ],
         "fifine-k054": [
             usb_device("fifine-k054", value, hubs=fifine_hubs) for value in fifine
         ],
@@ -91,7 +96,11 @@ def selected_for_topology(topology: dict[str, list[dict]]) -> dict | None:
     candidate_id = (
         "lark-a1"
         if len(topology["lark-a1"]) == 1
-        else ("fifine-k054" if len(topology["fifine-k054"]) == 1 else None)
+        else (
+            "fifine-k053"
+            if len(topology["fifine-k053"]) == 1
+            else ("fifine-k054" if len(topology["fifine-k054"]) == 1 else None)
+        )
     )
     if candidate_id is None:
         return None
@@ -714,9 +723,42 @@ class MicrophoneHotplugTests(unittest.TestCase):
             topology, error = hotplug.read_usb_microphones(root)
 
         self.assertIsNone(error)
+        self.assertEqual(topology["fifine-k053"], [])
         self.assertEqual(topology["fifine-k054"], [])
         self.assertEqual(topology["lark-a1"][0]["usb_instance_generation"], "1-1.3@9")
         self.assertEqual(topology["lark-a1"][0]["usb_devnum"], 9)
+
+    def test_usb_sysfs_inventory_distinguishes_k053_from_k054(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, product_id, devnum in (
+                ("1-1.2", "161f", 6),
+                ("1-1.4", "161e", 7),
+            ):
+                device = root / name
+                device.mkdir()
+                (device / "idVendor").write_text("0c76\n", encoding="ascii")
+                (device / "idProduct").write_text(
+                    f"{product_id}\n", encoding="ascii"
+                )
+                (device / "devnum").write_text(f"{devnum}\n", encoding="ascii")
+                (device / "product").write_text(
+                    "USB PnP Audio Device\n", encoding="utf-8"
+                )
+
+            topology, error = hotplug.read_usb_microphones(root)
+
+        self.assertIsNone(error)
+        self.assertEqual(
+            topology["fifine-k053"][0]["usb_instance_generation"], "1-1.2@6"
+        )
+        self.assertEqual(
+            topology["fifine-k054"][0]["usb_instance_generation"], "1-1.4@7"
+        )
+        self.assertEqual(
+            selected_for_topology(topology)["id"],  # type: ignore[index]
+            "fifine-k053",
+        )
 
     def test_usb_sysfs_inventory_caches_descriptors_for_one_live_generation(
         self,

@@ -6,14 +6,16 @@
 # Why stable USB identity for microphones, and port paths for the instrument dongles:
 #   - ALSA card order follows enumeration order and CHANGES across reboots.
 #   - The Lark has a unique VID:PID and may be plugged into any Pi USB port.
-#   - The K054 has a generic VID:PID and no serial; an optional port can pin it.
+#   - The K053 and K054 have distinct VID:PIDs but generic descriptors and no serial;
+#     an optional port can pin either model.
 #   - The two AB13X dongles report an identical USB serial (202405280846), so serial
 #     numbers cannot distinguish them either.
 #   - Port paths remain necessary only to distinguish those otherwise identical rig tools.
 #
 # Roles (see rig/inventory.toml):
-#   lark      any port Hollyland 3547:0407 — preferred microphone
-#   fifine    any port (or configured port) 0c76:161e — fallback microphone
+#   lark         any port Hollyland 3547:0407 — preferred microphone
+#   fifine_k053  any port (or configured port) 0c76:161f — second-priority microphone
+#   fifine       any port (or configured port) 0c76:161e — K054 fallback (legacy role name)
 #   dongle_a  1-1.5  AB13X 001f:0b26     — DUT wired output (Mode 1W)
 #   dongle_b  1-1.4  C-Media 0d8c:0014   — INSTRUMENT: out drives speaker, in captures
 
@@ -21,6 +23,10 @@ set -euo pipefail
 
 LARK_USB_ID="${LARK_USB_ID:-3547:0407}"
 LARK_USB_SERIAL="${LARK_USB_SERIAL:-}"
+FIFINE_K053_USB_ID="${FIFINE_K053_USB_ID:-0c76:161f}"
+FIFINE_K053_USB_SERIAL="${FIFINE_K053_USB_SERIAL:-}"
+FIFINE_K053_PORT="${FIFINE_K053_PORT:-}"
+# FIFINE_* is the established K054 interface; keep it backward compatible.
 FIFINE_USB_ID="${FIFINE_USB_ID:-0c76:161e}"
 FIFINE_USB_SERIAL="${FIFINE_USB_SERIAL:-}"
 FIFINE_PORT="${FIFINE_PORT:-}"
@@ -88,45 +94,53 @@ card_has_playback() { [ -e "/proc/asound/card$1/pcm0p" ]; }
 
 rig_resolve() {
   LARK_CARD="$(card_for_usb_identity "$LARK_USB_ID" "$LARK_USB_SERIAL" "" || true)"
+  FIFINE_K053_CARD="$(card_for_usb_identity "$FIFINE_K053_USB_ID" "$FIFINE_K053_USB_SERIAL" "$FIFINE_K053_PORT" || true)"
   FIFINE_CARD="$(card_for_usb_identity "$FIFINE_USB_ID" "$FIFINE_USB_SERIAL" "$FIFINE_PORT" || true)"
   case "$LARK_CARD" in
     [0-9]*) MICROPHONE_CARD="$LARK_CARD"; MICROPHONE_ID="lark-a1" ;;
     AMBIGUOUS*) MICROPHONE_CARD=""; MICROPHONE_ID="" ;;
     *)
-      case "$FIFINE_CARD" in
-        [0-9]*) MICROPHONE_CARD="$FIFINE_CARD"; MICROPHONE_ID="fifine-k054" ;;
-        *) MICROPHONE_CARD=""; MICROPHONE_ID="" ;;
+      case "$FIFINE_K053_CARD" in
+        [0-9]*) MICROPHONE_CARD="$FIFINE_K053_CARD"; MICROPHONE_ID="fifine-k053" ;;
+        AMBIGUOUS*) MICROPHONE_CARD=""; MICROPHONE_ID="" ;;
+        *)
+          case "$FIFINE_CARD" in
+            [0-9]*) MICROPHONE_CARD="$FIFINE_CARD"; MICROPHONE_ID="fifine-k054" ;;
+            *) MICROPHONE_CARD=""; MICROPHONE_ID="" ;;
+          esac
+          ;;
       esac
       ;;
   esac
   DONGLE_A_CARD="$(card_for_port "$DONGLE_A_PORT" || echo '')"
   DONGLE_B_CARD="$(card_for_port "$DONGLE_B_PORT" || echo '')"
-  export LARK_CARD FIFINE_CARD MICROPHONE_CARD MICROPHONE_ID DONGLE_A_CARD DONGLE_B_CARD
+  export LARK_CARD FIFINE_K053_CARD FIFINE_CARD MICROPHONE_CARD MICROPHONE_ID DONGLE_A_CARD DONGLE_B_CARD
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   rig_resolve
-  printf '%-10s %-12s %-6s %-18s %s\n' ROLE SELECTOR CARD ID STREAMS
+  printf '%-12s %-12s %-6s %-18s %s\n' ROLE SELECTOR CARD ID STREAMS
   for spec in "lark:$LARK_USB_ID:$LARK_CARD" \
+              "fifine_k053:$FIFINE_K053_USB_ID:$FIFINE_K053_CARD" \
               "fifine:$FIFINE_USB_ID:$FIFINE_CARD" \
               "dongle_a:$DONGLE_A_PORT:$DONGLE_A_CARD" \
               "dongle_b:$DONGLE_B_PORT:$DONGLE_B_CARD"; do
     role="${spec%%:*}"; rest="${spec#*:}"; card="${rest##*:}"
     selector="${rest%:*}"
     if [ -z "$card" ]; then
-      printf '%-10s %-12s %-6s %-18s %s\n' "$role" "$selector" '-' '-' 'NOT PRESENT'
+      printf '%-12s %-12s %-6s %-18s %s\n' "$role" "$selector" '-' '-' 'NOT PRESENT'
       continue
     fi
     case "$card" in
       AMBIGUOUS*)
-        printf '%-10s %-12s %-6s %-18s %s\n' "$role" "$selector" '-' '-' "$card"
+        printf '%-12s %-12s %-6s %-18s %s\n' "$role" "$selector" '-' '-' "$card"
         continue
         ;;
     esac
     s=""
     card_has_capture  "$card" && s="${s}capture "
     card_has_playback "$card" && s="${s}playback"
-    printf '%-10s %-12s %-6s %-18s %s\n' \
+    printf '%-12s %-12s %-6s %-18s %s\n' \
       "$role" "$selector" "$card" "$(cat "/proc/asound/card$card/id")" "$s"
   done
 fi

@@ -974,14 +974,21 @@ class LarkPcmLivenessTests(unittest.TestCase):
         )
         return (lark, fifine), (lark_source, fifine_source)
 
-    def test_policy_is_limited_to_explicit_lark_with_fifine_fallback(self) -> None:
+    def test_policy_requires_explicit_first_priority_lark_and_any_fallback(self) -> None:
         candidates, _sources = self.candidates_and_sources()
+        k053 = mock.Mock(id="fifine-k053", legacy=False)
         self.assertTrue(supervisor.automatic_lark_liveness_enabled(candidates))
+        self.assertTrue(
+            supervisor.automatic_lark_liveness_enabled((candidates[0], k053, candidates[1]))
+        )
         self.assertFalse(supervisor.automatic_lark_liveness_enabled(candidates[:1]))
         self.assertFalse(
             supervisor.automatic_lark_liveness_enabled(
                 (mock.Mock(id="lark-a1", legacy=True), candidates[1])
             )
+        )
+        self.assertFalse(
+            supervisor.automatic_lark_liveness_enabled((k053, candidates[0]))
         )
 
     def test_exact_zero_is_inactive_and_any_nonzero_bit_is_active(self) -> None:
@@ -1938,9 +1945,71 @@ class MicrophonePriorityLifecycleTests(unittest.TestCase):
             target_present=("lark", "fifine"),
         )
 
-    def test_inactive_fifine_hotplug_does_not_churn_active_lark(self) -> None:
+    def test_active_call_lark_to_k053_fallback_rebuilds_once(self) -> None:
+        self.assert_active_switch(
+            source="lark",
+            source_id="lark-a1",
+            source_present=("lark", "k053", "k054"),
+            target="k053",
+            target_id="fifine-k053",
+            target_present=("k053", "k054"),
+        )
+
+    def test_active_call_k053_to_lark_promotion_rebuilds_once(self) -> None:
+        self.assert_active_switch(
+            source="k053",
+            source_id="fifine-k053",
+            source_present=("k053", "k054"),
+            target="lark",
+            target_id="lark-a1",
+            target_present=("lark", "k053", "k054"),
+        )
+
+    def test_active_call_k053_to_k054_fallback_rebuilds_once(self) -> None:
+        self.assert_active_switch(
+            source="k053",
+            source_id="fifine-k053",
+            source_present=("k053", "k054"),
+            target="k054",
+            target_id="fifine-k054",
+            target_present=("k054",),
+        )
+
+    def test_active_call_k054_to_k053_promotion_rebuilds_once(self) -> None:
+        self.assert_active_switch(
+            source="k054",
+            source_id="fifine-k054",
+            source_present=("k054",),
+            target="k053",
+            target_id="fifine-k053",
+            target_present=("k053", "k054"),
+        )
+
+    def test_active_call_k053_replug_rebuilds_a_fresh_generation(self) -> None:
+        self.assert_active_switch(
+            source="k053",
+            source_id="fifine-k053",
+            source_present=("k053", "k054"),
+            target="k053",
+            target_id="fifine-k053",
+            target_present=("k053", "k054"),
+        )
+
+    def assert_inactive_hotplug_does_not_churn(
+        self,
+        *,
+        selected: str,
+        selected_id: str,
+        before: tuple[str, ...],
+        absent: tuple[str, ...],
+        restored: tuple[str, ...],
+    ) -> None:
         graph = supervisor.CallGraph(self.settings())
-        resolution = FakeMicrophoneResolution("lark", "lark-generation")
+        resolution = FakeMicrophoneResolution(
+            selected,
+            f"{selected}-generation",
+            selected_id=selected_id,
+        )
         with (
             mock.patch.object(supervisor, "NativeAecHost", self.host_type),
             mock.patch.object(supervisor, "Loopback", self.loopback_type),
@@ -1960,7 +2029,7 @@ class MicrophonePriorityLifecycleTests(unittest.TestCase):
             _nodes, links = self.build_active(
                 graph,
                 resolution,
-                ("lark", "fifine"),
+                before,
             )
             generation = graph.generation
             owners = (graph.aec_host, graph.microphone, graph.callout)
@@ -1972,24 +2041,24 @@ class MicrophonePriorityLifecycleTests(unittest.TestCase):
             graph.tick(
                 self.nodes(
                     graph,
-                    ("lark",),
+                    absent,
                     aec_ready=True,
                     control_ready=True,
                 ),
                 links,
                 resolution,
-                candidate_nodes=("lark",),
+                candidate_nodes=absent,
             )
             graph.tick(
                 self.nodes(
                     graph,
-                    ("lark", "fifine"),
+                    restored,
                     aec_ready=True,
                     control_ready=True,
                 ),
                 links,
                 resolution,
-                candidate_nodes=("lark", "fifine"),
+                candidate_nodes=restored,
             )
 
         self.assertEqual(graph.state, supervisor.State.ACTIVE)
@@ -2003,6 +2072,24 @@ class MicrophonePriorityLifecycleTests(unittest.TestCase):
             report_token,
         )
         self.assertEqual(self.events, [])
+
+    def test_inactive_fifine_hotplug_does_not_churn_active_lark(self) -> None:
+        self.assert_inactive_hotplug_does_not_churn(
+            selected="lark",
+            selected_id="lark-a1",
+            before=("lark", "fifine"),
+            absent=("lark",),
+            restored=("lark", "fifine"),
+        )
+
+    def test_inactive_k054_hotplug_does_not_churn_active_k053(self) -> None:
+        self.assert_inactive_hotplug_does_not_churn(
+            selected="k053",
+            selected_id="fifine-k053",
+            before=("k053", "k054"),
+            absent=("k053",),
+            restored=("k053", "k054"),
+        )
 
     def test_active_call_with_neither_microphone_waits_after_teardown(self) -> None:
         graph = supervisor.CallGraph(self.settings())
