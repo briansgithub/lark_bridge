@@ -1358,6 +1358,7 @@ class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
                 "props": {
                     "object.serial": 108,
                     "device.sysfs.path": "/devices/usb1/1-1/1-1.2",
+                    "api.alsa.card": 7,
                     "device.vendor.id": "usb:0c76",
                     "device.product.id": "usb:161e",
                     "device.product.name": "USB PnP Audio Device",
@@ -1408,6 +1409,7 @@ class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
                     sysfs_root=sysfs_root,
                 )
         self.assertEqual([source.node for source in observations], ["fifine"])
+        self.assertEqual(observations[0].alsa_card, "7")
         self.assertEqual(resolution.node, "fifine")
         run.assert_not_called()
 
@@ -1525,6 +1527,107 @@ class MicrophoneDiscoveryAndControlTests(unittest.TestCase):
         self.assertTrue(result[2])
         self.assertEqual(run.call_args_list[0].args[0], ["wpctl", "set-mute", "77", "1"])
         self.assertEqual(run.call_args_list[-1].args[0], ["wpctl", "get-volume", "77"])
+
+    def test_hardware_capture_gain_maps_db_to_raw_step_and_reads_back(self) -> None:
+        metadata = (
+            "numid=6,iface=MIXER,name='Mic Capture Volume'\n"
+            "  ; type=INTEGER,access=rw---R--,values=1,min=0,max=496,step=0\n"
+            "  : values=496\n"
+            "  | dBminmax-min=0.00dB,max=31.00dB\n"
+        )
+        replies = [
+            mock.Mock(returncode=0, stdout=metadata, stderr=""),
+            mock.Mock(returncode=0, stdout=metadata.replace("values=496", "values=400"), stderr=""),
+            mock.Mock(returncode=0, stdout=metadata.replace("values=496", "values=400"), stderr=""),
+        ]
+        with mock.patch.object(supervisor.subprocess, "run", side_effect=replies) as run:
+            result = supervisor.set_and_verify_hardware_capture_gain(
+                "7", "Mic Capture Volume", 25.0
+            )
+        self.assertTrue(result[0])
+        self.assertAlmostEqual(result[1] or 0.0, 25.0, places=2)
+        self.assertEqual(result[2], 400)
+        self.assertEqual(
+            run.call_args_list[1].args[0],
+            ["amixer", "-c", "7", "cset", "name=Mic Capture Volume", "400"],
+        )
+
+    def test_hardware_capture_gain_rejects_missing_metadata_and_out_of_range(self) -> None:
+        incomplete = mock.Mock(returncode=0, stdout=": values=10\n", stderr="")
+        with mock.patch.object(supervisor.subprocess, "run", return_value=incomplete):
+            result = supervisor.set_and_verify_hardware_capture_gain(
+                "7", "Mic Capture Volume", 25.0
+            )
+        self.assertFalse(result[0])
+        self.assertIn("metadata", result[3] or "")
+
+        metadata = mock.Mock(
+            returncode=0,
+            stdout="; min=0,max=496\n: values=0\n| dBminmax-min=0.00dB,max=31.00dB\n",
+            stderr="",
+        )
+        with mock.patch.object(supervisor.subprocess, "run", return_value=metadata) as run:
+            result = supervisor.set_and_verify_hardware_capture_gain(
+                "7", "Mic Capture Volume", 32.0
+            )
+        self.assertFalse(result[0])
+        self.assertIn("outside", result[3] or "")
+        self.assertEqual(run.call_count, 1)
+
+    def test_selected_hardware_gain_failure_holds_graph_safe_before_build(self) -> None:
+        candidate = microphones.MicrophoneCandidate(
+            id="fifine-k053",
+            label="FIFINE K053 Lavalier",
+            node_name="k053",
+            usb_vendor_id="0c76",
+            usb_product_id="161f",
+            required_rate=48000,
+            required_format="S16LE",
+            required_channels=1,
+            capture_only=False,
+            capture_control="Mic Capture Volume",
+            capture_gain_db=25.0,
+        )
+        source = microphones.ObservedSource(
+            node="k053",
+            pipewire_id="19",
+            pipewire_object_serial="119",
+            device_id="8",
+            device_object_serial="108",
+            alsa_components=("USB0C76:161F",),
+            usb_vendor_id="0c76",
+            usb_product_id="161f",
+            usb_instance_generation="1-1.5@4",
+            formats=(microphones.MicrophoneFormat(48000, "S16LE", 1),),
+            device_has_playback=True,
+            alsa_card="7",
+        )
+        resolution = microphones.SelectionResult(
+            microphones.MicrophoneSelection(candidate, source, 0),
+            "using fifine-k053",
+            (),
+        )
+        settings = supervisor.Settings(aec=supervisor.AecSettings(enabled=True))
+        graph = supervisor.CallGraph(settings)
+        nodes = {
+            "k053": {},
+            settings.wired_output: {},
+            settings.hfp_source: {},
+            settings.hfp_sink: {},
+        }
+        with (
+            mock.patch.object(
+                supervisor,
+                "set_and_verify_hardware_capture_gain",
+                return_value=(False, None, None, "readback failed"),
+            ),
+            mock.patch.object(supervisor, "NativeAecHost") as host,
+        ):
+            graph.tick(nodes, [], resolution)
+        self.assertEqual(graph.state, supervisor.State.SAFE)
+        self.assertTrue(graph.hardware_capture_blocked)
+        self.assertEqual(graph.last_failure, "readback failed")
+        host.assert_not_called()
 
     def test_control_failure_holds_graph_safe(self) -> None:
         settings = supervisor.Settings(

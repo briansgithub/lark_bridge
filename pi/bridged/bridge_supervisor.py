@@ -75,6 +75,11 @@ AEC_CAPTURE = "echo-cancel-capture"
 AEC_PLAYBACK = "echo-cancel-playback"
 VOLUME_PERCENT_RE = re.compile(r"/\s*([0-9]+(?:\.[0-9]+)?)%\s*/")
 WPCTL_VOLUME_RE = re.compile(r"Volume:\s+([0-9]+(?:\.[0-9]+)?)")
+AMIXER_VALUE_RE = re.compile(r"^\s*:\s*values=([0-9]+(?:,[0-9]+)*)\s*$", re.MULTILINE)
+AMIXER_RANGE_RE = re.compile(r"\bmin=(-?[0-9]+),max=(-?[0-9]+)\b")
+AMIXER_DB_MINMAX_RE = re.compile(
+    r"dBminmax-min=(-?[0-9]+(?:\.[0-9]+)?)dB,max=(-?[0-9]+(?:\.[0-9]+)?)dB"
+)
 
 log = logging.getLogger("bridge-supervisor")
 
@@ -1487,6 +1492,85 @@ def set_and_verify_microphone_control(
     return True, observed_db, observed_muted, None
 
 
+def set_and_verify_hardware_capture_gain(
+    alsa_card: str,
+    control: str,
+    gain_db: float,
+) -> tuple[bool, float | None, int | None, str | None]:
+    """Set an identity-resolved ALSA gain and verify its raw control value."""
+    card = str(alsa_card).strip()
+    if not re.fullmatch(r"[0-9]+", card):
+        return False, None, None, f"invalid observed ALSA card: {alsa_card!r}"
+
+    def run(action: str, value: str | None = None) -> subprocess.CompletedProcess[str] | None:
+        command = ["amixer", "-c", card, action, f"name={control}"]
+        if value is not None:
+            command.append(value)
+        try:
+            return subprocess.run(
+                command, capture_output=True, text=True, timeout=10, check=False
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    metadata = run("cget")
+    raw_range = AMIXER_RANGE_RE.search(metadata.stdout) if metadata is not None else None
+    db_range = AMIXER_DB_MINMAX_RE.search(metadata.stdout) if metadata is not None else None
+    if metadata is None or metadata.returncode != 0 or raw_range is None or db_range is None:
+        detail = (
+            "command could not run"
+            if metadata is None
+            else (metadata.stderr or metadata.stdout).strip() or "unsupported dB metadata"
+        )
+        return False, None, None, f"hardware capture gain metadata failed: {detail}"
+    raw_min, raw_max = (int(raw_range.group(1)), int(raw_range.group(2)))
+    db_min, db_max = (float(db_range.group(1)), float(db_range.group(2)))
+    if raw_max <= raw_min or db_max <= db_min or not db_min <= gain_db <= db_max:
+        return (
+            False,
+            None,
+            None,
+            f"hardware capture gain {gain_db:.2f} dB is outside {db_min:.2f}..{db_max:.2f} dB",
+        )
+    requested_raw = round(
+        raw_min + (gain_db - db_min) * (raw_max - raw_min) / (db_max - db_min)
+    )
+    written = run("cset", str(requested_raw))
+    if written is None or written.returncode != 0:
+        detail = (
+            "command could not run"
+            if written is None
+            else (written.stderr or written.stdout).strip() or f"exit {written.returncode}"
+        )
+        return False, None, None, f"hardware capture gain set failed: {detail}"
+    written_match = AMIXER_VALUE_RE.search(written.stdout)
+    observed = run("cget")
+    observed_match = (
+        AMIXER_VALUE_RE.search(observed.stdout)
+        if observed is not None and observed.returncode == 0
+        else None
+    )
+    if written_match is None or observed_match is None:
+        detail = (
+            "command could not run"
+            if observed is None
+            else (observed.stderr or observed.stdout).strip() or "no raw value"
+        )
+        return False, None, None, f"hardware capture gain readback failed: {detail}"
+    written_values = tuple(int(item) for item in written_match.group(1).split(","))
+    observed_values = tuple(int(item) for item in observed_match.group(1).split(","))
+    if written_values != observed_values or len(set(observed_values)) != 1:
+        return (
+            False,
+            None,
+            observed_values[0] if len(observed_values) == 1 else None,
+            f"hardware capture gain mismatch: wrote {written_values}, read {observed_values}",
+        )
+    observed_raw = observed_values[0]
+    observed_db = db_min + (observed_raw - raw_min) * (db_max - db_min) / (raw_max - raw_min)
+    return True, observed_db, observed_raw, None
+
+
 class Loopback:
     """A child pw-loopback with explicit, continuously verified targets."""
 
@@ -1728,6 +1812,20 @@ def selected_microphone_token(value: Any) -> Any:
     return token if token is not None else selected_microphone_node(value)
 
 
+def selected_hardware_capture_control(
+    value: Any,
+) -> tuple[str | None, float | None, str | None]:
+    """Return configured control plus the selected device's observed ALSA card."""
+    selected = getattr(value, "selected", None)
+    candidate = getattr(selected, "candidate", None)
+    source = getattr(selected, "source", None)
+    return (
+        getattr(candidate, "capture_control", None),
+        getattr(candidate, "capture_gain_db", None),
+        getattr(source, "alsa_card", None),
+    )
+
+
 def microphone_resolution_report(value: Any) -> dict[str, Any] | None:
     if isinstance(value, str) or value is None:
         return None
@@ -1821,6 +1919,14 @@ class CallGraph:
         self.mic_control_blocked = False
         self.mic_control_primed = False
         self.mic_link_requested = False
+        self.hardware_capture_control: str | None = None
+        self.hardware_capture_card: str | None = None
+        self.hardware_capture_desired_db: float | None = None
+        self.hardware_capture_observed_db: float | None = None
+        self.hardware_capture_raw_value: int | None = None
+        self.hardware_capture_verified = False
+        self.hardware_capture_error: str | None = None
+        self.hardware_capture_blocked = False
         self.phone_transport = PhoneTransport.ABSENT
         self.phone_connected = False
         self.media_node: str | None = None
@@ -2323,6 +2429,13 @@ class CallGraph:
         self.mic_control_error = None
         self.mic_control_primed = False
         self.mic_link_requested = False
+        self.hardware_capture_control = None
+        self.hardware_capture_card = None
+        self.hardware_capture_desired_db = None
+        self.hardware_capture_observed_db = None
+        self.hardware_capture_raw_value = None
+        self.hardware_capture_verified = False
+        self.hardware_capture_error = None
 
     def ensure_output_volume(self, target: str) -> bool:
         """Verify the selected wired sink once per graph generation."""
@@ -2367,6 +2480,58 @@ class CallGraph:
         self.mic_control_verified = ok
         self.mic_control_error = error
         return ok
+
+    def ensure_hardware_capture_gain(self) -> bool:
+        """Apply the selected physical microphone's configured capture gain once."""
+        if self.hardware_capture_control is None and self.hardware_capture_desired_db is None:
+            self.hardware_capture_verified = True
+            self.hardware_capture_error = None
+            return True
+        if self.hardware_capture_verified:
+            return True
+        if self.hardware_capture_control is None or self.hardware_capture_desired_db is None:
+            self.hardware_capture_error = "hardware capture control configuration is incomplete"
+            return False
+        if self.hardware_capture_card is None:
+            self.hardware_capture_error = "selected microphone has no observed ALSA card"
+            return False
+        ok, observed, raw_value, error = set_and_verify_hardware_capture_gain(
+            self.hardware_capture_card,
+            self.hardware_capture_control,
+            self.hardware_capture_desired_db,
+        )
+        self.hardware_capture_observed_db = observed
+        self.hardware_capture_raw_value = raw_value
+        self.hardware_capture_verified = ok
+        self.hardware_capture_error = error
+        return ok
+
+    def hold_hardware_capture_safe(self, reason: str) -> None:
+        state = (
+            self.hardware_capture_control,
+            self.hardware_capture_card,
+            self.hardware_capture_desired_db,
+            self.hardware_capture_observed_db,
+            self.hardware_capture_raw_value,
+            self.hardware_capture_error,
+        )
+        self.teardown(reason)
+        (
+            self.hardware_capture_control,
+            self.hardware_capture_card,
+            self.hardware_capture_desired_db,
+            self.hardware_capture_observed_db,
+            self.hardware_capture_raw_value,
+            self.hardware_capture_error,
+        ) = state
+        self.hardware_capture_verified = False
+        self.hardware_capture_blocked = True
+        self.last_failure = reason
+        self.state = State.SAFE
+        self.phone_transport = PhoneTransport.DEGRADED
+        self.phone_failure_reason = reason
+        self.phone_transition_reason = "physical microphone gain failed closed"
+        log.error("call graph held SAFE: %s", reason)
 
     def prime_microphone_control(self, nodes: NodeMap) -> bool:
         """Set gain while muted before bridge.mic is linked to the HFP sink."""
@@ -2424,6 +2589,7 @@ class CallGraph:
         self.last_failure = None
         self.break_before_make = had_graph
         self.mic_control_blocked = False
+        self.hardware_capture_blocked = False
         return had_graph
 
     def fail(
@@ -2655,6 +2821,9 @@ class CallGraph:
             else selected_microphone_token(microphone)
         )
         report = microphone_report or microphone_resolution_report(microphone)
+        hardware_control, hardware_gain, hardware_card = selected_hardware_capture_control(
+            microphone
+        )
         blocked = (
             bool(microphone_blocked)
             if microphone_blocked is not None
@@ -2680,6 +2849,9 @@ class CallGraph:
         signature = (call_up, token)
         endpoints_changed = signature != self.signature
         self.update_signature(signature)
+        self.hardware_capture_control = hardware_control
+        self.hardware_capture_desired_db = hardware_gain
+        self.hardware_capture_card = hardware_card
         if endpoints_changed and call_up and binding_accepted:
             # A new accepted endpoint generation is a materially new transition. It may
             # retry a prior failure; subsequent same-generation ticks must preserve it.
@@ -2803,6 +2975,22 @@ class CallGraph:
             self.phone_transport = PhoneTransport.DEGRADED
             self.phone_failure_reason = self.mic_control_error or "microphone controls are blocked"
             self.phone_transition_reason = "communication microphone control remains blocked"
+            return
+        if self.hardware_capture_blocked:
+            self.state = State.SAFE
+            self.phone_transport = PhoneTransport.DEGRADED
+            self.phone_failure_reason = (
+                self.hardware_capture_error or "physical microphone gain is blocked"
+            )
+            self.phone_transition_reason = "physical microphone gain remains blocked"
+            return
+
+        # Configure the physical source before the AEC process opens it. Replugging changes
+        # the selected instance token, resets this proof, and reapplies the measured gain.
+        if not self.ensure_hardware_capture_gain():
+            self.hold_hardware_capture_safe(
+                self.hardware_capture_error or "physical microphone gain did not verify"
+            )
             return
 
         # Mixer verification precedes both initial graph construction and a live switch
@@ -3087,6 +3275,16 @@ class CallGraph:
                 "observed_muted": self.mic_mute_observed,
                 "verified": self.mic_control_verified,
                 "error": self.mic_control_error,
+            },
+            "hardware_capture_control": {
+                "required": self.hardware_capture_control is not None,
+                "control": self.hardware_capture_control,
+                "alsa_card": self.hardware_capture_card,
+                "desired_gain_db": self.hardware_capture_desired_db,
+                "observed_gain_db": self.hardware_capture_observed_db,
+                "raw_value": self.hardware_capture_raw_value,
+                "verified": self.hardware_capture_verified,
+                "error": self.hardware_capture_error,
             },
             "graph": {
                 "expected_links": expected,

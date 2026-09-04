@@ -71,3 +71,8 @@ Electronic identity and native-format evidence alone does not qualify physical c
 replacement units, acoustics, AEC, hotplug endurance, or cold-boot stability. K054 evidence remains
 in `docs/experiments/E18-fifine-k054-compat.md`; K053 evidence and its deliberately abbreviated
 qualification scope are tracked separately in `docs/experiments/E20-fifine-k053-compat.md`.
+
+The K053 candidate also owns its physical `Mic Capture Volume`. The supervisor resolves the
+current ALSA card from the identity-qualified PipeWire device, applies the configured gain
+before starting AEC, verifies the raw mixer readback, and fails closed if any part is ambiguous.
+This is separate from `audio.mic_gain_db`, which remains a post-AEC software control.

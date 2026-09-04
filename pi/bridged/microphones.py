@@ -14,6 +14,7 @@ installations retain the historical exact-node-first/component-fallback behaviou
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from collections.abc import Iterable, Mapping, Sequence
@@ -156,6 +157,8 @@ class MicrophoneCandidate:
     required_format: str | None = None
     required_channels: int | None = None
     capture_only: bool = True
+    capture_control: str | None = None
+    capture_gain_db: float | None = None
     alsa_component: str | None = None
     legacy: bool = False
 
@@ -204,6 +207,25 @@ class MicrophoneCandidate:
                 raise ValueError(f"microphone {candidate_id!r} {field_name} must be positive")
         if not isinstance(self.capture_only, bool):
             raise TypeError(f"microphone {candidate_id!r} capture_only must be a boolean")
+        control = _optional_text(self.capture_control)
+        object.__setattr__(self, "capture_control", control)
+        gain = self.capture_gain_db
+        if (control is None) != (gain is None):
+            raise ValueError(
+                f"microphone {candidate_id!r} capture_control and capture_gain_db "
+                "must be set together"
+            )
+        if gain is not None:
+            if isinstance(gain, bool) or not isinstance(gain, (int, float)):
+                raise TypeError(
+                    f"microphone {candidate_id!r} capture_gain_db must be a finite number"
+                )
+            gain = float(gain)
+            if not math.isfinite(gain):
+                raise ValueError(
+                    f"microphone {candidate_id!r} capture_gain_db must be finite"
+                )
+            object.__setattr__(self, "capture_gain_db", gain)
 
     @property
     def required_capability(self) -> MicrophoneFormat | None:
@@ -233,6 +255,8 @@ class MicrophoneCandidate:
             "required_format": self.required_format,
             "required_channels": self.required_channels,
             "capture_only": self.capture_only,
+            "capture_control": self.capture_control,
+            "capture_gain_db": self.capture_gain_db,
             "legacy": self.legacy,
         }
 
@@ -254,6 +278,7 @@ class ObservedSource:
     usb_instance_generation: str | None = None
     formats: tuple[MicrophoneFormat, ...] = ()
     device_has_playback: bool | None = None
+    alsa_card: str | None = None
 
     def __post_init__(self) -> None:
         if not str(self.node).strip():
@@ -269,6 +294,7 @@ class ObservedSource:
             "usb_serial",
             "usb_port_path",
             "usb_instance_generation",
+            "alsa_card",
         ):
             object.__setattr__(self, name, _optional_text(getattr(self, name)))
         object.__setattr__(self, "usb_vendor_id", _optional_usb_id(self.usb_vendor_id))
@@ -322,6 +348,7 @@ class ObservedSource:
             "alsa_components": list(self.alsa_components),
             "formats": [item.as_dict() for item in self.formats],
             "device_has_playback": self.device_has_playback,
+            "alsa_card": self.alsa_card,
         }
 
 
@@ -498,6 +525,8 @@ def parse_microphone_candidates(
                     required_format=str(table.get("required_format", "")),
                     required_channels=_required_int(table, "required_channels", candidate_id),
                     capture_only=table.get("capture_only", True),
+                    capture_control=_optional_text(table.get("capture_control")),
+                    capture_gain_db=table.get("capture_gain_db"),
                     alsa_component=component,
                     legacy=False,
                 )
@@ -720,6 +749,10 @@ def observations_from_pw_dump(
                 device_has_playback=(
                     str(raw_device_id) in playback_devices if raw_device_id is not None else None
                 ),
+                alsa_card=_optional_text(
+                    _first(device_props, ("api.alsa.card", "alsa.card"))
+                    or _first(node_props, ("api.alsa.pcm.card", "alsa.card"))
+                ),
             )
         )
     return tuple(sorted(found, key=lambda source: (source.node, source.pipewire_id or "")))
@@ -770,6 +803,10 @@ def observations_from_node_map(
                 usb_instance_generation=_optional_text(identity.get("usb_instance_generation")),
                 formats=_coerce_formats(capabilities.get(node)),
                 device_has_playback=device_has_playback,
+                alsa_card=_optional_text(
+                    _first(identity, ("alsa_card", "api.alsa.card"))
+                    or _first(props, ("api.alsa.pcm.card", "alsa.card"))
+                ),
             )
         )
     return tuple(sorted(found, key=lambda source: (source.node, source.pipewire_id or "")))
