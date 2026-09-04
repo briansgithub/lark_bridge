@@ -73,9 +73,9 @@ required_format = "S16LE"
 required_channels = 1
 capture_only = false
 # The K053's USB preamp powers up at its noisy/distorted maximum. E20 measured +25 dB as
-# the highest setting that kept normal speech near -13 dBFS with clean AEC output.
+# a clean range; the operator selected +23 dB after the far-end listening check.
 capture_control = "Mic Capture Volume"
-capture_gain_db = 25.0
+capture_gain_db = 23.0
 
 [[devices.microphones]]
 # The K054 exposes generic descriptors and no serial. Leaving usb_port_path blank permits moving it
