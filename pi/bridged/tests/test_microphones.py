@@ -185,6 +185,8 @@ class ConfigurationTests(unittest.TestCase):
                         "required_format": "S16_LE",
                         "required_channels": 1,
                         "capture_only": False,
+                        "capture_control": "Mic Capture Volume",
+                        "capture_gain_db": 0.0,
                     },
                     {
                         "id": "fifine-k054",
@@ -216,8 +218,20 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(parsed[1].required_format, "S16LE")
         self.assertIsNone(parsed[1].usb_serial)
         self.assertFalse(parsed[1].capture_only)
+        self.assertEqual(parsed[1].capture_control, "Mic Capture Volume")
+        self.assertEqual(parsed[1].capture_gain_db, 0.0)
         self.assertTrue(parsed[2].capture_only)
         self.assertFalse(any(item.legacy for item in parsed))
+
+    def test_hardware_capture_control_requires_a_finite_paired_gain(self) -> None:
+        document = self.explicit_document()
+        k053 = document["devices"]["microphones"][1]
+        k053.pop("capture_gain_db")
+        with self.assertRaisesRegex(ValueError, "must be set together"):
+            microphones.parse_microphone_candidates(document, {})
+        k053["capture_gain_db"] = float("nan")
+        with self.assertRaisesRegex(ValueError, "must be finite"):
+            microphones.parse_microphone_candidates(document, {})
 
     def test_environment_changes_only_explicit_lark_profile_not_hard_identity(self) -> None:
         parsed = microphones.parse_microphone_candidates(

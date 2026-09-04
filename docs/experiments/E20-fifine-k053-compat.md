@@ -60,3 +60,21 @@ passing until the planned automated checks and abbreviated live routing matrix a
   subtests passed`.
 - Ruff passed for all changed Python files. Shell syntax and Git whitespace checks passed;
   ShellCheck was unavailable on this workstation.
+
+## K053 gain diagnosis
+
+A synchronized active-call sweep used a fixed synthetic speech source 30–45 cm from the lavalier.
+The raw physical source and post-AEC HFP uplink were captured together; temporary audio was deleted
+after reduction. PipeWire error counters did not increase and no sample clipped.
+
+| Hardware gain | Raw peak | Post-AEC peak | Verdict |
+|---:|---:|---:|---|
+| +20 dB | -20.71 dBFS | -21.31 dBFS | Too quiet |
+| +25 dB | -13.49 dBFS | -13.76 dBFS | Selected |
+| +28 dB | -9.01 dBFS | -9.37 dBFS | Insufficient headroom |
+
+At +25 dB, the post-AEC silence floor was -50.69 dBFS, giving 21.56 dB measured SNR against
+the -29.13 dBFS speech RMS. The K053 therefore owns `Mic Capture Volume` at +25 dB. The ALSA
+control exposes 496 raw steps over 0–31 dB; the supervisor converts the configured dB value to
+the raw step and verifies a separate readback rather than trusting `amixer cset` to interpret a
+`dB` suffix.
