@@ -51,3 +51,7 @@ desktop.ini
 # Bench-specific: MACs, host details
 rig/inventory.toml
 rig/adb/platform-tools/
+
+# Snapshot zip archives belong in artifacts/, not git
+archive/*.zip
+archive/*.zip.sha256
