@@ -1,0 +1,1 @@
+﻿These bulky E18 field `samples.jsonl` captures (up to ~18 MB) were removed from the repository tree. The raw files remain in the 2026-11-13 pre-cleanup snapshot and in git history until a future history rewrite.
