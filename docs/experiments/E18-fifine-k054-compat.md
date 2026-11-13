@@ -109,7 +109,18 @@ ancestry; software does not claim that USB descriptors prove external power. Cyc
 through the hub. During the hub half, any simultaneous Lark/FIFINE samples must share the hub
 ancestry observed at the handoff.
 
+If an operator stops at a clean cycle boundary, a later segment may retain those completed cycles
+only through the evidence-linked `--resume-from` path. The predecessor manifest, provenance,
+sampling, link, restart, action/result pairing, USB-edge evidence, closing fixture, and exact cycle
+prefix must all revalidate before any transition is imported. The new artifact records the source
+hashes and the unmonitored interval. Imported cycles count toward the 20-cycle transition and layout
+totals, but the segmented campaign's continuity gate and overall qualification remain non-passing;
+no safety claim is made for the gap between sampler processes.
+
 ## Runs
+
+Raw sampler dumps for runs 8 and 9 were kept locally and not committed because the `samples.jsonl` timelines are tens of megabytes. Verdicts and the resume-from rules below still stand.
+
 
 | # | Date | Variant / conditions | Artifact dir | Verdict |
 |---|---|---|---|---|
@@ -120,7 +131,10 @@ ancestry observed at the handoff.
 | 5 | 2026-08-26 | Initial active-call harness attempt; rejected stale-status comparison between unsynchronized host and Pi wall clocks before any physical transition | `docs/experiments/results/E18/field/hotplug-20260826T061527Z-9359e505c8c4/` | FAIL — harness diagnostic only |
 | 6 | 2026-08-26 | Active-call promotion attempt; harness treated intentional break-before-make silence as missing-route H5 violations | `docs/experiments/results/E18/field/hotplug-20260826T062255Z-dae8f3b0af34/` | INCONCLUSIVE — harness diagnostic only |
 | 7 | 2026-08-26 | Complete live active-call physical both/either/neither matrix with continuous link sampling | `docs/experiments/results/E18/field/hotplug-20260826T063853Z-e0089cc5cd0a/` | BEHAVIOR/SAFETY PASS / RUNTIME TIMING INCONCLUSIVE (recorded NOW-origin gate FAIL) |
-| 8 | pending | Each repeated gate split into 10 direct + 10 powered-hub cycles; physical controls, reboot, acoustic/AEC, and endurance | `docs/experiments/results/E18/field/` | pending |
+| 8 | 2026-08-26 | First split promotion/fallback attempt; stopped by a raw-USB descriptor teardown race after two direct cycles | `docs/experiments/results/E18/field/hotplug-20260826T145218Z-e8b78232a230/` | INCONCLUSIVE — harness diagnostic; no cycles retained |
+| 9 | 2026-08-26 | Direct promotion/fallback cycles 1–4; operator stopped cleanly after fallback cycle 4 to rearrange physically obstructed Pi ports | `docs/experiments/results/E18/field/hotplug-20260826T152038Z-823abcf04751/` | SEGMENT PASS — four timing-valid, link-safe, restart-free cycles retained; continuity gap follows |
+| 10 | pending | Resume promotion/fallback at cycle 5, hand off after cycle 10, and finish through powered-hub cycle 20 | `docs/experiments/results/E18/field/` | pending |
+| 11 | pending | FIFINE replug split into 10 direct + 10 powered-hub cycles; physical controls, reboot, acoustic/AEC, and endurance | `docs/experiments/results/E18/field/` | pending |
 
 ## Acceptance gates
 

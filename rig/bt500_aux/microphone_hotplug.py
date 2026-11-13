@@ -239,6 +239,312 @@ def _predecessor_recording_end(checkpoint: Mapping[str, Any]) -> float:
     return float(value)
 
 
+def _verified_predecessor_timeline(
+    path: Path,
+    *,
+    transitions: list[dict[str, Any]],
+    aborted: str,
+    expected_samples: int,
+) -> dict[str, Any]:
+    pending: dict[str, Any] | None = None
+    pending_acknowledged = False
+    result_index = 0
+    sample_count = 0
+    stream_start: dict[str, Any] | None = None
+    abort: dict[str, Any] | None = None
+    host_stop: dict[str, Any] | None = None
+    last_control = None
+    try:
+        handle = path.open("r", encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise EvidenceError(f"predecessor timeline is unreadable: {exc}") from exc
+    with handle:
+        for line_number, raw in enumerate(handle, 1):
+            try:
+                event = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise EvidenceError(
+                    f"predecessor timeline line {line_number} is malformed: {exc}"
+                ) from exc
+            if not isinstance(event, dict) or not isinstance(event.get("type"), str):
+                raise EvidenceError(
+                    f"predecessor timeline line {line_number} is not a typed object"
+                )
+            kind = event["type"]
+            if kind == "sample":
+                sample_count += 1
+                continue
+            if abort is not None and kind != "host_stream_stop":
+                raise EvidenceError(
+                    f"predecessor timeline has {kind!r} after its campaign abort"
+                )
+            if kind == "stream_start":
+                if stream_start is not None or last_control is not None:
+                    raise EvidenceError("predecessor timeline stream_start is not unique and first")
+                stream_start = event
+            elif kind == "operator_action":
+                if pending is not None:
+                    raise EvidenceError("predecessor timeline starts an action while one is pending")
+                if result_index >= len(transitions):
+                    raise EvidenceError(
+                        "predecessor timeline started a cycle beyond the retained prefix"
+                    )
+                expected = transitions[result_index]
+                for key in ("action_id", "phase", "cycle", "connection_layout"):
+                    if event.get(key) != expected.get(key):
+                        raise EvidenceError(
+                            f"predecessor action {result_index + 1} {key} disagrees with its retained transition"
+                        )
+                if event.get("timestamp") != expected.get("action_timestamp"):
+                    raise EvidenceError(
+                        "predecessor action timestamp disagrees with its retained transition"
+                    )
+                if event.get("usb_baseline") != expected.get("usb_baseline"):
+                    raise EvidenceError(
+                        "predecessor action USB baseline disagrees with its retained transition"
+                    )
+                pending = event
+                pending_acknowledged = False
+            elif kind == "operator_acknowledgement":
+                if pending is None or pending_acknowledged:
+                    raise EvidenceError(
+                        "predecessor timeline acknowledgement has no unique pending action"
+                    )
+                for key in ("action_id", "phase", "cycle", "connection_layout"):
+                    if event.get(key) != pending.get(key):
+                        raise EvidenceError(
+                            f"predecessor acknowledgement {key} disagrees with its action"
+                        )
+                if event.get("operator_acknowledged") is not True:
+                    raise EvidenceError("predecessor action was not acknowledged")
+                pending_acknowledged = True
+            elif kind == "transition_result":
+                result = event.get("result")
+                if pending is None or not pending_acknowledged:
+                    raise EvidenceError(
+                        "predecessor transition result lacks one acknowledged pending action"
+                    )
+                if result_index >= len(transitions) or result != transitions[result_index]:
+                    raise EvidenceError(
+                        "predecessor timeline result disagrees with summary transition order"
+                    )
+                for key in ("action_id", "phase", "cycle", "connection_layout"):
+                    if result.get(key) != pending.get(key):
+                        raise EvidenceError(
+                            f"predecessor result {key} disagrees with its action"
+                        )
+                result_index += 1
+                pending = None
+                pending_acknowledged = False
+            elif kind == "campaign_failure":
+                raise EvidenceError("predecessor timeline contains campaign_failure")
+            elif kind == "campaign_abort":
+                if abort is not None or pending is not None:
+                    raise EvidenceError(
+                        "predecessor timeline abort is duplicate or has a pending action"
+                    )
+                if result_index != len(transitions) or event.get("reason") != aborted:
+                    raise EvidenceError(
+                        "predecessor timeline abort does not follow and match all retained results"
+                    )
+                abort = event
+            elif kind == "host_stream_stop":
+                if abort is None or host_stop is not None:
+                    raise EvidenceError(
+                        "predecessor host_stream_stop is duplicate or precedes campaign_abort"
+                    )
+                host_stop = event
+            else:
+                raise EvidenceError(
+                    f"predecessor timeline contains unsupported event type {kind!r}"
+                )
+            last_control = kind
+    if stream_start is None or abort is None or host_stop is None:
+        raise EvidenceError(
+            "predecessor timeline lacks stream_start, final campaign_abort, or host_stream_stop"
+        )
+    if pending is not None or result_index != len(transitions):
+        raise EvidenceError("predecessor timeline ends with an unpaired action or result")
+    if last_control != "host_stream_stop":
+        raise EvidenceError("predecessor timeline does not end with host_stream_stop")
+    if sample_count != expected_samples or host_stop.get("samples") != expected_samples:
+        raise EvidenceError(
+            "predecessor timeline sample count disagrees with summary or stream stop"
+        )
+    return {
+        "validation": "ordered_action_result_journal",
+        "sample_count": sample_count,
+        "operator_action_count": result_index,
+        "transition_result_count": result_index,
+        "campaign_abort_count": 1,
+        "campaign_failure_count": 0,
+        "pending_action": False,
+        "stream_boot_id": stream_start.get("boot_id"),
+        "abort_timestamp": abort.get("timestamp"),
+    }
+
+
+def _validate_predecessor_closing(
+    closing: dict[str, Any],
+    *,
+    transitions: list[dict[str, Any]],
+    checkpoint: Mapping[str, Any],
+    completed_cycles: int,
+    snapshot_validator: Callable[..., None] | None,
+) -> dict[str, Any]:
+    validator = snapshot_validator or validate_hotplug_snapshot
+    try:
+        validator(closing, expected_microphone="fifine-k054")
+    except (EvidenceError, HardFailure, HardwareNotReady) as exc:
+        raise EvidenceError(f"predecessor closing snapshot is unsafe: {exc}") from exc
+    status = _snapshot_status(closing)
+    candidates = core.candidate_inventory(status)
+    if (
+        (candidates.get("lark-a1") or {}).get("state") != "absent"
+        or (candidates.get("fifine-k054") or {}).get("state") != "selected"
+    ):
+        raise EvidenceError(
+            "predecessor closing snapshot is not FIFINE-only with Lark absent"
+        )
+    selected = core.selected_microphone(status)
+    if not isinstance(selected, dict) or selected.get("id") != "fifine-k054":
+        raise EvidenceError("predecessor closing snapshot did not select FIFINE")
+    identity = selected.get("identity")
+    port = identity.get("usb_port_path") if isinstance(identity, dict) else None
+    parsed_port = core._usb_port_route_parts(port) if isinstance(port, str) else None
+    if parsed_port is None or len(parsed_port[1]) != 2:
+        raise EvidenceError(
+            "predecessor closing FIFINE identity is not on a direct Pi USB port"
+        )
+
+    final = transitions[-1]
+    final_sample = final.get("final_sample")
+    if (
+        final.get("phase") != "lark_fallback"
+        or final.get("gate_kind") != "fallback"
+        or final.get("cycle") != completed_cycles
+        or not isinstance(final_sample, dict)
+    ):
+        raise EvidenceError("predecessor final transition is not the retained fallback boundary")
+    final_selected = final_sample.get("microphone")
+    if (
+        not isinstance(final_selected, dict)
+        or selected.get("instance_token") != final_selected.get("instance_token")
+        or identity != final_selected.get("identity")
+        or status.get("generation") != final_sample.get("graph_generation")
+    ):
+        raise EvidenceError(
+            "predecessor closing microphone instance or graph generation changed after fallback"
+        )
+    final_topology = final_sample.get("usb_microphones")
+    fifine_devices, fifine_error = core._validated_usb_devices(
+        final_topology, "fifine-k054"
+    )
+    lark_devices, lark_error = core._validated_usb_devices(final_topology, "lark-a1")
+    if fifine_error or lark_error or len(fifine_devices or []) != 1 or lark_devices:
+        raise EvidenceError("predecessor closing boundary has invalid raw USB inventory")
+    final_device = (fifine_devices or [])[0]
+    _ancestors, ancestry_error = core._validated_hub_ancestors(final_device)
+    if ancestry_error or core._external_hub_ancestor_generations(final_device):
+        raise EvidenceError(
+            "predecessor closing boundary lacks valid direct USB ancestry"
+        )
+    if final_device.get("usb_instance_generation") != identity.get(
+        "usb_instance_generation"
+    ):
+        raise EvidenceError(
+            "predecessor closing identity does not match final raw USB generation"
+        )
+    raw_devices = (closing.get("usb") or {}).get("devices")
+    if not isinstance(raw_devices, str):
+        raise EvidenceError("predecessor closing snapshot omitted raw USB devices")
+    lowered_devices = raw_devices.lower()
+    if (
+        len(re.findall(r"\b0c76:161e\b", lowered_devices)) != 1
+        or re.search(r"\b3547:0407\b", lowered_devices) is not None
+    ):
+        raise EvidenceError(
+            "predecessor closing raw USB list is not exactly one FIFINE and no Lark"
+        )
+    expected_checkpoint = {
+        "schema": CHECKPOINT_SCHEMA,
+        "schema_version": 1,
+        "status": "failed",
+        "campaign": "promotion-fallback",
+        "connection_plan": core.CONNECTION_PLAN_DIRECT10_HUB10,
+        "target_cycles": core.QUALIFICATION_CYCLES,
+        "current_phase": "lark_fallback",
+        "current_cycle": completed_cycles,
+        "current_connection_layout": core.CONNECTION_LAYOUT_DIRECT,
+        "summary": SUMMARY_NAME,
+        "verdict": "FAIL",
+        "qualification_gate": "FAIL",
+        "aborted": "CampaignAbort: operator aborted the campaign",
+    }
+    mismatches = {
+        key: {"expected": expected, "observed": checkpoint.get(key)}
+        for key, expected in expected_checkpoint.items()
+        if checkpoint.get(key) != expected
+    }
+    if mismatches:
+        raise EvidenceError(
+            f"predecessor checkpoint does not match its fallback boundary: {mismatches}"
+        )
+    return {
+        "validation": "active_fifine_only_direct_boundary",
+        "selected_id": "fifine-k054",
+        "lark_state": "absent",
+        "usb_port_path": port,
+        "usb_instance_generation": identity.get("usb_instance_generation"),
+        "instance_token": selected.get("instance_token"),
+        "graph_generation": status.get("generation"),
+        "checkpoint_phase": checkpoint.get("current_phase"),
+        "checkpoint_cycle": completed_cycles,
+    }
+
+
+def compare_resume_environment(
+    resume: dict[str, Any], current_provenance: Mapping[str, Any]
+) -> dict[str, Any]:
+    expected = {
+        "remote_deployed_commit": resume["predecessor_provenance"].get(
+            "remote_deployed_commit"
+        ),
+        "preserved_bridge_config_sha256": resume["predecessor_provenance"].get(
+            "preserved_bridge_config_sha256"
+        ),
+    }
+    remote = current_provenance.get("remote")
+    remote = remote if isinstance(remote, dict) else {}
+    deployed = remote.get("deployed_release")
+    deployed = deployed if isinstance(deployed, dict) else {}
+    document = deployed.get("document")
+    document = document if isinstance(document, dict) else {}
+    installed = remote.get("installed_files")
+    installed = installed if isinstance(installed, dict) else {}
+    bridge_config = installed.get(PRESERVED_CONFIG_SOURCE)
+    bridge_config = bridge_config if isinstance(bridge_config, dict) else {}
+    observed = {
+        "remote_deployed_commit": document.get("commit"),
+        "preserved_bridge_config_sha256": bridge_config.get("sha256"),
+    }
+    errors = [
+        f"{key} changed from {expected[key]!r} to {observed[key]!r}"
+        for key in expected
+        if not isinstance(expected[key], str)
+        or not expected[key]
+        or observed[key] != expected[key]
+    ]
+    return {
+        "status": "PASS" if not errors else "FAIL",
+        "checked_timestamp": time.time(),
+        "checked_before_physical_actions": True,
+        "expected": expected,
+        "observed": observed,
+        "errors": errors,
+    }
+
+
 def load_resume_evidence(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Verify a stopped direct-port predecessor and bind its completed cycles."""
     try:
