@@ -1,4 +1,23 @@
-# rpi-lark-bridge
+# LarkBridge
+
+## Active ESP32 dual-radio port
+
+This branch ports the Raspberry Pi 3 bridge to an `ESP32-S31-FUNCTION-COREBOARD-1` plus an
+`ESP32-DEVKITC-32UE`. Both firmware targets have built with their pinned toolchains. The boards
+have arrived, and physical qualification begins with inventory and independent boot.
+
+```text
+LARK TX ~~wireless~~> LARK USB-C receiver --USB-A adapter--> ESP32-S31
+Pixel 7a <---------- HFP + A2DP + AVRCP -------------------> ESP32-S31
+ESP32-S31 -------- internal I2S audio + UART control ------> ESP32-DevKitC-32UE
+ESP32-DevKitC-32UE <--------- A2DP + AVRCP ----------------> car / speaker
+```
+
+Start with the [ESP32 development handoff](firmware/docs/resume-here.md). It links the
+[port plan](ESP32_PORT_PLAN.md), the first-hardware runbook, and the qualification criteria.
+Use the Raspberry Pi implementation below as a behavioral reference.
+
+## Raspberry Pi implementation history
 
 Abrupt-power-loss image preparation and the manual 50-cut acceptance campaign are
 documented in [`docs/power-loss-hardening.md`](docs/power-loss-hardening.md).
@@ -141,6 +160,8 @@ exact-device safety rules.
 
 | Path | Contains |
 |---|---|
+| [`ESP32_PORT_PLAN.md`](ESP32_PORT_PLAN.md) | Active two-board port phases, gates, and risks |
+| [`firmware/`](firmware/) | Shared core, S31 gateway, output-controller firmware, tools, and runbooks |
 | `PLAN.md` | The specification. Architecture, risks, milestones, test matrix, acceptance criteria. |
 | [`docs/BRINGUP-REPORT.md`](docs/BRINGUP-REPORT.md) | **Start here.** What is proven on real hardware, what broke, and the traps. |
 | `docs/` | Architecture, ADRs, hardware, operations, and **experiment reports with raw data** |
@@ -191,7 +212,10 @@ active-call soak.
 ```bash
 make help          # list targets
 make lint          # shellcheck, ruff, black --check, clang-format, dtc syntax
-make test-host     # pytest + Pico host unit tests. No hardware required.
+make test-host     # Python, Pico, and ESP portable tests. No hardware required.
+make esp-output    # exact IDF v6.0.2 Docker build for ESP32-DevKitC-32UE
+make esp-s31       # exact IDF v6.1-rc1 preview build for ESP32-S31
+make esp-build     # host tests plus both exact ESP-IDF builds
 make pio           # regenerate committed .pio.h headers from .pio sources
 make pico          # build firmware (PlatformIO)
 make pico-cmake    # build firmware (CMake reference build)

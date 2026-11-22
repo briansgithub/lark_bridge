@@ -1,0 +1,9 @@
+dependencies:
+  idf:
+    # The exact preview release is pinned by firmware/toolchain.lock.json. Keep
+    # this semver compatible with ESP-IDF's pre-release version comparison.
+    version: ">=6.0.0"
+  espressif/usb_host_uac:
+    version: "==1.5.0"
+  espressif/esp-sr:
+    version: "==2.5.1"

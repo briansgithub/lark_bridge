@@ -1,0 +1,41 @@
+menu "LarkBridge S31 gateway"
+
+config LARKBRIDGE_S31_ERASE_BONDS_ON_BOOT
+    bool "Erase S31 settings and Bluetooth bonds on every boot"
+    default n
+    help
+        Recovery-image option. Enable, flash and boot once to forget the bound
+        Pixel, then disable and flash the normal image. Do not leave enabled.
+
+config LARKBRIDGE_S31_ROUTE_DRAIN_GUARD_MS
+    int "Silence guard before opening a new audio route (ms)"
+    range 100 2000
+    default 350
+    help
+        After the output board acknowledges and flushes a SILENCE route, keep
+        both endpoints silent for this additional pipeline-drain interval.
+        The default is deliberately conservative and must be tuned with the
+        arrival-day stale-media boundary test.
+
+config LARKBRIDGE_S31_EXPERIMENTAL_AEC_UPLINK
+    bool "Enable unqualified ESP-SR AEC call uplink"
+    default n
+    help
+        Keep disabled in normal images. Enabling permits processed LARK audio
+        to reach the Pixel only after the route fence is open and fresh mic
+        plus downlink-reference frames have passed ESP-SR AEC. This remains
+        an arrival-day bench option until the documented echo-suppression,
+        clipping, latency, and stability gates pass on the assembled device.
+
+config LARKBRIDGE_S31_AEC_REFERENCE_DELAY_MS
+    int "Initial acoustic-reference delay compensation (ms)"
+    range 0 200
+    default 160
+    help
+        Delays the microphone stream relative to the HFP downlink reference
+        before AEC processing, compensating for I2S, downstream A2DP, car, and
+        acoustic latency. The value is intentionally arrival-day tunable and
+        must be measured with the assembled car/output path. The 200-ms limit
+        preserves headroom in the fixed raw-microphone ring.
+
+endmenu
