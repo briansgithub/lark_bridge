@@ -91,8 +91,9 @@ also parsed successfully, and `git diff --check` was clean.
 
 The ignored local bundles are under `firmware/dist/`; their adjacent `.sha256` files contain the
 same bundle hashes. The build manifests retain hashes for the bootloader, partition table, flash
-arguments, application, ELF, and map. Bundles can be regenerated only from a matching clean
-checkpoint if the ignored copies are unavailable.
+arguments, application, ELF, and map. On a fresh clone, follow the
+[handoff build procedure](../../firmware/docs/resume-here.md#build-and-artifact-provenance) to
+produce new bundles tied to the checked-out commit.
 
 ## Remaining qualification and risks
 

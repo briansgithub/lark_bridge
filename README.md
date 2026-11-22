@@ -2,10 +2,9 @@
 
 ## Active ESP32 dual-radio port
 
-This worktree ports the bridge to an `ESP32-S31-FUNCTION-COREBOARD-1` plus an
-`ESP32-DEVKITC-32UE`. It is currently **BUILD-READY / PENDING HARDWARE**: firmware, simulations,
-exact toolchain pins, and the arrival procedure can be completed now, but no RF, USB, audio, AEC,
-power, or vehicle behavior is claimed until the ordered boards arrive.
+This branch ports the Raspberry Pi 3 bridge to an `ESP32-S31-FUNCTION-COREBOARD-1` plus an
+`ESP32-DEVKITC-32UE`. Both firmware targets have built with their pinned toolchains. The boards
+have arrived, and physical qualification begins with inventory and independent boot.
 
 ```text
 LARK TX ~~wireless~~> LARK USB-C receiver --USB-A adapter--> ESP32-S31
@@ -14,13 +13,9 @@ ESP32-S31 -------- internal I2S audio + UART control ------> ESP32-DevKitC-32UE
 ESP32-DevKitC-32UE <--------- A2DP + AVRCP ----------------> car / speaker
 ```
 
-Start with [`ESP32_PORT_PLAN.md`](ESP32_PORT_PLAN.md), the frozen
-[architecture decision](docs/architecture/decisions/ADR-0010-esp32-dual-radio-bridge.md), the
-[firmware guide](firmware/README.md), and the
-[month-later resume card](firmware/docs/resume-here.md). The detailed
-[first-hardware runbook](firmware/docs/arrival-runbook.md) follows it. The prior Raspberry Pi implementation
-below remains as qualification evidence and a behavioral reference; it is not the active hardware
-architecture on this branch.
+Start with the [ESP32 development handoff](firmware/docs/resume-here.md). It links the
+[port plan](ESP32_PORT_PLAN.md), the first-hardware runbook, and the qualification criteria.
+Use the Raspberry Pi implementation below as a behavioral reference.
 
 ## Raspberry Pi implementation history
 
