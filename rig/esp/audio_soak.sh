@@ -5,7 +5,7 @@
 #
 # usage: rig/esp/audio_soak.sh <out-dir (WSL path)> <seconds> <s31-port> [bt_soak args...]
 #   e.g. ... COM3 --console "10:tap lark_in"   (H6 tap records during the soak)
-# Needs the harness installed and started (rig/esp/pixel-harness/README.md), the S31 bonded and
+# Needs the harness installed (rig/esp/pixel-harness/README.md), the S31 bonded and
 # connected, and the Pixel awake (stay_on_while_plugged_in). Read-only on both boards: the S31
 # port is opened with DTR/RTS deasserted, and nothing is flashed or reset.
 set -euo pipefail
@@ -22,6 +22,11 @@ A=dev.larkbridge.harness
 TAG=soak$(date -u +%H%M%S)
 
 [ -e "$OUT" ] && { echo "refusing to reuse $OUT" >&2; exit 2; }
+"$ADB" shell am start -W -n "$A/.MainActivity" >/dev/null
+if ! "$ADB" shell dumpsys activity activities | grep -F 'topResumedActivity=' | grep -F "$A/.MainActivity" >/dev/null; then
+    echo "Pixel harness is not in the foreground" >&2
+    exit 2
+fi
 mkdir -p "$OUT"
 LOOPS=$(( SECS / 3 + 20 ))   # the stimulus is 3.0 s; run a little past the logger's end
 
@@ -31,6 +36,7 @@ cleanup() {
     "$ADB" shell am broadcast $R -a $A.STOP_STIMULUS --es tag "$TAG-stop" >/dev/null 2>&1 || true
     sleep 2
     kill "$LOGCAT" 2>/dev/null || true
+    wait "$LOGCAT" 2>/dev/null || true
 }
 trap cleanup EXIT
 
