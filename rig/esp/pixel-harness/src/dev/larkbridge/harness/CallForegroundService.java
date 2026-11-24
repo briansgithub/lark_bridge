@@ -23,7 +23,11 @@ public final class CallForegroundService extends Service {
                 .setOngoing(true)
                 .build();
         try {
-            startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
+            int types = ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL;
+            if (intent != null && intent.getBooleanExtra(Harness.EXTRA_RECORD_UPLINK, false)) {
+                types |= ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
+            }
+            startForeground(1, n, types);
             Harness.onForegroundStarted(true, null);
         } catch (RuntimeException e) {
             Harness.onForegroundStarted(false, e.toString());

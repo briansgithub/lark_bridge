@@ -6,7 +6,7 @@
 #   ./build.sh            -> build/larkbridge-harness-debug.apk
 #   ./build.sh clean
 #
-# Env overrides: ANDROID_SDK, JDK, BUILD_TOOLS (version), PLATFORM (e.g. android-37.0), PYTHON.
+# Env overrides: ANDROID_SDK, JDK, BUILD_TOOLS (version), PLATFORM, PYTHON, DEBUG_KEYSTORE.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,7 +18,11 @@ PYTHON="${PYTHON:-python3}"
 MIN_SDK=31
 
 OUT="$HERE/build"
-KEYSTORE="$HERE/.keystore/debug.keystore"   # gitignored; generated on first build
+KEYSTORE="${DEBUG_KEYSTORE:-$HERE/.keystore/debug.keystore}"  # default is gitignored
+if [[ -n "${DEBUG_KEYSTORE:-}" && ! -f "$KEYSTORE" ]]; then
+    echo "missing debug keystore: $KEYSTORE" >&2
+    exit 1
+fi
 APK="$OUT/larkbridge-harness-debug.apk"
 
 if [[ "${1:-}" == "clean" ]]; then

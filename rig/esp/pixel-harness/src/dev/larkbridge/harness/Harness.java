@@ -49,6 +49,7 @@ final class Harness {
     static final String EXTRA_ROUTE = "route";   // SET_ROUTE: bluetooth|earpiece|speaker|wired
     static final String EXTRA_USAGE = "usage";   // PLAY_STIMULUS: voice (default) | media (A2DP)
     static final String EXTRA_PROGRESS = "progress_s"; // PLAY_STIMULUS: progress log period, 0 = off
+    static final String EXTRA_RECORD_UPLINK = "record_uplink"; // CALL_START opt-in
     static final String EXTRA_TAG = "tag";       // any command: echoed in its log lines
 
     static final String DEFAULT_ASSET = "tone_1k_16k_3s.wav";
@@ -62,6 +63,11 @@ final class Harness {
     private static long callStartedElapsed;
     private static StimulusPlayer player;
     private static String fgsState = "stopped";
+    private static boolean recordUplink;
+    private static UplinkRecorder uplink;
+    private static Context recordingContext;
+    private static String recordingTag;
+    private static String recordingError;
 
     private Harness() {}
 
@@ -75,7 +81,7 @@ final class Harness {
         log("cmd", tag, "cmd", cmd, "via", via);
         try {
             if (CALL_START.equals(action)) {
-                callStart(app, tag);
+                callStart(app, tag, intent.getBooleanExtra(EXTRA_RECORD_UPLINK, false));
             } else if (CALL_END.equals(action)) {
                 callEnd(tag);
             } else if (PLAY_STIMULUS.equals(action)) {
@@ -117,9 +123,9 @@ final class Harness {
         ctx.getSystemService(TelecomManager.class).registerPhoneAccount(account);
     }
 
-    private static void callStart(Context ctx, String tag) {
-        if (connection != null) {
-            log("error", tag, "error", "call_already_active", "call_state", Connection.stateToString(connection.getState()));
+    private static void callStart(Context ctx, String tag, boolean record) {
+        if (connection != null || fgsState.equals("requested")) {
+            log("error", tag, "error", "call_already_active");
             return;
         }
         TelecomManager tm = ctx.getSystemService(TelecomManager.class);
@@ -133,8 +139,18 @@ final class Harness {
         extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, handle);
         extras.putBoolean(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, false);
         pendingTag = tag;
+        recordUplink = record;
+        uplink = null;
+        recordingContext = record ? ctx : null;
+        recordingTag = record ? tag : null;
+        recordingError = null;
         startForeground(ctx, tag);
-        tm.placeCall(CALL_ADDRESS, extras);
+        try {
+            tm.placeCall(CALL_ADDRESS, extras);
+        } catch (RuntimeException e) {
+            onConnectionFailed(ctx, e.toString());
+            throw e;
+        }
         log("call_requested", tag);
     }
 
@@ -171,11 +187,13 @@ final class Harness {
         callStartedElapsed = SystemClock.elapsedRealtime();
         log("call_created", pendingTag, "call_id", c.id);
         pendingTag = null;
+        maybeRecordUplink();
     }
 
     static void onConnectionFailed(Context ctx, String why) {
         log("call_failed", pendingTag, "reason", why);
         pendingTag = null;
+        stopUplink();
         stopForeground(ctx);
     }
 
@@ -185,6 +203,7 @@ final class Harness {
         connection = null;
         lastDisconnect = cause;
         stopStimulus(null);
+        stopUplink();
         stopForeground(ctx);
         log("call_ended", null, "call_id", c.id, "cause", cause, "duration_ms", dur);
     }
@@ -193,12 +212,14 @@ final class Harness {
 
     private static void startForeground(Context ctx, String tag) {
         try {
-            ctx.startForegroundService(new Intent(ctx, CallForegroundService.class));
+            ctx.startForegroundService(new Intent(ctx, CallForegroundService.class)
+                    .putExtra(EXTRA_RECORD_UPLINK, recordUplink));
             fgsState = "requested";
         } catch (RuntimeException e) {
             // Background FGS start can be refused (Android 12+). The call still works: Telecom's
             // binding to HarnessConnectionService keeps the process alive for the call.
             fgsState = "refused";
+            if (recordUplink) recordingError = e.toString();
             log("fgs_refused", tag, "detail", e.toString());
         }
     }
@@ -210,7 +231,26 @@ final class Harness {
 
     static void onForegroundStarted(boolean ok, String detail) {
         fgsState = ok ? "running" : "failed";
-        if (!ok) log("fgs_failed", null, "detail", detail);
+        if (!ok) {
+            if (recordUplink) recordingError = detail;
+            log("fgs_failed", null, "detail", detail);
+        }
+        maybeRecordUplink();
+    }
+
+    private static void maybeRecordUplink() {
+        if (!recordUplink || uplink != null || connection == null || !"running".equals(fgsState)) return;
+        uplink = new UplinkRecorder(recordingContext, connection.id, recordingTag);
+        uplink.start();
+    }
+
+    private static void stopUplink() {
+        if (uplink != null) uplink.cancel();
+        if (recordUplink && uplink == null && recordingError == null) {
+            recordingError = "call ended before uplink recording started";
+        }
+        recordingContext = null;
+        recordingTag = null;
     }
 
     // ---------------------------------------------------------------- stimulus
@@ -273,6 +313,16 @@ final class Harness {
 
             StimulusPlayer p = player;
             o.put("stimulus", p == null ? JSONObject.NULL : p.statusJson());
+            if (uplink != null) {
+                o.put("uplink", uplink.statusJson());
+            } else if (recordUplink) {
+                JSONObject capture = new JSONObject();
+                capture.put("state", recordingError == null ? "waiting_for_foreground_service" : "error");
+                if (recordingError != null) capture.put("error", recordingError);
+                o.put("uplink", capture);
+            } else {
+                o.put("uplink", JSONObject.NULL);
+            }
 
             JSONObject perms = new JSONObject();
             for (String perm : new String[] {Manifest.permission.MANAGE_OWN_CALLS, Manifest.permission.RECORD_AUDIO,
