@@ -1,10 +1,12 @@
 """Hardware scenarios and replayable evidence for LarkBridge H2 through H5."""
 
+import array
 import json
 import math
 import subprocess
+import sys
 import time
-from pathlib import Path
+import wave
 
 from logic_decode import decode_i2s
 
@@ -198,7 +200,7 @@ def tone(bench, routed=False):
     bench.command("s31", f"tone {stage} 1000 -20")
 
 
-def run_scenario(bench, gate, limits, analyzer=None):
+def run_scenario(bench, gate, limits, analyzer=None, fake_car_address=None):
     bench.wait_link(limits["link_seconds"])
     if gate == "H2":
         bench.command("s31", "fault test_silence")
@@ -282,8 +284,11 @@ def run_scenario(bench, gate, limits, analyzer=None):
             bench.command("s31", "fault test_off")
     else:
         output = bench.command("output", "peers")
-        if not output["bt"].get("connected"):
-            raise BenchError("pair the DevKitC with the fake-car Bluetooth sink and connect it")
+        if not fake_car_address:
+            raise BenchError("supply the fake-car sink address with --fake-car-address")
+        if (not output["bt"].get("connected") or
+                output["bt"].get("peer", "").lower() != fake_car_address.lower()):
+            raise BenchError("pair and connect the DevKitC to the specified fake-car Bluetooth sink")
         try:
             tone(bench, routed=True)
             bench.command("s31", "fault test_a2dp")
@@ -436,9 +441,12 @@ def reduce_h4(e, limits, artifacts):
                                   for key, target in (("rms_l", 2317), ("rms_r", 1158))),
                 f"{role} tone tap RMS outside tolerance")
         first, last = (mark["data"][role] for mark in (begin, end))
-        e.check(first["ok"] and last["ok"] and last["blocks"] > first["blocks"] and
+        seconds = last["host"] - first["host"]
+        frames = (last["blocks"] - first["blocks"]) * last["bytes"] / 4
+        e.metrics[role]["silence_frames"] = frames
+        e.check(first["ok"] and last["ok"] and frames >= 48000 * seconds * limits["coverage"] and
                 last["nz_blocks"] == first["nz_blocks"] and last["rms_l"] == last["rms_r"] == 0
-                and last["host"] - first["host"] >= limits["silence_seconds"],
+                and seconds >= limits["silence_seconds"],
                 f"{role} tap did not show continuous silence")
     captures = {path.name: path for path in artifacts if path.suffix == ".bin"}
     if not {"tone.bin", "silence.bin"} <= captures.keys():
@@ -472,7 +480,32 @@ def reduce_h4(e, limits, artifacts):
                 "wire right channel is not the inverted half-amplitude left channel")
 
 
-def reduce_h5(e, limits):
+def score_recording(e, path, limits):
+    from rig.analysis.wav_level import goertzel
+
+    with wave.open(str(path), "rb") as wav:
+        rate, channels = wav.getframerate(), wav.getnchannels()
+        if wav.getsampwidth() != 2 or channels != 2:
+            raise ValueError("fake-car recording must be stereo S16LE PCM")
+        if wav.getnframes() < limits["stream_seconds"] * rate:
+            e.missing.append("fake-car recording is shorter than the FIFO measurement")
+            return
+        amplitudes = []
+        segment_frames = limits["recording_segment_seconds"] * rate
+        for start in range(0, limits["stream_seconds"] * rate, segment_frames):
+            # Probe the center of each segment. A 100 ms window tolerates
+            # the clock drift allowed by the FIFO gate.
+            wav.setpos(min(start + segment_frames // 2, wav.getnframes() - rate // 10))
+            samples = array.array("h", wav.readframes(rate // 10))
+            if sys.byteorder != "little":
+                samples.byteswap()
+            amplitudes.append(goertzel([value / 32768 for value in samples[::2]], rate, 1000))
+        e.metrics["recording_tone_amplitude"] = amplitudes
+        e.check(all(amp >= limits["recording_min_amplitude"] for amp in amplitudes),
+                "one or more fake-car recording segments lack the 1 kHz tone")
+
+
+def reduce_h5(e, limits, artifacts):
     begin, end, rows = e.window("stream")
     before, after = (mark["data"]["output"] for mark in (begin, end))
     span = coverage(e, rows, before, after, "output", limits["coverage"])
@@ -487,6 +520,12 @@ def reduce_h5(e, limits):
     e.check(ppm < limits["ppm_limit"], "clock correction reached or exceeded the saturation limit")
     e.check(not any(changes.values()), "new underrun, overrun or I2S error")
     e.check(all(streaming(r) for r in rows), "audio stream interrupted during the measurement")
+    recording = next((path for path in artifacts if path.suffix.lower() == ".wav"), None)
+    if recording is not None:
+        try:
+            score_recording(e, recording, limits)
+        except (wave.Error, EOFError) as error:
+            e.missing.append(f"invalid fake-car recording: {error}")
 
 
 def reduce(gate, limits, records, artifacts=()):
@@ -496,10 +535,10 @@ def reduce(gate, limits, records, artifacts=()):
         target = evidence.failures if any("reset loop" in x or "did not recover" in x for x in errors) else evidence.missing
         target.extend(errors)
     try:
-        if gate == "H4":
-            reduce_h4(evidence, limits, artifacts)
+        if gate in ("H4", "H5"):
+            {"H4": reduce_h4, "H5": reduce_h5}[gate](evidence, limits, artifacts)
         else:
-            {"H2": reduce_h2, "H3": reduce_h3, "H5": reduce_h5}[gate](evidence, limits)
+            {"H2": reduce_h2, "H3": reduce_h3}[gate](evidence, limits)
     except (KeyError, StopIteration, TypeError, ValueError) as error:
         evidence.missing.append(f"incomplete {gate} evidence ({type(error).__name__}: {error})")
     return evidence.verdict()

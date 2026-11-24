@@ -725,6 +725,10 @@ def run_two_boards(args, gate):
                         manifest, _ = arrival.validate_build_manifest(role)
                         if manifest.get("image_kind") != "test":
                             raise HilError(f"{role} build must be a test image")
+                        config = (FIRMWARE_ROOT / role / "sdkconfig").read_text(encoding="utf-8")
+                        erase_flag = f"CONFIG_LARKBRIDGE_{role.upper()}_ERASE_BONDS_ON_BOOT"
+                        if f"# {erase_flag} is not set" not in config.splitlines():
+                            raise HilError(f"{role} sdkconfig does not confirm bond-erase is disabled")
                         manifests[role] = expected_version(manifest)
                         commands[role] = app_flash_command(role, port)
                     for role, port in zip(module.ROLES, ports):
@@ -746,7 +750,9 @@ def run_two_boards(args, gate):
                         raise HilError(f"{role} requires the H2-H5 test image with bond erase disabled")
                     if args.flash and status.get("version") != manifests[role]:
                         raise HilError(f"{role} reported a version different from the flashed manifest")
-                module.run_scenario(bench, args.gate, gate, args.analyzer)
+                module.run_scenario(bench, args.gate, gate, args.analyzer, args.fake_car_address)
+                if args.recording:
+                    shutil.copy2(args.recording, staging / "fake-car.wav")
             except (OSError, HilError, module.BenchError, subprocess.TimeoutExpired) as error:
                 if bench is None:
                     records.append({"t": "abort", "reason": str(error)})
@@ -864,6 +870,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--port")
     run.add_argument("--s31-port")
     run.add_argument("--output-port")
+    run.add_argument("--fake-car-address", help="Bluetooth address of the bonded H5 fake-car sink")
+    run.add_argument("--recording", type=Path, help="optional H5 fake-car WAV for the measurement window")
     run.add_argument("--analyzer", help="sigrok driver for H4 (for example fx2lafw)")
     run.add_argument("--seconds", type=float, default=20.0)
     run.add_argument("--flash", action="store_true", help="app-only flash first (resets the board)")

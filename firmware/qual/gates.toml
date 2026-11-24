@@ -143,6 +143,7 @@ resets = false
 reducer = "h2h5"
 link_seconds = 60
 silence_seconds = 10
+coverage = 0.98
 tap_tolerance = 0.02
 analyzer_rate = 24000000
 sample_rate_ppm = 1000
@@ -173,6 +174,8 @@ coverage = 0.98
 fifo_low = 1024
 fifo_high = 7168
 ppm_limit = 500
+recording_segment_seconds = 30
+recording_min_amplitude = 0.01
 status = "PENDING"
 
 [gates.fake-car]
