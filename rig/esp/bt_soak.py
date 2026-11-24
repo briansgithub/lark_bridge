@@ -179,8 +179,14 @@ class Soak:
                 continue
             log.write(f"[{utc_now()}] CAPTURE_OPEN port={self.args.port}\n")
             log.flush()
+            due = [time.monotonic() + period for period, _ in self.args.console]
             try:
                 while not self.stop.is_set():
+                    now = time.monotonic()
+                    for index, (period, command) in enumerate(self.args.console):
+                        if now >= due[index]:
+                            due[index] = now + period
+                            connection.write((command + "\n").encode("utf-8"))  # data bytes only
                     raw = connection.readline()
                     if not raw:
                         continue
@@ -282,7 +288,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seconds", type=float, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--no-serial", action="store_true", help="adb polling only")
+    parser.add_argument("--console", type=console_command, action="append", default=[],
+                        metavar="SECONDS:COMMAND",
+                        help="send a test-image console command every SECONDS (repeatable)")
     return parser
+
+
+def console_command(value: str) -> tuple[float, str]:
+    period, _, command = value.partition(":")
+    try:
+        seconds = float(period)
+    except ValueError:
+        seconds = 0.0
+    if not (seconds >= 1.0) or not re.fullmatch(r"[a-z_]+( [A-Za-z0-9_.-]+)*", command):
+        raise argparse.ArgumentTypeError("expected SECONDS:COMMAND with SECONDS >= 1, e.g. 10:tap lark_in")
+    return seconds, command
 
 
 def main(argv: list[str] | None = None) -> int:

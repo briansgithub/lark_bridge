@@ -309,12 +309,18 @@ def _capture_span_seconds(text: str) -> float:
     return (max(stamps) - min(stamps)).total_seconds()
 
 
+UAC_BYTES_PER_S = 48000 * 2 * 2   # 48 kHz, S16, stereo
+TAP_ACTIVE_RMS = 300              # about -40 dBFS: speech or music, not an idle link
+
+
 def reduce_h6_uac(text: str, *, boot_log: str | None = None, min_seconds: float = 1800.0,
                   span_seconds: float | None = None) -> tuple[str, dict[str, Any], list[str]]:
     """H6 from S31 console text: descriptor/format at enumeration and zero UAC failures.
 
-    The 100/100 reconnect part always needs the Pico fake Lark or a person, so this reducer
-    never returns PASS on its own; a clean run is PARTIAL.
+    Test-image evidence adds ``tap lark_in`` replies (format, RMS) and the 1 Hz ``stats`` UAC
+    counters: receive-rate gaps against 48 kHz/S16/stereo, and reconnects (``disc``/``opens``).
+    PASS needs at least 100 reconnects that all recovered (the Pico fake Lark, or a person
+    replugging); otherwise a clean run is PARTIAL.
     """
 
     combined = (boot_log or "") + "\n" + text
@@ -335,6 +341,25 @@ def reduce_h6_uac(text: str, *, boot_log: str | None = None, min_seconds: float 
         metrics["uac_rx_packets_delta"] = last.get("rx", 0) - first.get("rx", 0)
         metrics["uac_xfer_err_delta"] = last.get("xfer_err", 0) - first.get("xfer_err", 0)
         metrics["uac_read_err_delta"] = last.get("read_err", 0) - first.get("read_err", 0)
+        metrics["uac_disconnects"] = last.get("disc", 0) - first.get("disc", 0)
+        metrics["uac_reopens"] = last.get("opens", 0) - first.get("opens", 0)
+        gaps = 0
+        for before, now in zip(stats, stats[1:]):
+            b, n = before.get("uac", {}), now.get("uac", {})
+            seconds = (now.get("up_ms", 0) - before.get("up_ms", 0)) / 1000.0
+            steady = (b.get("started") and n.get("started") and b.get("disc") == n.get("disc")
+                      and seconds > 0)
+            if steady and (n.get("bytes", 0) - b.get("bytes", 0)) % 2**32 < 0.5 * UAC_BYTES_PER_S * seconds:
+                gaps += 1
+        metrics["uac_rx_gap_intervals"] = gaps
+    taps = [r for r in json_records(text) if r["t"] == "tap" and r.get("stage") == "lark_in"]
+    if taps:
+        rms = sorted(int(r.get("rms", 0)) for r in taps)
+        metrics["tap_records"] = len(taps)
+        metrics["tap_ok"] = sum(1 for r in taps if r.get("ok"))
+        metrics["tap_formats"] = sorted({str(r.get("fmt")) for r in taps})
+        metrics["tap_rms"] = {"min": rms[0], "median": rms[len(rms) // 2], "max": rms[-1]}
+        metrics["tap_active"] = sum(1 for value in rms if value >= TAP_ACTIVE_RMS)
     reasons: list[str] = []
     if failures:
         return "FAIL", metrics, [f"{len(failures)} UAC failure lines, first: {failures[0][:120]}"]
@@ -349,8 +374,23 @@ def reduce_h6_uac(text: str, *, boot_log: str | None = None, min_seconds: float 
     if not stats:
         reasons.append("no JSON stats (pre-Stage-B image): transfer errors judged from log lines only, "
                        "UAC packet flow not proven")
-    reasons.append("100/100 reconnects and negative-descriptor tests not run (need the Pico fake Lark)")
-    return "PARTIAL", metrics, reasons
+    elif metrics["uac_rx_gap_intervals"]:
+        return "FAIL", metrics, [f"{metrics['uac_rx_gap_intervals']} stats intervals below half the "
+                                 "48 kHz/S16/stereo byte rate"]
+    if taps and (metrics["tap_formats"] != ["s16le_stereo_48k"] or not metrics["tap_ok"]):
+        return "FAIL", metrics, [f"tap lark_in format {metrics['tap_formats']}, ok {metrics['tap_ok']}"]
+    if not taps:
+        reasons.append("no tap lark_in records: format not verified from tap")
+    disconnects = metrics.get("uac_disconnects", 0)
+    recovered = min(disconnects, metrics.get("uac_reopens", 0))
+    if recovered < disconnects:
+        return "FAIL", metrics, [f"only {recovered}/{disconnects} Lark reconnects recovered"]
+    if disconnects < 100:
+        reasons.append(f"{recovered}/{disconnects} Lark reconnects observed; 100/100 hot-plugs and the "
+                       "negative-descriptor tests need the Pico fake Lark or a person")
+    if reasons:
+        return "PARTIAL", metrics, reasons
+    return "PASS", metrics, [f"{recovered}/{disconnects} reconnects, zero UAC errors, format verified"]
 
 
 def reduce_bt_soak(summary: dict[str, Any]) -> tuple[str, dict[str, Any], list[str]]:

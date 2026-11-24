@@ -1,3 +1,5 @@
+import contextlib
+import io
 import sys
 import unittest
 from pathlib import Path
@@ -55,6 +57,17 @@ class ParseTests(unittest.TestCase):
             ["acl_bredr", "a2dp_connected", "hfp_connected", "link_up"],
         )
         self.assertEqual(bt_soak.state_changes(None, down), [])
+
+
+class ConsoleOptionTests(unittest.TestCase):
+    def test_console_commands_parse_and_reject_bad_input(self):
+        args = bt_soak.build_parser().parse_args(
+            ["--seconds", "5", "--out", "x", "--console", "10:tap lark_in", "--console", "60:stats"])
+        self.assertEqual(args.console, [(10.0, "tap lark_in"), (60.0, "stats")])
+        for bad in ("0.5:stats", "x:stats", "10:", "10:tap; reboot", "10:Tap"):
+            with self.assertRaises(SystemExit):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    bt_soak.build_parser().parse_args(["--seconds", "5", "--out", "x", "--console", bad])
 
 
 if __name__ == "__main__":

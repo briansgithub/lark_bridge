@@ -159,6 +159,39 @@ class H6ReducerTests(unittest.TestCase):
         self.assertEqual(metrics["uac_rx_packets_delta"], 890)
 
 
+    def _live(self, *, gap=False, disc_at=None, reopen=True, fmt="s16le_stereo_48k"):
+        lines, total, disc, opens = [], 0, 0, 1
+        for s in range(0, 1801, 1):
+            total += 0 if gap and s == 900 else 192000
+            if disc_at is not None and s == disc_at:
+                disc += 1
+                opens += 1 if reopen else 0
+            stats = {"t": "stats", "role": "s31", "up_ms": 1000 * s + 3000,
+                     "uac": {"started": True, "rx": s, "bytes": total % 2**32, "read_err": 0,
+                             "xfer_err": 0, "disc": disc, "opens": opens}}
+            lines.append(f"[2026-11-24T16:{s // 60:02}:{s % 60:02}+00:00] {json.dumps(stats)}")
+            if s % 10 == 0:
+                tap = {"t": "tap", "role": "s31", "stage": "lark_in", "ok": True, "fmt": fmt,
+                       "rms": 900 if s % 20 else 40}
+                lines.append(f"[2026-11-24T16:{s // 60:02}:{s % 60:02}+00:00] {json.dumps(tap)}")
+        return "\n".join(lines) + "\n"
+
+    def test_live_capture_with_taps_and_a_reconnect(self):
+        verdict, metrics, reasons = hil.reduce_h6_uac(self._live(disc_at=600), boot_log=self.BOOT_LOG)
+        self.assertEqual(verdict, "PARTIAL")
+        self.assertEqual(metrics["tap_formats"], ["s16le_stereo_48k"])
+        self.assertEqual(metrics["tap_active"], 90)
+        self.assertEqual((metrics["uac_disconnects"], metrics["uac_reopens"]), (1, 1))
+        self.assertEqual(metrics["uac_rx_gap_intervals"], 0)
+        self.assertTrue(any("1/1 Lark reconnects" in r for r in reasons))
+
+    def test_live_capture_failures(self):
+        for kwargs, needle in (({"gap": True}, "byte rate"), ({"disc_at": 5, "reopen": False}, "0/1"),
+                               ({"fmt": "s16le_mono_16k"}, "format")):
+            verdict, _, reasons = hil.reduce_h6_uac(self._live(**kwargs), boot_log=self.BOOT_LOG)
+            self.assertEqual(verdict, "FAIL", kwargs)
+            self.assertIn(needle, reasons[0])
+
 class SoakReducerTests(unittest.TestCase):
     def test_soak(self):
         good = {"polls": 3, "polls_link_up": 3, "link_drops": [], "s31_reboot_markers": 0,
