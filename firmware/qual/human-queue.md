@@ -31,3 +31,7 @@ date and the evidence.
 - **H7 (fake car part)** needs P3.
 - **Stage B exit (`stageB-exit`)** needs nobody: it runs after 06:00 by app-only flashing the new
   test images (`hil.py run T2-smoke-s31 --flash --allow-reset`, then the output board).
+
+## Codex review pass
+
+- **Docker access for T1-build.** Give the review session access to the existing Docker daemon, or have an authorized session run the pinned builds. The overnight account received permission denied on `/var/run/docker.sock`. Both targets still need release and test build verification.
