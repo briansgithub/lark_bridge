@@ -329,15 +329,10 @@ uint32_t bridge_crc32(uint32_t crc, const void *data, size_t length)
     return ~crc;
 }
 
-uint32_t bridge_pcm16_rms(const int16_t *samples, size_t count)
+static uint32_t rms_from_sum(uint64_t sum, size_t count)
 {
-    uint64_t sum = 0;
-    if (samples == NULL || count == 0U) {
+    if (count == 0U) {
         return 0U;
-    }
-    for (size_t index = 0; index < count; ++index) {
-        int32_t sample = samples[index];
-        sum += (uint64_t)(sample * sample);
     }
     uint64_t mean = (sum + count / 2U) / count;
     /* Integer square root, rounded to nearest; mean < 2^31 so 32 bits suffice. */
@@ -354,4 +349,38 @@ uint32_t bridge_pcm16_rms(const int16_t *samples, size_t count)
         ++root;
     }
     return (uint32_t)root;
+}
+
+uint32_t bridge_pcm16_rms(const int16_t *samples, size_t count)
+{
+    uint64_t sum = 0;
+    if (samples == NULL || count == 0U) {
+        return 0U;
+    }
+    for (size_t index = 0; index < count; ++index) {
+        int32_t sample = samples[index];
+        sum += (uint64_t)(sample * sample);
+    }
+    return rms_from_sum(sum, count);
+}
+
+void bridge_pcm16_stereo_stats(const int16_t *interleaved, size_t frames,
+                               bridge_pcm16_stereo_stats_t *stats)
+{
+    uint64_t left = 0;
+    uint64_t right = 0;
+    bool nonzero = false;
+    if (stats == NULL) {
+        return;
+    }
+    for (size_t frame = 0; interleaved != NULL && frame < frames; ++frame) {
+        int32_t l = interleaved[frame * 2U];
+        int32_t r = interleaved[frame * 2U + 1U];
+        left += (uint64_t)(l * l);
+        right += (uint64_t)(r * r);
+        nonzero = nonzero || l != 0 || r != 0;
+    }
+    stats->rms_left = interleaved != NULL ? rms_from_sum(left, frames) : 0U;
+    stats->rms_right = interleaved != NULL ? rms_from_sum(right, frames) : 0U;
+    stats->nonzero = nonzero;
 }

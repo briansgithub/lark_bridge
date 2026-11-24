@@ -137,6 +137,60 @@ int bridge_protocol_encode(
     return 0;
 }
 
+int bridge_protocol_encode_corrupt(const bridge_packet_t *packet, bridge_corruption_t kind,
+                                   uint8_t *output, size_t output_capacity,
+                                   size_t *output_length) {
+    uint8_t raw[BRIDGE_PROTOCOL_MAX_RAW_SIZE];
+    size_t raw_length;
+    size_t encoded_length;
+    uint16_t crc;
+    if (packet == NULL || output == NULL || output_length == NULL ||
+        packet->payload_length > BRIDGE_PROTOCOL_MAX_PAYLOAD) {
+        return -1;
+    }
+    if (kind == BRIDGE_CORRUPT_OVERLONG) {
+        if (output_capacity < BRIDGE_PROTOCOL_OVERLONG_RUN + 1U) {
+            return -1;
+        }
+        memset(output, 0x55, BRIDGE_PROTOCOL_OVERLONG_RUN);
+        output[BRIDGE_PROTOCOL_OVERLONG_RUN] = 0U;
+        *output_length = BRIDGE_PROTOCOL_OVERLONG_RUN + 1U;
+        return 0;
+    }
+    if (kind != BRIDGE_CORRUPT_CRC && kind != BRIDGE_CORRUPT_COBS &&
+        kind != BRIDGE_CORRUPT_VERSION) {
+        return -1;
+    }
+    raw_length = BRIDGE_PROTOCOL_HEADER_SIZE + packet->payload_length + BRIDGE_PROTOCOL_CRC_SIZE;
+    if (output_capacity < raw_length + 2U) {
+        return -1;
+    }
+    raw[VERSION_OFFSET] = kind == BRIDGE_CORRUPT_VERSION ? (uint8_t)(BRIDGE_PROTOCOL_VERSION + 1U)
+                                                         : (uint8_t)BRIDGE_PROTOCOL_VERSION;
+    raw[TYPE_OFFSET] = packet->type;
+    raw[SEQUENCE_LOW_OFFSET] = (uint8_t)(packet->sequence & 0xffU);
+    raw[SEQUENCE_HIGH_OFFSET] = (uint8_t)(packet->sequence >> 8U);
+    raw[LENGTH_LOW_OFFSET] = (uint8_t)(packet->payload_length & 0xffU);
+    raw[LENGTH_HIGH_OFFSET] = (uint8_t)(packet->payload_length >> 8U);
+    memcpy(&raw[BRIDGE_PROTOCOL_HEADER_SIZE], packet->payload, packet->payload_length);
+    crc = bridge_crc16_ccitt(raw, raw_length - BRIDGE_PROTOCOL_CRC_SIZE);
+    if (kind == BRIDGE_CORRUPT_CRC) {
+        crc ^= 0x0001U;
+    }
+    raw[raw_length - BRIDGE_PROTOCOL_CRC_SIZE] = (uint8_t)(crc & 0xffU);
+    raw[raw_length - 1U] = (uint8_t)(crc >> 8U);
+    if (!cobs_encode(raw, raw_length, output, output_capacity - 1U, &encoded_length)) {
+        return -1;
+    }
+    if (kind == BRIDGE_CORRUPT_COBS) {
+        /* A code longer than the frame: cobs_decode rejects it. */
+        output[0] = (uint8_t)(encoded_length + 1U > 0xfeU ? 0xfeU : encoded_length + 1U);
+    }
+    output[encoded_length++] = 0U;
+    *output_length = encoded_length;
+    return 0;
+}
+
 void bridge_stream_decoder_init(bridge_stream_decoder_t *decoder) {
     if (decoder != NULL) {
         decoder->encoded_length = 0U;

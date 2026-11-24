@@ -30,3 +30,14 @@ else()
 endif()
 
 add_test(NAME bridge_console_tests COMMAND bridge_console_tests)
+
+add_executable(bridge_fault_frame_tests test_fault_frames.c)
+target_link_libraries(bridge_fault_frame_tests PRIVATE bridge_common)
+
+if(MSVC)
+    target_compile_options(bridge_fault_frame_tests PRIVATE /W4 /WX /experimental:c11atomics)
+else()
+    target_compile_options(bridge_fault_frame_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
+add_test(NAME bridge_fault_frame_tests COMMAND bridge_fault_frame_tests)
