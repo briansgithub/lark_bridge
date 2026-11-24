@@ -22,7 +22,7 @@ import zipfile
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIRMWARE_ROOT = REPO_ROOT / "firmware"
-DEFAULT_RESULTS_ROOT = REPO_ROOT / "docs" / "experiments" / "results" / "E18"
+DEFAULT_RESULTS_ROOT = REPO_ROOT / "docs" / "experiments" / "results" / "E21"
 VALID_FINAL_STATUSES = ("PASS", "FAIL", "PENDING_HARDWARE")
 GATE_RE = re.compile(r"H(?:[0-9]|1[0-7])\Z")
 PORT_RE = re.compile(r"[A-Za-z0-9_./:\\\-]+\Z")

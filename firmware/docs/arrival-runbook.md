@@ -30,7 +30,7 @@ Leave the inter-board harness and LARK receiver disconnected.
 3. Disconnect it. Connect the S31 through its USB Serial/JTAG Type-C port, flash `firmware/s31`, and
    save a complete boot log.
 4. Record each chip revision, Bluetooth address, reset reason, IDF commit, free heap, and firmware
-   Git commit in an E18 result directory.
+   Git commit in an E21 result directory (`docs/experiments/results/E21/`).
 
 Expected state is `NOT_READY` or silence while peers and the inter-board link are absent. A firmware
 that reports ready at this stage fails the gate.

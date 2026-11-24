@@ -1,7 +1,7 @@
 # ESP hardware qualification matrix
 
 All rows are `PENDING HARDWARE`. Build or simulation success does not change a hardware row to pass.
-Store each run under `docs/experiments/results/E18/<UTC timestamp>-<gate>/` with commands, serial
+Store each run under `docs/experiments/results/E21/<UTC timestamp>-<gate>/` with commands, serial
 logs, measurements, firmware/toolchain manifests, and SHA-256 hashes.
 
 | Gate | Scenario | Objective pass condition | Status |

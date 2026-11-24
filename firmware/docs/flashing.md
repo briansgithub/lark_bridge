@@ -82,7 +82,7 @@ Run the printed lines. Direct esptool flashing avoids reconfiguring the clean Do
 the final printed `idf.py ... monitor` line only opens the serial monitor.
 
 Use `Ctrl+]` to exit the IDF monitor. The operator helper can print the validated command for a
-selected port, and can capture a timestamped serial artifact into an E18 run. Record the COM-port
+selected port, and can capture a timestamped serial artifact into an E21 run. Record the COM-port
 mapping by unplugging one board and rescanning; port numbers are not permanent.
 
 The boot banner must state project/version, IDF version, chip model/revision/cores, reset reason,

@@ -26,7 +26,7 @@
 | HIL runner, fake peers, phone harness | **Not started.** The hand-off lists the HIL runner and the qualification serial interface as open work | `resume-here.md` |
 | Behavior contract (Pi policies ported to C) | Not started. The output board has a basic peer policy; the S31 has simple reconnect requests | `output_policy.c`, `bt_gateway.c` |
 | This PC | Missing Docker, ESP-IDF, esptool, pyserial, adb, sigrok, cmake, and a compiler | `command -v` checks (2026-11-22) |
-| Experiment-number collision | Still open: `E18-esp32-prehardware-port.md` sits beside `E18-fifine-k054-compat.md` | `docs/experiments/` |
+| Experiment-number collision | Resolved 2026-11-24: the ESP series is E21 (`E21-esp32-prehardware-port.md`, stub at the old name) | `docs/experiments/` |
 
 ### 1.1 How this changes the revision 1 plan
 

@@ -19,13 +19,13 @@ and AEC. The 32UE in [`firmware/output`](../output/) owns car-facing A2DP and AV
 
 ## Build and artifact provenance
 
-[E18](../../docs/experiments/E18-esp32-prehardware-port.md) records the original native tests,
+[E21](../../docs/experiments/E21-esp32-prehardware-port.md) records the original native tests,
 pinned ESP-IDF builds, and flash bundle checksums. The retained local ZIPs identify historical
 commit `b608dc3a3cec883501c4ab55bdee87586e751128`, which is outside the current branch ancestry.
 The firmware sources, target configs and locks, host tests, and build tools from that checkpoint
 match the tracked inputs at branch baseline `e7f8180`. A fresh clone should build from its clean checked-out
 commit and record the source commit and hashes from the resulting manifests. If reusing the
-original ZIPs on the bench host, verify the [recorded hashes](../../docs/experiments/E18-esp32-prehardware-port.md#retained-build-identities)
+original ZIPs on the bench host, verify the [recorded hashes](../../docs/experiments/E21-esp32-prehardware-port.md#retained-build-identities)
 and retain their original source identity in the evidence.
 
 From the repository root on Windows:
