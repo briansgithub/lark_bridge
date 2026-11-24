@@ -140,6 +140,14 @@ static bool start_engine(aec_worker_t *worker)
 
     s31_audio_router_reset_aec_inputs();
     worker->generation = s31_audio_router_aec_generation();
+    ESP_LOGI(TAG, "D5: AEC create mode=%d core=%d stack_min=%u internal_free=%u "
+             "internal_largest=%u psram_free=%u psram_largest=%u",
+             (int)config.mode, (int)xPortGetCoreID(),
+             (unsigned)uxTaskGetStackHighWaterMark(NULL),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     worker->handle = aec_create_from_config(&config);
     if (worker->handle == NULL) {
         ESP_LOGE(TAG, "ESP-SR AEC allocation failed");
@@ -385,6 +393,13 @@ esp_err_t s31_aec_gate_init(void)
     s31_gateway_set_fault(BRIDGE_FAULT_AEC_NOT_READY);
     return ESP_OK;
 #endif
+    /* ESP-SR 2.5.1's FD nonlinear initializer hardcodes SPIRAM caps.
+     * With no such heap it can dereference a failed allocation. */
+    if (heap_caps_get_total_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) == 0U) {
+        ESP_LOGE(TAG, "D5: FD AEC requires a registered 8-bit PSRAM heap");
+        s31_gateway_set_fault(BRIDGE_FAULT_AEC_NOT_READY);
+        return ESP_OK;
+    }
     if (xTaskCreate(aec_task, "s31_aec", 8192U, NULL, 10U, NULL) != pdPASS) {
         ESP_LOGE(TAG, "could not create AEC worker");
         return ESP_ERR_NO_MEM;

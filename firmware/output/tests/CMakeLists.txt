@@ -22,3 +22,12 @@ endif()
 
 enable_testing()
 add_test(NAME output_policy_tests COMMAND output_policy_tests)
+
+add_executable(output_sbc_tests test_output_sbc.c)
+target_include_directories(output_sbc_tests PRIVATE ../main)
+if(MSVC)
+    target_compile_options(output_sbc_tests PRIVATE /W4 /WX)
+else()
+    target_compile_options(output_sbc_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME output_sbc_tests COMMAND output_sbc_tests)

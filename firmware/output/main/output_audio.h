@@ -22,7 +22,7 @@ typedef struct {
 
 esp_err_t output_audio_start(void);
 bool output_audio_is_initialized(void);
-bool output_audio_clock_active(uint32_t now_ms);
+bool output_audio_clock_active(void);
 void output_audio_set_capture_active(bool active);
 size_t output_audio_pull(void *destination, size_t length, uint32_t rate, bool mono);
 void output_audio_flush(void);

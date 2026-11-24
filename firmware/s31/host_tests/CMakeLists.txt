@@ -17,3 +17,12 @@ endif()
 
 enable_testing()
 add_test(NAME s31_audio_convert COMMAND s31_audio_convert_test)
+
+add_executable(s31_reconnect_timer_tests test_reconnect_timer.c)
+target_include_directories(s31_reconnect_timer_tests PRIVATE ../main)
+if(MSVC)
+    target_compile_options(s31_reconnect_timer_tests PRIVATE /W4 /WX)
+else()
+    target_compile_options(s31_reconnect_timer_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME s31_reconnect_timer_tests COMMAND s31_reconnect_timer_tests)

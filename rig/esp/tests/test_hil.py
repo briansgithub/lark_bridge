@@ -185,6 +185,16 @@ class H6ReducerTests(unittest.TestCase):
         self.assertEqual(metrics["uac_rx_gap_intervals"], 0)
         self.assertTrue(any("1/1 Lark reconnects" in r for r in reasons))
 
+    def test_controlled_usb_disconnects_require_matching_evidence(self):
+        text = self._live(disc_at=600) + "\nW (603000) s31_uac: USB audio device disconnected\n"
+        self.assertEqual(hil.reduce_h6_uac(text, boot_log=self.BOOT_LOG)[0], "FAIL")
+        verdict, metrics, _ = hil.reduce_h6_uac(text, boot_log=self.BOOT_LOG, expected_disconnects=1)
+        self.assertEqual(verdict, "PARTIAL")
+        self.assertEqual(metrics["uac_disconnect_lines"], 1)
+        self.assertEqual(hil.reduce_h6_uac(text, boot_log=self.BOOT_LOG, expected_disconnects=2)[0], "FAIL")
+        text += "E (603001) s31_uac: LARK UAC transfer error\n"
+        self.assertEqual(hil.reduce_h6_uac(text, boot_log=self.BOOT_LOG, expected_disconnects=1)[0], "FAIL")
+
     def test_live_capture_failures(self):
         for kwargs, needle in (({"gap": True}, "byte rate"), ({"disc_at": 5, "reopen": False}, "0/1"),
                                ({"fmt": "s16le_mono_16k"}, "format")):

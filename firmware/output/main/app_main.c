@@ -6,7 +6,6 @@
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_system.h"
-#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
@@ -100,7 +99,6 @@ void app_main(void) {
 
     for (;;) {
         uint8_t ready = 0U;
-        uint32_t current_ms = (uint32_t)(esp_timer_get_time() / 1000);
 
         if (output_control_is_initialized()) {
             ready |= BRIDGE_READY_UART;
@@ -114,7 +112,7 @@ void app_main(void) {
         if (output_bluetooth_peer_connected()) {
             ready |= BRIDGE_READY_PEER;
         }
-        if (output_bluetooth_audio_streaming() && output_audio_clock_active(current_ms) &&
+        if (output_bluetooth_audio_streaming() && output_audio_clock_active() &&
             output_control_link_alive()) {
             ready |= BRIDGE_READY_AUDIO;
         }

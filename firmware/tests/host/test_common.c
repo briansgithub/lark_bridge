@@ -3,8 +3,6 @@
 #include "bridge_protocol.h"
 #include "bridge_rate.h"
 #include "bridge_resample.h"
-
-#include <math.h>
 #include "bridge_ring.h"
 #include "bridge_route_fence.h"
 #include "bridge_session.h"
@@ -295,6 +293,30 @@ static int test_rate_controller(void) {
     return 0;
 }
 
+static int test_rate_converges_from_prefill(void) {
+    enum { PREFILL = 4096, DRIFT_PPM = 180 };
+    for (int drift = -DRIFT_PPM; drift <= DRIFT_PPM; drift += 2 * DRIFT_PPM) {
+        bridge_rate_controller_t controller;
+        double fill = PREFILL;
+        int32_t filtered = PREFILL;
+        int32_t correction = 0;
+        CHECK(bridge_rate_controller_init(&controller, PREFILL, 32768, 131, 500));
+        CHECK(bridge_rate_controller_update(&controller, PREFILL) == 0);
+        for (int update = 0; update < 6000; ++update) {
+            /* 100 ms net change at 48 kHz. The producer and consumer each
+             * contribute their clock error in parts per million. */
+            fill += 4800.0 * (drift + correction) / 1000000.0;
+            filtered += ((int32_t)fill - filtered) / 4;
+            correction = bridge_rate_controller_update(&controller, filtered);
+            CHECK(fill > PREFILL - 500 && fill < PREFILL + 500);
+            CHECK(correction > -500 && correction < 500);
+        }
+        CHECK(fill > PREFILL - 8 && fill < PREFILL + 8);
+        CHECK(correction + drift >= -2 && correction + drift <= 2);
+    }
+    return 0;
+}
+
 static int test_elastic_resampler(void) {
     const int16_t three_frames[] = {0, 100, 10, 110, 20, 120};
     const int16_t five_frames[] = {0, 100, 10, 110, 20, 120, 30, 130, 40, 140};
@@ -350,6 +372,37 @@ static int test_continuous_resampler(void) {
     }
     CHECK(bridge_resampler_input_frames(&resampler, 1ULL << 30, OUT) == 0U);
     CHECK(!bridge_resampler_process(NULL, step, input, 3U, output, 3U));
+    return 0;
+}
+
+static int test_resampler_short_pulls(void) {
+    /* A pull can land before the last consumed input, even at nominal 48 kHz
+     * once negative drift compensation has introduced fractional phase. */
+    const uint64_t step = 3ULL << 30;
+    const int16_t input[] = {100, -100, 200, -200, 300, -300};
+    const size_t expected_input[] = {1U, 1U, 1U, 0U};
+    const int16_t expected_output[] = {75, 150, 225, 300};
+    bridge_resampler_t resampler;
+    bridge_resampler_reset(&resampler);
+    size_t consumed = 0U;
+    for (size_t i = 0U; i < 4U; ++i) {
+        int16_t output[2];
+        size_t frames = bridge_resampler_input_frames(&resampler, step, 1U);
+        CHECK(frames == expected_input[i]);
+        CHECK(bridge_resampler_process(&resampler, step,
+                                       frames ? &input[consumed * 2U] : NULL,
+                                       frames, output, 1U));
+        CHECK(output[0] == expected_output[i] && output[1] == -expected_output[i]);
+        consumed += frames;
+    }
+    CHECK(consumed == 3U && resampler.lag_q32 == 0U);
+    /* Change the step with almost one frame already buffered. */
+    resampler.lag_q32 = UINT32_MAX;
+    int16_t output[2];
+    CHECK(bridge_resampler_process(&resampler, 1ULL << 31, NULL, 0U, output, 1U));
+    CHECK(output[0] == 250 && output[1] == -251);
+    CHECK(bridge_resampler_input_frames(&resampler, step, SIZE_MAX) == 0U);
+    CHECK(!bridge_resampler_process(&resampler, step, NULL, 0U, output, SIZE_MAX));
     return 0;
 }
 
@@ -412,8 +465,9 @@ int main(void) {
     if (test_byte_ring() != 0 || test_frame_ring() != 0 || test_pcm() != 0 ||
         test_protocol() != 0 || test_protocol_random_stream() != 0 ||
         test_link_contract() != 0 || test_session() != 0 ||
-        test_rate_controller() != 0 || test_elastic_resampler() != 0 ||
-        test_continuous_resampler() != 0 ||
+        test_rate_controller() != 0 || test_rate_converges_from_prefill() != 0 ||
+        test_elastic_resampler() != 0 ||
+        test_continuous_resampler() != 0 || test_resampler_short_pulls() != 0 ||
         test_route_fence() != 0) {
         return 1;
     }

@@ -287,9 +287,10 @@ def reduce_t2_smoke(text: str, *, board: str, manifest: dict[str, Any] | None,
 
 
 UAC_FAILURE_RE = re.compile(
-    r"UAC transfer error|capture read failed|USB audio device disconnected|"
+    r"UAC transfer error|capture read failed|"
     r"lacks required 48 kHz|automatic recovery exhausted"
 )
+UAC_DISCONNECT = "USB audio device disconnected"
 UAC_READY_RE = re.compile(r"LARK (?P<vid>[0-9a-f]{4}):(?P<pid>[0-9a-f]{4}) capture ready at "
                           r"(?P<fmt>48 kHz/S16/stereo)")
 STAMP_RE = re.compile(r"^\[(?P<ts>[^\]]+)\] ")
@@ -314,7 +315,8 @@ TAP_ACTIVE_RMS = 300              # about -40 dBFS: speech or music, not an idle
 
 
 def reduce_h6_uac(text: str, *, boot_log: str | None = None, min_seconds: float = 1800.0,
-                  span_seconds: float | None = None) -> tuple[str, dict[str, Any], list[str]]:
+                  span_seconds: float | None = None,
+                  expected_disconnects: int | None = None) -> tuple[str, dict[str, Any], list[str]]:
     """H6 from S31 console text: descriptor/format at enumeration and zero UAC failures.
 
     Test-image evidence adds ``tap lark_in`` replies (format, RMS) and the 1 Hz ``stats`` UAC
@@ -325,13 +327,17 @@ def reduce_h6_uac(text: str, *, boot_log: str | None = None, min_seconds: float 
 
     combined = (boot_log or "") + "\n" + text
     ready = [m.groupdict() for m in (UAC_READY_RE.search(l) for l in iter_log_lines(combined)) if m]
-    failures = [l for l in iter_log_lines(text) if UAC_FAILURE_RE.search(l)]
+    disconnect_lines = [line for line in iter_log_lines(text) if UAC_DISCONNECT in line]
+    failures = [line for line in iter_log_lines(text) if UAC_FAILURE_RE.search(line)]
+    if expected_disconnects is None:
+        failures += disconnect_lines
     stats = [r for r in json_records(text) if r["t"] == "stats" and r.get("role") == "s31"]
     # Several logs with gaps between them: the caller passes the sum of per-log spans.
     span = _capture_span_seconds(text) if span_seconds is None else span_seconds
     metrics: dict[str, Any] = {
         "enumerations": ready,
         "uac_failure_lines": len(failures),
+        "uac_disconnect_lines": len(disconnect_lines),
         "capture_seconds": round(span, 1),
         "stats_records": len(stats),
         "reboot_markers": sum(1 for l in iter_log_lines(text) if REBOOT_RE.search(l)),
@@ -383,6 +389,11 @@ def reduce_h6_uac(text: str, *, boot_log: str | None = None, min_seconds: float 
         reasons.append("no tap lark_in records: format not verified from tap")
     disconnects = metrics.get("uac_disconnects", 0)
     recovered = min(disconnects, metrics.get("uac_reopens", 0))
+    if expected_disconnects is not None and (
+        disconnects != expected_disconnects or metrics.get("uac_reopens") != expected_disconnects
+        or len(disconnect_lines) != expected_disconnects
+    ):
+        return "FAIL", metrics, [f"expected {expected_disconnects} USB cycles with matching logs and counters"]
     if recovered < disconnects:
         return "FAIL", metrics, [f"only {recovered}/{disconnects} Lark reconnects recovered"]
     if disconnects < 100:

@@ -1,3 +1,4 @@
+#include "output_sbc.h"
 #include "output_bluetooth.h"
 
 #include "esp_a2dp_api.h"
@@ -450,45 +451,31 @@ static void gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *par
 }
 
 static bool select_sbc_codec(const esp_a2d_mcc_t *capabilities, bool fallback,
-                             esp_a2d_mcc_t *preferred) {
-    const esp_a2d_cie_sbc_t *caps;
-    esp_a2d_cie_sbc_t *config;
-
-    if (capabilities == NULL || preferred == NULL || capabilities->type != ESP_A2D_MCT_SBC) {
+                             esp_a2d_mcc_t *preferred)
+{
+    if (capabilities->type != ESP_A2D_MCT_SBC) {
         return false;
     }
-    caps = &capabilities->cie.sbc_info;
-    if ((caps->samp_freq & (ESP_A2D_SBC_CIE_SF_44K | ESP_A2D_SBC_CIE_SF_48K)) == 0U ||
-        (caps->ch_mode & (ESP_A2D_SBC_CIE_CH_MODE_JOINT_STEREO |
-                          ESP_A2D_SBC_CIE_CH_MODE_STEREO |
-                          ESP_A2D_SBC_CIE_CH_MODE_MONO)) == 0U ||
-        (caps->block_len & ESP_A2D_SBC_CIE_BLOCK_LEN_16) == 0U ||
-        (caps->num_subbands & ESP_A2D_SBC_CIE_NUM_SUBBANDS_8) == 0U ||
-        (caps->alloc_mthd & ESP_A2D_SBC_CIE_ALLOC_MTHD_LOUDNESS) == 0U) {
+    const esp_a2d_cie_sbc_t *caps = &capabilities->cie.sbc_info;
+    const output_sbc_t offered = {
+        .samp_freq = caps->samp_freq, .ch_mode = caps->ch_mode,
+        .block_len = caps->block_len, .num_subbands = caps->num_subbands,
+        .alloc_mthd = caps->alloc_mthd,
+        .min_bitpool = caps->min_bitpool, .max_bitpool = caps->max_bitpool,
+    };
+    output_sbc_t selected;
+    if (!output_sbc_select(&offered, fallback, &selected)) {
         return false;
     }
     (void)memset(preferred, 0, sizeof(*preferred));
     preferred->type = ESP_A2D_MCT_SBC;
-    config = &preferred->cie.sbc_info;
-    bool supports_44k = (caps->samp_freq & ESP_A2D_SBC_CIE_SF_44K) != 0U;
-    bool supports_48k = (caps->samp_freq & ESP_A2D_SBC_CIE_SF_48K) != 0U;
-    config->samp_freq = supports_44k && !(fallback && supports_48k)
-                            ? ESP_A2D_SBC_CIE_SF_44K : ESP_A2D_SBC_CIE_SF_48K;
-    if ((caps->ch_mode & ESP_A2D_SBC_CIE_CH_MODE_JOINT_STEREO) != 0U &&
-        !(fallback && (caps->ch_mode & ESP_A2D_SBC_CIE_CH_MODE_STEREO) != 0U)) {
-        config->ch_mode = ESP_A2D_SBC_CIE_CH_MODE_JOINT_STEREO;
-    } else if ((caps->ch_mode & ESP_A2D_SBC_CIE_CH_MODE_STEREO) != 0U) {
-        config->ch_mode = ESP_A2D_SBC_CIE_CH_MODE_STEREO;
-    } else {
-        config->ch_mode = ESP_A2D_SBC_CIE_CH_MODE_MONO;
-    }
-    config->block_len = ESP_A2D_SBC_CIE_BLOCK_LEN_16;
-    config->num_subbands = ESP_A2D_SBC_CIE_NUM_SUBBANDS_8;
-    config->alloc_mthd = ESP_A2D_SBC_CIE_ALLOC_MTHD_LOUDNESS;
-    config->min_bitpool = caps->min_bitpool < 2U ? 2U : caps->min_bitpool;
-    uint8_t limit = fallback && config->min_bitpool < 35U ? 35U : 53U;
-    config->max_bitpool = caps->max_bitpool > limit ? limit : caps->max_bitpool;
-    return config->min_bitpool <= config->max_bitpool;
+    preferred->cie.sbc_info = (esp_a2d_cie_sbc_t){
+        .samp_freq = selected.samp_freq, .ch_mode = selected.ch_mode,
+        .block_len = selected.block_len, .num_subbands = selected.num_subbands,
+        .alloc_mthd = selected.alloc_mthd,
+        .min_bitpool = selected.min_bitpool, .max_bitpool = selected.max_bitpool,
+    };
+    return true;
 }
 
 static bool request_sbc_codec(bool fallback)

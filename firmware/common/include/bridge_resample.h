@@ -20,6 +20,7 @@ bool bridge_resample_stereo_s16(const int16_t *input, size_t input_frames,
  * frames consumed per output frame in Q32 and must lie in [0.5, 2]. */
 typedef struct {
     int16_t previous[2];
+    int16_t penultimate[2];
     uint32_t lag_q32;
 } bridge_resampler_t;
 
@@ -30,7 +31,8 @@ size_t bridge_resampler_input_frames(const bridge_resampler_t *resampler,
                                      uint64_t step_q32, size_t output_frames);
 
 /* input_frames must equal bridge_resampler_input_frames() for the same step
- * and output_frames; input and output must not overlap. */
+ * and output_frames; input and output must not overlap. Input may be NULL
+ * when zero frames are required. */
 bool bridge_resampler_process(bridge_resampler_t *resampler, uint64_t step_q32,
                               const int16_t *input, size_t input_frames,
                               int16_t *output, size_t output_frames);
