@@ -1,0 +1,8 @@
+# larkbridge-rig: keep every USB Bluetooth controller (the USB-BT500) unbound (rig Pi only).
+# Install to: /etc/udev/rules.d/70-larkbridge-rig-no-usb-bt.rules
+#
+# The fake car must be the ONBOARD controller. btusb never binds a de-authorized
+# interface, so no second hci appears, bluetoothd cannot pick it as the default, and its
+# radio stays off. Class e0/01/01 is "Wireless Controller / RF / Bluetooth". The onboard
+# BCM43438 is on the UART, not USB, so this rule cannot touch it.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ATTR{bInterfaceClass}=="e0", ATTR{bInterfaceSubClass}=="01", ATTR{bInterfaceProtocol}=="01", ATTR{authorized}="0"

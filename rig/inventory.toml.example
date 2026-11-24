@@ -34,6 +34,10 @@ boot_variant_apply_command = ["python", "rig/boot/apply_variant.py", "--candidat
 phone_serial  = ""
 phone_wifi_ssid = "abridge-village_5G"   # 5 GHz on purpose - see the plan's RF rationale
 
+# ESP32 HIL rig Pi (the SEPARATE rig SD card, rig/esp/pi-image/). Never the product card.
+rig_pi_host   = "larkbridge-rig"      # Host entry in ~/.ssh/config, key auth only
+rig_bt_addr   = ""                    # onboard controller = fake car; provision.sh --bt-addr
+
 # ---------------------------------------------------------------- audio hardware
 #
 # Cheap dongles frequently share a serial number, so they are identified by USB PORT

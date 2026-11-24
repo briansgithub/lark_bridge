@@ -82,6 +82,7 @@ test-py: venv ## pytest for bridged/bridgectl against recorded fixtures
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/pi/powerloss/tests" -p 'test_*.py'
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/rig/powerloss/tests" -p 'test_*.py'
 	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/scripts/powerloss/tests" -p 'test_*.py'
+	$(VENV)/bin/python -m unittest discover -s "$(REPO_ROOT)/rig/esp/pi-image/tests" -p 'test_*.py'
 
 .PHONY: test-pico-host
 test-pico-host: ## Host-compiled unit tests for ring buffer / rate control

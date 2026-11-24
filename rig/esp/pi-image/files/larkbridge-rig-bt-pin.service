@@ -1,0 +1,13 @@
+# larkbridge-rig: pin BlueZ to the onboard controller by address (rig Pi only).
+[Unit]
+Description=LarkBridge rig: pin Bluetooth to the onboard controller
+Requires=bluetooth.service
+After=bluetooth.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/lib/larkbridge-rig/bt-pin.sh
+
+[Install]
+WantedBy=multi-user.target
