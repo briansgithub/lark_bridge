@@ -17,6 +17,7 @@
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "output_audio.h"
 #include "output_bluetooth.h"
@@ -91,14 +92,24 @@ static void format_address(char *text, size_t size, const uint8_t address[6])
                    address[2], address[3], address[4], address[5]);
 }
 
+/* ESP-IDF gives each task its own stdout FILE, so newlib's stream lock does
+ * not serialize the stats and console tasks. Without this lock a reply could
+ * land inside a periodic stats line and neither record would parse. */
+static StaticSemaphore_t s_emit_lock_storage;
+static SemaphoreHandle_t s_emit_lock;
+
 static void emit(char *buffer, bridge_json_t *json)
 {
+    bool locked = s_emit_lock != NULL && xSemaphoreTake(s_emit_lock, portMAX_DELAY) == pdTRUE;
     if (bridge_json_end(json)) {
         printf("%s\n", buffer);
     } else {
         printf("{\"t\":\"error\",\"role\":\"output\",\"err\":\"record_overflow\"}\n");
     }
     fflush(stdout);
+    if (locked) {
+        (void)xSemaphoreGive(s_emit_lock);
+    }
 }
 
 static void add_identity(bridge_json_t *json)
@@ -555,6 +566,7 @@ static void console_task(void *argument)
 
 esp_err_t output_telemetry_start(void)
 {
+    s_emit_lock = xSemaphoreCreateMutexStatic(&s_emit_lock_storage);
     emit_boot_record();
     esp_err_t uart_result = uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0);
     if (uart_result == ESP_OK) {
