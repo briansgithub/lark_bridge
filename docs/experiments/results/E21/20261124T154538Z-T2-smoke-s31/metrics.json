@@ -1,0 +1,18 @@
+{
+  "aec_publish": 0,
+  "board": "s31",
+  "boot_records": 0,
+  "bt": "1c:29:04:d0:61:5f",
+  "erase_bonds": 0,
+  "errors": 0,
+  "expected_image": "test",
+  "expected_version": "2a6861b6a305-test",
+  "identity_source": "status",
+  "idf": "v6.1-rc1",
+  "image": "test",
+  "reboot_markers": 0,
+  "reset": "usb",
+  "stats_records": 30,
+  "status_records": 2,
+  "version": "2a6861b6a305-test"
+}

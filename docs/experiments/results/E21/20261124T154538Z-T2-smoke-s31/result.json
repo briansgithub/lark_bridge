@@ -1,0 +1,36 @@
+{
+  "artifacts": [
+    {
+      "bytes": 26829,
+      "name": "s31-console.log",
+      "sha256": "3a6abfc3c463ff421f3c50eade3f224ee45d292be115c2eca8a10ca2387ac1f8"
+    },
+    {
+      "bytes": 2009,
+      "name": "larkbridge-build-manifest.json",
+      "sha256": "8d03849d3c7e2a3d4dabdf6e68e2060ab3cc8e41e5867a5d43cb89f6cb116d4e"
+    }
+  ],
+  "flashed": false,
+  "gate": "T2-smoke-s31",
+  "port": "COM3",
+  "reasons": [
+    "status JSON matches the manifest"
+  ],
+  "recorded_at": "2026-11-24T15:45:38+00:00",
+  "revisions": {
+    "checkout": {
+      "commit": "2d1514ffc22ad918b539312c7a09286ff010202c",
+      "dirty": true,
+      "dirty_paths": [
+        "?? docs/experiments/results/E21/20261124T154538Z-T2-smoke-s31/artifacts/larkbridge-build-manifest.json",
+        "?? docs/experiments/results/E21/20261124T154538Z-T2-smoke-s31/artifacts/s31-console.log"
+      ]
+    },
+    "hil_version": 0,
+    "manifest_sha256": "8d03849d3c7e2a3d4dabdf6e68e2060ab3cc8e41e5867a5d43cb89f6cb116d4e",
+    "toolchain_lock_sha256": "9ab42ddf52096f0b58f89de91c9ae08ceac680eede3da85270eac5b3681c72db"
+  },
+  "schema": 1,
+  "verdict": "PASS"
+}
