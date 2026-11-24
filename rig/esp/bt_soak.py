@@ -36,7 +36,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 S31_EVENT_RE = re.compile(
     r"rst:|boot:|ESP-ROM|Guru Meditation|abort\(\)|Brownout|"
     r"A2DP connection state|HFP service state|HFP audio|AVRCP controller|"
-    r"authentication|reconnect request|gateway ready|bound upstream",
+    r"authentication|reconnect request|gateway ready|bound upstream|s31_uac|uac-host|LARK",
     re.IGNORECASE,
 )
 ACL_RE = re.compile(
