@@ -119,12 +119,16 @@ static void release_engine(aec_worker_t *worker)
     worker->alignment_correction_ppm = 0;
 }
 
-static void *allocate_audio_buffer(size_t bytes)
-{
-    return heap_caps_aligned_alloc(AEC_BUFFER_ALIGNMENT, bytes, MALLOC_CAP_8BIT);
-}
+/* ESP-SR does not return NULL when its internal FFT tables fail to allocate;
+ * it returns a handle and faults later. The S31 has no PSRAM, and once
+ * Bluetooth, A2DP and USB are up the internal heap can fall below what the
+ * engine needs. So measure the engine once at boot, before Bluetooth claims
+ * its share, and refuse to start it later without that much free heap. */
+#define AEC_HEAP_MARGIN_BYTES (16U * 1024U)
+#define AEC_FRAME_BUFFER_ESTIMATE_BYTES (AEC_MAX_FRAME_SAMPLES * 16U)
+static size_t s_engine_heap_bytes;
 
-static bool start_engine(aec_worker_t *worker)
+static aec_config_t engine_config(void)
 {
     aec_config_t config = {
         .mic_num = 1,
@@ -136,8 +140,56 @@ static bool start_engine(aec_worker_t *worker)
         .mode = AEC_MODE_FD_LOW_COST,
         .nlp_level = AEC_NLP_LEVEL_AGGR,
     };
+    return config;
+}
+
+static bool probe_engine_heap(void)
+{
+    aec_config_t config = engine_config();
+    size_t before = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    aec_handle_t *handle = aec_create_from_config(&config);
+    size_t after = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    if (handle == NULL) {
+        ESP_LOGE(TAG, "ESP-SR AEC boot probe allocation failed (free=%u)", (unsigned)before);
+        return false;
+    }
+    aec_destroy(handle);
+    s_engine_heap_bytes = before > after ? before - after : 0U;
+    ESP_LOGI(TAG, "ESP-SR AEC engine needs %u heap bytes (boot free=%u, now %u)",
+             (unsigned)s_engine_heap_bytes, (unsigned)before,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT));
+    return s_engine_heap_bytes != 0U;
+}
+
+static bool engine_heap_available(void)
+{
+    static bool s_reported_short;
+    size_t free_bytes = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    size_t needed = s_engine_heap_bytes + AEC_FRAME_BUFFER_ESTIMATE_BYTES +
+                    AEC_HEAP_MARGIN_BYTES;
+    bool available = s_engine_heap_bytes != 0U && free_bytes >= needed;
+    if (!available && !s_reported_short) {
+        ESP_LOGW(TAG, "AEC not started: free heap %u < %u needed; uplink stays silent",
+                 (unsigned)free_bytes, (unsigned)needed);
+    }
+    s_reported_short = !available;
+    return available;
+}
+
+static void *allocate_audio_buffer(size_t bytes)
+{
+    return heap_caps_aligned_alloc(AEC_BUFFER_ALIGNMENT, bytes, MALLOC_CAP_8BIT);
+}
+
+static bool start_engine(aec_worker_t *worker)
+{
+    aec_config_t config = engine_config();
     int frame_samples;
 
+    if (!engine_heap_available()) {
+        s31_gateway_set_fault(BRIDGE_FAULT_AEC_NOT_READY);
+        return false;
+    }
     s31_audio_router_reset_aec_inputs();
     worker->generation = s31_audio_router_aec_generation();
     worker->handle = aec_create_from_config(&config);
@@ -379,6 +431,9 @@ static void aec_task(void *argument)
 esp_err_t s31_aec_gate_init(void)
 {
     s31_gateway_set_aec_ready(false);
+    if (!probe_engine_heap()) {
+        s31_gateway_set_fault(BRIDGE_FAULT_AEC_NOT_READY);
+    }
     if (xTaskCreate(aec_task, "s31_aec", 8192U, NULL, 10U, NULL) != pdPASS) {
         ESP_LOGE(TAG, "could not create AEC worker");
         return ESP_ERR_NO_MEM;
