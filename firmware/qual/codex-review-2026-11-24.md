@@ -9,11 +9,12 @@ H5, D4, and AEC changes. All work stayed on the host. The branch was not pushed.
 | --- | --- |
 | `246fd07` | A short A2DP pull at a step below one input frame could request zero new input frames or start between the last two consumed frames. The unsigned position calculation could wrap, and the caller treated zero input as no output, losing phase. Keep two frames of history, support zero-input pulls, and bound the Q32 arithmetic and sample indexing. |
 | `d11d0e4` | A concurrent flush could clear the FIFO between the prefill check and trimming. The resulting unsigned subtraction could corrupt the count and indices. Check, trim, and publish the primed state under the ring lock. An old multi-block pull also checks for a flush before consuming again. Calculate I2S clock age using a 64-bit timestamp sampled before the current time. The prior signed 32-bit age could classify a clock stopped for about 25 days as active. |
-| `504b1ff` | The fallback excluded a sink minimum bitpool of exactly 35 from the 35-bitpool cap. A 44.1 kHz-only, single-mode sink could then get no distinct retry. Accept the boundary and run the production selection logic in host tests. |
+| `504b1ff`, `13f4a70` | The fallback excluded a sink minimum bitpool of exactly 35 from the 35-bitpool cap. A 44.1 kHz-only, single-mode sink could then get no distinct retry. Accept the boundary and run the production selection logic in host tests. |
 | `031d50c` | A phone that connected both profiles during the boot hold could cause the worker to replace the hold deadline with its ordinary backoff deadline. If a profile dropped again, an outgoing page could go out before the full five seconds elapsed. Keep a separate one-shot elapsed-time gate. |
 | `41a9433` | Added CTest coverage for SBC rates, mode preferences and mono fallback, invalid ranges, the bitpool boundary, FIFO convergence from 4096 frames at both signs of 180 ppm, and the boot hold across a 32-bit tick wrap. The common suite also checks the 48-to-44.1 kHz ramp and zero-input frame accounting. |
 | `21b32c8` | Removed the H5 test build's unused `libm` link dependency, which would make MSVC look for `m.lib`. |
-| `2aa4709`, `a1b04ae` | Added four soak entry points using the existing console and lease infrastructure. |
+| `2aa4709`, `a1b04ae`, `13bc342` | Added four soak entry points using the existing console and lease infrastructure. H6 scores P7 independently of the optional P9 phase. H14 and streaming accept either built-in Pixel commands or fixture executables. |
+| `e0979b6` | The H6 reducer treated the normal USB detach warning as a transfer failure. The unattended soak now requires exactly 100 detach warnings, disconnects, and reopens. Transfer and capture errors still fail the run. |
 
 The 240-frame output blocks fit the resampler staging buffer at 44.1 and 48 kHz
 through the full ±500 ppm range. The nominal frame accumulator fits in 32
@@ -67,13 +68,30 @@ requested transition is complete and clean up their own child processes.
 | --- | --- |
 | `h5_long_drift.py` | Four hours by default. Supply the bonded fake-car address with `--fake-car-address`. The H5 reducer scores FIFO band, ppm, stream continuity, and error deltas after warmup. If there is a sink recording, supply `--recording` with a WAV aligned to the measured window. |
 | `h6_reconnect.py` | Supply `--p7-cycle-hook` after wiring the Pico fixture. It receives the cycle number and must disconnect, reconnect, and restore compatible UAC data. Each of 100 cycles needs a new disconnect, a reopen, and renewed RX. Supply `--p9-usb-hook` and `--p9-tx-hook` if the real Lark exercises can be actuated unattended. Those receive the cycle number for ten USB and five transmitter cycles before P7. The TX hook must verify the actual actuator transition. The board evidence verifies USB remains up. Supply `--p7-setup-hook` for any fixture handover after P9. The scored P7 window begins after setup. Keep real-Lark manual P9 work out of the unattended run when it cannot be actuated. |
-| `h14_adapter_cycles.py` | Ten cycles by default. Supply `--adapter-hook` accepting `off` or `on`. The script checks profile loss, an effective silence route, revoked output audio, and recovery of HFP, A2DP and AVRCP on the same saved peer. Adapter cycles cover only this portion of H14. |
-| `s31_32ue_streaming.py` | Four hours by default. Supply the 32UE address with `--sink-address` and a `--media-hook` accepting `start SECONDS` and `stop`. Use continuous nonzero media. Both-board telemetry, source PCM byte rate, and downstream nonzero tap counts provide the verdict. Capture the sink separately if acoustic continuity is required. |
+| `h14_adapter_cycles.py` | Ten cycles by default. Supply `--adb` and `--pixel-serial` for the built-in Pixel adapter commands, or `--adapter-hook` accepting `off` or `on`. The script checks profile loss, an effective silence route, revoked output audio, and recovery of HFP, A2DP and AVRCP on the same saved peer. Adapter cycles cover only this portion of H14. |
+| `s31_32ue_streaming.py` | Four hours by default. Supply the 32UE address with `--sink-address`. Use `--adb` and `--pixel-serial` with the installed Pixel harness, or a `--media-hook` accepting `start SECONDS` and `stop` to play continuous nonzero media. Both-board telemetry, source PCM byte rate, and downstream nonzero tap counts provide the verdict. Capture the sink separately if acoustic continuity is required. |
 
-The long soaks were exercised with `--help` only. A mock exercised shared
-lease cleanup and JSON verdict generation.
+Host checks used `--help` and mocks only. Mocks exercised all four scenarios,
+including 100 H6 reconnects and ten H14 adapter cycles. They also checked
+fixture command arguments, lease cleanup, and PASS and FAIL summaries.
 
 ## Host verification
 
 Eight CTest targets passed in the standard host build and under UBSan. The
-11 firmware tool tests and 34 rig Python tests also passed.
+11 firmware tool tests and 35 rig Python tests also passed.
+
+| Docker target | Pinned ESP-IDF | Release | Test |
+| --- | --- | --- | --- |
+| Output ESP32 | `v6.0.2` | PASS | PASS |
+| S31 ESP32-S31 | `v6.1-rc1` | PASS | PASS |
+
+All four builds used `firmware/tools/build_firmware.py --no-pull` and emitted
+build manifests. The recorded commit differs across builds because host tests,
+scripts, and the report were committed while the sequence ran. The compiled
+firmware source is equivalent across those commits.
+
+The only difference among the generated LarkBridge Kconfig settings for
+each target was `CONFIG_LARKBRIDGE_TEST_IMAGE`. Both images keep bond erase
+disabled. Both output images use an 8192-frame ring and a 4096-frame prefill
+(about 85 ms at 48 kHz). Both S31 images leave the AEC engine and experimental
+uplink disabled.
