@@ -7,6 +7,9 @@
 
 static portMUX_TYPE s_lock = portMUX_INITIALIZER_UNLOCKED;
 static s31_gateway_snapshot_t s_state;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+static int s_test_route = -1;
+#endif
 
 static bridge_route_t calculate_desired_route(void)
 {
@@ -14,6 +17,9 @@ static bridge_route_t calculate_desired_route(void)
         !s_state.i2s_ready || !s_state.uart_ready) {
         return BRIDGE_ROUTE_SILENCE;
     }
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    if (s_test_route >= 0) return (bridge_route_t)s_test_route;
+#endif
     return s_state.session.route;
 }
 
@@ -37,6 +43,16 @@ static void update_route_locked(void)
     s31_audio_router_set_uplink_ready(s_state.session.hfp_uplink_enabled &&
                                       s_state.effective_route == BRIDGE_ROUTE_HFP);
 }
+
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+void s31_gateway_test_route(int route)
+{
+    taskENTER_CRITICAL(&s_lock);
+    s_test_route = route;
+    update_route_locked();
+    taskEXIT_CRITICAL(&s_lock);
+}
+#endif
 
 void s31_gateway_state_init(void)
 {

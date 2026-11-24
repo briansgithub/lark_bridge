@@ -59,6 +59,7 @@ static atomic_uint_fast32_t s_overruns;
 /* Test-image stage-isolation tone at I2S-out: 0 Hz means off. */
 static atomic_uint_fast32_t s_tone_hz;
 static atomic_int s_tone_dbfs;
+static atomic_bool s_tone_routed;
 
 static void fill_test_tone(int16_t *block, size_t frames, float *phase, uint32_t hz)
 {
@@ -67,9 +68,11 @@ static void fill_test_tone(int16_t *block, size_t frames, float *phase, uint32_t
     float step = 2.0f * (float)M_PI * (float)hz / (float)S31_AUDIO_SAMPLE_RATE_HZ;
     for (size_t frame = 0; frame < frames; ++frame) {
         int16_t sample = (int16_t)lrintf(amplitude * sinf(*phase));
-        /* Left carries the tone, right its inverse: a channel-order marker. */
+        /* Channel-order marker for H4: left carries the tone, right is its
+         * inverse at half amplitude, so right == -(left / 2) sample for
+         * sample and the two channels differ by 6 dB. */
         block[frame * 2U] = sample;
-        block[frame * 2U + 1U] = (int16_t)(sample == INT16_MIN ? INT16_MAX : -sample);
+        block[frame * 2U + 1U] = (int16_t)(-(sample / 2));
         *phase += step;
         if (*phase >= 2.0f * (float)M_PI) {
             *phase -= 2.0f * (float)M_PI;
@@ -128,14 +131,21 @@ static void i2s_writer_task(void *argument)
         if (source != NULL) {
             count = bridge_byte_ring_read(source, block, sizeof(block));
         }
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        uint32_t tone_hz = (uint32_t)atomic_load_explicit(&s_tone_hz, memory_order_acquire);
+        if (route != BRIDGE_ROUTE_A2DP && atomic_load(&s_tone_routed)) tone_hz = 0;
+#else
+        const uint32_t tone_hz = 0U;
+#endif
         if (count < sizeof(block)) {
             memset(block + count, 0, sizeof(block) - count);
-            if (source != NULL) {
+            /* The test tone replaces the source, so an empty ring under it is
+             * not an underrun (H5 runs the tone with no phone attached). */
+            if (source != NULL && tone_hz == 0U) {
                 atomic_fetch_add_explicit(&s_underruns, 1U, memory_order_relaxed);
             }
         }
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
-        uint32_t tone_hz = (uint32_t)atomic_load_explicit(&s_tone_hz, memory_order_acquire);
         if (tone_hz != 0U) {
             fill_test_tone((int16_t *)block, I2S_BLOCK_FRAMES, &tone_phase, tone_hz);
         }
@@ -519,15 +529,17 @@ void s31_audio_router_get_stats(s31_audio_stats_t *stats)
     stats->overruns = (uint32_t)atomic_load_explicit(&s_overruns, memory_order_relaxed);
 }
 
-bool s31_audio_router_set_test_tone(uint32_t hz, int32_t dbfs)
+bool s31_audio_router_set_test_tone(uint32_t hz, int32_t dbfs, bool routed)
 {
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
+    atomic_store(&s_tone_routed, routed);
     atomic_store_explicit(&s_tone_dbfs, (int)dbfs, memory_order_release);
     atomic_store_explicit(&s_tone_hz, hz, memory_order_release);
     return true;
 #else
     (void)hz;
     (void)dbfs;
+    (void)routed;
     return false;
 #endif
 }

@@ -42,9 +42,27 @@ typedef struct {
     int dropping;
 } bridge_stream_decoder_t;
 
+/* Deliberately invalid frames for the H2 fault hooks (test images only).
+ * Each kind decodes to exactly one BRIDGE_DECODER_ERROR at its trailing
+ * delimiter, and the decoder accepts the next valid frame. */
+typedef enum {
+    BRIDGE_CORRUPT_CRC = 1,      /* valid COBS frame whose CRC has one bit flipped */
+    BRIDGE_CORRUPT_COBS = 2,     /* first COBS code points past the end of the frame */
+    BRIDGE_CORRUPT_VERSION = 3,  /* correct CRC over a version-2 header */
+    BRIDGE_CORRUPT_OVERLONG = 4  /* a non-zero run longer than any frame, then a delimiter */
+} bridge_corruption_t;
+
+#define BRIDGE_PROTOCOL_OVERLONG_RUN (BRIDGE_PROTOCOL_MAX_ENCODED_SIZE + 22U)
+#define BRIDGE_PROTOCOL_MAX_CORRUPT_SIZE (BRIDGE_PROTOCOL_OVERLONG_RUN + 1U)
+
 uint16_t bridge_crc16_ccitt(const uint8_t *data, size_t length);
 int bridge_protocol_encode(
     const bridge_packet_t *packet, uint8_t *output, size_t output_capacity, size_t *output_length);
+/* Encodes packet as the given corruption, including the trailing delimiter.
+ * Returns 0, or -1 for a bad argument or a too-small buffer. */
+int bridge_protocol_encode_corrupt(const bridge_packet_t *packet, bridge_corruption_t kind,
+                                   uint8_t *output, size_t output_capacity,
+                                   size_t *output_length);
 void bridge_stream_decoder_init(bridge_stream_decoder_t *decoder);
 bridge_decoder_result_t bridge_stream_decoder_feed(
     bridge_stream_decoder_t *decoder, uint8_t byte, bridge_packet_t *packet);

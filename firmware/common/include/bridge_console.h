@@ -95,6 +95,17 @@ bool bridge_json_end(bridge_json_t *json);
 uint32_t bridge_crc32(uint32_t crc, const void *data, size_t length);
 uint32_t bridge_pcm16_rms(const int16_t *samples, size_t count);
 
+/* Per-channel RMS of interleaved S16 stereo frames, and whether any sample is
+ * nonzero. Used by the H4 taps to check channel order and continuous silence. */
+typedef struct {
+    uint32_t rms_left;
+    uint32_t rms_right;
+    bool nonzero;
+} bridge_pcm16_stereo_stats_t;
+
+void bridge_pcm16_stereo_stats(const int16_t *interleaved, size_t frames,
+                               bridge_pcm16_stereo_stats_t *stats);
+
 #ifdef __cplusplus
 }
 #endif

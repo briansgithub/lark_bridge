@@ -8,6 +8,7 @@
 #include "audio_router.h"
 #include "bridge_link.h"
 #include "bridge_protocol.h"
+#include "bridge_link_test.h"
 #include "bridge_route_fence.h"
 #include "bt_gateway.h"
 #include "driver/uart.h"
@@ -56,6 +57,9 @@ static _Atomic uint16_t s_last_output_fifo_min_frames;
 static _Atomic uint16_t s_last_output_fifo_max_frames;
 static _Atomic uint32_t s_last_output_protocol_errors;
 static _Atomic uint32_t s_last_output_reliable_failures;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+static bridge_link_test_t s_link_test;
+#endif
 static _Atomic uint32_t s_protocol_errors;
 static _Atomic uint32_t s_reliable_failures;
 
@@ -79,6 +83,9 @@ static esp_err_t send_packet(uint8_t type, const uint8_t *payload, uint16_t payl
     if (bridge_protocol_encode(&packet, encoded, sizeof(encoded), &encoded_length) != 0) {
         return ESP_ERR_INVALID_SIZE;
     }
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    if (bridge_link_test_muted(&s_link_test, (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS))) return ESP_OK;
+#endif
     int written = uart_write_bytes(S31_LINK_UART_PORT, encoded, encoded_length);
     return written == (int)encoded_length ? ESP_OK : ESP_FAIL;
 }
@@ -165,6 +172,9 @@ static bridge_ack_status_t dispatch_avrcp(const bridge_packet_t *packet)
     }
     esp_err_t result = s31_bt_send_avrcp(command, key_state);
     if (result == ESP_OK) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        ++s_link_test.executed;
+#endif
         (void)bridge_sequence_tracker_accept(&s_avrcp_sequences, packet->sequence);
         return BRIDGE_ACK_OK;
     }
@@ -251,6 +261,9 @@ static void handle_packet(const bridge_packet_t *packet)
             if (!s_output_session_valid || output_session != s_output_session) {
                 /* A peer reboot starts a new replay domain. Fail closed and
                  * force the current route to be acknowledged by that boot. */
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+                bridge_link_test_session(&s_link_test);
+#endif
                 s_output_session = output_session;
                 s_output_session_valid = true;
                 s_peer_seen = false;
@@ -268,6 +281,9 @@ static void handle_packet(const bridge_packet_t *packet)
     }
     case BRIDGE_MESSAGE_HEARTBEAT:
         if (packet->payload_length == BRIDGE_HEARTBEAT_PAYLOAD_SIZE) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+            if (s_output_hello_valid) bridge_link_test_heartbeat(&s_link_test, (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS));
+#endif
             note_peer_status(packet->payload[BRIDGE_HEARTBEAT_READY_OFFSET]);
         } else {
             s31_gateway_set_fault(BRIDGE_FAULT_PROTOCOL);
@@ -424,22 +440,83 @@ static void maintain_route(void)
     s_pending_route.last_send = now;
 }
 
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+bool s31_link_uart_test_fault(const char *kind)
+{
+    s31_gateway_snapshot_t snapshot;
+    s31_gateway_get_snapshot(&snapshot);
+    bool allow_dup = snapshot.desired_route == BRIDGE_ROUTE_SILENCE;
+    return bridge_link_test_request(&s_link_test, kind, allow_dup);
+}
+
+void s31_link_uart_test_stats(bridge_json_t *json)
+{
+    bridge_link_test_stats(&s_link_test, json);
+}
+
+static void run_link_test(uint32_t now)
+{
+    unsigned kind = atomic_exchange(&s_link_test.request, 0);
+    if (kind == 0) return;
+    if (kind == BRIDGE_TEST_MUTE) {
+        s_link_test.mute_until = now + 3000U;
+        return;
+    }
+    if (bridge_link_test_muted(&s_link_test, now)) return;
+    bridge_packet_t packet = {
+        .version = BRIDGE_PROTOCOL_VERSION, .sequence = s_tx_sequence++,
+        .type = BRIDGE_MESSAGE_ROUTE, .payload_length = BRIDGE_ROUTE_PAYLOAD_SIZE,
+        .payload = {BRIDGE_ROUTE_SILENCE},
+    };
+    if (kind == BRIDGE_TEST_DUP) {
+        s31_gateway_snapshot_t snapshot;
+        s31_gateway_get_snapshot(&snapshot);
+        if (snapshot.desired_route != BRIDGE_ROUTE_SILENCE || s_pending_route.active) return;
+        for (unsigned i = 0; i < 3; ++i) {
+            send_packet(packet.type, packet.payload, packet.payload_length, packet.sequence);
+        }
+        return;
+    }
+    uint8_t wire[BRIDGE_PROTOCOL_MAX_CORRUPT_SIZE];
+    size_t length;
+    if (bridge_protocol_encode_corrupt(&packet, (bridge_corruption_t)kind,
+                                       wire, sizeof(wire), &length) == 0 &&
+        uart_write_bytes(S31_LINK_UART_PORT, wire, length) == (int)length) {
+        printf("{\"t\":\"event\",\"role\":\"s31\",\"ev\":\"inject\","
+               "\"kind\":%u,\"probe_seq\":%u}\n", kind, s_tx_sequence);
+        send_heartbeat();
+    }
+}
+#endif
+
 static void link_task(void *argument)
 {
     (void)argument;
     uint8_t input[256];
-    TickType_t last_periodic = 0;
+    const TickType_t heartbeat_period = pdMS_TO_TICKS(S31_LINK_HEARTBEAT_PERIOD_MS);
+    const TickType_t max_read_wait = pdMS_TO_TICKS(50U);
+    TickType_t next_periodic = xTaskGetTickCount() + heartbeat_period;
     TickType_t last_drift_log = 0;
     announce_hello();
     for (;;) {
-        int count = uart_read_bytes(S31_LINK_UART_PORT, input, sizeof(input), pdMS_TO_TICKS(50));
+        int32_t until_periodic = (int32_t)(next_periodic - xTaskGetTickCount());
+        TickType_t read_wait = until_periodic > 0 ? (TickType_t)until_periodic : 0U;
+        if (read_wait > max_read_wait) read_wait = max_read_wait;
+        int count = uart_read_bytes(S31_LINK_UART_PORT, input, sizeof(input), read_wait);
         for (int index = 0; index < count; ++index) {
             bridge_packet_t packet;
             bridge_decoder_result_t result = bridge_stream_decoder_feed(
                 &s_decoder, input[index], &packet);
             if (result == BRIDGE_DECODER_PACKET) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+                bridge_link_test_recover(&s_link_test, "s31", &packet);
+#endif
                 handle_packet(&packet);
             } else if (result == BRIDGE_DECODER_ERROR) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+                ++s_link_test.errors;
+                s_link_test.recover = true;
+#endif
                 ESP_LOGW(TAG, "discarded invalid CRC/COBS link frame");
                 ++s_protocol_errors;
                 s31_gateway_set_fault(BRIDGE_FAULT_PROTOCOL);
@@ -447,13 +524,19 @@ static void link_task(void *argument)
         }
         TickType_t now = xTaskGetTickCount();
         maintain_route();
-        if ((now - last_periodic) >= pdMS_TO_TICKS(S31_LINK_HEARTBEAT_PERIOD_MS)) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        run_link_test((uint32_t)(now * portTICK_PERIOD_MS));
+#endif
+        if ((int32_t)(now - next_periodic) >= 0) {
             send_heartbeat();
             send_status();
             /* Same-session HELLO is idempotent. Periodic advertisement makes
              * either board's reboot recovery independent of UART burst timing. */
             announce_hello();
-            last_periodic = now;
+            /* Keep the cadence tied to its deadline despite variable UART read times.
+             * A stall spanning a full interval should not cause a burst of stale sends. */
+            next_periodic += heartbeat_period;
+            if ((int32_t)(now - next_periodic) >= 0) next_periodic = now + heartbeat_period;
         }
         if (s_peer_seen &&
             (now - last_drift_log) >= pdMS_TO_TICKS(5000U)) {
@@ -472,6 +555,10 @@ static void link_task(void *argument)
         }
         if (s_peer_seen &&
             (now - s_last_peer_heartbeat) > pdMS_TO_TICKS(S31_LINK_TIMEOUT_MS)) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+            bridge_link_test_timeout(&s_link_test, "s31",
+                                     (now - s_last_peer_heartbeat) * portTICK_PERIOD_MS);
+#endif
             ESP_LOGE(TAG, "output heartbeat timed out; forcing silence");
             s_peer_seen = false;
             s31_gateway_set_fault(BRIDGE_FAULT_HEARTBEAT_TIMEOUT);

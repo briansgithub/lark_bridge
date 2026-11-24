@@ -1,7 +1,7 @@
 # LarkBridge ESP32 gate registry, read by rig/esp/hil.py.
 #
-# Thresholds live in firmware/docs/qualification-matrix.md; this file only
-# orders the gates and says how each one is run and reduced.
+# See firmware/docs/qualification-matrix.md for the gate definitions.
+# Automated measurement thresholds are recorded with the gate.
 #
 #   tier     T0 host test · T1 build · T2 smoke on hardware · T3 rig-automated
 #            · T4 acoustic/real-peer fixture · T5 car/person
@@ -104,7 +104,13 @@ tier = "T3"
 needs = ["stageB-exit", "harness"]
 human = false
 resets = true
-reducer = "manual"
+reducer = "h2h5"
+link_seconds = 60
+clean_seconds = 600
+post_seconds = 30
+hb_tolerance = 0.02
+hb_gap_ms = 1000
+coverage = 0.98
 status = "PENDING"
 
 [gates.harness]
@@ -122,7 +128,10 @@ tier = "T3"
 needs = ["H2"]
 human = false
 resets = true
-reducer = "manual"
+reducer = "h2h5"
+link_seconds = 60
+recovery_seconds = 60
+mute_max_ms = 1600
 status = "PENDING"
 
 [gates.H4]
@@ -131,7 +140,15 @@ tier = "T3"
 needs = ["H2", "analyzer"]
 human = false
 resets = false
-reducer = "manual"
+reducer = "h2h5"
+link_seconds = 60
+silence_seconds = 10
+coverage = 0.98
+tap_tolerance = 0.02
+analyzer_rate = 24000000
+sample_rate_ppm = 1000
+tone_hz_tolerance = 1
+amplitude_tolerance = 0.01
 status = "PENDING"
 
 [gates.analyzer]
@@ -149,7 +166,16 @@ tier = "T3"
 needs = ["H4", "fake-car"]
 human = false
 resets = false
-reducer = "manual"
+reducer = "h2h5"
+link_seconds = 60
+warmup_seconds = 60
+stream_seconds = 1800
+coverage = 0.98
+fifo_low = 1024
+fifo_high = 7168
+ppm_limit = 500
+recording_segment_seconds = 30
+recording_min_amplitude = 0.01
 status = "PENDING"
 
 [gates.fake-car]

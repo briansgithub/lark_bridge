@@ -30,4 +30,10 @@ typedef struct {
 
 void output_control_get_stats(output_control_stats_t *stats);
 
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+#include "bridge_console.h"
+bool output_control_test_fault(const char *kind);
+void output_control_test_stats(bridge_json_t *json);
+#endif
+
 #endif

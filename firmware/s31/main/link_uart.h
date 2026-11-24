@@ -25,3 +25,9 @@ typedef struct {
 esp_err_t s31_link_uart_init(void);
 /* Telemetry snapshot; word-sized fields are read without a lock. */
 void s31_link_uart_get_stats(s31_link_stats_t *stats);
+
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+#include "bridge_console.h"
+bool s31_link_uart_test_fault(const char *kind);
+void s31_link_uart_test_stats(bridge_json_t *json);
+#endif

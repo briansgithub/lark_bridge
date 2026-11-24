@@ -115,9 +115,26 @@ static int test_digests(void) {
     return 0;
 }
 
+static int test_stereo_stats(void) {
+    /* Left 1000/-1000, right the H4 marker: inverted at half amplitude. */
+    const int16_t marker[8] = {1000, -500, -1000, 500, 1000, -500, -1000, 500};
+    const int16_t silence[6] = {0, 0, 0, 0, 0, 0};
+    const int16_t one_lsb[4] = {0, 0, 0, 1};
+    bridge_pcm16_stereo_stats_t stats;
+    bridge_pcm16_stereo_stats(marker, 4U, &stats);
+    CHECK(stats.rms_left == 1000U && stats.rms_right == 500U && stats.nonzero);
+    bridge_pcm16_stereo_stats(silence, 3U, &stats);
+    CHECK(stats.rms_left == 0U && stats.rms_right == 0U && !stats.nonzero);
+    bridge_pcm16_stereo_stats(one_lsb, 2U, &stats);
+    CHECK(stats.rms_left == 0U && stats.rms_right == 1U && stats.nonzero);
+    bridge_pcm16_stereo_stats(NULL, 0U, &stats);
+    CHECK(stats.rms_left == 0U && !stats.nonzero);
+    return 0;
+}
+
 int main(void) {
     int failures = test_parse_release() + test_parse_test_image() + test_numbers() + test_json() +
-                   test_digests();
+                   test_digests() + test_stereo_stats();
     if (failures == 0) {
         (void)printf("bridge_console_tests: PASS\n");
     }
