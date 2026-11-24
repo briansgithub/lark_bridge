@@ -55,10 +55,9 @@ def scenario(bench, args, metrics):
     text = "\n".join(r["line"] if r["t"] == "console" else json.dumps(r) for r in records)
     boot = args.boot_log.read_text(encoding="utf-8", errors="replace") if args.boot_log else None
     verdict, scored, reasons = hil.reduce_h6_uac(
-        text, boot_log=boot, min_seconds=args.seconds, span_seconds=time.monotonic() - started)
+        text, boot_log=boot, min_seconds=args.seconds, span_seconds=time.monotonic() - started,
+        expected_disconnects=100)
     metrics.update(scored)
-    require(scored.get("uac_disconnects") == 100 and scored.get("uac_reopens") == 100,
-            "P7 capture must show exactly 100 disconnects and reopens")
     return verdict, reasons
 
 
