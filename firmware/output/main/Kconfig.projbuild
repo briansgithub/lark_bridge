@@ -95,4 +95,18 @@ menu "LarkBridge output controller"
         range 1000 60000
         default 5000
 
+config LARKBRIDGE_TEST_IMAGE
+    bool "Build a qualification test image (tone/tap/fault hooks)"
+    default n
+    help
+        Compiles the stage-isolation tone generators, tap digests and fault
+        hooks into the image and marks it image=test in every telemetry record
+        and in the build manifest. Release images reject those commands.
+        Built with: build_firmware.py <target> --image test
+
+config LARKBRIDGE_STATS_PERIOD_MS
+    int "JSON stats record period (ms)"
+    range 200 60000
+    default 1000
+
 endmenu

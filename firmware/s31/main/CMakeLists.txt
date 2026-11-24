@@ -8,6 +8,7 @@ idf_component_register(
         "gateway_state.c"
         "link_uart.c"
         "s31_peer_store.c"
+        "s31_telemetry.c"
         "uac_lark.c"
     INCLUDE_DIRS "."
     PRIV_REQUIRES
@@ -16,6 +17,7 @@ idf_component_register(
         esp_app_format
         esp_driver_i2s
         esp_driver_uart
+        esp_timer
         esp-sr
         heap
         nvs_flash

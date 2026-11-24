@@ -1,6 +1,7 @@
 #include "uac_lark.h"
 
 #include <inttypes.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -53,6 +54,13 @@ static uint8_t s_lark_address;
 static uint8_t s_lark_interface;
 static uint8_t s_reopen_attempts;
 static TickType_t s_reopen_at;
+static atomic_uint_fast32_t s_rx_packets;
+static atomic_uint_fast32_t s_rx_bytes;
+static atomic_uint_fast32_t s_read_errors;
+static atomic_uint_fast32_t s_transfer_errors;
+static atomic_uint_fast32_t s_disconnects;
+static atomic_uint_fast32_t s_opens;
+static atomic_uint_fast32_t s_reopen_total;
 
 static void post_driver_event(uint8_t address, uint8_t interface_number,
                               const uac_host_driver_event_t event, void *argument)
@@ -208,6 +216,7 @@ static bool open_lark(uint8_t address, uint8_t interface_number)
         return false;
     }
     s_lark_started = true;
+    atomic_fetch_add_explicit(&s_opens, 1U, memory_order_relaxed);
     s_lark_address = address;
     s_lark_interface = interface_number;
     s_reopen_pending = false;
@@ -243,8 +252,11 @@ static void handle_device_event(const uac_queue_event_t *message)
             esp_err_t result = uac_host_device_read(handle, capture, sizeof(capture),
                                                     &bytes_read, 0);
             if (result == ESP_OK && bytes_read != 0U) {
+                atomic_fetch_add_explicit(&s_rx_packets, 1U, memory_order_relaxed);
+                atomic_fetch_add_explicit(&s_rx_bytes, bytes_read, memory_order_relaxed);
                 s31_audio_router_write_lark(capture, bytes_read);
             } else if (result != ESP_OK) {
+                atomic_fetch_add_explicit(&s_read_errors, 1U, memory_order_relaxed);
                 ESP_LOGE(TAG, "LARK capture read failed: %s", esp_err_to_name(result));
                 s31_gateway_set_fault(BRIDGE_FAULT_UAC_LOST);
                 close_lark(handle);
@@ -253,12 +265,14 @@ static void handle_device_event(const uac_queue_event_t *message)
         }
         break;
     case UAC_HOST_DEVICE_EVENT_TRANSFER_ERROR:
+        atomic_fetch_add_explicit(&s_transfer_errors, 1U, memory_order_relaxed);
         ESP_LOGE(TAG, "LARK UAC transfer error");
         s31_gateway_set_fault(BRIDGE_FAULT_UAC_LOST);
         close_lark(handle);
         schedule_reopen();
         break;
     case UAC_HOST_DRIVER_EVENT_DISCONNECTED:
+        atomic_fetch_add_explicit(&s_disconnects, 1U, memory_order_relaxed);
         ESP_LOGW(TAG, "USB audio device disconnected");
         close_lark(handle);
         break;
@@ -298,6 +312,7 @@ static void uac_task(void *argument)
             if (s_reopen_pending) {
                 s_reopen_pending = false;
                 ++s_reopen_attempts;
+                atomic_fetch_add_explicit(&s_reopen_total, 1U, memory_order_relaxed);
                 ESP_LOGW(TAG, "retrying LARK UAC capture (%u/%u)", s_reopen_attempts,
                          UAC_REOPEN_MAX_ATTEMPTS);
                 if (!open_lark(s_lark_address, s_lark_interface)) {
@@ -366,4 +381,21 @@ esp_err_t s31_uac_lark_init(void)
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;
+}
+
+void s31_uac_lark_get_stats(s31_uac_stats_t *stats)
+{
+    if (stats == NULL) {
+        return;
+    }
+    stats->capture_started = s_lark_started;
+    stats->rx_packets = (uint32_t)atomic_load_explicit(&s_rx_packets, memory_order_relaxed);
+    stats->rx_bytes = (uint32_t)atomic_load_explicit(&s_rx_bytes, memory_order_relaxed);
+    stats->read_errors = (uint32_t)atomic_load_explicit(&s_read_errors, memory_order_relaxed);
+    stats->transfer_errors =
+        (uint32_t)atomic_load_explicit(&s_transfer_errors, memory_order_relaxed);
+    stats->disconnects = (uint32_t)atomic_load_explicit(&s_disconnects, memory_order_relaxed);
+    stats->opens = (uint32_t)atomic_load_explicit(&s_opens, memory_order_relaxed);
+    stats->reopen_attempts =
+        (uint32_t)atomic_load_explicit(&s_reopen_total, memory_order_relaxed);
 }

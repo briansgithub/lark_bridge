@@ -13,6 +13,7 @@
 #include "output_audio.h"
 #include "output_bluetooth.h"
 #include "output_control.h"
+#include "output_telemetry.h"
 
 #include <stdint.h>
 
@@ -90,6 +91,11 @@ void app_main(void) {
             ESP_LOGE(TAG, "Bluetooth initialization failed: %s", esp_err_to_name(bluetooth_error));
             (void)output_control_report_fault(BRIDGE_FAULT_BLUETOOTH);
         }
+    }
+
+    esp_err_t telemetry_error = output_telemetry_start();
+    if (telemetry_error != ESP_OK) {
+        ESP_LOGE(TAG, "telemetry initialization failed: %s", esp_err_to_name(telemetry_error));
     }
 
     for (;;) {

@@ -522,3 +522,24 @@ esp_err_t s31_link_uart_init(void)
              S31_LINK_UART_TX_GPIO, S31_LINK_UART_RX_GPIO);
     return ESP_OK;
 }
+
+void s31_link_uart_get_stats(s31_link_stats_t *stats)
+{
+    if (stats == NULL) {
+        return;
+    }
+    stats->peer_seen = s_peer_seen;
+    stats->output_hello_valid = s_output_hello_valid;
+    stats->output_session_valid = s_output_session_valid;
+    stats->protocol_errors = s_protocol_errors;
+    stats->reliable_failures = s_reliable_failures;
+    stats->output_fifo_frames = s_last_output_fifo_frames;
+    stats->output_fifo_min_frames = s_last_output_fifo_min_frames;
+    stats->output_fifo_max_frames = s_last_output_fifo_max_frames;
+    stats->output_correction_ppm = s_last_output_correction_ppm;
+    stats->output_missing_frames = s_last_output_missing_frames;
+    stats->output_dropped_frames = s_last_output_dropped_frames;
+    stats->output_i2s_errors = s_last_output_i2s_errors;
+    stats->output_protocol_errors = s_last_output_protocol_errors;
+    stats->output_reliable_failures = s_last_output_reliable_failures;
+}

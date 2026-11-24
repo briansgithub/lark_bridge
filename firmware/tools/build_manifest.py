@@ -77,10 +77,14 @@ def create_manifest(target: str) -> Path:
         source_dirty = bool(status)
         dirty_paths = status.splitlines()
     component_lock = project / "dependencies.lock"
+    image_kind = os.environ.get("LARKBRIDGE_IMAGE_KIND", "release")
+    if image_kind not in ("release", "test"):
+        raise ValueError(f"unknown image kind {image_kind!r}")
     manifest = {
         "schema": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "target": target,
+        "image_kind": image_kind,
         "source_commit": source_commit,
         "source_dirty": source_dirty,
         "dirty_paths": dirty_paths,

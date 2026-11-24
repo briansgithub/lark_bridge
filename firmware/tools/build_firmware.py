@@ -45,11 +45,15 @@ def source_state() -> tuple[str, bool]:
     return commit, bool(status)
 
 
+IMAGE_KINDS = ("release", "test")
+
+
 def docker_command(
     target: str,
     lock: dict[str, object],
     docker: str = "docker",
     pull: bool = True,
+    image: str = "release",
 ) -> list[str]:
     config = target_config(lock, target)
     tag = str(config["esp_idf_tag"])
@@ -59,12 +63,21 @@ def docker_command(
     if not project.is_dir():
         raise FileNotFoundError(f"missing firmware project: {project}")
     source_commit, source_dirty = source_state()
+    if image not in IMAGE_KINDS:
+        raise ValueError(f"unknown image kind {image!r}")
     project_version = source_commit[:12] + ("-dirty" if source_dirty else "")
+    if image == "test":
+        project_version += "-test"
+    # `set-target` regenerates sdkconfig from the defaults on every build, so the
+    # overlay cannot leak from a test build into a later release build.
+    defaults = "sdkconfig.defaults" + (";sdkconfig.test" if image == "test" else "")
 
     idf_target = (
-        f'idf.py -D PROJECT_VER="$PROJECT_VER" --preview set-target {chip}'
+        f'idf.py -D PROJECT_VER="$PROJECT_VER" -D SDKCONFIG_DEFAULTS="{defaults}" '
+        f"--preview set-target {chip}"
         if config.get("preview_target")
-        else f'idf.py -D PROJECT_VER="$PROJECT_VER" set-target {chip}'
+        else f'idf.py -D PROJECT_VER="$PROJECT_VER" -D SDKCONFIG_DEFAULTS="{defaults}" '
+        f"set-target {chip}"
     )
     shell = (
         "set -euo pipefail; "
@@ -88,6 +101,8 @@ def docker_command(
             f"LARKBRIDGE_SOURCE_COMMIT={source_commit}",
             "-e",
             f"LARKBRIDGE_SOURCE_DIRTY={'1' if source_dirty else '0'}",
+            "-e",
+            f"LARKBRIDGE_IMAGE_KIND={image}",
             "-v",
             f"{FIRMWARE_ROOT}:/work/firmware",
             "-w",
@@ -176,6 +191,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("target", choices=("host", "s31", "output", "all"))
     parser.add_argument("--docker", default=os.environ.get("DOCKER", "docker"))
     parser.add_argument("--no-pull", action="store_true", help="reuse the local IDF image")
+    parser.add_argument(
+        "--image",
+        choices=IMAGE_KINDS,
+        default="release",
+        help="test images compile the qualification hooks (sdkconfig.test overlay)",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args(argv)
 
@@ -191,7 +212,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         for target in ("output", "s31"):
             if args.target in (target, "all"):
                 run(
-                    docker_command(target, lock, args.docker, not args.no_pull),
+                    docker_command(
+                        target, lock, args.docker, not args.no_pull, image=args.image
+                    ),
                     dry_run=args.dry_run,
                 )
     except (FileNotFoundError, KeyError, ValueError, subprocess.CalledProcessError) as error:

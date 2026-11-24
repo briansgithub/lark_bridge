@@ -17,4 +17,17 @@ void output_control_set_local_ready(uint8_t ready_flags);
 void output_control_invalidate_local_audio(void);
 void output_control_note_local_audio_started(void);
 
+typedef struct {
+    bool initialized;
+    bool link_alive;
+    bool hello_valid;
+    uint8_t local_ready_flags;
+    uint8_t remote_ready_flags;
+    uint8_t route;
+    uint32_t protocol_errors;
+    uint32_t reliable_failures;
+} output_control_stats_t;
+
+void output_control_get_stats(output_control_stats_t *stats);
+
 #endif

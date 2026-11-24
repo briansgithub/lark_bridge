@@ -27,5 +27,8 @@ void output_audio_set_capture_active(bool active);
 size_t output_audio_pull(void *destination, size_t length);
 void output_audio_flush(void);
 void output_audio_get_stats(output_audio_stats_t *stats);
+/* Test images only: replace the A2DP-out PCM with a tone (hz == 0 stops it).
+ * Returns false in release images. */
+bool output_audio_set_test_tone(uint32_t hz, int32_t dbfs);
 
 #endif

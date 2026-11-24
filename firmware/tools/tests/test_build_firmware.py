@@ -32,6 +32,18 @@ class BuildFirmwareTests(unittest.TestCase):
         self.assertIn("44f0c59f7c81a72a5868a52d5f6dfbbf88829704", rendered)
         self.assertIn("--preview set-target esp32s31", rendered)
 
+    def test_image_kind_selects_overlay_and_version(self) -> None:
+        lock = build_firmware.load_lock()
+        release = " ".join(build_firmware.docker_command("s31", lock, pull=False))
+        test = " ".join(build_firmware.docker_command("s31", lock, pull=False, image="test"))
+        self.assertIn('SDKCONFIG_DEFAULTS="sdkconfig.defaults"', release)
+        self.assertIn("LARKBRIDGE_IMAGE_KIND=release", release)
+        self.assertIn('SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.test"', test)
+        self.assertIn("LARKBRIDGE_IMAGE_KIND=test", test)
+        self.assertRegex(test, r"PROJECT_VER=[0-9a-f]{12}(-dirty)?-test")
+        with self.assertRaises(ValueError):
+            build_firmware.docker_command("s31", lock, pull=False, image="debug")
+
     def test_lock_schema_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
             build_firmware.target_config({"schema": 1}, "output")

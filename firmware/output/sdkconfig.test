@@ -1,0 +1,3 @@
+# Qualification test-image overlay, applied after sdkconfig.defaults by
+# build_firmware.py --image test. Never deploy a test image.
+CONFIG_LARKBRIDGE_TEST_IMAGE=y

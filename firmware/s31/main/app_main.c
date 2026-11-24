@@ -12,6 +12,7 @@
 #include "gateway_state.h"
 #include "link_uart.h"
 #include "nvs_flash.h"
+#include "s31_telemetry.h"
 #include "uac_lark.h"
 
 static const char *TAG = "s31_main";
@@ -108,6 +109,11 @@ void app_main(void)
         ESP_LOGE(TAG, "Bluetooth gateway initialization failed: %s", esp_err_to_name(result));
         s31_gateway_set_bt_ready(false);
         s31_gateway_set_fault(BRIDGE_FAULT_BLUETOOTH);
+    }
+
+    result = s31_telemetry_start();
+    if (result != ESP_OK) {
+        ESP_LOGE(TAG, "telemetry initialization failed: %s", esp_err_to_name(result));
     }
 
     ESP_LOGW(TAG, "pre-hardware firmware started; call uplink remains digitally muted "

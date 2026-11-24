@@ -7,7 +7,10 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "output_telemetry.h"
+#include "sdkconfig.h"
 
+#include <math.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <string.h>
@@ -131,6 +134,9 @@ static void i2s_reader_task(void *context) {
             i2s_channel_read(s_rx_channel, s_i2s_buffer, sizeof(s_i2s_buffer), &bytes_read, 250U);
         if (error == ESP_OK && bytes_read > 0U) {
             bytes_read -= bytes_read % PCM_BYTES_PER_FRAME;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+            output_telemetry_tap_note(OUTPUT_TAP_I2S_IN, s_i2s_buffer, bytes_read);
+#endif
             if (atomic_load_explicit(&s_capture_active, memory_order_acquire)) {
                 ring_write_overwrite_oldest(s_i2s_buffer, bytes_read);
             }
@@ -245,7 +251,65 @@ void output_audio_set_capture_active(bool active)
     }
 }
 
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+static atomic_uint_fast32_t s_tone_hz;
+static atomic_int s_tone_dbfs;
+static float s_tone_phase;
+
+static size_t apply_test_tone(uint8_t *output, size_t length) {
+    uint32_t hz = (uint32_t)atomic_load_explicit(&s_tone_hz, memory_order_acquire);
+    int16_t *samples = (int16_t *)output;
+    size_t frames = length / PCM_BYTES_PER_FRAME;
+    if (hz == 0U) {
+        return 0U;
+    }
+    float amplitude =
+        32767.0f * powf(10.0f, (float)atomic_load(&s_tone_dbfs) / 20.0f);
+    float step = 2.0f * (float)M_PI * (float)hz / 48000.0f;
+    for (size_t frame = 0; frame < frames; ++frame) {
+        int16_t sample = (int16_t)lrintf(amplitude * sinf(s_tone_phase));
+        samples[frame * 2U] = sample;
+        samples[frame * 2U + 1U] = (int16_t)(sample == INT16_MIN ? INT16_MAX : -sample);
+        s_tone_phase += step;
+        if (s_tone_phase >= 2.0f * (float)M_PI) {
+            s_tone_phase -= 2.0f * (float)M_PI;
+        }
+    }
+    return frames * PCM_BYTES_PER_FRAME;
+}
+#endif
+
+bool output_audio_set_test_tone(uint32_t hz, int32_t dbfs) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    atomic_store_explicit(&s_tone_dbfs, (int)dbfs, memory_order_release);
+    atomic_store_explicit(&s_tone_hz, hz, memory_order_release);
+    return true;
+#else
+    (void)hz;
+    (void)dbfs;
+    return false;
+#endif
+}
+
+static size_t pull_from_ring(void *destination, size_t length);
+
 size_t output_audio_pull(void *destination, size_t length) {
+    size_t produced = pull_from_ring(destination, length);
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    if (destination != NULL && length >= PCM_BYTES_PER_FRAME) {
+        size_t toned = apply_test_tone(destination, length - (length % PCM_BYTES_PER_FRAME));
+        if (toned != 0U) {
+            produced = toned;
+        }
+        if (produced != 0U) {
+            output_telemetry_tap_note(OUTPUT_TAP_A2DP_OUT, destination, produced);
+        }
+    }
+#endif
+    return produced;
+}
+
+static size_t pull_from_ring(void *destination, size_t length) {
     uint8_t *output = destination;
     size_t output_length;
     size_t output_offset = 0U;

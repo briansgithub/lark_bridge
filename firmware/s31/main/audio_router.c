@@ -1,6 +1,7 @@
 #include "audio_router.h"
 
 #include <limits.h>
+#include <math.h>
 #include <stdatomic.h>
 #include <string.h>
 
@@ -11,6 +12,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "s31_config.h"
+#include "s31_telemetry.h"
 
 #define AUDIO_RING_BYTES (32U * 1024U)
 #define MIC_RING_BYTES (48U * 1024U)
@@ -53,6 +55,29 @@ static atomic_uint_fast32_t s_hfp_rate_hz;
 static atomic_uint_fast32_t s_a2dp_rate_hz;
 static atomic_uint_fast32_t s_underruns;
 static atomic_uint_fast32_t s_overruns;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+/* Test-image stage-isolation tone at I2S-out: 0 Hz means off. */
+static atomic_uint_fast32_t s_tone_hz;
+static atomic_int s_tone_dbfs;
+
+static void fill_test_tone(int16_t *block, size_t frames, float *phase)
+{
+    uint32_t hz = (uint32_t)atomic_load_explicit(&s_tone_hz, memory_order_acquire);
+    int dbfs = atomic_load_explicit(&s_tone_dbfs, memory_order_acquire);
+    float amplitude = 32767.0f * powf(10.0f, (float)dbfs / 20.0f);
+    float step = 2.0f * (float)M_PI * (float)hz / (float)S31_AUDIO_SAMPLE_RATE_HZ;
+    for (size_t frame = 0; frame < frames; ++frame) {
+        int16_t sample = (int16_t)lrintf(amplitude * sinf(*phase));
+        /* Left carries the tone, right its inverse: a channel-order marker. */
+        block[frame * 2U] = sample;
+        block[frame * 2U + 1U] = (int16_t)(sample == INT16_MIN ? INT16_MAX : -sample);
+        *phase += step;
+        if (*phase >= 2.0f * (float)M_PI) {
+            *phase -= 2.0f * (float)M_PI;
+        }
+    }
+}
+#endif
 
 static size_t write_aligned_ring(bridge_byte_ring_t *ring, const uint8_t *pcm,
                                  size_t length, size_t frame_bytes);
@@ -75,6 +100,9 @@ static void i2s_writer_task(void *argument)
     uint8_t block[I2S_BLOCK_BYTES];
     int16_t reference[I2S_BLOCK_FRAMES / 3U];
     bridge_route_t previous_route = BRIDGE_ROUTE_SILENCE;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    float tone_phase = 0.0f;
+#endif
     (void)argument;
 
     for (;;) {
@@ -107,7 +135,17 @@ static void i2s_writer_task(void *argument)
                 atomic_fetch_add_explicit(&s_underruns, 1U, memory_order_relaxed);
             }
         }
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        if (atomic_load_explicit(&s_tone_hz, memory_order_acquire) != 0U) {
+            fill_test_tone((int16_t *)block, I2S_BLOCK_FRAMES, &tone_phase);
+        }
+#endif
         esp_err_t result = i2s_channel_write(s_i2s_tx, block, sizeof(block), &bytes_written, 1000U);
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        if (result == ESP_OK && bytes_written == sizeof(block)) {
+            s31_telemetry_tap_note(S31_TAP_I2S_OUT, block, sizeof(block));
+        }
+#endif
         if (result != ESP_OK || bytes_written != sizeof(block)) {
             ESP_LOGE(TAG, "I2S write failed: %s (%u/%u bytes)", esp_err_to_name(result),
                      (unsigned)bytes_written, (unsigned)sizeof(block));
@@ -324,6 +362,9 @@ size_t s31_audio_router_write_lark(const uint8_t *pcm, size_t length)
     if (pcm == NULL || length == 0U || (length % 4U) != 0U) {
         return 0U;
     }
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    s31_telemetry_tap_note(S31_TAP_LARK_IN, pcm, length);
+#endif
     if (atomic_load_explicit(&s_route, memory_order_acquire) != BRIDGE_ROUTE_HFP) {
         return 0U;
     }
@@ -476,4 +517,17 @@ void s31_audio_router_get_stats(s31_audio_stats_t *stats)
     stats->fifo_frames = frames > UINT16_MAX ? UINT16_MAX : (uint16_t)frames;
     stats->underruns = (uint32_t)atomic_load_explicit(&s_underruns, memory_order_relaxed);
     stats->overruns = (uint32_t)atomic_load_explicit(&s_overruns, memory_order_relaxed);
+}
+
+bool s31_audio_router_set_test_tone(uint32_t hz, int32_t dbfs)
+{
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    atomic_store_explicit(&s_tone_dbfs, (int)dbfs, memory_order_release);
+    atomic_store_explicit(&s_tone_hz, hz, memory_order_release);
+    return true;
+#else
+    (void)hz;
+    (void)dbfs;
+    return false;
+#endif
 }

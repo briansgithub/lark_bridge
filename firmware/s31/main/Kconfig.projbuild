@@ -38,4 +38,18 @@ config LARKBRIDGE_S31_AEC_REFERENCE_DELAY_MS
         must be measured with the assembled car/output path. The 200-ms limit
         preserves headroom in the fixed raw-microphone ring.
 
+config LARKBRIDGE_TEST_IMAGE
+    bool "Build a qualification test image (tone/tap/fault hooks)"
+    default n
+    help
+        Compiles the stage-isolation tone generators, tap digests and fault
+        hooks into the image and marks it image=test in every telemetry record
+        and in the build manifest. Release images reject those commands.
+        Built with: build_firmware.py <target> --image test
+
+config LARKBRIDGE_STATS_PERIOD_MS
+    int "JSON stats record period (ms)"
+    range 200 60000
+    default 1000
+
 endmenu

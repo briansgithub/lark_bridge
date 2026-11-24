@@ -630,3 +630,19 @@ void output_control_note_local_audio_started(void) {
     atomic_store_explicit(&s_local_audio_blocked, false, memory_order_release);
     refresh_audio_capture(now_ms(), true);
 }
+
+void output_control_get_stats(output_control_stats_t *stats) {
+    if (stats == NULL) {
+        return;
+    }
+    stats->initialized = atomic_load(&s_initialized);
+    stats->link_alive = output_control_link_alive();
+    stats->local_ready_flags = (uint8_t)atomic_load(&s_local_ready_flags);
+    portENTER_CRITICAL(&s_policy_mux);
+    stats->hello_valid = s_policy.hello_valid;
+    stats->remote_ready_flags = s_policy.remote_ready_flags;
+    stats->route = (uint8_t)s_policy.route;
+    stats->protocol_errors = s_protocol_errors;
+    stats->reliable_failures = s_reliable_failures;
+    portEXIT_CRITICAL(&s_policy_mux);
+}

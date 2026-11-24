@@ -559,3 +559,18 @@ esp_err_t s31_bt_send_avrcp(uint8_t command, uint8_t key_state)
     }
     return esp_avrc_ct_send_passthrough_cmd(label, command, key_state);
 }
+
+void s31_bt_get_status(s31_bt_status_t *status)
+{
+    if (status == NULL) {
+        return;
+    }
+    status->hfp_service_state = atomic_load_explicit(&s_hfp_service_state, memory_order_acquire);
+    status->a2dp_connection_state =
+        atomic_load_explicit(&s_a2dp_connection_state, memory_order_acquire);
+    status->hfp_audio_connected = atomic_load(&s_hfp_audio_connected);
+    status->avrcp_connected = atomic_load(&s_avrcp_connected);
+    status->hfp_profile_ready = atomic_load(&s_hfp_profile_ready);
+    status->a2dp_profile_ready = atomic_load(&s_a2dp_profile_ready);
+    status->peer_bound = upstream_snapshot(status->peer);
+}

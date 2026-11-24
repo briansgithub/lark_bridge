@@ -6,6 +6,7 @@ idf_component_register(
         "output_control.c"
         "output_peer_store.c"
         "output_policy.c"
+        "output_telemetry.c"
     INCLUDE_DIRS "."
     REQUIRES
         bt

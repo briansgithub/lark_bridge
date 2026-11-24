@@ -34,3 +34,6 @@ uint32_t s31_audio_router_aec_generation(void);
 size_t s31_audio_router_write_aec_output(const uint8_t *pcm, size_t length);
 uint32_t s31_audio_router_fill_hfp_uplink(uint8_t *pcm, uint32_t length);
 void s31_audio_router_get_stats(s31_audio_stats_t *stats);
+/* Test images only: replace the I2S-out stream with a tone (hz == 0 stops it).
+ * Returns false in release images, which never generate test audio. */
+bool s31_audio_router_set_test_tone(uint32_t hz, int32_t dbfs);
