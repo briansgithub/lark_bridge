@@ -231,6 +231,8 @@ def reduce_t2_smoke(text: str, *, board: str, manifest: dict[str, Any] | None,
     want_image = manifest.get("image_kind", "release")
     metrics["expected_version"] = want_version
     metrics["expected_image"] = want_image
+    if want_image != "test":
+        reasons.append("Stage B smoke requires a test image manifest")
     # A boot record, or a `status` reply (same identity fields) when the port opened late.
     full = boots[-1] if boots else (statuses[-1] if statuses else None)
     identity = full if full is not None else (stats[-1] if stats else None)
@@ -662,6 +664,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     acquire_lease(lease_path, args.owner, ttl=max(600.0, args.seconds + 300.0), renew=False)
     try:
         manifest, _ = arrival.validate_build_manifest(target)
+        if manifest.get("image_kind") != "test":
+            raise HilError("Stage B smoke requires a test image build")
         staging = Path(os.environ.get("TEMP", "/tmp")) / f"hil-{os.getpid()}"
         staging.mkdir(parents=True, exist_ok=True)
         artifacts = []

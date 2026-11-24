@@ -117,6 +117,15 @@ class SmokeReducerTests(unittest.TestCase):
                 verdict, _, _ = hil.reduce_t2_smoke(evidence, board="s31", manifest=MANIFEST)
                 self.assertEqual(verdict, "FAIL")
 
+    def test_matching_release_cannot_pass_stage_b(self):
+        release = dict(MANIFEST, image_kind="release")
+        boot = BOOT.replace("-test", "").replace('"test"', '"release"')
+        verdict, _, reasons = hil.reduce_t2_smoke(
+            log(boot, stats("0123456789ab", "release"), stats("0123456789ab", "release", up=2000)),
+            board="s31", manifest=release)
+        self.assertEqual(verdict, "FAIL")
+        self.assertIn("Stage B smoke requires a test image manifest", reasons)
+
     def test_old_image_without_json_fails(self):
         verdict, _, _ = hil.reduce_t2_smoke(log("I (643) s31_main: IDENTITY role=s31"),
                                             board="s31", manifest=MANIFEST)
