@@ -30,7 +30,7 @@ BT="$ANDROID_SDK/build-tools/$BUILD_TOOLS"
 ANDROID_JAR="$ANDROID_SDK/platforms/$PLATFORM/android.jar"
 X=""; [[ -e "$BT/aapt2.exe" ]] && X=".exe"
 # Windows tools need Windows paths.
-p() { if [[ -n "$X" ]]; then wslpath -w "$1"; else printf '%s' "$1"; fi; }
+p() { if [[ -n "$X" ]]; then wslpath -m "$1"; else printf '%s' "$1"; fi; }
 
 for f in "$BT/aapt2$X" "$BT/zipalign$X" "$BT/lib/d8.jar" "$BT/lib/apksigner.jar" "$ANDROID_JAR" "$JDK/bin/javac$X"; do
     [[ -e "$f" ]] || { echo "missing: $f" >&2; exit 1; }
@@ -48,14 +48,15 @@ echo "== aapt2 link"
 
 echo "== javac"
 : > "$OUT/sources.txt"
-while IFS= read -r -d '' src; do p "$src" >> "$OUT/sources.txt"; echo >> "$OUT/sources.txt"; done \
+while IFS= read -r -d '' src; do printf '"%s"\n' "$(p "$src")"; done > "$OUT/sources.txt" \
     < <(find "$HERE/src" -name '*.java' -print0 | sort -z)
 "$JDK/bin/javac$X" -source 8 -target 8 -Xlint:-options -Xlint:deprecation -encoding UTF-8 \
     -bootclasspath "$(p "$ANDROID_JAR")" -d "$(p "$OUT/classes")" "@$(p "$OUT/sources.txt")"
 
 echo "== d8"
 : > "$OUT/classes.txt"
-while IFS= read -r -d '' c; do p "$c" >> "$OUT/classes.txt"; echo >> "$OUT/classes.txt"; done \
+# D8 reads one argument per line and treats quote characters literally.
+while IFS= read -r -d '' c; do p "$c"; echo; done > "$OUT/classes.txt" \
     < <(find "$OUT/classes" -name '*.class' -print0 | sort -z)
 "$JDK/bin/java$X" -cp "$(p "$BT/lib/d8.jar")" com.android.tools.r8.D8 --debug --min-api "$MIN_SDK" \
     --lib "$(p "$ANDROID_JAR")" --output "$(p "$OUT/dex")" "@$(p "$OUT/classes.txt")"
