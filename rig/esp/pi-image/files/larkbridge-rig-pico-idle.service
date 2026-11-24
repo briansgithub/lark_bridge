@@ -1,0 +1,13 @@
+# larkbridge-rig: put the Pico SWD, reset and UART-TX pins back to inputs at boot
+# (hil-rig.md section 3.4: a powered Pi must not drive an unpowered Pico).
+[Unit]
+Description=LarkBridge rig: Pico interface pins to inputs
+After=sysinit.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/lib/larkbridge-rig/pico-ctl.sh idle
+
+[Install]
+WantedBy=multi-user.target
