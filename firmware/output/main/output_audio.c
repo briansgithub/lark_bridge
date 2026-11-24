@@ -55,9 +55,9 @@ static audio_ring_t s_ring = {.mux = portMUX_INITIALIZER_UNLOCKED};
 static i2s_chan_handle_t s_rx_channel;
 static atomic_bool s_initialized;
 static atomic_bool s_capture_active;
-static atomic_bool s_primed;
-static atomic_bool s_rate_reset_requested;
-static atomic_uint_fast32_t s_last_read_ms;
+static bool s_primed;
+static bool s_rate_reset_requested;
+static int64_t s_last_read_us;
 static uint8_t s_i2s_buffer[I2S_READ_BYTES];
 static int16_t s_adaptive_input[ADAPTIVE_INPUT_FRAMES * 2U];
 static int16_t s_adaptive_output[ADAPTIVE_BLOCK_FRAMES * 2U];
@@ -170,8 +170,9 @@ static void i2s_reader_task(void *context) {
             if (atomic_load_explicit(&s_capture_active, memory_order_acquire)) {
                 ring_write_overwrite_oldest(s_i2s_buffer, bytes_read);
             }
-            atomic_store_explicit(
-                &s_last_read_ms, (uint32_t)(esp_timer_get_time() / 1000), memory_order_release);
+            portENTER_CRITICAL(&s_ring.mux);
+            s_last_read_us = esp_timer_get_time();
+            portEXIT_CRITICAL(&s_ring.mux);
         } else if (error != ESP_ERR_TIMEOUT) {
             portENTER_CRITICAL(&s_ring.mux);
             ++s_ring.i2s_read_errors;
@@ -220,9 +221,9 @@ esp_err_t output_audio_start(void) {
     s_ring.fifo_max_frames = 0U;
     atomic_init(&s_initialized, false);
     atomic_init(&s_capture_active, false);
-    atomic_init(&s_primed, false);
-    atomic_init(&s_rate_reset_requested, false);
-    atomic_init(&s_last_read_ms, 0U);
+    s_primed = false;
+    s_rate_reset_requested = false;
+    s_last_read_us = 0;
     s_held_correction_ppm = 0;
     s_last_rate_update_ms = 0U;
     /* Regulate around the level playback starts at, so a fresh route begins
@@ -268,12 +269,12 @@ bool output_audio_is_initialized(void) {
     return atomic_load_explicit(&s_initialized, memory_order_acquire);
 }
 
-bool output_audio_clock_active(uint32_t now_ms) {
-    uint32_t last = (uint32_t)atomic_load_explicit(&s_last_read_ms, memory_order_acquire);
-    /* The reader task may stamp a read after the caller sampled now_ms; that
-     * negative age is a live clock, not a 49-day-old one. */
-    return output_audio_is_initialized() && last != 0U &&
-           (int32_t)(now_ms - last) < (int32_t)I2S_CLOCK_ACTIVE_MS;
+bool output_audio_clock_active(void) {
+    portENTER_CRITICAL(&s_ring.mux);
+    int64_t last = s_last_read_us;
+    portEXIT_CRITICAL(&s_ring.mux);
+    return output_audio_is_initialized() && last != 0 &&
+           esp_timer_get_time() - last < I2S_CLOCK_ACTIVE_MS * 1000;
 }
 
 void output_audio_set_capture_active(bool active)
@@ -364,19 +365,21 @@ static size_t pull_from_ring(void *destination, size_t length, uint32_t rate, bo
     if (!atomic_load_explicit(&s_capture_active, memory_order_acquire)) {
         return 0U;
     }
-    if (atomic_exchange_explicit(&s_rate_reset_requested, false, memory_order_acq_rel)) {
-        reset_rate_state();
-    }
+    size_t prefill_frames = prefill_target_frames();
     portENTER_CRITICAL(&s_ring.mux);
     fill_frames = s_ring.count / PCM_BYTES_PER_FRAME;
-    portEXIT_CRITICAL(&s_ring.mux);
-    size_t prefill_frames = prefill_target_frames();
-    if (!atomic_load_explicit(&s_primed, memory_order_acquire)) {
+    bool reset = s_rate_reset_requested;
+    s_rate_reset_requested = false;
+    if (!s_primed) {
         if (fill_frames < prefill_frames) {
+            portEXIT_CRITICAL(&s_ring.mux);
+            if (reset) {
+                reset_rate_state();
+            }
             return 0U;
         }
-        atomic_store_explicit(&s_primed, true, memory_order_release);
-        portENTER_CRITICAL(&s_ring.mux);
+        s_primed = true;
+        reset = true;
         /* The first pull can arrive well after the prefill was reached; start
          * at the regulation target so the loop begins with zero error. */
         size_t excess_bytes = s_ring.count - prefill_frames * PCM_BYTES_PER_FRAME;
@@ -388,7 +391,9 @@ static size_t pull_from_ring(void *destination, size_t length, uint32_t rate, bo
         if (s_ring.fifo_min_frames > s_ring.fifo_max_frames) {
             s_ring.fifo_max_frames = s_ring.fifo_min_frames;
         }
-        portEXIT_CRITICAL(&s_ring.mux);
+    }
+    portEXIT_CRITICAL(&s_ring.mux);
+    if (reset) {
         reset_rate_state();
     }
     s_fill_sum += (int64_t)fill_frames;
@@ -424,13 +429,18 @@ static size_t pull_from_ring(void *destination, size_t length, uint32_t rate, bo
         size_t nominal_input_frames = scaled_frames / rate;
         s_nominal_input_remainder = scaled_frames % rate;
         size_t input_frames = bridge_resampler_input_frames(&s_resampler, step, output_frames);
-        if (input_frames == 0U || input_frames > ADAPTIVE_INPUT_FRAMES) {
+        if (input_frames > ADAPTIVE_INPUT_FRAMES) {
             break;
         }
         size_t input_bytes = input_frames * PCM_BYTES_PER_FRAME;
         size_t available_bytes;
 
         portENTER_CRITICAL(&s_ring.mux);
+        if (s_rate_reset_requested) {
+            portEXIT_CRITICAL(&s_ring.mux);
+            (void)memset(output, 0, output_length);
+            return 0U;
+        }
         available_bytes = s_ring.count - (s_ring.count % PCM_BYTES_PER_FRAME);
         if (available_bytes < input_bytes) {
             ++s_ring.underruns;
@@ -484,9 +494,9 @@ void output_audio_flush(void) {
     s_ring.correction_ppm = 0;
     s_ring.fifo_min_frames = UINT32_MAX;
     s_ring.fifo_max_frames = 0U;
+    s_primed = false;
+    s_rate_reset_requested = true;
     portEXIT_CRITICAL(&s_ring.mux);
-    atomic_store_explicit(&s_primed, false, memory_order_release);
-    atomic_store_explicit(&s_rate_reset_requested, true, memory_order_release);
 }
 
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
