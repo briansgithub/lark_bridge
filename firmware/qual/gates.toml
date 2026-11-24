@@ -1,0 +1,277 @@
+# LarkBridge ESP32 gate registry, read by rig/esp/hil.py.
+#
+# Thresholds live in firmware/docs/qualification-matrix.md; this file only
+# orders the gates and says how each one is run and reduced.
+#
+#   tier     T0 host test · T1 build · T2 smoke on hardware · T3 rig-automated
+#            · T4 acoustic/real-peer fixture · T5 car/person
+#   needs    gates that must be PASS first
+#   human    true when a person must act (see firmware/qual/human-queue.md)
+#   resets   true when running the gate resets or reflashes a board
+#   status   last recorded verdict: PENDING | PASS | FAIL | PARTIAL; evidence
+#            names the result directory or record
+#   reducer  hil.py reducer; "manual" gates are recorded with arrival.py
+
+schema = 1
+
+[gates.T0-host]
+title = "Host C tests (ctest in the pinned IDF container)"
+tier = "T0"
+needs = []
+human = false
+resets = false
+reducer = "manual"
+status = "PASS"
+evidence = "overnight-2026-11-24: 5/5 ctest at the Stage B commits"
+
+[gates.T1-build]
+title = "Pinned ESP-IDF builds of both targets (release + test images)"
+tier = "T1"
+needs = ["T0-host"]
+human = false
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H0]
+title = "Visual identity and antenna"
+tier = "T5"
+needs = []
+human = true
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H1]
+title = "Independent flash/boot"
+tier = "T2"
+needs = ["T1-build"]
+human = false
+resets = true
+reducer = "manual"
+status = "PASS"
+evidence = "lark_bridge-evidence/20261124T042154-H1-s31-boot-lark-attached, 20261124T042953-H1-output-devkitc-boot (057eb3c)"
+
+[gates.T2-smoke-s31]
+title = "S31 test image: flash app-only, boot JSON matches the manifest"
+tier = "T2"
+board = "s31"
+needs = ["H1", "T1-build"]
+human = false
+resets = true
+reducer = "t2_smoke"
+seconds = 20
+status = "PENDING"
+
+[gates.T2-smoke-output]
+title = "Output test image: flash app-only, boot JSON matches the manifest"
+tier = "T2"
+board = "output"
+needs = ["H1", "T1-build"]
+human = false
+resets = true
+reducer = "t2_smoke"
+seconds = 20
+status = "PENDING"
+
+[gates.stageB-exit]
+title = "Stage B exit: T2 smoke passes on both boards with no person present"
+tier = "T2"
+needs = ["T2-smoke-s31", "T2-smoke-output"]
+human = false
+resets = false
+reducer = "all_needs"
+status = "PENDING"
+
+[gates.BT-soak]
+title = "Passive Pixel<->S31 ACL soak (136 kHz RC slow clock check)"
+tier = "T3"
+board = "s31"
+needs = ["H1"]
+human = false
+resets = false
+reducer = "bt_soak"
+status = "PENDING"
+
+[gates.H2]
+title = "UART protocol"
+tier = "T3"
+needs = ["stageB-exit", "harness"]
+human = false
+resets = true
+reducer = "manual"
+status = "PENDING"
+
+[gates.harness]
+title = "Six-wire harness fitted and continuity-checked (wiring.md)"
+tier = "T5"
+needs = []
+human = true
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H3]
+title = "Independent reset"
+tier = "T3"
+needs = ["H2"]
+human = false
+resets = true
+reducer = "manual"
+status = "PENDING"
+
+[gates.H4]
+title = "I2S electrical/PCM"
+tier = "T3"
+needs = ["H2", "analyzer"]
+human = false
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.analyzer]
+title = "Logic analyzer clipped onto the harness (hil-rig.md 3.2)"
+tier = "T5"
+needs = ["harness"]
+human = true
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H5]
+title = "FIFO/drift, 30 min"
+tier = "T3"
+needs = ["H4", "fake-car"]
+human = false
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.fake-car]
+title = "Rig Pi on its own rig SD card, fake car provisioned (rig/esp/pi-image)"
+tier = "T5"
+needs = []
+human = true
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H6]
+title = "LARK UAC1"
+tier = "T3"
+board = "s31"
+needs = ["H1"]
+human = false
+resets = false
+reducer = "h6_uac"
+seconds = 1800
+status = "PARTIAL"
+evidence = "firmware/qual/overnight-2026-11-24.md (read-only; no transmitter; 0/100 reconnects)"
+
+[gates.H7]
+title = "Output Bluetooth (fake car at T3, speaker/car at T4/T5)"
+tier = "T3"
+needs = ["H1", "fake-car"]
+human = false
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H8]
+title = "Pixel media"
+tier = "T3"
+needs = ["H5", "H7", "pixel-harness"]
+human = false
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.pixel-harness]
+title = "Pixel harness app installed and granted (rig/esp/pixel-harness)"
+tier = "T2"
+needs = []
+human = false
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H9]
+title = "Pixel call"
+tier = "T3"
+needs = ["H8"]
+human = false
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H10]
+title = "LARK call + AEC"
+tier = "T4"
+needs = ["H6", "H9"]
+human = true
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H11]
+title = "Audio focus"
+tier = "T3"
+needs = ["H9"]
+human = false
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H12]
+title = "Steering controls"
+tier = "T5"
+needs = ["H7", "H8"]
+human = true
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H13]
+title = "RF coexistence"
+tier = "T4"
+needs = ["H9"]
+human = true
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H14]
+title = "Fault injection"
+tier = "T3"
+needs = ["H11"]
+human = false
+resets = true
+reducer = "manual"
+status = "PENDING"
+
+[gates.H15]
+title = "Repetition, ten cycles"
+tier = "T3"
+needs = ["H14"]
+human = false
+resets = true
+reducer = "manual"
+status = "PENDING"
+
+[gates.H16]
+title = "Endurance, 3,600 s active call"
+tier = "T3"
+needs = ["H15", "H10"]
+human = false
+resets = false
+reducer = "manual"
+status = "PENDING"
+
+[gates.H17]
+title = "Vehicle power"
+tier = "T5"
+needs = ["H16"]
+human = true
+resets = true
+reducer = "manual"
+status = "PENDING"

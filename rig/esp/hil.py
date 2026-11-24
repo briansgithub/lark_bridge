@@ -1,0 +1,695 @@
+#!/usr/bin/env python3
+"""LarkBridge ESP32 hardware-in-the-loop runner, v0.
+
+Wraps ``firmware/tools/arrival.py`` with a rig lease, app-only flashing, read-only console
+capture, reducers, and the ``firmware/qual/gates.toml`` registry. Each run writes
+``docs/experiments/results/E21/<UTC>-<gate>/`` with ``result.json`` (verdict + revisions),
+``metrics.json`` and the raw artifacts.
+
+Safety:
+
+* every capture opens the port with DTR and RTS deasserted (``arrival._quiet_serial_factory``),
+  so capturing never resets a board;
+* anything that resets or flashes a board (``run --flash``) also needs ``--allow-reset``;
+* flashing writes the application partition only, so NVS and Bluetooth bonds survive; it
+  never erases flash, and never touches eFuses, secure boot or flash encryption.
+
+Run under Windows Python (``py -3``) for COM ports; ``gates``, ``next``, ``reduce`` and
+``lease`` also work under WSL/Linux Python 3.11+.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterable, Sequence
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
+    tomllib = None  # type: ignore[assignment]
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+FIRMWARE_ROOT = REPO_ROOT / "firmware"
+GATES_PATH = FIRMWARE_ROOT / "qual" / "gates.toml"
+RESULTS_ROOT = REPO_ROOT / "docs" / "experiments" / "results" / "E21"
+VERDICTS = ("PASS", "FAIL", "INCONCLUSIVE", "PARTIAL")
+
+sys.path.insert(0, str(FIRMWARE_ROOT / "tools"))
+import arrival  # noqa: E402
+
+
+class HilError(RuntimeError):
+    """An operator-correctable runner error."""
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# --- gates ---------------------------------------------------------------------------------
+
+
+def load_gates(path: Path = GATES_PATH) -> dict[str, dict[str, Any]]:
+    if tomllib is None:
+        raise HilError("Python 3.11+ is required to read gates.toml")
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != 1:
+        raise HilError(f"{path}: unsupported schema")
+    gates = data.get("gates")
+    if not isinstance(gates, dict) or not gates:
+        raise HilError(f"{path}: no gates")
+    return gates
+
+
+def validate_gates(gates: dict[str, dict[str, Any]]) -> list[str]:
+    """Returns a list of problems; empty means the registry is consistent."""
+
+    problems: list[str] = []
+    required = ("title", "tier", "needs", "human", "resets", "reducer", "status")
+    for name, gate in gates.items():
+        for key in required:
+            if key not in gate:
+                problems.append(f"{name}: missing {key}")
+        for need in gate.get("needs", []):
+            if need not in gates:
+                problems.append(f"{name}: unknown prerequisite {need}")
+        if gate.get("status") not in ("PENDING", "PASS", "FAIL", "PARTIAL"):
+            problems.append(f"{name}: bad status {gate.get('status')!r}")
+        if gate.get("tier") not in ("T0", "T1", "T2", "T3", "T4", "T5"):
+            problems.append(f"{name}: bad tier {gate.get('tier')!r}")
+        reducer = gate.get("reducer")
+        if reducer not in REDUCERS and reducer not in ("manual", "all_needs"):
+            problems.append(f"{name}: unknown reducer {reducer!r}")
+        if reducer == "t2_smoke" and gate.get("board") not in ("s31", "output"):
+            problems.append(f"{name}: t2_smoke needs board = s31|output")
+    # Cycle check (depth-first).
+    state: dict[str, int] = {}
+
+    def visit(name: str, trail: list[str]) -> None:
+        if state.get(name) == 2:
+            return
+        if state.get(name) == 1:
+            problems.append("prerequisite cycle: " + " -> ".join(trail + [name]))
+            return
+        state[name] = 1
+        for need in gates.get(name, {}).get("needs", []):
+            if need in gates:
+                visit(need, trail + [name])
+        state[name] = 2
+
+    for name in gates:
+        visit(name, [])
+    for index in range(1, 18):
+        if f"H{index}" not in gates:
+            problems.append(f"H{index} missing from registry")
+    return problems
+
+
+def latest_verdicts(results_root: Path = RESULTS_ROOT) -> dict[str, dict[str, Any]]:
+    """The newest recorded hil.py verdict per gate."""
+
+    latest: dict[str, dict[str, Any]] = {}
+    if not results_root.is_dir():
+        return latest
+    for result in sorted(results_root.glob("*/result.json")):
+        try:
+            record = json.loads(result.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        gate = record.get("gate")
+        if isinstance(gate, str) and record.get("verdict") in VERDICTS:
+            record["_path"] = str(result.parent)
+            latest[gate] = record
+    return latest
+
+
+def effective_status(gates: dict[str, dict[str, Any]],
+                     verdicts: dict[str, dict[str, Any]]) -> dict[str, str]:
+    status = {name: str(gate.get("status", "PENDING")) for name, gate in gates.items()}
+    for name, record in verdicts.items():
+        if name in status:
+            status[name] = record["verdict"]
+    for name, gate in gates.items():
+        if gate.get("reducer") == "all_needs" and gate.get("needs"):
+            if all(status.get(need) == "PASS" for need in gate["needs"]):
+                status[name] = "PASS"
+    return status
+
+
+def runnable(gates: dict[str, dict[str, Any]], status: dict[str, str], *,
+             allow_human: bool = False, allow_reset: bool = True) -> list[str]:
+    ready = []
+    for name, gate in gates.items():
+        if status.get(name) == "PASS":
+            continue
+        if gate.get("human") and not allow_human:
+            continue
+        if gate.get("resets") and not allow_reset:
+            continue
+        if gate.get("reducer") == "all_needs":
+            continue
+        if all(status.get(need) == "PASS" for need in gate.get("needs", [])):
+            ready.append(name)
+    return ready
+
+
+# --- telemetry parsing ---------------------------------------------------------------------
+
+LOG_PREFIX_RE = re.compile(r"^\[[^\]]+\] ")
+REBOOT_RE = re.compile(r"rst:0x|ESP-ROM:|Guru Meditation|Brownout detector|abort\(\) was called")
+
+
+def iter_log_lines(text: str) -> Iterable[str]:
+    for line in text.splitlines():
+        yield LOG_PREFIX_RE.sub("", line, count=1)
+
+
+def json_records(text: str) -> list[dict[str, Any]]:
+    """Every JSON-lines telemetry record in a console log (other lines are ignored)."""
+
+    records = []
+    for line in iter_log_lines(text):
+        start = line.find('{"t":')
+        if start < 0:
+            continue
+        try:
+            record = json.loads(line[start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict) and isinstance(record.get("t"), str):
+            records.append(record)
+    return records
+
+
+def expected_version(manifest: dict[str, Any]) -> str:
+    version = str(manifest.get("source_commit", ""))[:12]
+    if manifest.get("source_dirty"):
+        version += "-dirty"
+    if manifest.get("image_kind") == "test":
+        version += "-test"
+    return version
+
+
+# --- reducers ------------------------------------------------------------------------------
+
+
+def reduce_t2_smoke(text: str, *, board: str, manifest: dict[str, Any] | None,
+                    require_boot: bool = True) -> tuple[str, dict[str, Any], list[str]]:
+    records = json_records(text)
+    boots = [r for r in records if r["t"] == "boot" and r.get("role") == board]
+    statuses = [r for r in records if r["t"] == "status" and r.get("role") == board]
+    stats = [r for r in records if r["t"] == "stats" and r.get("role") == board]
+    reboot_markers = sum(1 for line in iter_log_lines(text) if REBOOT_RE.search(line))
+    metrics: dict[str, Any] = {
+        "board": board,
+        "boot_records": len(boots),
+        "status_records": len(statuses),
+        "stats_records": len(stats),
+        "reboot_markers": reboot_markers,
+        "errors": sum(1 for r in records if r["t"] == "error"),
+    }
+    reasons: list[str] = []
+    if manifest is None:
+        reasons.append("no build manifest to compare against")
+        return "INCONCLUSIVE", metrics, reasons
+    want_version = expected_version(manifest)
+    want_image = manifest.get("image_kind", "release")
+    metrics["expected_version"] = want_version
+    metrics["expected_image"] = want_image
+    # A boot record, or a `status` reply (same identity fields) when the port opened late.
+    full = boots[-1] if boots else (statuses[-1] if statuses else None)
+    identity = full if full is not None else (stats[-1] if stats else None)
+    if identity is None:
+        reasons.append("no boot or stats JSON record from this board")
+        return "FAIL", metrics, reasons
+    metrics["version"] = identity.get("version")
+    metrics["image"] = identity.get("image")
+    if identity.get("version") != want_version:
+        reasons.append(f"version {identity.get('version')!r} != manifest {want_version!r}")
+    if identity.get("image") != want_image:
+        reasons.append(f"image {identity.get('image')!r} != manifest {want_image!r}")
+    if full is not None:
+        boot = full
+        metrics["identity_source"] = boot["t"]
+        metrics.update({k: boot.get(k) for k in ("reset", "bt", "erase_bonds", "aec_publish", "idf")})
+        if boot.get("erase_bonds") != 0:
+            reasons.append("erase_bonds is not 0")
+        if board == "s31" and boot.get("aec_publish") != 0:
+            reasons.append("aec_publish is not 0")
+        toolchain = manifest.get("toolchain", {})
+        tag = toolchain.get("esp_idf_tag") if isinstance(toolchain, dict) else None
+        if tag and boot.get("idf") and not str(boot["idf"]).startswith(tag):
+            reasons.append(f"idf {boot.get('idf')!r} != manifest tag {tag!r}")
+    if len(boots) > 1 or reboot_markers > 1:
+        reasons.append(f"more than one boot in the capture (boots={len(boots)}, markers={reboot_markers})")
+    if len(stats) < 2:
+        reasons.append(f"fewer than 2 stats records ({len(stats)})")
+    if metrics["errors"]:
+        reasons.append(f"{metrics['errors']} telemetry error records")
+    if reasons:
+        return "FAIL", metrics, reasons
+    if require_boot and full is None:
+        return "INCONCLUSIVE", metrics, ["identity matched from stats only; no boot/status record"]
+    return "PASS", metrics, [f"{full['t'] if full else 'stats'} JSON matches the manifest"]
+
+
+UAC_FAILURE_RE = re.compile(
+    r"UAC transfer error|capture read failed|USB audio device disconnected|"
+    r"lacks required 48 kHz|automatic recovery exhausted"
+)
+UAC_READY_RE = re.compile(r"LARK (?P<vid>[0-9a-f]{4}):(?P<pid>[0-9a-f]{4}) capture ready at "
+                          r"(?P<fmt>48 kHz/S16/stereo)")
+STAMP_RE = re.compile(r"^\[(?P<ts>[^\]]+)\] ")
+
+
+def _capture_span_seconds(text: str) -> float:
+    stamps = []
+    for line in text.splitlines():
+        match = STAMP_RE.match(line)
+        if match:
+            try:
+                stamps.append(datetime.fromisoformat(match.group("ts")))
+            except ValueError:
+                pass
+    if len(stamps) < 2:
+        return 0.0
+    return (max(stamps) - min(stamps)).total_seconds()
+
+
+def reduce_h6_uac(text: str, *, boot_log: str | None = None,
+                  min_seconds: float = 1800.0) -> tuple[str, dict[str, Any], list[str]]:
+    """H6 from S31 console text: descriptor/format at enumeration and zero UAC failures.
+
+    The 100/100 reconnect part always needs the Pico fake Lark or a person, so this reducer
+    never returns PASS on its own; a clean run is PARTIAL.
+    """
+
+    combined = (boot_log or "") + "\n" + text
+    ready = [m.groupdict() for m in (UAC_READY_RE.search(l) for l in iter_log_lines(combined)) if m]
+    failures = [l for l in iter_log_lines(text) if UAC_FAILURE_RE.search(l)]
+    stats = [r for r in json_records(text) if r["t"] == "stats" and r.get("role") == "s31"]
+    span = _capture_span_seconds(text)
+    metrics: dict[str, Any] = {
+        "enumerations": ready,
+        "uac_failure_lines": len(failures),
+        "capture_seconds": round(span, 1),
+        "stats_records": len(stats),
+        "reboot_markers": sum(1 for l in iter_log_lines(text) if REBOOT_RE.search(l)),
+    }
+    if stats:
+        first, last = stats[0].get("uac", {}), stats[-1].get("uac", {})
+        metrics["uac_rx_packets_delta"] = last.get("rx", 0) - first.get("rx", 0)
+        metrics["uac_xfer_err_delta"] = last.get("xfer_err", 0) - first.get("xfer_err", 0)
+        metrics["uac_read_err_delta"] = last.get("read_err", 0) - first.get("read_err", 0)
+    reasons: list[str] = []
+    if failures:
+        return "FAIL", metrics, [f"{len(failures)} UAC failure lines, first: {failures[0][:120]}"]
+    if metrics.get("uac_xfer_err_delta") or metrics.get("uac_read_err_delta"):
+        return "FAIL", metrics, ["UAC error counters increased"]
+    if metrics["reboot_markers"]:
+        return "FAIL", metrics, ["board rebooted during the capture"]
+    if not any(r["vid"] == "3547" and r["pid"] == "0407" for r in ready):
+        reasons.append("no 3547:0407 48 kHz/S16/stereo enumeration line in the evidence")
+    if span < min_seconds:
+        reasons.append(f"capture {span:.0f} s < {min_seconds:.0f} s")
+    if not stats:
+        reasons.append("no JSON stats (pre-Stage-B image): transfer errors judged from log lines only, "
+                       "UAC packet flow not proven")
+    reasons.append("100/100 reconnects and negative-descriptor tests not run (need the Pico fake Lark)")
+    return "PARTIAL", metrics, reasons
+
+
+def reduce_bt_soak(summary: dict[str, Any]) -> tuple[str, dict[str, Any], list[str]]:
+    metrics = {
+        key: summary.get(key)
+        for key in ("started_utc", "finished_utc", "polls", "polls_link_up", "poll_errors",
+                    "pixel_acl_events", "s31_lines", "s31_reboot_markers")
+    }
+    metrics["link_drops"] = len(summary.get("link_drops", []))
+    metrics["serial_errors"] = len(summary.get("serial_errors", []))
+    reasons = []
+    if not summary.get("polls"):
+        return "INCONCLUSIVE", metrics, ["no adb polls"]
+    if metrics["link_drops"]:
+        reasons.append(f"{metrics['link_drops']} link drops seen by polling")
+    if summary.get("s31_reboot_markers"):
+        reasons.append("S31 reboot markers in the console capture")
+    if summary.get("polls_link_up") != summary.get("polls"):
+        reasons.append(f"link up in {summary.get('polls_link_up')}/{summary.get('polls')} polls")
+    if reasons:
+        return "FAIL", metrics, reasons
+    return "PASS", metrics, ["link up at every poll, no drops, no S31 reboot"]
+
+
+REDUCERS = ("t2_smoke", "h6_uac", "bt_soak")
+
+
+# --- lease ---------------------------------------------------------------------------------
+
+
+def default_lease_path() -> Path:
+    override = os.environ.get("LARKBRIDGE_RIG_LEASE")
+    if override:
+        return Path(override)
+    if os.name == "nt":
+        return Path.home() / ".larkbridge" / "rig.lease"
+    # Under WSL, share the Windows-side lease so py.exe and Linux runs see one lock.
+    match = re.match(r"^(/mnt/[a-z]/Users/[^/]+)/", str(REPO_ROOT))
+    if match:
+        return Path(match.group(1)) / ".larkbridge" / "rig.lease"
+    return Path.home() / ".larkbridge" / "rig.lease"
+
+
+def read_lease(path: Path) -> dict[str, Any] | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError):
+        return {"owner": "unreadable", "expires": 0}
+
+
+def acquire_lease(path: Path, owner: str, ttl: float, *, now: float | None = None) -> dict[str, Any]:
+    now = time.time() if now is None else now
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {"owner": owner, "host": socket.gethostname(), "pid": os.getpid(),
+              "acquired": now, "expires": now + ttl}
+    for _ in range(2):
+        try:
+            descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            current = read_lease(path)
+            if current and current.get("owner") == owner:
+                break  # renew our own lease
+            if current and float(current.get("expires", 0)) > now:
+                raise HilError(f"rig lease held by {current.get('owner')} until "
+                               f"{datetime.fromtimestamp(float(current['expires']), timezone.utc).isoformat()}")
+            path.unlink(missing_ok=True)  # stale: take it over
+            continue
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(record, stream)
+        return record
+    path.write_text(json.dumps(record), encoding="utf-8")
+    return record
+
+
+def release_lease(path: Path, owner: str) -> bool:
+    current = read_lease(path)
+    if current is None:
+        return False
+    if current.get("owner") != owner:
+        raise HilError(f"rig lease belongs to {current.get('owner')}, not {owner}")
+    path.unlink(missing_ok=True)
+    return True
+
+
+# --- flashing ------------------------------------------------------------------------------
+
+FORBIDDEN_ESPTOOL = re.compile(r"erase[_-]flash|erase[_-]region|efuse|secure|encrypt|write[_-]flash-status",
+                               re.IGNORECASE)
+
+
+def app_flash_command(target: str, port: str, python: str = sys.executable) -> list[str]:
+    """esptool command that writes only the application image at its generated offset."""
+
+    manifest, _ = arrival.validate_build_manifest(target)
+    definition = json.loads((FIRMWARE_ROOT / target / "build" / "flasher_args.json")
+                            .read_text(encoding="utf-8"))
+    app = definition.get("app")
+    if not isinstance(app, dict) or not app.get("offset") or not app.get("file"):
+        raise HilError("flasher_args.json has no app entry")
+    extra = definition.get("extra_esptool_args", {})
+    write = definition.get("write_flash_args", [])
+    command = [python, "-m", "esptool", "--chip", str(extra["chip"]), "--port", port,
+               "--before", str(extra.get("before", "default-reset")),
+               "--after", str(extra.get("after", "hard-reset"))]
+    if extra.get("stub") is False:
+        command.append("--no-stub")
+    # esptool 5 spelling; the offsets and flash settings come from the generated file only.
+    command += ["write-flash", *[str(a) for a in write], str(app["offset"]),
+                str(FIRMWARE_ROOT / target / "build" / app["file"])]
+    if any(FORBIDDEN_ESPTOOL.search(part) for part in command):
+        raise HilError(f"refusing a forbidden esptool operation: {command}")
+    return command
+
+
+# --- runs ----------------------------------------------------------------------------------
+
+
+def revisions(target: str | None) -> dict[str, Any]:
+    snapshot = arrival.git_snapshot(REPO_ROOT)
+    info: dict[str, Any] = {"checkout": snapshot, "hil_version": 0}
+    lock = FIRMWARE_ROOT / "toolchain.lock.json"
+    if lock.is_file():
+        info["toolchain_lock_sha256"] = arrival.sha256(lock)
+    if target:
+        manifest_path = FIRMWARE_ROOT / target / "build" / "larkbridge-build-manifest.json"
+        if manifest_path.is_file():
+            info["manifest_sha256"] = arrival.sha256(manifest_path)
+    return info
+
+
+def write_result(gate: str, verdict: str, metrics: dict[str, Any], reasons: list[str], *,
+                 target: str | None, artifacts: Sequence[Path] = (), results_root: Path = RESULTS_ROOT,
+                 extra: dict[str, Any] | None = None) -> Path:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_dir = results_root / f"{stamp}-{gate}"
+    suffix = 1
+    while run_dir.exists():
+        suffix += 1
+        run_dir = results_root / f"{stamp}-{gate}-{suffix}"
+    (run_dir / "artifacts").mkdir(parents=True)
+    recorded = []
+    for artifact in artifacts:
+        destination = run_dir / "artifacts" / artifact.name
+        shutil.copy2(artifact, destination)
+        recorded.append({"name": artifact.name, "sha256": arrival.sha256(destination),
+                         "bytes": destination.stat().st_size})
+    result = {"schema": 1, "gate": gate, "verdict": verdict, "reasons": reasons,
+              "recorded_at": utc_now(), "revisions": revisions(target), "artifacts": recorded,
+              **(extra or {})}
+    (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n",
+                                          encoding="utf-8")
+    (run_dir / "result.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n",
+                                         encoding="utf-8")
+    return run_dir
+
+
+def capture(port: str, seconds: float, destination: Path,
+            commands: Sequence[tuple[float, str]] = ()) -> Path:
+    """Read-only capture, plus optional console lines sent at the given offsets.
+
+    Writing a line never touches DTR/RTS, so it cannot reset the board.
+    """
+
+    import serial  # type: ignore
+
+    connection = arrival._quiet_serial_factory(serial.Serial)(port=port, baudrate=115200, timeout=0.2)
+    start = time.monotonic()
+    deadline = start + seconds
+    pending = sorted(commands)
+    try:
+        with destination.open("w", encoding="utf-8", newline="\n") as log:
+            log.write(f"[{utc_now()}] CAPTURE_START port={port}\n")
+            while time.monotonic() < deadline:
+                while pending and time.monotonic() - start >= pending[0][0]:
+                    _, line = pending.pop(0)
+                    connection.write((line + "\n").encode("ascii"))
+                    log.write(f"[{utc_now()}] HOST_SENT {line}\n")
+                raw = connection.readline()
+                if raw:
+                    text = bytes(raw).decode("utf-8", errors="replace").rstrip("\r\n")
+                    log.write(f"[{utc_now()}] {text}\n")
+            log.write(f"[{utc_now()}] CAPTURE_END\n")
+    finally:
+        connection.close()
+    return destination
+
+
+def load_manifest(target: str) -> dict[str, Any] | None:
+    path = FIRMWARE_ROOT / target / "build" / "larkbridge-build-manifest.json"
+    if not path.is_file():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+# --- commands ------------------------------------------------------------------------------
+
+
+def cmd_gates(args: argparse.Namespace) -> int:
+    gates = load_gates(args.gates)
+    problems = validate_gates(gates)
+    status = effective_status(gates, latest_verdicts(args.results))
+    if args.json:
+        print(json.dumps({"problems": problems, "status": status}, indent=2, sort_keys=True))
+    else:
+        for name, gate in gates.items():
+            flags = ("H" if gate.get("human") else "-") + ("R" if gate.get("resets") else "-")
+            print(f"{name:16} {gate['tier']} {flags} {status[name]:12} {gate['title']}")
+        for problem in problems:
+            print(f"PROBLEM: {problem}")
+    return 1 if problems else 0
+
+
+def cmd_next(args: argparse.Namespace) -> int:
+    gates = load_gates(args.gates)
+    status = effective_status(gates, latest_verdicts(args.results))
+    ready = runnable(gates, status, allow_human=args.human, allow_reset=args.allow_reset)
+    print(json.dumps(ready))
+    return 0
+
+
+def cmd_reduce(args: argparse.Namespace) -> int:
+    gates = load_gates(args.gates)
+    gate = gates.get(args.gate)
+    if gate is None:
+        raise HilError(f"unknown gate {args.gate}")
+    reducer = gate.get("reducer")
+    artifacts = [Path(p) for p in args.log]
+    text = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in artifacts)
+    target = gate.get("board")
+    if reducer == "t2_smoke":
+        manifest = json.loads(args.manifest.read_text(encoding="utf-8")) if args.manifest else load_manifest(target)
+        verdict, metrics, reasons = reduce_t2_smoke(text, board=target, manifest=manifest)
+    elif reducer == "h6_uac":
+        boot = args.boot_log.read_text(encoding="utf-8", errors="replace") if args.boot_log else None
+        if args.boot_log:
+            artifacts.append(args.boot_log)
+        verdict, metrics, reasons = reduce_h6_uac(text, boot_log=boot,
+                                                  min_seconds=float(gate.get("seconds", 1800)))
+    elif reducer == "bt_soak":
+        verdict, metrics, reasons = reduce_bt_soak(json.loads(text))
+    else:
+        raise HilError(f"gate {args.gate} has reducer {reducer!r}; record it with arrival.py")
+    out = {"gate": args.gate, "verdict": verdict, "reasons": reasons, "metrics": metrics}
+    if args.record:
+        run_dir = write_result(args.gate, verdict, metrics, reasons, target=target,
+                               artifacts=artifacts, results_root=args.results,
+                               extra={"note": args.note} if args.note else None)
+        out["run_dir"] = str(run_dir)
+    print(json.dumps(out, indent=2, sort_keys=True))
+    return 0 if verdict in ("PASS", "PARTIAL") else 2
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    gates = load_gates(args.gates)
+    gate = gates.get(args.gate)
+    if gate is None:
+        raise HilError(f"unknown gate {args.gate}")
+    if gate.get("reducer") != "t2_smoke":
+        raise HilError("hil.py v0 runs only t2_smoke gates; use reduce for recorded logs")
+    target = gate["board"]
+    if args.flash and not args.allow_reset:
+        raise HilError("--flash resets the board; add --allow-reset to confirm it is allowed now")
+    lease_path = default_lease_path()
+    acquire_lease(lease_path, args.owner, ttl=max(600.0, args.seconds + 300.0))
+    try:
+        manifest, _ = arrival.validate_build_manifest(target)
+        staging = Path(os.environ.get("TEMP", "/tmp")) / f"hil-{os.getpid()}"
+        staging.mkdir(parents=True, exist_ok=True)
+        artifacts = []
+        if args.flash:
+            command = app_flash_command(target, args.port)
+            flash_log = staging / "flash.log"
+            with flash_log.open("w", encoding="utf-8") as log:
+                log.write("+ " + " ".join(command) + "\n")
+                log.flush()
+                completed = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT)
+            artifacts.append(flash_log)
+            if completed.returncode != 0:
+                run_dir = write_result(args.gate, "FAIL", {"flash_exit": completed.returncode},
+                                       ["app-only flash failed"], target=target, artifacts=artifacts,
+                                       results_root=args.results)
+                print(run_dir)
+                return 2
+        log_path = capture(args.port, args.seconds, staging / f"{target}-console.log",
+                           commands=[(3.0, "status"), (max(4.0, args.seconds - 3.0), "status")])
+        artifacts.append(log_path)
+        manifest_path = FIRMWARE_ROOT / target / "build" / "larkbridge-build-manifest.json"
+        artifacts.append(manifest_path)
+        verdict, metrics, reasons = reduce_t2_smoke(
+            log_path.read_text(encoding="utf-8", errors="replace"), board=target, manifest=manifest)
+        run_dir = write_result(args.gate, verdict, metrics, reasons, target=target,
+                               artifacts=artifacts, results_root=args.results,
+                               extra={"port": args.port, "flashed": args.flash})
+        print(json.dumps({"gate": args.gate, "verdict": verdict, "reasons": reasons,
+                          "run_dir": str(run_dir)}, indent=2))
+        return 0 if verdict == "PASS" else 2
+    finally:
+        release_lease(lease_path, args.owner)
+
+
+def cmd_lease(args: argparse.Namespace) -> int:
+    path = default_lease_path()
+    if args.action == "acquire":
+        print(json.dumps(acquire_lease(path, args.owner, args.ttl)))
+    elif args.action == "release":
+        print("released" if release_lease(path, args.owner) else "not held")
+    else:
+        print(json.dumps({"path": str(path), "lease": read_lease(path)}))
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="LarkBridge ESP32 HIL runner v0")
+    parser.add_argument("--gates", type=Path, default=GATES_PATH)
+    parser.add_argument("--results", type=Path, default=RESULTS_ROOT)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    gates = sub.add_parser("gates", help="list gates, statuses and registry problems")
+    gates.add_argument("--json", action="store_true")
+    gates.set_defaults(func=cmd_gates)
+
+    nxt = sub.add_parser("next", help="gates whose prerequisites have passed")
+    nxt.add_argument("--human", action="store_true", help="include gates that need a person")
+    nxt.add_argument("--no-reset", dest="allow_reset", action="store_false",
+                     help="exclude gates that reset a board")
+    nxt.set_defaults(func=cmd_next)
+
+    reduce = sub.add_parser("reduce", help="reduce recorded logs to a verdict")
+    reduce.add_argument("gate")
+    reduce.add_argument("--log", type=Path, action="append", required=True)
+    reduce.add_argument("--boot-log", type=Path)
+    reduce.add_argument("--manifest", type=Path)
+    reduce.add_argument("--record", action="store_true", help="write an E21 result directory")
+    reduce.add_argument("--note")
+    reduce.set_defaults(func=cmd_reduce)
+
+    run = sub.add_parser("run", help="run a t2_smoke gate on hardware")
+    run.add_argument("gate")
+    run.add_argument("--port", required=True)
+    run.add_argument("--seconds", type=float, default=20.0)
+    run.add_argument("--flash", action="store_true", help="app-only flash first (resets the board)")
+    run.add_argument("--allow-reset", action="store_true")
+    run.add_argument("--owner", default=f"hil-{socket.gethostname()}")
+    run.set_defaults(func=cmd_run)
+
+    lease = sub.add_parser("lease", help="rig lease")
+    lease.add_argument("action", choices=("acquire", "release", "status"))
+    lease.add_argument("--owner", default=f"hil-{socket.gethostname()}")
+    lease.add_argument("--ttl", type=float, default=3600.0)
+    lease.set_defaults(func=cmd_lease)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        return args.func(args)
+    except (HilError, arrival.ArrivalError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
