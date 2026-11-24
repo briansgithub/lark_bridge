@@ -131,13 +131,13 @@ resets = true
 reducer = "h2h5"
 link_seconds = 60
 recovery_seconds = 60
-mute_max_ms = 1600
+mute_max_ms = 1500
 status = "PENDING"
 
 [gates.H4]
 title = "I2S electrical/PCM"
 tier = "T3"
-needs = ["H2", "analyzer"]
+needs = ["H2"]
 human = false
 resets = false
 reducer = "h2h5"

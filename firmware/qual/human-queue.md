@@ -13,7 +13,7 @@ date and the evidence.
 | P9 | 2026-11-24 | H6 | When prompted during the H6 reconnect smoke, unplug and replug the **Lark receiver's USB** at the S31 10 times, about 20 s apart. Then switch the Lark **transmitter** off and on 5 times, about 20 s apart. | The S31 counts each USB replug (`uac.disc`/`opens`), and the reducer scores each one. 100/100 still needs the Pico fake Lark (P7). |
 | ~~P8~~ | 2026-11-24 | H6 acoustic source | Use BigBoy audio or the Pixel 7a speaker as the Lark source. | Brian reassigned MP43247 to the 32UE at 12:43 ET. P11 tracks its pairing blocker. |
 | P1 (in progress 11:00 ET) | 2026-11-24 | H2, H3, H4, H5 | With both boards **unpowered**, fit the six-wire I2S + UART harness exactly as in `firmware/docs/wiring.md`. Run its unpowered continuity and adjacent-short checks, then power each board from its own USB only (no 5 V header link). Mark `harness` PASS in `firmware/qual/gates.toml` with the meter readings. | Tonight the harness is absent, so the S31 logs `route ACK timed out` every ~1.3 s. That is expected. |
-| P2 | 2026-11-24 | H4, H5 | Clip the logic analyzer onto the harness (`hil-rig.md` §3.2) and plug it into the hub. Confirm `sigrok-cli --scan` sees it. | Needs P1. Not bought yet if it is not on the bench. |
+| ~~P2~~ | 2026-11-24 | H4, H5 | Brian confirmed there is no logic analyzer. Use DevKitC PCM taps for frequency, RMS, channel identity and silence CRC. Use FIFO telemetry for drift once A2DP streaming is active. | The tap covers decoded PCM. Wire timing and slot width remain unmeasured. Production FIFO drift still needs a downstream sink. |
 | P3 | 2026-11-24 | H5, H7, H8 | Prepare the **rig** SD card (not the product card): flash Raspberry Pi OS Lite 64-bit, boot it, and run `rig/esp/pi-image/provision.sh` as its README says. Install an SSH key for the agent. | The product SD (overlayroot) stays untouched as the rollback. |
 | ~~P4~~ | 2026-11-24 | Pi reads | Give the agent non-interactive SSH to the current Pi (`ssh-copy-id admin@larkbridge.local` from WSL), **or** run the read-only checklist in `rig/esp/pi-image/README.md` yourself and paste the output into an issue or note. | Tonight the Pi refused key auth (password only), so every Pi read was skipped. **Done 2026-11-24 ~10:40 ET** by Brian: key login works (`ssh larkbridge`). The key is only in the overlay, so a Pi reboot removes it. |
 | P5 | 2026-11-24 | H0 | Do the H0 photos and the antenna/U.FL check, then record it with `arrival.py new-run --gate H0`. | There's no H0 record yet; H1 was recorded without one. |
@@ -32,8 +32,7 @@ date and the evidence.
 
 ## Hardware gates that wait on the above
 
-- **H2–H5** need P1 (harness), and H4/H5 also need P2 (analyzer) and P3 (fake car). They can't run
-  unattended until those are in place.
+- **H2–H5** need P1 (harness). H4 uses the decoded PCM tap. H5 needs a live downstream A2DP sink through P3 or P11.
 - **H7 (fake car part)** needs P3.
 - ~~**Stage B exit (`stageB-exit`)**~~ Done 2026-11-24 06:05 ET: both T2 smokes passed unattended
   (`docs/experiments/results/E21/20261124T1101*`, `…T1104*`). Both boards now run the `209f25a` test image.

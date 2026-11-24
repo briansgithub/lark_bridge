@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import wave
+import zlib
 
 from logic_decode import decode_i2s
 
@@ -460,9 +461,19 @@ def reduce_h4(e, limits, artifacts):
                 last["nz_blocks"] == first["nz_blocks"] and last["rms_l"] == last["rms_r"] == 0
                 and seconds >= limits["silence_seconds"],
                 f"{role} tap did not show continuous silence")
+    receiver = tone_taps["output"]
+    if "tone_mhz_l" in receiver and "tone_mhz_r" in receiver:
+        tone_hz = [receiver[field] / 1000 for field in ("tone_mhz_l", "tone_mhz_r")]
+        e.metrics["output"]["tone_hz_nominal_clock"] = tone_hz
+        e.check(all(abs(hz - 1000) <= limits["tone_hz_tolerance"] for hz in tone_hz),
+                "receiver tap tone frequency outside tolerance")
+        for mark in (begin, end):
+            tap = mark["data"]["output"]
+            e.check(0 < tap["bytes"] <= 65536 and tap["crc"] == zlib.crc32(bytes(tap["bytes"])),
+                    "receiver silence checksum does not match a zero PCM block")
     captures = {path.name: path for path in artifacts if path.suffix == ".bin"}
     if not {"tone.bin", "silence.bin"} <= captures.keys():
-        e.partial.append("Attach a sigrok analyzer to verify frame rate, slot width and channel alignment")
+        e.partial.append("Wire clock, slot width and edge timing are outside PCM tap coverage")
         return
     from rig.analysis.glitch_detect import step
 

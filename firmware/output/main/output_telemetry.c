@@ -40,6 +40,7 @@ typedef struct {
     atomic_uint_fast32_t crc;
     atomic_uint_fast32_t rms;
     atomic_uint_fast32_t rms_l, rms_r, nz_blocks;
+    atomic_uint_fast32_t tone_mhz_l, tone_mhz_r;
     atomic_uint_fast32_t bytes;
 } tap_slot_t;
 
@@ -248,6 +249,27 @@ static void stats_task(void *argument)
     }
 }
 
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+/* Estimate a periodic test tone from positive zero crossings in one PCM block.
+ * Use 48 kHz nominal timing. This does not measure the physical sample clock. */
+static uint32_t tone_frequency_mhz(const int16_t *samples, size_t frames, size_t channel)
+{
+    size_t first = 0U;
+    size_t last = 0U;
+    uint32_t crossings = 0U;
+    for (size_t frame = 1U; frame < frames; ++frame) {
+        if (samples[(frame - 1U) * 2U + channel] <= 0 && samples[frame * 2U + channel] > 0) {
+            if (crossings == 0U) {
+                first = frame;
+            }
+            last = frame;
+            ++crossings;
+        }
+    }
+    return crossings < 2U ? 0U : (uint32_t)(48000000ULL * (crossings - 1U) / (last - first));
+}
+#endif
+
 void output_telemetry_tap_note(output_tap_stage_t stage, const void *pcm, size_t bytes)
 {
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
@@ -257,14 +279,23 @@ void output_telemetry_tap_note(output_tap_stage_t stage, const void *pcm, size_t
     tap_slot_t *slot = &s_taps[stage];
     uint32_t crc = bridge_crc32(0U, pcm, bytes);
     uint32_t rms = bridge_pcm16_rms((const int16_t *)pcm, bytes / sizeof(int16_t));
+    size_t frames = bytes / (2U * sizeof(int16_t));
     bridge_pcm16_stereo_stats_t stereo;
-    bridge_pcm16_stereo_stats(pcm, bytes / (2U * sizeof(int16_t)), &stereo);
+    bridge_pcm16_stereo_stats(pcm, frames, &stereo);
+    uint32_t tone_mhz_l = 0U;
+    uint32_t tone_mhz_r = 0U;
+    if (stage == OUTPUT_TAP_I2S_IN && stereo.nonzero) {
+        tone_mhz_l = tone_frequency_mhz(pcm, frames, 0U);
+        tone_mhz_r = tone_frequency_mhz(pcm, frames, 1U);
+    }
     /* Odd sequence = write in progress; readers retry. One writer per stage. */
     atomic_fetch_add_explicit(&slot->sequence, 1U, memory_order_acq_rel);
     atomic_store_explicit(&slot->crc, crc, memory_order_relaxed);
     atomic_store_explicit(&slot->rms, rms, memory_order_relaxed);
     atomic_store_explicit(&slot->rms_l, stereo.rms_left, memory_order_relaxed);
     atomic_store_explicit(&slot->rms_r, stereo.rms_right, memory_order_relaxed);
+    atomic_store_explicit(&slot->tone_mhz_l, tone_mhz_l, memory_order_relaxed);
+    atomic_store_explicit(&slot->tone_mhz_r, tone_mhz_r, memory_order_relaxed);
     if (stereo.nonzero) atomic_fetch_add_explicit(&slot->nz_blocks, 1U, memory_order_relaxed);
     atomic_store_explicit(&slot->bytes, bytes, memory_order_relaxed);
     atomic_fetch_add_explicit(&slot->sequence, 1U, memory_order_acq_rel);
@@ -320,6 +351,7 @@ static void respond_tap(const char *stage_name)
         uint32_t after;
         uint32_t crc;
         uint32_t rms, rms_l, rms_r, nz_blocks;
+        uint32_t tone_mhz_l, tone_mhz_r;
         uint32_t bytes;
         unsigned attempts = 0;
         do {
@@ -330,6 +362,8 @@ static void respond_tap(const char *stage_name)
             rms_r = atomic_load_explicit(&slot->rms_r, memory_order_relaxed);
             nz_blocks = atomic_load_explicit(&slot->nz_blocks, memory_order_relaxed);
             bytes = (uint32_t)atomic_load_explicit(&slot->bytes, memory_order_relaxed);
+            tone_mhz_l = atomic_load_explicit(&slot->tone_mhz_l, memory_order_relaxed);
+            tone_mhz_r = atomic_load_explicit(&slot->tone_mhz_r, memory_order_relaxed);
             after = (uint32_t)atomic_load_explicit(&slot->sequence, memory_order_acquire);
         } while ((before != after || (before & 1U) != 0U) && ++attempts < 8U);
         bridge_json_t json;
@@ -345,6 +379,10 @@ static void respond_tap(const char *stage_name)
         bridge_json_u32(&json, "rms_l", rms_l);
         bridge_json_u32(&json, "rms_r", rms_r);
         bridge_json_u32(&json, "nz_blocks", nz_blocks);
+        if (stage == OUTPUT_TAP_I2S_IN) {
+            bridge_json_u32(&json, "tone_mhz_l", tone_mhz_l);
+            bridge_json_u32(&json, "tone_mhz_r", tone_mhz_r);
+        }
         emit(s_console_record, &json);
         return;
     }
