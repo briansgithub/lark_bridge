@@ -184,7 +184,9 @@ final class Harness {
         long dur = SystemClock.elapsedRealtime() - callStartedElapsed;
         connection = null;
         lastDisconnect = cause;
-        stopStimulus(null);
+        // A media stimulus stands in for car media that a call interrupts (H11):
+        // it must outlive the call. Voice stimuli belong to the call.
+        if (player != null && !player.isMedia()) stopStimulus(null);
         stopForeground(ctx);
         log("call_ended", null, "call_id", c.id, "cause", cause, "duration_ms", dur);
     }

@@ -45,6 +45,10 @@ final class StimulusPlayer extends Thread {
         this.progressSeconds = Math.max(0, progressSeconds);
     }
 
+    boolean isMedia() {
+        return media;
+    }
+
     void cancel() {
         cancelled = true;
         interrupt();
