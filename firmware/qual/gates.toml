@@ -31,7 +31,8 @@ needs = ["T0-host"]
 human = false
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PASS"
+evidence = "firmware/qual/review-2026-11-24.md#verification (pinned v6.0.2 / v6.1-rc1, release + test, clean 209f25a)"
 
 [gates.H0]
 title = "Visual identity and antenna"
