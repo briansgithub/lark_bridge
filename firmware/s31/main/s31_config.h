@@ -25,10 +25,12 @@ enum {
     S31_BT_RECONNECT_INITIAL_MS = 1000,
     S31_BT_RECONNECT_MAX_MS = 30000,
     S31_BT_RECONNECT_STALL_MS = 10000,
-    /* After a reset that cut a live link, the phone pages back within about
-     * 3 s. An outbound connect in that window collides (HCI 0x0B) and leaves
-     * Bluedroid ignoring later connect requests (D4). Let the phone's
-     * reconnect land first. */
+    /* After a reset that cut a live link, the phone keeps the stale ACL
+     * until its link supervision timeout (the Pixel negotiates 8000 slots,
+     * 5 s). Paging it before then fails with HCI 0x0B ("connection already
+     * exists") and leaves Bluedroid ignoring later connect requests (D4).
+     * The reconnect task starts about 0.8 s after boot, so this places the
+     * first page about 6 s after reset. */
     S31_BT_RECONNECT_BOOT_HOLD_MS = 5000,
 };
 
