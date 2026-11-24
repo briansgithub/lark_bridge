@@ -5,6 +5,7 @@
  * UART0 console. Test hooks exist only when CONFIG_LARKBRIDGE_TEST_IMAGE is set. */
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "esp_err.h"
 
@@ -15,4 +16,6 @@ typedef enum {
 } output_tap_stage_t;
 
 esp_err_t output_telemetry_start(void);
-void output_telemetry_tap_note(output_tap_stage_t stage, const void *pcm, size_t bytes);
+/* rate_hz is the stereo PCM sample rate, used for the tone estimate. */
+void output_telemetry_tap_note(output_tap_stage_t stage, const void *pcm, size_t bytes,
+                               uint32_t rate_hz);

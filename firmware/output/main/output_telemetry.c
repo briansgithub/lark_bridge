@@ -252,7 +252,8 @@ static void stats_task(void *argument)
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
 /* Estimate a periodic test tone from positive zero crossings in one PCM block.
  * Use 48 kHz nominal timing. This does not measure the physical sample clock. */
-static uint32_t tone_frequency_mhz(const int16_t *samples, size_t frames, size_t channel)
+static uint32_t tone_frequency_mhz(const int16_t *samples, size_t frames, size_t channel,
+                                   uint32_t rate_hz)
 {
     size_t first = 0U;
     size_t last = 0U;
@@ -266,11 +267,12 @@ static uint32_t tone_frequency_mhz(const int16_t *samples, size_t frames, size_t
             ++crossings;
         }
     }
-    return crossings < 2U ? 0U : (uint32_t)(48000000ULL * (crossings - 1U) / (last - first));
+    return crossings < 2U ? 0U : (uint32_t)(1000ULL * rate_hz * (crossings - 1U) / (last - first));
 }
 #endif
 
-void output_telemetry_tap_note(output_tap_stage_t stage, const void *pcm, size_t bytes)
+void output_telemetry_tap_note(output_tap_stage_t stage, const void *pcm, size_t bytes,
+                               uint32_t rate_hz)
 {
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
     if ((unsigned)stage >= OUTPUT_TAP_COUNT || pcm == NULL || bytes == 0U) {
@@ -284,9 +286,9 @@ void output_telemetry_tap_note(output_tap_stage_t stage, const void *pcm, size_t
     bridge_pcm16_stereo_stats(pcm, frames, &stereo);
     uint32_t tone_mhz_l = 0U;
     uint32_t tone_mhz_r = 0U;
-    if (stage == OUTPUT_TAP_I2S_IN && stereo.nonzero) {
-        tone_mhz_l = tone_frequency_mhz(pcm, frames, 0U);
-        tone_mhz_r = tone_frequency_mhz(pcm, frames, 1U);
+    if (stereo.nonzero) {
+        tone_mhz_l = tone_frequency_mhz(pcm, frames, 0U, rate_hz);
+        tone_mhz_r = tone_frequency_mhz(pcm, frames, 1U, rate_hz);
     }
     /* Odd sequence = write in progress; readers retry. One writer per stage. */
     atomic_fetch_add_explicit(&slot->sequence, 1U, memory_order_acq_rel);
@@ -303,6 +305,7 @@ void output_telemetry_tap_note(output_tap_stage_t stage, const void *pcm, size_t
     (void)stage;
     (void)pcm;
     (void)bytes;
+    (void)rate_hz;
 #endif
 }
 

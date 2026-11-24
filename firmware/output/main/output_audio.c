@@ -165,7 +165,7 @@ static void i2s_reader_task(void *context) {
         if (error == ESP_OK && bytes_read > 0U) {
             bytes_read -= bytes_read % PCM_BYTES_PER_FRAME;
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
-            output_telemetry_tap_note(OUTPUT_TAP_I2S_IN, s_i2s_buffer, bytes_read);
+            output_telemetry_tap_note(OUTPUT_TAP_I2S_IN, s_i2s_buffer, bytes_read, I2S_RATE_HZ);
 #endif
             if (atomic_load_explicit(&s_capture_active, memory_order_acquire)) {
                 ring_write_overwrite_oldest(s_i2s_buffer, bytes_read);
@@ -338,8 +338,8 @@ size_t output_audio_pull(void *destination, size_t length, uint32_t rate, bool m
         if (toned != 0U) {
             produced = toned;
         }
-        if (produced != 0U && !mono && rate == I2S_RATE_HZ) {
-            output_telemetry_tap_note(OUTPUT_TAP_A2DP_OUT, destination, produced);
+        if (produced != 0U && !mono) {
+            output_telemetry_tap_note(OUTPUT_TAP_A2DP_OUT, destination, produced, rate);
         }
     }
 #endif
