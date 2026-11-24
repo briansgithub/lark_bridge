@@ -17,8 +17,19 @@ config LARKBRIDGE_S31_ROUTE_DRAIN_GUARD_MS
         The default is deliberately conservative and must be tuned with the
         arrival-day stale-media boundary test.
 
+config LARKBRIDGE_S31_AEC_ENGINE
+    bool "Create the ESP-SR AEC engine during calls"
+    default n
+    help
+        Off by default: on this esp32s31 build, aec_create_from_config()
+        faults inside ESP-SR (esp_aec3_hps16fft_init -> esp_aec3_nlp_init)
+        even at boot with over 200 KB free, so the first HFP call rebooted
+        the S31. With the engine off, the call uplink stays digital silence.
+        Enable only to debug ESP-SR on the bench.
+
 config LARKBRIDGE_S31_EXPERIMENTAL_AEC_UPLINK
     bool "Enable unqualified ESP-SR AEC call uplink"
+    depends on LARKBRIDGE_S31_AEC_ENGINE
     default n
     help
         Keep disabled in normal images. Enabling permits processed LARK audio
