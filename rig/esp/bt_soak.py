@@ -3,8 +3,8 @@
 
 Observes, never drives:
 
-* the S31 USB console, opened with DTR and RTS deasserted (``arrival._quiet_serial_factory``),
-  so the capture cannot reset the board or leave it in download mode;
+* the S31 USB console, when ``--port`` is given. The logger requests deasserted DTR
+  and RTS before opening the port (``arrival._quiet_serial_factory``);
 * the Pixel's ``dumpsys bluetooth_manager`` over adb, every ``--interval`` seconds.
 
 It sends nothing to either device. Output (all under ``--out``):
@@ -133,7 +133,7 @@ class Soak:
             "poll_errors": 0,
             "link_drops": [],
             "pixel_acl_events": 0,
-            "serial_enabled": not args.no_serial,
+            "serial_enabled": args.port is not None and not args.no_serial,
             "s31_lines": 0,
             "s31_event_lines": 0,
             "s31_reboot_markers": 0,
@@ -252,7 +252,7 @@ class Soak:
         deadline_utc = datetime.fromtimestamp(time.time() + self.args.seconds, timezone.utc)
         self.event("soak_start", deadline_utc=deadline_utc.isoformat())
         reader = threading.Thread(target=self.serial_loop, daemon=True)
-        if not self.args.no_serial:
+        if self.summary["serial_enabled"]:
             reader.start()
         previous: dict[str, Any] | None = None
         try:
@@ -275,7 +275,7 @@ class Soak:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--port", default="COM3")
+    parser.add_argument("--port", help="explicitly enable S31 serial capture on this port")
     parser.add_argument("--adb", default="adb")
     parser.add_argument("--mac-tail", default="61:5F")
     parser.add_argument("--interval", type=float, default=180.0)

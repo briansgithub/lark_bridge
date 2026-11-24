@@ -8,8 +8,8 @@ capture, reducers, and the ``firmware/qual/gates.toml`` registry. Each run write
 
 Safety:
 
-* every capture opens the port with DTR and RTS deasserted (``arrival._quiet_serial_factory``),
-  so capturing never resets a board;
+* capture requests deasserted DTR and RTS before opening the specified port
+  (``arrival._quiet_serial_factory``). The host driver controls the physical lines;
 * anything that resets or flashes a board (``run --flash``) also needs ``--allow-reset``;
 * flashing writes the application partition only, so NVS and Bluetooth bonds survive; it
   never erases flash, and never touches eFuses, secure boot or flash encryption.
@@ -380,6 +380,8 @@ def reduce_bt_soak(summary: dict[str, Any]) -> tuple[str, dict[str, Any], list[s
         reasons.append("no S31 console lines captured")
     if reasons:
         return "INCONCLUSIVE", metrics, reasons
+    if summary.get("serial_enabled") is False:
+        return "PASS", metrics, ["link up at every ADB poll, serial capture disabled"]
     return "PASS", metrics, ["link up at every poll, no observed drops or reboot"]
 
 
@@ -550,7 +552,7 @@ def capture(port: str, seconds: float, destination: Path,
             commands: Sequence[tuple[float, str]] = ()) -> Path:
     """Read-only capture, plus optional console lines sent at the given offsets.
 
-    Writing a line never touches DTR/RTS, so it cannot reset the board.
+    Writes send data bytes only. The host driver controls the physical DTR and RTS lines.
     """
 
     import serial  # type: ignore
