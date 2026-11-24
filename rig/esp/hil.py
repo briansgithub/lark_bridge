@@ -352,7 +352,17 @@ def reduce_bt_soak(summary: dict[str, Any]) -> tuple[str, dict[str, Any], list[s
         reasons.append(f"link up in {summary.get('polls_link_up')}/{summary.get('polls')} polls")
     if reasons:
         return "FAIL", metrics, reasons
-    return "PASS", metrics, ["link up at every poll, no drops, no S31 reboot"]
+    if not summary.get("finished_utc") or summary.get("completed") is False:
+        reasons.append("soak did not finish")
+    if summary.get("poll_errors"):
+        reasons.append("one or more ADB polls failed")
+    if metrics["serial_errors"]:
+        reasons.append("one or more S31 serial capture errors")
+    if summary.get("serial_enabled", True) and not summary.get("s31_lines"):
+        reasons.append("no S31 console lines captured")
+    if reasons:
+        return "INCONCLUSIVE", metrics, reasons
+    return "PASS", metrics, ["link up at every poll, no observed drops or reboot"]
 
 
 REDUCERS = ("t2_smoke", "h6_uac", "bt_soak")

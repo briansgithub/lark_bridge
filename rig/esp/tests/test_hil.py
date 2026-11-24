@@ -138,8 +138,12 @@ class H6ReducerTests(unittest.TestCase):
 
 class SoakReducerTests(unittest.TestCase):
     def test_soak(self):
-        good = {"polls": 3, "polls_link_up": 3, "link_drops": [], "s31_reboot_markers": 0}
+        good = {"polls": 3, "polls_link_up": 3, "link_drops": [], "s31_reboot_markers": 0,
+                "finished_utc": "2026-11-24T11:00:00+00:00", "s31_lines": 10}
         self.assertEqual(hil.reduce_bt_soak(good)[0], "PASS")
+        for missing in ({"finished_utc": None}, {"completed": False}, {"poll_errors": 1},
+                        {"serial_errors": [{"error": "disconnected"}]}, {"s31_lines": 0}):
+            self.assertEqual(hil.reduce_bt_soak(dict(good, **missing))[0], "INCONCLUSIVE")
         bad = dict(good, polls_link_up=2, link_drops=[{"utc": "x"}])
         self.assertEqual(hil.reduce_bt_soak(bad)[0], "FAIL")
         self.assertEqual(hil.reduce_bt_soak({"polls": 0})[0], "INCONCLUSIVE")

@@ -133,11 +133,13 @@ class Soak:
             "poll_errors": 0,
             "link_drops": [],
             "pixel_acl_events": 0,
+            "serial_enabled": not args.no_serial,
             "s31_lines": 0,
             "s31_event_lines": 0,
             "s31_reboot_markers": 0,
             "serial_errors": [],
             "finished_utc": None,
+            "completed": False,
         }
         self.seen_acl: set[tuple[str, str, int]] = set()
 
@@ -157,8 +159,13 @@ class Soak:
     # --- serial ---------------------------------------------------------------------------
     def serial_loop(self) -> None:
         sys.path.insert(0, str(REPO_ROOT / "firmware" / "tools"))
-        import serial  # type: ignore
-        from arrival import _quiet_serial_factory  # noqa: PLC0415
+        try:
+            import serial  # type: ignore
+            from arrival import _quiet_serial_factory  # noqa: PLC0415
+        except ImportError as error:
+            self.summary["serial_errors"].append({"utc": utc_now(), "error": str(error)})
+            self.event("serial_unavailable", error=str(error))
+            return
 
         factory = _quiet_serial_factory(serial.Serial)
         log = (self.out / "s31-serial.log").open("a", encoding="utf-8", newline="\n")
@@ -241,17 +248,19 @@ class Soak:
         return state
 
     def run(self) -> int:
-        deadline = time.time() + self.args.seconds
-        self.event("soak_start", deadline_utc=datetime.fromtimestamp(deadline, timezone.utc).isoformat())
+        deadline = time.monotonic() + self.args.seconds
+        deadline_utc = datetime.fromtimestamp(time.time() + self.args.seconds, timezone.utc)
+        self.event("soak_start", deadline_utc=deadline_utc.isoformat())
         reader = threading.Thread(target=self.serial_loop, daemon=True)
         if not self.args.no_serial:
             reader.start()
         previous: dict[str, Any] | None = None
         try:
-            while time.time() < deadline:
+            while time.monotonic() < deadline:
                 previous = self.poll_once(previous)
                 self.write_summary()
-                self.stop.wait(min(self.args.interval, max(0.0, deadline - time.time())))
+                self.stop.wait(min(self.args.interval, max(0.0, deadline - time.monotonic())))
+            self.summary["completed"] = True
         except KeyboardInterrupt:
             self.event("interrupted")
         finally:
