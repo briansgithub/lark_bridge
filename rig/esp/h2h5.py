@@ -265,9 +265,11 @@ def run_scenario(bench, gate, limits, analyzer=None, fake_car_address=None):
                     tone(bench, routed=True)
                     bench.command("s31", "fault test_a2dp")
                     if had_audio:
-                        audio_status = bench.wait_link(
-                            deadline - time.monotonic(), lambda pair: streaming(pair["output"])
-                        )["output"]
+                        bench.wait_link(
+                            deadline - time.monotonic(),
+                            lambda pair: streaming(bench.command("output", "stats")),
+                        )
+                        audio_status = bench.command("output", "stats")
                     else:
                         audio_status = bench.command("output", "status")
                     bench.add(t="end", phase=phase, data=recovered,
