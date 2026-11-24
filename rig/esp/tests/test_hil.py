@@ -150,6 +150,8 @@ class LeaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "rig.lease"
             hil.acquire_lease(path, "a", ttl=60, now=1000)
+            with self.assertRaises(hil.HilError):
+                hil.acquire_lease(path, "a", ttl=60, now=1010, renew=False)
             hil.acquire_lease(path, "a", ttl=60, now=1010)  # renew
             with self.assertRaises(hil.HilError):
                 hil.acquire_lease(path, "b", ttl=60, now=1020)

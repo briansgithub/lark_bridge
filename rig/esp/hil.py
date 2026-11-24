@@ -21,13 +21,16 @@ Run under Windows Python (``py -3``) for COM ports; ``gates``, ``next``, ``reduc
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
+import math
 import os
 import re
 import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -377,40 +380,56 @@ def read_lease(path: Path) -> dict[str, Any] | None:
     except FileNotFoundError:
         return None
     except (OSError, json.JSONDecodeError):
-        return {"owner": "unreadable", "expires": 0}
+        raise HilError(f"could not read rig lease {path}")
 
 
-def acquire_lease(path: Path, owner: str, ttl: float, *, now: float | None = None) -> dict[str, Any]:
-    now = time.time() if now is None else now
+@contextmanager
+def lease_transaction(path: Path):
+    # Atomic directory creation works for both Windows and WSL on the shared volume.
+    lock = path.with_name(path.name + ".lock")
     path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        lock.mkdir()
+    except FileExistsError as error:
+        raise HilError(f"rig lease update in progress or interrupted: {lock}") from error
+    try:
+        yield
+    finally:
+        lock.rmdir()
+
+
+def acquire_lease(path: Path, owner: str, ttl: float, *, now: float | None = None,
+                  renew: bool = True) -> dict[str, Any]:
+    if not math.isfinite(ttl) or ttl <= 0:
+        raise HilError("rig lease TTL must be positive and finite")
+    now = time.time() if now is None else now
     record = {"owner": owner, "host": socket.gethostname(), "pid": os.getpid(),
               "acquired": now, "expires": now + ttl}
-    for _ in range(2):
-        try:
-            descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            current = read_lease(path)
-            if current and current.get("owner") == owner:
-                break  # renew our own lease
-            if current and float(current.get("expires", 0)) > now:
-                raise HilError(f"rig lease held by {current.get('owner')} until "
-                               f"{datetime.fromtimestamp(float(current['expires']), timezone.utc).isoformat()}")
-            path.unlink(missing_ok=True)  # stale: take it over
-            continue
-        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-            json.dump(record, stream)
-        return record
-    path.write_text(json.dumps(record), encoding="utf-8")
+    with lease_transaction(path):
+        current = read_lease(path)
+        if current is not None and float(current["expires"]) > now:
+            if not renew or current["owner"] != owner:
+                raise HilError(f"rig lease held by {current['owner']}")
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         delete=False) as stream:
+            pending = Path(stream.name)
+            try:
+                json.dump(record, stream)
+                stream.close()
+                pending.replace(path)
+            finally:
+                pending.unlink(missing_ok=True)
     return record
 
 
 def release_lease(path: Path, owner: str) -> bool:
-    current = read_lease(path)
-    if current is None:
-        return False
-    if current.get("owner") != owner:
-        raise HilError(f"rig lease belongs to {current.get('owner')}, not {owner}")
-    path.unlink(missing_ok=True)
+    with lease_transaction(path):
+        current = read_lease(path)
+        if current is None:
+            return False
+        if current.get("owner") != owner:
+            raise HilError(f"rig lease belongs to {current.get('owner')}, not {owner}")
+        path.unlink()
     return True
 
 
@@ -594,8 +613,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     target = gate["board"]
     if args.flash and not args.allow_reset:
         raise HilError("--flash resets the board; add --allow-reset to confirm it is allowed now")
+    if not math.isfinite(args.seconds) or args.seconds <= 0:
+        raise HilError("--seconds must be positive and finite")
     lease_path = default_lease_path()
-    acquire_lease(lease_path, args.owner, ttl=max(600.0, args.seconds + 300.0))
+    acquire_lease(lease_path, args.owner, ttl=max(600.0, args.seconds + 300.0), renew=False)
     try:
         manifest, _ = arrival.validate_build_manifest(target)
         staging = Path(os.environ.get("TEMP", "/tmp")) / f"hil-{os.getpid()}"
@@ -674,7 +695,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--seconds", type=float, default=20.0)
     run.add_argument("--flash", action="store_true", help="app-only flash first (resets the board)")
     run.add_argument("--allow-reset", action="store_true")
-    run.add_argument("--owner", default=f"hil-{socket.gethostname()}")
+    run.add_argument("--owner", default=f"hil-{socket.gethostname()}-{os.getpid()}")
     run.set_defaults(func=cmd_run)
 
     lease = sub.add_parser("lease", help="rig lease")
