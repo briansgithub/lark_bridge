@@ -3,8 +3,6 @@
 #include "bridge_protocol.h"
 #include "bridge_rate.h"
 #include "bridge_resample.h"
-
-#include <math.h>
 #include "bridge_ring.h"
 #include "bridge_route_fence.h"
 #include "bridge_session.h"
