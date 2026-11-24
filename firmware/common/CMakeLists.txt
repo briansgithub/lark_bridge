@@ -8,5 +8,6 @@ idf_component_register(
         "src/bridge_ring.c"
         "src/bridge_route_fence.c"
         "src/bridge_session.c"
+        "src/bridge_console.c"
     INCLUDE_DIRS "include"
 )
