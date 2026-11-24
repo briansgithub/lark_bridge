@@ -29,9 +29,12 @@ def parser(description):
     return result
 
 
-def hook(bench, executable, *args, timeout=30):
+def hook(bench, executable, *args):
+    run_fixture(bench, [executable, *map(str, args)])
+
+
+def run_fixture(bench, command, timeout=30):
     """Keep servicing the consoles while a fixture command is running."""
-    command = [executable, *map(str, args)]
     bench.add(t="hook", command=command)
     with (bench.directory / "hooks.log").open("a", encoding="utf-8") as log:
         log.write(f"{command!r}\n")

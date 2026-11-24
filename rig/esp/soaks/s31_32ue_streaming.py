@@ -3,7 +3,31 @@
 
 import time
 
-from soak_common import h2h5, hook, observe, parser, positive, require, run
+from soak_common import h2h5, hook, observe, parser, positive, require, run, run_fixture
+
+
+HARNESS = "dev.larkbridge.harness"
+
+
+def media(bench, args, start):
+    seconds = args.seconds + 120
+    if args.media_hook:
+        if start:
+            hook(bench, args.media_hook, "start", seconds)
+        else:
+            hook(bench, args.media_hook, "stop")
+        return
+
+    shell = [args.adb, "-s", args.pixel_serial, "shell"]
+    if start:
+        run_fixture(bench, shell + ["am", "start", "-W", "-n", f"{HARNESS}/.MainActivity"])
+    broadcast = shell + ["am", "broadcast", "-f", "0x20", "-n", f"{HARNESS}/.ControlReceiver"]
+    if start:
+        loops = (seconds + 2) // 3
+        run_fixture(bench, broadcast + ["-a", f"{HARNESS}.PLAY_STIMULUS", "--es", "usage", "media",
+                                        "--ei", "loops", str(loops), "--ei", "progress_s", "30"])
+    else:
+        run_fixture(bench, broadcast + ["-a", f"{HARNESS}.STOP_STIMULUS"])
 
 
 def scenario(bench, args, metrics):
@@ -11,7 +35,7 @@ def scenario(bench, args, metrics):
     require(peer.get("connected") and peer.get("peer", "").lower() == args.sink_address.lower(),
             "the output board must be connected to the specified 32UE")
     try:
-        hook(bench, args.media_hook, "start", args.seconds + 120)
+        media(bench, args, True)
         observe(bench, "output", h2h5.streaming, 60, "output never started streaming")
         bench.wait(10)
         bench.command("output", "fault fifo_window")
@@ -54,16 +78,20 @@ def scenario(bench, args, metrics):
         verdict, _, reasons = evidence.verdict()
         return verdict, reasons
     finally:
-        hook(bench, args.media_hook, "stop")
+        media(bench, args, False)
 
 
 def main():
     cli = parser(__doc__)
     cli.add_argument("--sink-address", required=True, help="Bluetooth address of the bonded 32UE")
-    cli.add_argument("--media-hook", required=True,
-                     help="executable accepting start SECONDS or stop for continuous Pixel media")
+    fixture = cli.add_mutually_exclusive_group(required=True)
+    fixture.add_argument("--media-hook", help="executable accepting start SECONDS or stop")
+    fixture.add_argument("--adb", help="ADB executable for the installed Pixel harness")
+    cli.add_argument("--pixel-serial", help="required with --adb")
     cli.add_argument("--seconds", type=positive, default=4 * 3600)
     args = cli.parse_args()
+    if args.adb and not args.pixel_serial:
+        cli.error("--adb requires --pixel-serial")
     return run("S31-32UE", args, args.seconds + 180, scenario)
 
 

@@ -3,7 +3,7 @@
 
 import time
 
-from soak_common import hook, observe, parser, positive, require, run
+from soak_common import hook, observe, parser, positive, require, run, run_fixture
 
 
 def profiles_up(record):
@@ -15,13 +15,21 @@ def profiles_down(record):
             not record["bt"]["avrcp"] and record["route"]["effective"] == 0)
 
 
+def adapter(bench, args, enabled):
+    if args.adapter_hook:
+        hook(bench, args.adapter_hook, "on" if enabled else "off")
+    else:
+        run_fixture(bench, [args.adb, "-s", args.pixel_serial, "shell", "svc", "bluetooth",
+                            "enable" if enabled else "disable"])
+
+
 def scenario(bench, args, metrics):
     metrics["cycles"] = []
     observe(bench, "s31", profiles_up, args.recovery_seconds, "baseline profiles are down")
     saved = bench.command("s31", "peers")["bt"]["peer"]
     for cycle in range(1, args.cycles + 1):
         try:
-            hook(bench, args.adapter_hook, "off")
+            adapter(bench, args, False)
             observe(bench, "s31", profiles_down, args.recovery_seconds,
                     f"cycle {cycle} did not reach silence with all profiles down")
             observe(bench, "output", lambda r: not r["audio"], args.recovery_seconds,
@@ -31,7 +39,7 @@ def scenario(bench, args, metrics):
                     f"cycle {cycle} profiles came back during the off interval")
         finally:
             enabled_at = time.monotonic()
-            hook(bench, args.adapter_hook, "on")
+            adapter(bench, args, True)
         recovered = observe(bench, "s31", profiles_up, args.recovery_seconds,
                             f"cycle {cycle} did not recover HFP, A2DP and AVRCP")
         require(bench.command("s31", "peers")["bt"]["peer"] == saved,
@@ -45,12 +53,17 @@ def scenario(bench, args, metrics):
 
 def main():
     cli = parser(__doc__)
-    cli.add_argument("--adapter-hook", required=True, help="executable accepting off or on")
+    fixture = cli.add_mutually_exclusive_group(required=True)
+    fixture.add_argument("--adapter-hook", help="executable accepting off or on")
+    fixture.add_argument("--adb", help="ADB executable for the built-in Pixel adapter commands")
+    cli.add_argument("--pixel-serial", help="required with --adb")
     cli.add_argument("--cycles", type=positive, default=10)
     cli.add_argument("--off-seconds", type=positive, default=12)
     cli.add_argument("--recovery-seconds", type=positive, default=60)
     cli.add_argument("--settle-seconds", type=positive, default=5)
     args = cli.parse_args()
+    if args.adb and not args.pixel_serial:
+        cli.error("--adb requires --pixel-serial")
     ttl = args.cycles * (90 + args.off_seconds + 3 * args.recovery_seconds + args.settle_seconds)
     return run("H14-adapter", args, ttl, scenario)
 
