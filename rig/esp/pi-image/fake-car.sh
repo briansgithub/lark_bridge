@@ -64,7 +64,8 @@ cmd_record() {
   case "$seconds" in *[!0-9]*|'') die "record: seconds must be a whole number" ;; esac
   [ "$seconds" -ge 1 ] && [ "$seconds" -le 7200 ] || die "record: seconds must be 1..7200"
   command -v pw-record >/dev/null 2>&1 || die "pw-record not installed (pipewire-bin)"
-  pw-dump 2>/dev/null | grep -q "\"node.name\": \"$SINK\"" ||
+  # Read all of pw-dump so pipefail cannot turn grep's early exit into a false miss.
+  pw-dump 2>/dev/null | grep -F "\"node.name\": \"$SINK\"" >/dev/null ||
     { err "recording tap $SINK not found: is the rig user's PipeWire running?"; exit "$EX_NOHW"; }
   streams="$(a2dp_streams | paste -sd, -)"
   [ -n "$streams" ] || warn "no A2DP stream is connected yet; the recording will be silence"
