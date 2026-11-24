@@ -104,5 +104,67 @@ class SoakSummaryTests(unittest.TestCase):
         self.assertEqual({p.name: p.read_bytes() for p in part.iterdir()}, before)
 
 
+def stats_line(seconds, *, up_ms, streaming, rx_bytes, a2dp_state=2, heap_min=70000):
+    record = {"t": "stats", "role": "s31", "up_ms": up_ms, "heap": {"free": heap_min, "min": heap_min},
+              "session": {"a2dp": streaming}, "bt": {"a2dp_state": a2dp_state, "a2dp_bytes": rx_bytes},
+              "i2s": {"under": 0, "over": 0}}
+    return f"[{audio_stamp(seconds)}] {json.dumps(record)}\n"
+
+
+def audio_stamp(seconds):
+    return datetime.fromtimestamp(1795500000 + seconds, timezone.utc).isoformat()
+
+
+def harness_line(event, seconds, **fields):
+    return json.dumps({"event": event, "tag": "soak", "ts_ms": (1795500000 + seconds) * 1000, **fields}) + "\n"
+
+
+class AudioSoakTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.part = Path(temp.name) / "audio"
+        self.part.mkdir()
+
+    def test_s31_stream_drops_rx_gaps_wrap_and_resets(self):
+        rate = 176400
+        lines, total = [], 2**32 - 3 * rate  # wraps during the run
+        for s in range(0, 10):
+            total += 0 if s in (5, 6) else rate  # two seconds with no A2DP data
+            lines.append(stats_line(s, up_ms=1000 * s + 5000, streaming=True, rx_bytes=total % 2**32))
+        lines.append(stats_line(10, up_ms=15000, streaming=False, rx_bytes=total % 2**32))
+        lines.append(stats_line(11, up_ms=500, streaming=True, rx_bytes=rate, heap_min=60000))
+        (self.part / "s31-serial.log").write_text("".join(lines), encoding="utf-8")
+        report = soak.audio_report(self.part)["s31"]
+        self.assertEqual(report["stats_records"], 12)
+        self.assertEqual([d["utc"].isoformat() for d in report["a2dp_stream_drops"]], [audio_stamp(10)])
+        self.assertEqual(report["uptime_resets"], 1)
+        self.assertEqual(report["heap_min"], 60000)
+        self.assertEqual(len(report["rx_gaps"]), 1)
+        self.assertEqual(report["rx_gaps"][0]["start_utc"].isoformat(), audio_stamp(4))
+        self.assertEqual(report["rx_gaps"][0]["seconds"], 2.0)
+        self.assertAlmostEqual(report["median_rx_bytes_per_s"], rate)
+
+    def test_harness_underruns_stalls_and_routes(self):
+        lines = [harness_line("stimulus_start", 0, rate=16000, routed_device={"type": "BLUETOOTH_A2DP"})]
+        played = 0
+        for s in range(60, 360, 60):
+            played += 0 if s == 180 else 16000 * 60
+            device = "BUILTIN_SPEAKER" if s == 300 else "BLUETOOTH_A2DP"
+            lines.append(harness_line("stimulus_progress", s, frames_played=played,
+                                      underruns=2 if s >= 240 else 0, routed_device={"type": device}))
+        lines.append("not json\n")
+        (self.part / "harness.log").write_text("".join(lines), encoding="utf-8")
+        report = soak.audio_report(self.part)["pixel"]
+        self.assertEqual(report["progress_records"], 5)
+        self.assertEqual(report["underruns"], 2)
+        self.assertEqual([s["end_utc"].isoformat() for s in report["playback_stalls"]], [audio_stamp(180)])
+        self.assertEqual(report["non_a2dp_progress"], 1)
+        self.assertEqual(report["played_seconds"], 240.0)
+
+    def test_no_audio_evidence_gives_none(self):
+        self.assertIsNone(soak.audio_report(self.part))
+
+
 if __name__ == "__main__":
     unittest.main()

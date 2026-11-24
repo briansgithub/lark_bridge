@@ -89,6 +89,132 @@ def acl_intervals(points):
     return longest, reconnects
 
 
+def s31_stats(path):
+    for line in complete_lines(path):
+        match = SERIAL_LINE.fullmatch(line)
+        if not match or not match[2].startswith("{"):
+            continue
+        try:
+            record = json.loads(match[2])
+        except ValueError:
+            continue
+        if record.get("t") == "stats" and record.get("role", "s31") == "s31":
+            yield utc(match[1]), record
+
+
+def median(values):
+    ordered = sorted(values)
+    if not ordered:
+        return None
+    middle = len(ordered) // 2
+    return ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
+
+
+def s31_audio(path, gap_fraction=0.5):
+    """A2DP stream state, receive-rate gaps and resets from the S31 test-image stats records."""
+    stats = list(s31_stats(path))
+    if not stats:
+        return None
+    drops, disconnects, resets, rates = [], [], 0, []
+    for (before_utc, before), (now_utc, now) in zip(stats, stats[1:]):
+        if now.get("up_ms", 0) < before.get("up_ms", 0):
+            resets += 1
+            continue
+        if before.get("session", {}).get("a2dp") and not now.get("session", {}).get("a2dp"):
+            drops.append({"utc": now_utc})
+        if before.get("bt", {}).get("a2dp_state") == 2 and now.get("bt", {}).get("a2dp_state") != 2:
+            disconnects.append({"utc": now_utc, "state": now.get("bt", {}).get("a2dp_state")})
+        seconds = (now_utc - before_utc).total_seconds()
+        old, new = before.get("bt", {}).get("a2dp_bytes"), now.get("bt", {}).get("a2dp_bytes")
+        streaming = before.get("session", {}).get("a2dp") and now.get("session", {}).get("a2dp")
+        if streaming and seconds > 0 and isinstance(old, int) and isinstance(new, int):
+            rates.append((before_utc, seconds, ((new - old) % 2**32) / seconds))
+    typical = median([rate for *_, rate in rates])
+    gaps, current = [], None
+    for start, seconds, rate in rates:
+        if typical and rate < gap_fraction * typical:
+            if current is None:
+                current = {"start_utc": start, "seconds": 0.0}
+                gaps.append(current)
+            current["seconds"] += seconds
+        else:
+            current = None
+    heap = [r["heap"]["min"] for _, r in stats if isinstance(r.get("heap", {}).get("min"), int)]
+    i2s = [r.get("i2s", {}) for _, r in stats]
+    return {
+        "stats_records": len(stats), "first_utc": stats[0][0], "last_utc": stats[-1][0],
+        "streaming_records": sum(bool(r.get("session", {}).get("a2dp")) for _, r in stats),
+        "a2dp_stream_drops": drops, "a2dp_disconnects": disconnects, "uptime_resets": resets,
+        "median_rx_bytes_per_s": typical, "rx_gaps": gaps,
+        "rx_gap_seconds": sum(gap["seconds"] for gap in gaps),
+        "heap_min": min(heap) if heap else None,
+        "i2s_under_max": max((x.get("under", 0) for x in i2s), default=0),
+        "i2s_over_max": max((x.get("over", 0) for x in i2s), default=0),
+    }
+
+
+def harness_records(path):
+    for line in complete_lines(path):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                yield json.loads(line)
+            except ValueError:
+                continue
+
+
+def pixel_audio(path, stall_fraction=0.5):
+    """Underruns, playback stalls and routing from the Pixel harness stimulus_* lines."""
+    if not path.is_file():
+        return None
+    players, events = {}, []
+    for record in harness_records(path):
+        kind = record.get("event", "")
+        if not kind.startswith("stimulus_"):
+            continue
+        stamp = datetime.fromtimestamp(record["ts_ms"] / 1000, timezone.utc)
+        tag = record.get("tag")
+        if kind == "stimulus_start":
+            players[tag] = {"rate": record.get("rate") or 0, "last": None, "underruns": 0, "played": 0}
+            continue
+        player = players.setdefault(tag, {"rate": 0, "last": None, "underruns": 0, "played": 0})
+        player["underruns"] = max(player["underruns"], record.get("underruns") or 0)
+        played = record.get("frames_played")
+        if kind == "stimulus_progress":
+            events.append((stamp, tag, played, (record.get("routed_device") or {}).get("type")))
+        elif kind in ("stimulus_end", "stimulus_error"):
+            player["ended"] = {"utc": stamp, "event": kind, "state": record.get("state"),
+                               "detail": record.get("detail")}
+        if isinstance(played, int):
+            player["played"] = max(player["played"], played)
+    stalls = []
+    for stamp, tag, played, _ in events:
+        player = players[tag]
+        if player["last"] is not None and isinstance(played, int) and player["rate"]:
+            last_stamp, last_played = player["last"]
+            expected = player["rate"] * (stamp - last_stamp).total_seconds()
+            if expected and played - last_played < stall_fraction * expected:
+                stalls.append({"start_utc": last_stamp, "end_utc": stamp, "tag": tag,
+                               "frames_played": played - last_played, "frames_expected": expected})
+        if isinstance(played, int):
+            player["last"] = (stamp, played)
+    return {
+        "progress_records": len(events),
+        "first_utc": events[0][0] if events else None, "last_utc": events[-1][0] if events else None,
+        "underruns": sum(p["underruns"] for p in players.values()),
+        "played_seconds": sum(p["played"] / p["rate"] for p in players.values() if p["rate"]),
+        "playback_stalls": stalls,
+        "non_a2dp_progress": sum(device != "BLUETOOTH_A2DP" for *_, device in events),
+        "endings": [p["ended"] for p in players.values() if "ended" in p],
+    }
+
+
+def audio_report(part):
+    s31, pixel = s31_audio(part / "s31-serial.log"), pixel_audio(part / "harness.log")
+    if s31 is None and pixel is None:
+        return None
+    return {"s31": s31, "pixel": pixel}
+
 def summarize(parts, pixel_zone):
     part_reports, spans, fault_markers = [], [], []
     history = {}
@@ -139,6 +265,9 @@ def summarize(parts, pixel_zone):
             "acl_polls": len(polls), "acl_up_polls": sum(up is True for up in polls.values()),
             "route_ack_timeouts": timeouts,
         }))
+        audio = audio_report(part)
+        if audio is not None:
+            spans[-1][3]["audio"] = audio
 
     acl_events = [event for _, event in sorted(history.items())]
     covered, longest, reconnects = 0.0, 0.0, []
