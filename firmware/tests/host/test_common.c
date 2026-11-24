@@ -295,6 +295,30 @@ static int test_rate_controller(void) {
     return 0;
 }
 
+static int test_rate_converges_from_prefill(void) {
+    enum { PREFILL = 4096, DRIFT_PPM = 180 };
+    for (int drift = -DRIFT_PPM; drift <= DRIFT_PPM; drift += 2 * DRIFT_PPM) {
+        bridge_rate_controller_t controller;
+        double fill = PREFILL;
+        int32_t filtered = PREFILL;
+        int32_t correction = 0;
+        CHECK(bridge_rate_controller_init(&controller, PREFILL, 32768, 131, 500));
+        CHECK(bridge_rate_controller_update(&controller, PREFILL) == 0);
+        for (int update = 0; update < 6000; ++update) {
+            /* 100 ms net change at 48 kHz. The producer and consumer each
+             * contribute their clock error in parts per million. */
+            fill += 4800.0 * (drift + correction) / 1000000.0;
+            filtered += ((int32_t)fill - filtered) / 4;
+            correction = bridge_rate_controller_update(&controller, filtered);
+            CHECK(fill > PREFILL - 500 && fill < PREFILL + 500);
+            CHECK(correction > -500 && correction < 500);
+        }
+        CHECK(fill > PREFILL - 8 && fill < PREFILL + 8);
+        CHECK(correction + drift >= -2 && correction + drift <= 2);
+    }
+    return 0;
+}
+
 static int test_elastic_resampler(void) {
     const int16_t three_frames[] = {0, 100, 10, 110, 20, 120};
     const int16_t five_frames[] = {0, 100, 10, 110, 20, 120, 30, 130, 40, 140};
@@ -443,7 +467,8 @@ int main(void) {
     if (test_byte_ring() != 0 || test_frame_ring() != 0 || test_pcm() != 0 ||
         test_protocol() != 0 || test_protocol_random_stream() != 0 ||
         test_link_contract() != 0 || test_session() != 0 ||
-        test_rate_controller() != 0 || test_elastic_resampler() != 0 ||
+        test_rate_controller() != 0 || test_rate_converges_from_prefill() != 0 ||
+        test_elastic_resampler() != 0 ||
         test_continuous_resampler() != 0 || test_resampler_short_pulls() != 0 ||
         test_route_fence() != 0) {
         return 1;
