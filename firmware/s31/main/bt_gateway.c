@@ -19,6 +19,7 @@
 #include "freertos/task.h"
 #include "gateway_state.h"
 #include "s31_peer_store.h"
+#include "reconnect_timer.h"
 #include "s31_config.h"
 
 static const char *TAG = "s31_bt";
@@ -476,7 +477,9 @@ static bool request_reconnect(reconnect_profile_t *profile, esp_bd_addr_t peer,
 
 static void reconnect_worker(void *context)
 {
-    uint32_t next_attempt_ms = now_ms() + S31_BT_RECONNECT_BOOT_HOLD_MS;
+    uint32_t started_ms = now_ms();
+    uint32_t next_attempt_ms = started_ms + S31_BT_RECONNECT_BOOT_HOLD_MS;
+    bool boot_held = true;
     uint32_t backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
     reconnect_profile_t hfp = {
         .name = "HFP", .completions = &s_hfp_connection_completions,
@@ -501,7 +504,8 @@ static void reconnect_worker(void *context)
 
         bool hfp_down = hfp_state == ESP_HF_CLIENT_CONNECTION_STATE_DISCONNECTED;
         bool a2dp_down = a2dp_state == ESP_A2D_CONNECTION_STATE_DISCONNECTED;
-        if (profiles_ready && upstream_snapshot(peer)) {
+        if (!s31_reconnect_boot_held(&boot_held, started_ms, current_ms) &&
+            profiles_ready && upstream_snapshot(peer)) {
             bool cancelled_hfp = cancel_stalled_request(&hfp, peer, hfp_up, hfp_down, current_ms);
             bool cancelled_a2dp = cancel_stalled_request(&a2dp, peer, a2dp_up, a2dp_down, current_ms);
             if ((hfp_up && a2dp_up) || cancelled_hfp || cancelled_a2dp) {
