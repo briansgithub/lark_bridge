@@ -11,7 +11,7 @@
 # Hold the rig lease (rig-lease acquire) before pair-accept, record or avrcp.
 set -euo pipefail
 HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-# shellcheck source=lib.sh
+# shellcheck source-path=SCRIPTDIR source=lib.sh
 . "$HERE/lib.sh"
 rig_load_conf
 

@@ -22,7 +22,7 @@
 # still read the running system, so it cannot be used to sneak past the guard.
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-# shellcheck source=lib.sh
+# shellcheck source-path=SCRIPTDIR source=lib.sh
 . "$HERE/lib.sh"
 
 R="${RIG_SYSROOT:-}"

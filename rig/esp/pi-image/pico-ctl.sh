@@ -20,7 +20,7 @@
 # resistors on the harness are the hardware half of the same rule.
 set -euo pipefail
 HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-# shellcheck source=lib.sh
+# shellcheck source-path=SCRIPTDIR source=lib.sh
 . "$HERE/lib.sh"
 rig_load_conf
 

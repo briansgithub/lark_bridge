@@ -8,7 +8,7 @@
 # so selftest.sh and `systemctl --failed` show it instead of the fake car silently using
 # the wrong radio.
 set -euo pipefail
-# shellcheck source=lib.sh
+# shellcheck source-path=SCRIPTDIR source=lib.sh
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib.sh"
 rig_load_conf
 

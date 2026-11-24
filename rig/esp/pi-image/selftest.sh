@@ -9,7 +9,7 @@
 # Each check is {"status": pass|warn|fail|skip, "detail": "..."}.
 set -euo pipefail
 HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-# shellcheck source=lib.sh
+# shellcheck source-path=SCRIPTDIR source=lib.sh
 . "$HERE/lib.sh"
 rig_load_conf
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
