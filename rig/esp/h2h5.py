@@ -235,11 +235,13 @@ def run_scenario(bench, gate, limits, analyzer=None, fake_car_address=None):
                     bench.wait(2)
                     pair = bench.pair("status")
                     audio = bench.command("output", "tap a2dp_out")
+                    had_audio = streaming(pair["output"]) and audio["ok"] and audio["rms_l"] > 0
                     phase = f"{role}/{fault}"
                     bench.add(t="start", phase=phase, data=pair, audio=audio)
                     if fault == "reboot":
                         bench.boots[role] = 0
                         bench.restart = role
+                    deadline = time.monotonic() + limits["recovery_seconds"]
                     bench.command(role, f"fault {fault}")
                     if fault == "uart_mute":
                         bench.wait(1.8)
@@ -250,7 +252,7 @@ def run_scenario(bench, gate, limits, analyzer=None, fake_car_address=None):
                     # A new session is sufficient to prove recovery even when the
                     # reboot completed before the peer's heartbeat timeout.
                     recovered = bench.wait_link(
-                        limits["recovery_seconds"] - 4,
+                        deadline - time.monotonic(),
                         lambda pair: fault == "uart_mute" or (
                             pair[other(role)]["uart"]["sessions"] >
                             start_sessions(bench.records, phase, other(role))
@@ -259,11 +261,15 @@ def run_scenario(bench, gate, limits, analyzer=None, fake_car_address=None):
                     bench.restart = None
                     tone(bench, routed=True)
                     bench.command("s31", "fault test_a2dp")
-                    bench.wait(2)
+                    if had_audio:
+                        audio_status = bench.wait_link(
+                            deadline - time.monotonic(), lambda pair: streaming(pair["output"])
+                        )["output"]
+                    else:
+                        audio_status = bench.command("output", "status")
                     bench.add(t="end", phase=phase, data=recovered,
                               audio=bench.command("output", "tap a2dp_out"),
-                              audio_status=bench.command("output", "status"),
-                              peers=bench.pair("peers"))
+                              audio_status=audio_status, peers=bench.pair("peers"))
         finally:
             if bench.restart is None:
                 bench.command("s31", "tone off")
