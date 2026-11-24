@@ -240,7 +240,8 @@ def run_scenario(bench, gate, limits, analyzer=None, fake_car_address=None):
                     had_audio = (streaming(bench.command("output", "stats")) and audio["ok"]
                                  and audio["rms_l"] > 0)
                     phase = f"{role}/{fault}"
-                    bench.add(t="start", phase=phase, data=pair, audio=audio)
+                    bench.add(t="start", phase=phase, data=pair, audio=audio,
+                              audio_status=bench.command("output", "stats"))
                     if fault == "reboot":
                         bench.boots[role] = 0
                         bench.restart = role
@@ -439,7 +440,7 @@ def reduce_h3(e, limits):
             e.check({r: end["peers"][r]["bt"].get("peer") for r in ROLES} == bonds,
                     f"{phase} saved peer changed")
             if not (begin["audio"]["ok"] and begin["audio"]["rms_l"] > 0 and
-                    streaming(begin["data"]["output"]) and end["audio"]["ok"] and
+                    streaming(begin["audio_status"]) and end["audio"]["ok"] and
                     end["audio"]["rms_l"] > 0 and streaming(end["audio_status"])):
                 e.partial.append(f"{phase} needs a live audio sink before and after the fault")
             elif fault == "uart_mute":
