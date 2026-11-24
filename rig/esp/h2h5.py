@@ -131,6 +131,11 @@ class Bench:
                         raise BenchError(f"{role} rejected {command}: {record}")
                     return record
                 if kind == name and (name != "tap" or record.get("stage") == args[0]):
+                    if name == "status" and isinstance(record.get("bt"), str):
+                        # Boot identity reuses "bt" for the address on status.
+                        # The stats reply contains the live Bluetooth object.
+                        bluetooth = self.command(role, "stats")["bt"]
+                        return {**record, "bt_addr": record["bt"], "bt": bluetooth}
                     return record
             start = len(self.records)
         raise BenchError(f"{role} did not answer {command}")
@@ -552,5 +557,6 @@ def reduce(gate, limits, records, artifacts=()):
         else:
             {"H2": reduce_h2, "H3": reduce_h3}[gate](evidence, limits)
     except (KeyError, StopIteration, TypeError, ValueError) as error:
-        evidence.missing.append(f"incomplete {gate} evidence ({type(error).__name__}: {error})")
+        if not errors:
+            evidence.missing.append(f"incomplete {gate} evidence ({type(error).__name__}: {error})")
     return evidence.verdict()

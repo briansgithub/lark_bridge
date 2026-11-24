@@ -2,6 +2,7 @@ import math
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -62,6 +63,25 @@ class TwoBoardTests(unittest.TestCase):
             self.assertEqual(h2h5.reduce("H4", limits, records, (tone, silence))[0], "PASS")
             tone.write_bytes(samples_on_wire([(l, l) for l in left]))
             self.assertEqual(h2h5.reduce("H4", limits, records, (tone, silence))[0], "FAIL")
+
+    def test_status_keeps_mac_and_live_bluetooth_details(self):
+        bench = h2h5.Bench.__new__(h2h5.Bench)
+        bench.records = []
+        bench.poll = lambda: None
+        bench.add = lambda **record: bench.records.append(record)
+        bench.wait = lambda seconds: None
+        connection = Mock()
+        bench.connections = {"output": connection}
+
+        def send(raw):
+            command = raw.decode().strip()
+            details = "00:00:00:00:00:01" if command == "status" else {"streaming": True}
+            bench.add(role="output", t=command, bt=details)
+
+        connection.write.side_effect = send
+        status = bench.command("output", "status")
+        self.assertEqual(status["bt_addr"], "00:00:00:00:00:01")
+        self.assertEqual(status["bt"], {"streaming": True})
 
     def test_h2_requires_matching_decoder_probe_and_duplicate_counts(self):
         limits = {**hil.load_gates()["H2"], "clean_seconds": 1, "post_seconds": 1}
