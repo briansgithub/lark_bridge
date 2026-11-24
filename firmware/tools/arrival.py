@@ -280,6 +280,27 @@ def _unique_capture_path(artifact_dir: Path, name: str) -> Path:
     raise ArrivalError(f"cannot allocate a unique capture file below {artifact_dir}")
 
 
+def _quiet_serial_factory(serial_class: Callable[..., Any]) -> Callable[..., Any]:
+    """Open a port with DTR and RTS deasserted.
+
+    Opening a USB Serial/JTAG (S31) or auto-reset UART port with the default control-line
+    state can reset the chip, or leave it in ROM download mode when the port closes. A
+    capture must only observe the running firmware, so both lines stay low.
+    """
+
+    def factory(*, port: str, baudrate: int, timeout: float) -> Any:
+        connection = serial_class()
+        connection.port = port
+        connection.baudrate = baudrate
+        connection.timeout = timeout
+        connection.dtr = False
+        connection.rts = False
+        connection.open()
+        return connection
+
+    return factory
+
+
 def capture_serial(
     run: Path,
     port: str,
@@ -307,7 +328,7 @@ def capture_serial(
                 "pyserial is required for capture; install it with "
                 "'py -3 -m pip install pyserial'"
             ) from error
-        serial_factory = serial.Serial
+        serial_factory = _quiet_serial_factory(serial.Serial)
 
     connection = serial_factory(port=port, baudrate=baud, timeout=0.2)
     deadline = time.monotonic() + duration
