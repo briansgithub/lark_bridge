@@ -29,8 +29,9 @@ date and the evidence.
 - **H2–H5** need P1 (harness), and H4/H5 also need P2 (analyzer) and P3 (fake car). They can't run
   unattended until those are in place.
 - **H7 (fake car part)** needs P3.
-- **Stage B exit (`stageB-exit`)** needs nobody: it runs after 06:00 by app-only flashing the new
-  test images (`hil.py run T2-smoke-s31 --flash --allow-reset`, then the output board).
+- ~~**Stage B exit (`stageB-exit`)**~~ Done 2026-11-24 06:05 ET: both T2 smokes passed unattended
+  (`docs/experiments/results/E21/20261124T1101*`, `…T1104*`). Both boards now run the `209f25a` test image.
+- **Pixel harness install** (`pixel-harness` gate, then H9) needs Brian's OK to install an app on the Pixel.
 
 ## Codex review pass
 
