@@ -286,8 +286,8 @@ def _capture_span_seconds(text: str) -> float:
     return (max(stamps) - min(stamps)).total_seconds()
 
 
-def reduce_h6_uac(text: str, *, boot_log: str | None = None,
-                  min_seconds: float = 1800.0) -> tuple[str, dict[str, Any], list[str]]:
+def reduce_h6_uac(text: str, *, boot_log: str | None = None, min_seconds: float = 1800.0,
+                  span_seconds: float | None = None) -> tuple[str, dict[str, Any], list[str]]:
     """H6 from S31 console text: descriptor/format at enumeration and zero UAC failures.
 
     The 100/100 reconnect part always needs the Pico fake Lark or a person, so this reducer
@@ -298,7 +298,8 @@ def reduce_h6_uac(text: str, *, boot_log: str | None = None,
     ready = [m.groupdict() for m in (UAC_READY_RE.search(l) for l in iter_log_lines(combined)) if m]
     failures = [l for l in iter_log_lines(text) if UAC_FAILURE_RE.search(l)]
     stats = [r for r in json_records(text) if r["t"] == "stats" and r.get("role") == "s31"]
-    span = _capture_span_seconds(text)
+    # Several logs with gaps between them: the caller passes the sum of per-log spans.
+    span = _capture_span_seconds(text) if span_seconds is None else span_seconds
     metrics: dict[str, Any] = {
         "enumerations": ready,
         "uac_failure_lines": len(failures),
@@ -556,7 +557,8 @@ def cmd_reduce(args: argparse.Namespace) -> int:
         raise HilError(f"unknown gate {args.gate}")
     reducer = gate.get("reducer")
     artifacts = [Path(p) for p in args.log]
-    text = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in artifacts)
+    texts = [p.read_text(encoding="utf-8", errors="replace") for p in artifacts]
+    text = "\n".join(texts)
     target = gate.get("board")
     if reducer == "t2_smoke":
         manifest = json.loads(args.manifest.read_text(encoding="utf-8")) if args.manifest else load_manifest(target)
@@ -565,8 +567,9 @@ def cmd_reduce(args: argparse.Namespace) -> int:
         boot = args.boot_log.read_text(encoding="utf-8", errors="replace") if args.boot_log else None
         if args.boot_log:
             artifacts.append(args.boot_log)
-        verdict, metrics, reasons = reduce_h6_uac(text, boot_log=boot,
-                                                  min_seconds=float(gate.get("seconds", 1800)))
+        verdict, metrics, reasons = reduce_h6_uac(
+            text, boot_log=boot, min_seconds=float(gate.get("seconds", 1800)),
+            span_seconds=sum(_capture_span_seconds(t) for t in texts))
     elif reducer == "bt_soak":
         verdict, metrics, reasons = reduce_bt_soak(json.loads(text))
     else:
