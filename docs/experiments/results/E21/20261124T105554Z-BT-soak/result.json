@@ -1,0 +1,30 @@
+{
+  "artifacts": [
+    {
+      "bytes": 377,
+      "name": "summary.json",
+      "sha256": "2394c9fb2110701c678009cf38d3914570f67df7a0c542305412efefccf7f017"
+    }
+  ],
+  "gate": "BT-soak",
+  "note": "part2 of 2; part1 (22m42s, 8/8 up) in combined-summary.json; 124/124 polls up over 6h11m; BT500 paging Pixel (D2) throughout",
+  "reasons": [
+    "link up at every poll, no observed drops or reboot"
+  ],
+  "recorded_at": "2026-11-24T10:55:54+00:00",
+  "revisions": {
+    "checkout": {
+      "commit": "f3fbc18b72e79cc47861c86a6ad976ea031cde10",
+      "dirty": true,
+      "dirty_paths": [
+        "?? docs/experiments/results/E21/20261124T105554Z-BT-soak/artifacts/summary.json",
+        "?? firmware/qual/overnight-2026-11-24.md"
+      ]
+    },
+    "hil_version": 0,
+    "manifest_sha256": "fbfcb72eb6137c9f70960262b58aa28cce478fd698e0fd193af0e25787729e61",
+    "toolchain_lock_sha256": "9ab42ddf52096f0b58f89de91c9ae08ceac680eede3da85270eac5b3681c72db"
+  },
+  "schema": 1,
+  "verdict": "PASS"
+}

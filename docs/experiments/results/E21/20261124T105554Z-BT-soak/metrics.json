@@ -1,0 +1,12 @@
+{
+  "finished_utc": "2026-11-24T10:55:01+00:00",
+  "link_drops": 0,
+  "pixel_acl_events": 0,
+  "poll_errors": 0,
+  "polls": 116,
+  "polls_link_up": 116,
+  "s31_lines": 16067,
+  "s31_reboot_markers": 0,
+  "serial_errors": 0,
+  "started_utc": "2026-11-24T05:06:53+00:00"
+}

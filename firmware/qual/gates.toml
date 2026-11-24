@@ -92,7 +92,8 @@ needs = ["H1"]
 human = false
 resets = false
 reducer = "bt_soak"
-status = "PENDING"
+status = "PASS"
+evidence = "docs/experiments/results/E21/20261124T105554Z-BT-soak (124/124 polls up over 6h11m, 0 drops, 0 S31 resets)"
 
 [gates.H2]
 title = "UART protocol"
