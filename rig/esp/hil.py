@@ -427,7 +427,7 @@ def reduce_bt_soak(summary: dict[str, Any]) -> tuple[str, dict[str, Any], list[s
     return "PASS", metrics, ["link up at every poll, no observed drops or reboot"]
 
 
-REDUCERS = ("t2_smoke", "h6_uac", "bt_soak")
+REDUCERS = ("t2_smoke", "h6_uac", "bt_soak", "h2h5")
 
 
 # --- lease ---------------------------------------------------------------------------------
@@ -654,6 +654,12 @@ def cmd_next(args: argparse.Namespace) -> int:
     return 0
 
 
+def h2h5_module():
+    sys.path.insert(0, str(REPO_ROOT))
+    import h2h5
+    return h2h5
+
+
 def cmd_reduce(args: argparse.Namespace) -> int:
     gates = load_gates(args.gates)
     gate = gates.get(args.gate)
@@ -661,7 +667,7 @@ def cmd_reduce(args: argparse.Namespace) -> int:
         raise HilError(f"unknown gate {args.gate}")
     reducer = gate.get("reducer")
     artifacts = [Path(p) for p in args.log]
-    texts = [p.read_text(encoding="utf-8", errors="replace") for p in artifacts]
+    texts = [p.read_text(encoding="utf-8", errors="replace") for p in artifacts] if reducer != "h2h5" else []
     text = "\n".join(texts)
     target = gate.get("board")
     if reducer == "t2_smoke":
@@ -674,6 +680,13 @@ def cmd_reduce(args: argparse.Namespace) -> int:
         verdict, metrics, reasons = reduce_h6_uac(
             text, boot_log=boot, min_seconds=float(gate.get("seconds", 1800)),
             span_seconds=sum(_capture_span_seconds(t) for t in texts))
+    elif reducer == "h2h5":
+        module = h2h5_module()
+        logs = [path for path in artifacts if path.suffix == ".jsonl"]
+        if len(logs) != 1:
+            raise HilError("H2-H5 replay requires one bench.jsonl with optional analyzer artifacts")
+        records = [json.loads(line) for line in logs[0].read_text(encoding="utf-8").splitlines()]
+        verdict, metrics, reasons = module.reduce(args.gate, gate, records, artifacts)
     elif reducer == "bt_soak":
         verdict, metrics, reasons = reduce_bt_soak(json.loads(text))
     else:
@@ -688,14 +701,84 @@ def cmd_reduce(args: argparse.Namespace) -> int:
     return 0 if verdict in ("PASS", "PARTIAL") else 2
 
 
+def run_two_boards(args, gate):
+    module = h2h5_module()
+    if (gate["resets"] or args.flash) and not args.allow_reset:
+        raise HilError("this run resets a board; add --allow-reset")
+    ports = (args.s31_port, args.output_port)
+    if any(port is None or not arrival.PORT_RE.fullmatch(port) for port in ports) or ports[0] == ports[1]:
+        raise HilError("specify distinct --s31-port and --output-port")
+    lease = default_lease_path()
+    acquire_lease(lease, args.owner, ttl=max(600, gate.get("stream_seconds", 0) + 900,
+                                            gate.get("clean_seconds", 0) + 900), renew=False)
+    try:
+        with tempfile.TemporaryDirectory(prefix="lark-hil-") as directory:
+            staging = Path(directory)
+            bench = None
+            records = []
+            try:
+                expected = module.identify_ports(ports)
+                if args.flash:
+                    manifests = {}
+                    commands = {}
+                    for role, port in zip(module.ROLES, ports):
+                        manifest, _ = arrival.validate_build_manifest(role)
+                        if manifest.get("image_kind") != "test":
+                            raise HilError(f"{role} build must be a test image")
+                        manifests[role] = expected_version(manifest)
+                        commands[role] = app_flash_command(role, port)
+                    for role, port in zip(module.ROLES, ports):
+                        module.identify_ports((port,), (expected[role],))
+                        with (staging / f"{role}-flash.log").open("w", encoding="utf-8") as log:
+                            completed = subprocess.run(commands[role], stdout=log, stderr=subprocess.STDOUT,
+                                                       timeout=120)
+                        if completed.returncode:
+                            raise HilError(f"{role} app-only flash failed")
+                        shutil.copy2(FIRMWARE_ROOT / role / "build" / "larkbridge-build-manifest.json",
+                                     staging / f"{role}-manifest.json")
+                        time.sleep(3)
+                bench = module.Bench(ports, staging, arrival._quiet_serial_factory)
+                records = bench.records
+                for role, status in bench.pair("status").items():
+                    if status.get("image") != "test" or status.get("erase_bonds") != 0 or (
+                        "dec_err" not in status.get("uart", {})
+                    ):
+                        raise HilError(f"{role} requires the H2-H5 test image with bond erase disabled")
+                    if args.flash and status.get("version") != manifests[role]:
+                        raise HilError(f"{role} reported a version different from the flashed manifest")
+                module.run_scenario(bench, args.gate, gate, args.analyzer)
+            except (OSError, HilError, module.BenchError, subprocess.TimeoutExpired) as error:
+                if bench is None:
+                    records.append({"t": "abort", "reason": str(error)})
+                    (staging / "bench.jsonl").write_text(json.dumps(records[0]) + "\n", encoding="utf-8")
+                else:
+                    bench.add(t="abort", reason=str(error))
+            finally:
+                if bench is not None:
+                    bench.close()
+            artifacts = list(staging.iterdir())
+            verdict, metrics, reasons = module.reduce(args.gate, gate, records, artifacts)
+            run_dir = write_result(args.gate, verdict, metrics, reasons, target=None, artifacts=artifacts,
+                                   results_root=args.results, extra={"ports": ports, "flashed": args.flash})
+            print(json.dumps({"gate": args.gate, "verdict": verdict, "reasons": reasons,
+                              "run_dir": str(run_dir)}, indent=2))
+            return 0 if verdict == "PASS" else 2
+    finally:
+        release_lease(lease, args.owner)
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     gates = load_gates(args.gates)
     gate = gates.get(args.gate)
     if gate is None:
         raise HilError(f"unknown gate {args.gate}")
+    if gate.get("reducer") == "h2h5":
+        return run_two_boards(args, gate)
     if gate.get("reducer") != "t2_smoke":
         raise HilError("hil.py v0 runs only t2_smoke gates; use reduce for recorded logs")
     target = gate["board"]
+    if not args.port:
+        raise HilError("T2 smoke requires --port")
     if args.flash and not args.allow_reset:
         raise HilError("--flash resets the board; add --allow-reset to confirm it is allowed now")
     if not math.isfinite(args.seconds) or args.seconds <= 0:
@@ -776,9 +859,12 @@ def build_parser() -> argparse.ArgumentParser:
     reduce.add_argument("--note")
     reduce.set_defaults(func=cmd_reduce)
 
-    run = sub.add_parser("run", help="run a t2_smoke gate on hardware")
+    run = sub.add_parser("run", help="run a qualification gate on hardware")
     run.add_argument("gate")
-    run.add_argument("--port", required=True)
+    run.add_argument("--port")
+    run.add_argument("--s31-port")
+    run.add_argument("--output-port")
+    run.add_argument("--analyzer", help="sigrok driver for H4 (for example fx2lafw)")
     run.add_argument("--seconds", type=float, default=20.0)
     run.add_argument("--flash", action="store_true", help="app-only flash first (resets the board)")
     run.add_argument("--allow-reset", action="store_true")
