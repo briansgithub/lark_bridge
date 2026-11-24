@@ -1,5 +1,5 @@
 add_executable(bridge_common_tests test_common.c)
-target_link_libraries(bridge_common_tests PRIVATE bridge_common)
+target_link_libraries(bridge_common_tests PRIVATE bridge_common m)
 
 if(MSVC)
     target_compile_options(bridge_common_tests PRIVATE /W4 /WX /experimental:c11atomics)

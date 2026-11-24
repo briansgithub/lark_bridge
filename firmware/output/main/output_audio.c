@@ -22,9 +22,14 @@
 #define ADAPTIVE_BLOCK_FRAMES 240U
 #define I2S_RATE_HZ 48000U
 #define MIN_SINK_RATE_HZ 44100U
+/* Worst case: lowest sink rate with the FIFO-draining correction at its limit. */
 #define ADAPTIVE_INPUT_FRAMES \
-    ((ADAPTIVE_BLOCK_FRAMES * I2S_RATE_HZ + MIN_SINK_RATE_HZ - 1U) / MIN_SINK_RATE_HZ + 1U)
+    ((ADAPTIVE_BLOCK_FRAMES * I2S_RATE_HZ + MIN_SINK_RATE_HZ - 1U) / MIN_SINK_RATE_HZ + 2U)
 #define RATE_CORRECTION_SCALE 1000000LL
+/* Fill samples are taken per A2DP pull, which arrives in bursts; average them
+ * per update and low-pass by 1/RATE_FILL_SMOOTHING so burst phase does not
+ * reach the proportional term. */
+#define RATE_FILL_SMOOTHING 4
 #define RATE_MAX_CORRECTION_PPM 500
 #define RATE_UPDATE_INTERVAL_MS 100U
 
@@ -57,10 +62,30 @@ static uint8_t s_i2s_buffer[I2S_READ_BYTES];
 static int16_t s_adaptive_input[ADAPTIVE_INPUT_FRAMES * 2U];
 static int16_t s_adaptive_output[ADAPTIVE_BLOCK_FRAMES * 2U];
 static bridge_rate_controller_t s_rate_controller;
-static int64_t s_frame_adjustment_accumulator;
+static bridge_resampler_t s_resampler;
 static uint32_t s_nominal_input_remainder;
+static int64_t s_fill_sum;
+static uint32_t s_fill_samples;
+static int32_t s_fill_filtered;
 static int32_t s_held_correction_ppm;
 static uint32_t s_last_rate_update_ms;
+
+static size_t prefill_target_frames(void) {
+    size_t prefill_frames = CONFIG_LARKBRIDGE_OUTPUT_AUDIO_PREFILL_FRAMES;
+    size_t maximum_prefill = CONFIG_LARKBRIDGE_OUTPUT_AUDIO_RING_FRAMES / 2U;
+    return prefill_frames > maximum_prefill ? maximum_prefill : prefill_frames;
+}
+
+static void reset_rate_state(void) {
+    bridge_rate_controller_reset(&s_rate_controller);
+    bridge_resampler_reset(&s_resampler);
+    s_nominal_input_remainder = 0U;
+    s_held_correction_ppm = 0;
+    s_last_rate_update_ms = 0U;
+    s_fill_sum = 0;
+    s_fill_samples = 0U;
+    s_fill_filtered = (int32_t)prefill_target_frames();
+}
 
 static size_t ring_capacity(void) {
     return sizeof(s_ring.storage);
@@ -198,11 +223,12 @@ esp_err_t output_audio_start(void) {
     atomic_init(&s_primed, false);
     atomic_init(&s_rate_reset_requested, false);
     atomic_init(&s_last_read_ms, 0U);
-    s_frame_adjustment_accumulator = 0;
     s_held_correction_ppm = 0;
     s_last_rate_update_ms = 0U;
+    /* Regulate around the level playback starts at, so a fresh route begins
+     * with zero error instead of saturating the correction while it fills. */
     if (!bridge_rate_controller_init(
-            &s_rate_controller, CONFIG_LARKBRIDGE_OUTPUT_AUDIO_RING_FRAMES / 2,
+            &s_rate_controller, (int32_t)prefill_target_frames(),
             32768, 131, RATE_MAX_CORRECTION_PPM)) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -244,7 +270,10 @@ bool output_audio_is_initialized(void) {
 
 bool output_audio_clock_active(uint32_t now_ms) {
     uint32_t last = (uint32_t)atomic_load_explicit(&s_last_read_ms, memory_order_acquire);
-    return output_audio_is_initialized() && last != 0U && (uint32_t)(now_ms - last) < I2S_CLOCK_ACTIVE_MS;
+    /* The reader task may stamp a read after the caller sampled now_ms; that
+     * negative age is a live clock, not a 49-day-old one. */
+    return output_audio_is_initialized() && last != 0U &&
+           (int32_t)(now_ms - last) < (int32_t)I2S_CLOCK_ACTIVE_MS;
 }
 
 void output_audio_set_capture_active(bool active)
@@ -336,20 +365,12 @@ static size_t pull_from_ring(void *destination, size_t length, uint32_t rate, bo
         return 0U;
     }
     if (atomic_exchange_explicit(&s_rate_reset_requested, false, memory_order_acq_rel)) {
-        bridge_rate_controller_reset(&s_rate_controller);
-        s_frame_adjustment_accumulator = 0;
-        s_nominal_input_remainder = 0U;
-        s_held_correction_ppm = 0;
-        s_last_rate_update_ms = 0U;
+        reset_rate_state();
     }
     portENTER_CRITICAL(&s_ring.mux);
     fill_frames = s_ring.count / PCM_BYTES_PER_FRAME;
     portEXIT_CRITICAL(&s_ring.mux);
-    size_t prefill_frames = CONFIG_LARKBRIDGE_OUTPUT_AUDIO_PREFILL_FRAMES;
-    size_t maximum_prefill = CONFIG_LARKBRIDGE_OUTPUT_AUDIO_RING_FRAMES / 2U;
-    if (prefill_frames > maximum_prefill) {
-        prefill_frames = maximum_prefill;
-    }
+    size_t prefill_frames = prefill_target_frames();
     if (!atomic_load_explicit(&s_primed, memory_order_acquire)) {
         if (fill_frames < prefill_frames) {
             return 0U;
@@ -361,16 +382,19 @@ static size_t pull_from_ring(void *destination, size_t length, uint32_t rate, bo
             s_ring.fifo_max_frames = s_ring.fifo_min_frames;
         }
         portEXIT_CRITICAL(&s_ring.mux);
-        bridge_rate_controller_reset(&s_rate_controller);
-        s_frame_adjustment_accumulator = 0;
-        s_nominal_input_remainder = 0U;
-        s_held_correction_ppm = 0;
+        reset_rate_state();
     }
+    s_fill_sum += (int64_t)fill_frames;
+    ++s_fill_samples;
     current_ms = (uint32_t)(esp_timer_get_time() / 1000);
     if (s_last_rate_update_ms == 0U ||
         (uint32_t)(current_ms - s_last_rate_update_ms) >= RATE_UPDATE_INTERVAL_MS) {
+        int32_t mean = (int32_t)(s_fill_sum / (int64_t)s_fill_samples);
+        s_fill_filtered += (mean - s_fill_filtered) / RATE_FILL_SMOOTHING;
+        s_fill_sum = 0;
+        s_fill_samples = 0U;
         s_held_correction_ppm =
-            bridge_rate_controller_update(&s_rate_controller, (int32_t)fill_frames);
+            bridge_rate_controller_update(&s_rate_controller, s_fill_filtered);
         s_last_rate_update_ms = current_ms;
     }
     correction = s_held_correction_ppm;
@@ -378,57 +402,55 @@ static size_t pull_from_ring(void *destination, size_t length, uint32_t rate, bo
     s_ring.correction_ppm = correction;
     portEXIT_CRITICAL(&s_ring.mux);
 
+    /* Input frames per output frame in Q32. Positive correction consumes
+     * fewer input frames so the FIFO fills. */
+    uint64_t nominal_step = ((uint64_t)I2S_RATE_HZ << 32) / rate;
+    uint64_t step = (uint64_t)((int64_t)nominal_step -
+                               (int64_t)(nominal_step / RATE_CORRECTION_SCALE) * correction);
+
     while (output_offset < output_length) {
         size_t output_frames = (output_length - output_offset) / output_frame_bytes;
-        int adjustment = 0;
         if (output_frames > ADAPTIVE_BLOCK_FRAMES) {
             output_frames = ADAPTIVE_BLOCK_FRAMES;
         }
-        /* Keep fractional input frames across callbacks so only clock drift reaches the PI controller. */
         uint32_t scaled_frames = (uint32_t)output_frames * I2S_RATE_HZ + s_nominal_input_remainder;
         size_t nominal_input_frames = scaled_frames / rate;
         s_nominal_input_remainder = scaled_frames % rate;
-        s_frame_adjustment_accumulator -= (int64_t)correction * (int64_t)nominal_input_frames;
-        if (s_frame_adjustment_accumulator >= RATE_CORRECTION_SCALE) {
-            adjustment = 1;
-            s_frame_adjustment_accumulator -= RATE_CORRECTION_SCALE;
-        } else if (s_frame_adjustment_accumulator <= -RATE_CORRECTION_SCALE) {
-            adjustment = -1;
-            s_frame_adjustment_accumulator += RATE_CORRECTION_SCALE;
+        size_t input_frames = bridge_resampler_input_frames(&s_resampler, step, output_frames);
+        if (input_frames == 0U || input_frames > ADAPTIVE_INPUT_FRAMES) {
+            break;
         }
-        size_t input_frames = (size_t)((int)nominal_input_frames + adjustment);
         size_t input_bytes = input_frames * PCM_BYTES_PER_FRAME;
-        bool apply_adjustment;
+        size_t available_bytes;
 
         portENTER_CRITICAL(&s_ring.mux);
-        apply_adjustment = s_ring.count >= input_bytes;
-        if (!apply_adjustment) {
-            if (adjustment != 0) {
-                s_frame_adjustment_accumulator +=
-                    (int64_t)adjustment * RATE_CORRECTION_SCALE;
-                adjustment = 0;
-                input_frames = nominal_input_frames;
-                input_bytes = input_frames * PCM_BYTES_PER_FRAME;
-            }
-            if (input_bytes > s_ring.count) {
-                input_bytes = s_ring.count - (s_ring.count % PCM_BYTES_PER_FRAME);
-                input_frames = input_bytes / PCM_BYTES_PER_FRAME;
-                ++s_ring.underruns;
-                s_ring.missing_frames += (uint32_t)(nominal_input_frames - input_frames);
-            }
+        available_bytes = s_ring.count - (s_ring.count % PCM_BYTES_PER_FRAME);
+        if (available_bytes < input_bytes) {
+            ++s_ring.underruns;
+            s_ring.missing_frames +=
+                (uint32_t)((input_bytes - available_bytes) / PCM_BYTES_PER_FRAME);
+        } else {
+            available_bytes = input_bytes;
         }
-        (void)ring_read_locked((uint8_t *)s_adaptive_input, input_bytes);
-        if (apply_adjustment && adjustment != 0) {
-            s_ring.adaptive_input_delta_frames += adjustment;
-        }
+        (void)ring_read_locked((uint8_t *)s_adaptive_input, available_bytes);
+        s_ring.adaptive_input_delta_frames +=
+            (int32_t)input_frames - (int32_t)nominal_input_frames;
         portEXIT_CRITICAL(&s_ring.mux);
-
-        const int16_t *samples = s_adaptive_input;
-        if (input_frames != output_frames) {
-            samples = bridge_resample_stereo_s16(s_adaptive_input, input_frames,
-                                                 s_adaptive_output, output_frames)
-                          ? s_adaptive_output : NULL;
+        /* On underrun, hold the last real frame rather than jumping to zero. */
+        size_t have_frames = available_bytes / PCM_BYTES_PER_FRAME;
+        for (size_t frame = have_frames; frame < input_frames; ++frame) {
+            s_adaptive_input[frame * 2U] =
+                have_frames == 0U ? s_resampler.previous[0] : s_adaptive_input[(have_frames - 1U) * 2U];
+            s_adaptive_input[frame * 2U + 1U] =
+                have_frames == 0U ? s_resampler.previous[1]
+                                  : s_adaptive_input[(have_frames - 1U) * 2U + 1U];
         }
+
+        const int16_t *samples =
+            bridge_resampler_process(&s_resampler, step, s_adaptive_input, input_frames,
+                                     s_adaptive_output, output_frames)
+                ? s_adaptive_output
+                : NULL;
         size_t output_bytes = output_frames * output_frame_bytes;
         if (samples != NULL) {
             if (mono) {

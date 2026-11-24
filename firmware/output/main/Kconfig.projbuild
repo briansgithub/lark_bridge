@@ -78,7 +78,7 @@ menu "LarkBridge output controller"
     config LARKBRIDGE_OUTPUT_AUDIO_PREFILL_FRAMES
         int "Elastic PCM startup prefill (stereo frames)"
         range 240 4096
-        default 1440
+        default 4096
         help
             Return digital silence until this many fresh I2S frames have been
             captured after each route opening. Runtime clamps the value to half

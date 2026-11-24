@@ -3,6 +3,8 @@
 #include "bridge_protocol.h"
 #include "bridge_rate.h"
 #include "bridge_resample.h"
+
+#include <math.h>
 #include "bridge_ring.h"
 #include "bridge_route_fence.h"
 #include "bridge_session.h"
@@ -314,6 +316,43 @@ static int test_elastic_resampler(void) {
     return 0;
 }
 
+static int test_continuous_resampler(void) {
+    /* 48 kHz ramp to 44.1 kHz in 240-frame blocks: every output must land on
+     * the ideal uniform grid, including across block boundaries. */
+    enum { BLOCKS = 8, OUT = 240, SLOPE = 15 };
+    static int16_t input[(BLOCKS * 262 + 1) * 2];
+    int16_t output[OUT * 2];
+    bridge_resampler_t resampler;
+    const uint64_t step = (48000ULL << 32) / 44100U;
+    size_t consumed = 0U;
+    size_t produced = 0U;
+    for (size_t frame = 0; frame < BLOCKS * 262U + 1U; ++frame) {
+        input[frame * 2U] = (int16_t)(frame * SLOPE);
+        input[frame * 2U + 1U] = (int16_t)-(int32_t)(frame * SLOPE);
+    }
+    bridge_resampler_reset(&resampler);
+    for (int block = 0; block < BLOCKS; ++block) {
+        size_t frames = bridge_resampler_input_frames(&resampler, step, OUT);
+        CHECK(frames == 261U || frames == 262U);
+        CHECK(!bridge_resampler_process(&resampler, step, &input[consumed * 2U],
+                                        frames + 1U, output, OUT));
+        CHECK(bridge_resampler_process(&resampler, step, &input[consumed * 2U], frames,
+                                       output, OUT));
+        for (size_t k = 0; k < OUT; ++k) {
+            /* Previous starts at 0 (= input frame -1), so input[i] is at i + 1. */
+            double ideal = (double)(produced + k + 1U) * 48000.0 / 44100.0 - 1.0;
+            double position = output[k * 2U] / (double)SLOPE;
+            CHECK(position <= ideal + 0.001 && position > ideal - 1.0 / SLOPE - 0.001);
+        }
+        consumed += frames;
+        produced += OUT;
+        CHECK(resampler.previous[0] == input[(consumed - 1U) * 2U]);
+    }
+    CHECK(bridge_resampler_input_frames(&resampler, 1ULL << 30, OUT) == 0U);
+    CHECK(!bridge_resampler_process(NULL, step, input, 3U, output, 3U));
+    return 0;
+}
+
 static int test_route_fence(void) {
     bridge_route_fence_t fence;
     bridge_route_fence_reset(&fence);
@@ -374,6 +413,7 @@ int main(void) {
         test_protocol() != 0 || test_protocol_random_stream() != 0 ||
         test_link_contract() != 0 || test_session() != 0 ||
         test_rate_controller() != 0 || test_elastic_resampler() != 0 ||
+        test_continuous_resampler() != 0 ||
         test_route_fence() != 0) {
         return 1;
     }
