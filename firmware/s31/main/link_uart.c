@@ -554,7 +554,7 @@ static void link_task(void *argument)
             last_drift_log = now;
         }
         if (s_peer_seen &&
-            (now - s_last_peer_heartbeat) > pdMS_TO_TICKS(S31_LINK_TIMEOUT_MS)) {
+            (now - s_last_peer_heartbeat) >= pdMS_TO_TICKS(S31_LINK_TIMEOUT_MS)) {
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
             bridge_link_test_timeout(&s_link_test, "s31",
                                      (now - s_last_peer_heartbeat) * portTICK_PERIOD_MS);

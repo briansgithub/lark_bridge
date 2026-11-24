@@ -62,7 +62,7 @@ menu "LarkBridge output controller"
     config LARKBRIDGE_OUTPUT_HEARTBEAT_TIMEOUT_MS
         int "S31 heartbeat timeout (ms)"
         range 250 5000
-        default 1500
+        default 1400
         help
             The audio callback returns silence after this interval without a
             valid S31 heartbeat.

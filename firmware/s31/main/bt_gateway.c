@@ -30,6 +30,8 @@ static atomic_bool s_a2dp_profile_ready;
 static atomic_bool s_tap_release_pending;
 static atomic_int s_hfp_service_state;
 static atomic_int s_a2dp_connection_state;
+static atomic_uint s_hfp_connection_completions;
+static atomic_uint s_a2dp_connection_completions;
 static atomic_uint_fast32_t s_a2dp_rx_packets;
 static atomic_uint_fast32_t s_a2dp_rx_bytes;
 static bool s_call_present;
@@ -188,6 +190,10 @@ static void hfp_callback(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_
     case ESP_HF_CLIENT_CONNECTION_STATE_EVT:
         atomic_store_explicit(&s_hfp_service_state, parameter->conn_stat.state,
                               memory_order_release);
+        if (parameter->conn_stat.state == ESP_HF_CLIENT_CONNECTION_STATE_SLC_CONNECTED ||
+            parameter->conn_stat.state == ESP_HF_CLIENT_CONNECTION_STATE_DISCONNECTED) {
+            atomic_fetch_add_explicit(&s_hfp_connection_completions, 1U, memory_order_release);
+        }
         ESP_LOGI(TAG, "HFP service state=%d", parameter->conn_stat.state);
         if ((parameter->conn_stat.state == ESP_HF_CLIENT_CONNECTION_STATE_CONNECTED ||
              parameter->conn_stat.state == ESP_HF_CLIENT_CONNECTION_STATE_SLC_CONNECTED) &&
@@ -267,6 +273,10 @@ static void a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *paramete
     case ESP_A2D_CONNECTION_STATE_EVT:
         atomic_store_explicit(&s_a2dp_connection_state, parameter->conn_stat.state,
                               memory_order_release);
+        if (parameter->conn_stat.state == ESP_A2D_CONNECTION_STATE_CONNECTED ||
+            parameter->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
+            atomic_fetch_add_explicit(&s_a2dp_connection_completions, 1U, memory_order_release);
+        }
         ESP_LOGI(TAG, "A2DP connection state=%d", parameter->conn_stat.state);
         if (parameter->conn_stat.state == ESP_A2D_CONNECTION_STATE_CONNECTED &&
             !accept_or_bind_upstream(parameter->conn_stat.remote_bda)) {
@@ -419,10 +429,63 @@ static esp_err_t initialize_profiles(void)
         upstream_snapshot(NULL) ? ESP_BT_NON_DISCOVERABLE : ESP_BT_GENERAL_DISCOVERABLE);
 }
 
+typedef struct {
+    const char *name;
+    atomic_uint *completions;
+    esp_err_t (*connect)(esp_bd_addr_t);
+    esp_err_t (*disconnect)(esp_bd_addr_t);
+    unsigned int request_completion;
+    uint32_t deadline_ms;
+    bool pending;
+} reconnect_profile_t;
+
+static bool cancel_stalled_request(reconnect_profile_t *profile, esp_bd_addr_t peer,
+                                   bool connected, bool disconnected, uint32_t current_ms)
+{
+    if (connected ||
+        atomic_load_explicit(profile->completions, memory_order_acquire) != profile->request_completion) {
+        profile->pending = false;
+    }
+    if (!profile->pending || (int32_t)(current_ms - profile->deadline_ms) < 0) {
+        return false;
+    }
+
+    esp_err_t result = profile->disconnect(peer);
+    ESP_LOGW(TAG, "%s reconnect stalled after %u ms; cancel request: %s",
+             profile->name, S31_BT_RECONNECT_STALL_MS, esp_err_to_name(result));
+    /* Give the stack another deadline to settle if it still reports connecting. */
+    profile->pending = !disconnected;
+    profile->deadline_ms = current_ms + S31_BT_RECONNECT_STALL_MS;
+    return true;
+}
+
+static bool request_reconnect(reconnect_profile_t *profile, esp_bd_addr_t peer,
+                              bool disconnected, uint32_t current_ms)
+{
+    if (profile->pending || !disconnected) {
+        return false;
+    }
+
+    profile->request_completion = atomic_load_explicit(profile->completions, memory_order_acquire);
+    esp_err_t result = profile->connect(peer);
+    profile->pending = result == ESP_OK;
+    profile->deadline_ms = current_ms + S31_BT_RECONNECT_STALL_MS;
+    ESP_LOGI(TAG, "%s reconnect request: %s", profile->name, esp_err_to_name(result));
+    return true;
+}
+
 static void reconnect_worker(void *context)
 {
     uint32_t next_attempt_ms = now_ms() + S31_BT_RECONNECT_INITIAL_MS;
     uint32_t backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
+    reconnect_profile_t hfp = {
+        .name = "HFP", .completions = &s_hfp_connection_completions,
+        .connect = esp_hf_client_connect, .disconnect = esp_hf_client_disconnect,
+    };
+    reconnect_profile_t a2dp = {
+        .name = "A2DP", .completions = &s_a2dp_connection_completions,
+        .connect = esp_a2d_sink_connect, .disconnect = esp_a2d_sink_disconnect,
+    };
     (void)context;
 
     for (;;) {
@@ -436,31 +499,24 @@ static void reconnect_worker(void *context)
         bool a2dp_up = a2dp_state == ESP_A2D_CONNECTION_STATE_CONNECTED;
         uint32_t current_ms = now_ms();
 
-        if (hfp_up && a2dp_up) {
-            backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
-            next_attempt_ms = current_ms + backoff_ms;
-        } else if (profiles_ready && upstream_snapshot(peer) &&
-                   (int32_t)(current_ms - next_attempt_ms) >= 0) {
-            bool requested = false;
-            if (hfp_state == ESP_HF_CLIENT_CONNECTION_STATE_DISCONNECTED) {
-                esp_err_t result = esp_hf_client_connect(peer);
-                requested = true;
-                ESP_LOGI(TAG, "HFP reconnect request: %s", esp_err_to_name(result));
-            }
-            if (a2dp_state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
-                esp_err_t result = esp_a2d_sink_connect(peer);
-                requested = true;
-                ESP_LOGI(TAG, "A2DP reconnect request: %s", esp_err_to_name(result));
-            }
-            if (requested) {
+        bool hfp_down = hfp_state == ESP_HF_CLIENT_CONNECTION_STATE_DISCONNECTED;
+        bool a2dp_down = a2dp_state == ESP_A2D_CONNECTION_STATE_DISCONNECTED;
+        if (profiles_ready && upstream_snapshot(peer)) {
+            bool cancelled_hfp = cancel_stalled_request(&hfp, peer, hfp_up, hfp_down, current_ms);
+            bool cancelled_a2dp = cancel_stalled_request(&a2dp, peer, a2dp_up, a2dp_down, current_ms);
+            if ((hfp_up && a2dp_up) || cancelled_hfp || cancelled_a2dp) {
+                backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
                 next_attempt_ms = current_ms + backoff_ms;
-                if (backoff_ms < S31_BT_RECONNECT_MAX_MS / 2U) {
-                    backoff_ms *= 2U;
+            } else if ((int32_t)(current_ms - next_attempt_ms) >= 0) {
+                bool requested_hfp = request_reconnect(&hfp, peer, hfp_down, current_ms);
+                bool requested_a2dp = request_reconnect(&a2dp, peer, a2dp_down, current_ms);
+                if (requested_hfp || requested_a2dp) {
+                    next_attempt_ms = current_ms + backoff_ms;
+                    backoff_ms = backoff_ms < S31_BT_RECONNECT_MAX_MS / 2U
+                                     ? backoff_ms * 2U : S31_BT_RECONNECT_MAX_MS;
                 } else {
-                    backoff_ms = S31_BT_RECONNECT_MAX_MS;
+                    next_attempt_ms = current_ms + S31_BT_RECONNECT_INITIAL_MS;
                 }
-            } else {
-                next_attempt_ms = current_ms + S31_BT_RECONNECT_INITIAL_MS;
             }
         }
         vTaskDelay(pdMS_TO_TICKS(250U));
