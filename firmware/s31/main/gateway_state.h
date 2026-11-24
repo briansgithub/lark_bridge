@@ -33,4 +33,4 @@ void s31_gateway_set_fault(bridge_fault_code_t fault);
 void s31_gateway_force_silence(void);
 bool s31_gateway_authorize_route(bridge_route_t route, uint32_t route_generation);
 void s31_gateway_get_snapshot(s31_gateway_snapshot_t *snapshot);
-uint8_t s31_gateway_ready_flags(void);
+uint8_t s31_gateway_ready_flags(void);void s31_gateway_test_route(int route);

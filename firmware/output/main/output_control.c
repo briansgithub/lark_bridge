@@ -1,6 +1,7 @@
 #include "output_control.h"
 
 #include "bridge_protocol.h"
+#include "bridge_link_test.h"
 #include "driver/uart.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -56,6 +57,9 @@ static uint16_t s_remote_capabilities;
 static uint32_t s_local_session;
 static uint32_t s_remote_session;
 static bool s_remote_session_valid;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+static bridge_link_test_t s_link_test;
+#endif
 static _Atomic uint32_t s_protocol_errors;
 static _Atomic uint32_t s_reliable_failures;
 
@@ -96,6 +100,9 @@ static bool send_wire_packet(const bridge_packet_t *packet) {
     if (bridge_protocol_encode(packet, encoded, sizeof(encoded), &encoded_length) != 0) {
         return false;
     }
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    if (bridge_link_test_muted(&s_link_test, now_ms())) return true;
+#endif
     written = uart_write_bytes(CONTROL_UART, encoded, encoded_length);
     return written == (int)encoded_length;
 }
@@ -218,6 +225,9 @@ static void update_policy_after_heartbeat(const bridge_packet_t *packet, uint32_
     portENTER_CRITICAL(&s_policy_mux);
     before = output_policy_audio_allowed(&s_policy, current_ms);
     if (bridge_sequence_tracker_accept(&s_heartbeat_sequences, packet->sequence)) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        if (s_policy.hello_valid) bridge_link_test_heartbeat(&s_link_test, current_ms);
+#endif
         (void)output_policy_accept_heartbeat(
             &s_policy, current_ms, packet->payload[BRIDGE_HEARTBEAT_ROUTE_OFFSET],
             packet->payload[BRIDGE_HEARTBEAT_READY_OFFSET]);
@@ -263,6 +273,9 @@ static void handle_hello(const bridge_packet_t *packet) {
     s_remote_capabilities = capabilities;
     portEXIT_CRITICAL(&s_policy_mux);
     if (reset_session) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        bridge_link_test_session(&s_link_test);
+#endif
         /* Reliable commands belong to the old S31 boot and must never be
          * replayed into the new one. This task is the sole pending-window owner. */
         discard_outbound_session_work();
@@ -299,9 +312,16 @@ static void handle_route(const bridge_packet_t *packet, uint32_t current_ms) {
             old_route = s_policy.route;
             s_policy = candidate;
             (void)bridge_sequence_tracker_accept(&s_route_sequences, packet->sequence);
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+            ++s_link_test.executed;
+#endif
             execute = true;
             after = output_policy_audio_allowed(&s_policy, current_ms);
             new_route = s_policy.route;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        } else {
+            ++s_link_test.duplicates;
+#endif
         }
     }
     portEXIT_CRITICAL(&s_policy_mux);
@@ -442,6 +462,44 @@ static void send_status(uint32_t current_ms) {
     }
 }
 
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+bool output_control_test_fault(const char *kind)
+{
+    bool allow_dup = false;
+    return bridge_link_test_request(&s_link_test, kind, allow_dup);
+}
+
+void output_control_test_stats(bridge_json_t *json)
+{
+    bridge_link_test_stats(&s_link_test, json);
+}
+
+static void run_link_test(uint32_t now)
+{
+    unsigned kind = atomic_exchange(&s_link_test.request, 0);
+    if (kind == 0) return;
+    if (kind == BRIDGE_TEST_MUTE) {
+        s_link_test.mute_until = now + 3000U;
+        return;
+    }
+    if (bridge_link_test_muted(&s_link_test, now)) return;
+    bridge_packet_t packet = {
+        .version = BRIDGE_PROTOCOL_VERSION, .sequence = s_next_sequence++,
+        .type = BRIDGE_MESSAGE_AVRCP_COMMAND, .payload_length = BRIDGE_AVRCP_PAYLOAD_SIZE,
+        .payload = {0x44, BRIDGE_KEY_TAP},
+    };
+    uint8_t wire[BRIDGE_PROTOCOL_MAX_CORRUPT_SIZE];
+    size_t length;
+    if (bridge_protocol_encode_corrupt(&packet, (bridge_corruption_t)kind,
+                                       wire, sizeof(wire), &length) == 0 &&
+        uart_write_bytes(CONTROL_UART, wire, length) == (int)length) {
+        printf("{\"t\":\"event\",\"role\":\"output\",\"ev\":\"inject\","
+               "\"kind\":%u,\"probe_seq\":%u}\n", kind, s_next_sequence);
+        send_heartbeat(now);
+    }
+}
+#endif
+
 static void control_task(void *context) {
     bridge_stream_decoder_t decoder;
     bridge_packet_t packet;
@@ -462,8 +520,15 @@ static void control_task(void *context) {
         for (index = 0; index < received; ++index) {
             bridge_decoder_result_t result = bridge_stream_decoder_feed(&decoder, bytes[index], &packet);
             if (result == BRIDGE_DECODER_PACKET) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+                bridge_link_test_recover(&s_link_test, "output", &packet);
+#endif
                 handle_packet(&packet, current_ms);
             } else if (result == BRIDGE_DECODER_ERROR) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+                ++s_link_test.errors;
+                s_link_test.recover = true;
+#endif
                 atomic_fetch_add_explicit(&s_protocol_errors, 1U, memory_order_relaxed);
             }
         }
@@ -479,11 +544,18 @@ static void control_task(void *context) {
             transmit_request(&request, current_ms);
         }
         retry_pending(current_ms);
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        run_link_test(current_ms);
+#endif
 
         portENTER_CRITICAL(&s_policy_mux);
         heartbeat_timed_out = output_policy_tick(&s_policy, current_ms);
         portEXIT_CRITICAL(&s_policy_mux);
         if (heartbeat_timed_out) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+            bridge_link_test_timeout(&s_link_test, "output",
+                                     current_ms - s_link_test.last_hb);
+#endif
             discard_outbound_session_work();
             output_audio_set_capture_active(false);
             (void)output_control_report_fault(BRIDGE_FAULT_HEARTBEAT_TIMEOUT);

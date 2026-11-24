@@ -32,13 +32,14 @@ static const char *TAG = "output_telemetry";
 #define IMAGE_KIND BRIDGE_IMAGE_RELEASE
 #endif
 
-#define RECORD_BYTES 1280U
+#define RECORD_BYTES 1536U
 
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
 typedef struct {
     atomic_uint_fast32_t sequence;
     atomic_uint_fast32_t crc;
     atomic_uint_fast32_t rms;
+    atomic_uint_fast32_t rms_l, rms_r, nz_blocks;
     atomic_uint_fast32_t bytes;
 } tap_slot_t;
 
@@ -158,7 +159,11 @@ static void build_stats(bridge_json_t *json, char *buffer, const char *type)
     bridge_json_bool(json, "connected", output_bluetooth_peer_connected());
     bridge_json_bool(json, "streaming", output_bluetooth_audio_streaming());
     bridge_json_object_end(json);
+    bridge_json_bool(json, "audio", output_control_audio_allowed());
     bridge_json_object_begin(json, "uart");
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    output_control_test_stats(json);
+#endif
     bridge_json_bool(json, "init", control.initialized);
     bridge_json_bool(json, "alive", control.link_alive);
     bridge_json_bool(json, "hello", control.hello_valid);
@@ -252,10 +257,15 @@ void output_telemetry_tap_note(output_tap_stage_t stage, const void *pcm, size_t
     tap_slot_t *slot = &s_taps[stage];
     uint32_t crc = bridge_crc32(0U, pcm, bytes);
     uint32_t rms = bridge_pcm16_rms((const int16_t *)pcm, bytes / sizeof(int16_t));
+    bridge_pcm16_stereo_stats_t stereo;
+    bridge_pcm16_stereo_stats(pcm, bytes / (2U * sizeof(int16_t)), &stereo);
     /* Odd sequence = write in progress; readers retry. One writer per stage. */
     atomic_fetch_add_explicit(&slot->sequence, 1U, memory_order_acq_rel);
     atomic_store_explicit(&slot->crc, crc, memory_order_relaxed);
     atomic_store_explicit(&slot->rms, rms, memory_order_relaxed);
+    atomic_store_explicit(&slot->rms_l, stereo.rms_left, memory_order_relaxed);
+    atomic_store_explicit(&slot->rms_r, stereo.rms_right, memory_order_relaxed);
+    if (stereo.nonzero) atomic_fetch_add_explicit(&slot->nz_blocks, 1U, memory_order_relaxed);
     atomic_store_explicit(&slot->bytes, bytes, memory_order_relaxed);
     atomic_fetch_add_explicit(&slot->sequence, 1U, memory_order_acq_rel);
 #else
@@ -309,13 +319,16 @@ static void respond_tap(const char *stage_name)
         uint32_t before;
         uint32_t after;
         uint32_t crc;
-        uint32_t rms;
+        uint32_t rms, rms_l, rms_r, nz_blocks;
         uint32_t bytes;
         unsigned attempts = 0;
         do {
             before = (uint32_t)atomic_load_explicit(&slot->sequence, memory_order_acquire);
             crc = (uint32_t)atomic_load_explicit(&slot->crc, memory_order_relaxed);
             rms = (uint32_t)atomic_load_explicit(&slot->rms, memory_order_relaxed);
+            rms_l = atomic_load_explicit(&slot->rms_l, memory_order_relaxed);
+            rms_r = atomic_load_explicit(&slot->rms_r, memory_order_relaxed);
+            nz_blocks = atomic_load_explicit(&slot->nz_blocks, memory_order_relaxed);
             bytes = (uint32_t)atomic_load_explicit(&slot->bytes, memory_order_relaxed);
             after = (uint32_t)atomic_load_explicit(&slot->sequence, memory_order_acquire);
         } while ((before != after || (before & 1U) != 0U) && ++attempts < 8U);
@@ -329,6 +342,9 @@ static void respond_tap(const char *stage_name)
         bridge_json_str(&json, "fmt", "s16le_stereo");
         bridge_json_u32(&json, "crc", crc);
         bridge_json_u32(&json, "rms", rms);
+        bridge_json_u32(&json, "rms_l", rms_l);
+        bridge_json_u32(&json, "rms_r", rms_r);
+        bridge_json_u32(&json, "nz_blocks", nz_blocks);
         emit(s_console_record, &json);
         return;
     }
@@ -431,9 +447,30 @@ static void handle_line(const char *line)
             bridge_json_bool(&json, "ok", true);
             bridge_json_str(&json, "kind", "silence");
             emit(s_console_record, &json);
-        } else {
-            respond_error("fault", "kind_not_implemented");
+            break;
         }
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        bool reboot = strcmp(request.argv[0], "reboot") == 0;
+        if (strcmp(request.argv[0], "fifo_window") == 0) {
+            output_audio_test_fifo_window();
+        } else if (!reboot && !output_control_test_fault(request.argv[0])) {
+            respond_error("fault", "unsupported_or_busy");
+            break;
+        }
+        bridge_json_begin(&json, s_console_record, RECORD_BYTES, "resp");
+        add_identity(&json);
+        bridge_json_str(&json, "cmd", "fault");
+        bridge_json_bool(&json, "ok", true);
+        bridge_json_str(&json, "kind", request.argv[0]);
+        emit(s_console_record, &json);
+        if (reboot) {
+            vTaskDelay(pdMS_TO_TICKS(150U));
+            esp_restart();
+        }
+#endif
+#if !CONFIG_LARKBRIDGE_TEST_IMAGE
+        respond_error("fault", "kind_not_implemented");
+#endif
         break;
     case BRIDGE_CMD_FORGET:
         /* Bond changes stay out of v0: pairing gates use the recovery image. */

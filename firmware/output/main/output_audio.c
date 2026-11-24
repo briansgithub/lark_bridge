@@ -436,6 +436,16 @@ void output_audio_flush(void) {
     atomic_store_explicit(&s_rate_reset_requested, true, memory_order_release);
 }
 
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+void output_audio_test_fifo_window(void)
+{
+    portENTER_CRITICAL(&s_ring.mux);
+    s_ring.fifo_min_frames = s_ring.count / PCM_BYTES_PER_FRAME;
+    s_ring.fifo_max_frames = s_ring.fifo_min_frames;
+    portEXIT_CRITICAL(&s_ring.mux);
+}
+#endif
+
 void output_audio_get_stats(output_audio_stats_t *stats) {
     size_t fifo_frames;
 

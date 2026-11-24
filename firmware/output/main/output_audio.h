@@ -31,4 +31,6 @@ void output_audio_get_stats(output_audio_stats_t *stats);
  * Returns false in release images. */
 bool output_audio_set_test_tone(uint32_t hz, int32_t dbfs);
 
+void output_audio_test_fifo_window(void);
+
 #endif
