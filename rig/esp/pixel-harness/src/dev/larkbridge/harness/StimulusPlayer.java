@@ -111,11 +111,15 @@ final class StimulusPlayer extends Thread {
             int chunk = (rate / 50) * frameBytes; // 20 ms
             outer:
             for (int l = 0; l < loops; l++) {
-                for (int off = 0; off < framesPerLoop * frameBytes; off += chunk) {
+                for (int off = 0; off < framesPerLoop * frameBytes;) {
                     if (cancelled) break outer;
                     int n = (int) Math.min(chunk, framesPerLoop * frameBytes - off);
                     int w = track.write(wav, dataOff + off, n);
-                    if (w < 0) throw new IOException("AudioTrack.write=" + w);
+                    if (cancelled) break outer;
+                    if (w <= 0 || w % frameBytes != 0) {
+                        throw new IOException("AudioTrack.write=" + w);
+                    }
+                    off += w;
                     framesWritten += w / frameBytes;
                 }
             }
