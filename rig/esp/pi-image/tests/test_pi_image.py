@@ -139,6 +139,13 @@ class ProvisionTests(unittest.TestCase):
         self.assertIn(f"RIG_BT_ADDR={BT}\n",
                       (self.root / "etc/larkbridge-rig/rig.conf").read_text())
 
+    def test_sysroot_refuses_live_provisioning(self):
+        before = snapshot(self.root)
+        proc = self.provision("--user", "admin")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("RIG_SYSROOT requires --files-only", proc.stderr)
+        self.assertEqual(snapshot(self.root), before)
+
     def test_dry_run_writes_nothing(self):
         before = snapshot(self.root)
         proc = self.full("--dry-run")

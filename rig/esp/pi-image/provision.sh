@@ -18,8 +18,8 @@
 #   --files-only       write files only: no apt, systemctl, usermod or hardware probes.
 #                      Used by the unit tests together with RIG_SYSROOT=<temp root>.
 #
-# RIG_SYSROOT is a TEST hook: every path is written under it. The live overlay checks
-# still read the running system, so it cannot be used to sneak past the guard.
+# RIG_SYSROOT and --files-only must be used together with a separate test root.
+# The overlay guard checks the running system as well as the test root.
 set -euo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck source-path=SCRIPTDIR source=lib.sh
@@ -49,7 +49,15 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-LIVE=1; [ "$FILES_ONLY" = 1 ] && LIVE=0
+LIVE=1
+if [ "$FILES_ONLY" = 1 ]; then
+  [ -n "$R" ] || die "--files-only requires a separate RIG_SYSROOT"
+  R="$(realpath -e -- "$R")" || die "RIG_SYSROOT must exist"
+  [ -d "$R" ] && [ "$R" != / ] || die "RIG_SYSROOT must be a separate directory"
+  LIVE=0
+elif [ -n "$R" ]; then
+  die "RIG_SYSROOT requires --files-only"
+fi
 CHANGES=0
 REBOOT_NEEDED=0
 
