@@ -1,5 +1,6 @@
 #include "link_uart.h"
 
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -40,23 +41,23 @@ static bridge_route_fence_t s_route_fence;
 static uint32_t s_fence_route_generation;
 static TickType_t s_route_guard_until;
 static TickType_t s_last_peer_heartbeat;
-static bool s_peer_seen;
-static bool s_output_hello_valid;
+static _Atomic bool s_peer_seen;
+static _Atomic bool s_output_hello_valid;
 static uint32_t s_local_session;
 static uint32_t s_output_session;
-static bool s_output_session_valid;
-static uint16_t s_last_output_fifo_frames;
-static int16_t s_last_output_correction_ppm;
+static _Atomic bool s_output_session_valid;
+static _Atomic uint16_t s_last_output_fifo_frames;
+static _Atomic int16_t s_last_output_correction_ppm;
 static int32_t s_last_output_adaptive_delta;
-static uint32_t s_last_output_missing_frames;
-static uint32_t s_last_output_dropped_frames;
-static uint32_t s_last_output_i2s_errors;
-static uint16_t s_last_output_fifo_min_frames;
-static uint16_t s_last_output_fifo_max_frames;
-static uint32_t s_last_output_protocol_errors;
-static uint32_t s_last_output_reliable_failures;
-static uint32_t s_protocol_errors;
-static uint32_t s_reliable_failures;
+static _Atomic uint32_t s_last_output_missing_frames;
+static _Atomic uint32_t s_last_output_dropped_frames;
+static _Atomic uint32_t s_last_output_i2s_errors;
+static _Atomic uint16_t s_last_output_fifo_min_frames;
+static _Atomic uint16_t s_last_output_fifo_max_frames;
+static _Atomic uint32_t s_last_output_protocol_errors;
+static _Atomic uint32_t s_last_output_reliable_failures;
+static _Atomic uint32_t s_protocol_errors;
+static _Atomic uint32_t s_reliable_failures;
 
 static void announce_hello(void);
 static void send_heartbeat(void);
@@ -528,18 +529,18 @@ void s31_link_uart_get_stats(s31_link_stats_t *stats)
     if (stats == NULL) {
         return;
     }
-    stats->peer_seen = s_peer_seen;
-    stats->output_hello_valid = s_output_hello_valid;
-    stats->output_session_valid = s_output_session_valid;
-    stats->protocol_errors = s_protocol_errors;
-    stats->reliable_failures = s_reliable_failures;
-    stats->output_fifo_frames = s_last_output_fifo_frames;
-    stats->output_fifo_min_frames = s_last_output_fifo_min_frames;
-    stats->output_fifo_max_frames = s_last_output_fifo_max_frames;
-    stats->output_correction_ppm = s_last_output_correction_ppm;
-    stats->output_missing_frames = s_last_output_missing_frames;
-    stats->output_dropped_frames = s_last_output_dropped_frames;
-    stats->output_i2s_errors = s_last_output_i2s_errors;
-    stats->output_protocol_errors = s_last_output_protocol_errors;
-    stats->output_reliable_failures = s_last_output_reliable_failures;
+    stats->peer_seen = atomic_load_explicit(&s_peer_seen, memory_order_relaxed);
+    stats->output_hello_valid = atomic_load_explicit(&s_output_hello_valid, memory_order_relaxed);
+    stats->output_session_valid = atomic_load_explicit(&s_output_session_valid, memory_order_relaxed);
+    stats->protocol_errors = atomic_load_explicit(&s_protocol_errors, memory_order_relaxed);
+    stats->reliable_failures = atomic_load_explicit(&s_reliable_failures, memory_order_relaxed);
+    stats->output_fifo_frames = atomic_load_explicit(&s_last_output_fifo_frames, memory_order_relaxed);
+    stats->output_fifo_min_frames = atomic_load_explicit(&s_last_output_fifo_min_frames, memory_order_relaxed);
+    stats->output_fifo_max_frames = atomic_load_explicit(&s_last_output_fifo_max_frames, memory_order_relaxed);
+    stats->output_correction_ppm = atomic_load_explicit(&s_last_output_correction_ppm, memory_order_relaxed);
+    stats->output_missing_frames = atomic_load_explicit(&s_last_output_missing_frames, memory_order_relaxed);
+    stats->output_dropped_frames = atomic_load_explicit(&s_last_output_dropped_frames, memory_order_relaxed);
+    stats->output_i2s_errors = atomic_load_explicit(&s_last_output_i2s_errors, memory_order_relaxed);
+    stats->output_protocol_errors = atomic_load_explicit(&s_last_output_protocol_errors, memory_order_relaxed);
+    stats->output_reliable_failures = atomic_load_explicit(&s_last_output_reliable_failures, memory_order_relaxed);
 }

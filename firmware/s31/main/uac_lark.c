@@ -48,7 +48,7 @@ typedef struct {
 static const char *TAG = "s31_uac";
 static QueueHandle_t s_events;
 static uac_host_device_handle_t s_lark_handle;
-static bool s_lark_started;
+static atomic_bool s_lark_started;
 static bool s_reopen_pending;
 static uint8_t s_lark_address;
 static uint8_t s_lark_interface;
@@ -388,7 +388,7 @@ void s31_uac_lark_get_stats(s31_uac_stats_t *stats)
     if (stats == NULL) {
         return;
     }
-    stats->capture_started = s_lark_started;
+    stats->capture_started = atomic_load_explicit(&s_lark_started, memory_order_relaxed);
     stats->rx_packets = (uint32_t)atomic_load_explicit(&s_rx_packets, memory_order_relaxed);
     stats->rx_bytes = (uint32_t)atomic_load_explicit(&s_rx_bytes, memory_order_relaxed);
     stats->read_errors = (uint32_t)atomic_load_explicit(&s_read_errors, memory_order_relaxed);

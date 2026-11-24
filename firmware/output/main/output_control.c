@@ -56,8 +56,8 @@ static uint16_t s_remote_capabilities;
 static uint32_t s_local_session;
 static uint32_t s_remote_session;
 static bool s_remote_session_valid;
-static uint32_t s_protocol_errors;
-static uint32_t s_reliable_failures;
+static _Atomic uint32_t s_protocol_errors;
+static _Atomic uint32_t s_reliable_failures;
 
 static uint32_t now_ms(void) {
     return (uint32_t)(esp_timer_get_time() / 1000);
@@ -146,7 +146,7 @@ static void transmit_request(const tx_request_t *request, uint32_t current_ms) {
     if (request->reliable) {
         pending = find_pending_slot();
         if (pending == NULL) {
-            ++s_reliable_failures;
+            atomic_fetch_add_explicit(&s_reliable_failures, 1U, memory_order_relaxed);
             ESP_LOGE(TAG, "reliable window full; dropping message type %u", request->type);
             return;
         }
@@ -181,7 +181,7 @@ static void handle_ack(const bridge_packet_t *packet) {
     size_t index;
 
     if (packet->payload_length != BRIDGE_ACK_PAYLOAD_SIZE) {
-        ++s_protocol_errors;
+        atomic_fetch_add_explicit(&s_protocol_errors, 1U, memory_order_relaxed);
         return;
     }
     acked_type = packet->payload[BRIDGE_ACK_TYPE_OFFSET];
@@ -239,7 +239,7 @@ static void handle_hello(const bridge_packet_t *packet) {
     bool reset_session = false;
 
     if (packet->payload_length != BRIDGE_HELLO_PAYLOAD_SIZE) {
-        ++s_protocol_errors;
+        atomic_fetch_add_explicit(&s_protocol_errors, 1U, memory_order_relaxed);
         return;
     }
     role = packet->payload[BRIDGE_HELLO_ROLE_OFFSET];
@@ -247,7 +247,7 @@ static void handle_hello(const bridge_packet_t *packet) {
     remote_session = bridge_get_u32_le(&packet->payload[BRIDGE_HELLO_SESSION_OFFSET]);
     output_policy_init(&candidate, CONFIG_LARKBRIDGE_OUTPUT_HEARTBEAT_TIMEOUT_MS);
     if (!output_policy_accept_hello(&candidate, role, capabilities)) {
-        ++s_protocol_errors;
+        atomic_fetch_add_explicit(&s_protocol_errors, 1U, memory_order_relaxed);
         return;
     }
 
@@ -282,7 +282,7 @@ static void handle_route(const bridge_packet_t *packet, uint32_t current_ms) {
 
     if (packet->payload_length != BRIDGE_ROUTE_PAYLOAD_SIZE) {
         queue_or_send_ack(packet->type, packet->sequence, BRIDGE_ACK_INVALID);
-        ++s_protocol_errors;
+        atomic_fetch_add_explicit(&s_protocol_errors, 1U, memory_order_relaxed);
         return;
     }
     portENTER_CRITICAL(&s_policy_mux);
@@ -321,7 +321,7 @@ static void handle_packet(const bridge_packet_t *packet, uint32_t current_ms) {
         if (packet->payload_length == BRIDGE_HEARTBEAT_PAYLOAD_SIZE) {
             update_policy_after_heartbeat(packet, current_ms);
         } else {
-            ++s_protocol_errors;
+            atomic_fetch_add_explicit(&s_protocol_errors, 1U, memory_order_relaxed);
         }
         break;
     case BRIDGE_MESSAGE_ROUTE:
@@ -335,7 +335,7 @@ static void handle_packet(const bridge_packet_t *packet, uint32_t current_ms) {
         /* S31 diagnostics are consumed by the coordinator/operator, not this endpoint. */
         break;
     default:
-        ++s_protocol_errors;
+        atomic_fetch_add_explicit(&s_protocol_errors, 1U, memory_order_relaxed);
         break;
     }
 }
@@ -352,7 +352,7 @@ static void retry_pending(uint32_t current_ms) {
                      pending->packet.sequence);
             pending->used = false;
             (void)xQueueReset(s_tx_queue);
-            ++s_reliable_failures;
+            atomic_fetch_add_explicit(&s_reliable_failures, 1U, memory_order_relaxed);
             continue;
         }
         (void)send_wire_packet(&pending->packet);
@@ -464,7 +464,7 @@ static void control_task(void *context) {
             if (result == BRIDGE_DECODER_PACKET) {
                 handle_packet(&packet, current_ms);
             } else if (result == BRIDGE_DECODER_ERROR) {
-                ++s_protocol_errors;
+                atomic_fetch_add_explicit(&s_protocol_errors, 1U, memory_order_relaxed);
             }
         }
         /* AVRCP press/release edges are ordered. Keep exactly one reliable
@@ -642,7 +642,7 @@ void output_control_get_stats(output_control_stats_t *stats) {
     stats->hello_valid = s_policy.hello_valid;
     stats->remote_ready_flags = s_policy.remote_ready_flags;
     stats->route = (uint8_t)s_policy.route;
-    stats->protocol_errors = s_protocol_errors;
-    stats->reliable_failures = s_reliable_failures;
+    stats->protocol_errors = atomic_load_explicit(&s_protocol_errors, memory_order_relaxed);
+    stats->reliable_failures = atomic_load_explicit(&s_reliable_failures, memory_order_relaxed);
     portEXIT_CRITICAL(&s_policy_mux);
 }
