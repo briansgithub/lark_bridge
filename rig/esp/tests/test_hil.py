@@ -71,7 +71,8 @@ class RegistryTests(unittest.TestCase):
 class SmokeReducerTests(unittest.TestCase):
     def test_boot_matches_manifest(self):
         verdict, metrics, _ = hil.reduce_t2_smoke(
-            log("rst:0x17 (CHIP_USB_UART_RESET)", BOOT, stats(), stats(up=2000)),
+            log("ESP-ROM:esp32s31", "rst:0x17 (CHIP_USB_UART_RESET)",
+                BOOT, stats(), stats(up=2000)),
             board="s31", manifest=MANIFEST)
         self.assertEqual(verdict, "PASS", metrics)
 
@@ -106,6 +107,15 @@ class SmokeReducerTests(unittest.TestCase):
             board="s31", manifest=MANIFEST)
         self.assertEqual(verdict, "FAIL")
         self.assertIn("erase_bonds is not 0", reasons)
+
+    def test_single_crash_and_mixed_boot_stats_fail(self):
+        for evidence in (
+                log(BOOT, stats(), stats(up=2000), "Guru Meditation"),
+                log(BOOT, stats(), stats(up=500)),
+                log(BOOT, stats(version="old", up=2000))):
+            with self.subTest(evidence=evidence):
+                verdict, _, _ = hil.reduce_t2_smoke(evidence, board="s31", manifest=MANIFEST)
+                self.assertEqual(verdict, "FAIL")
 
     def test_old_image_without_json_fails(self):
         verdict, _, _ = hil.reduce_t2_smoke(log("I (643) s31_main: IDENTITY role=s31"),

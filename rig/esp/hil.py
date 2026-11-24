@@ -169,7 +169,9 @@ def runnable(gates: dict[str, dict[str, Any]], status: dict[str, str], *,
 # --- telemetry parsing ---------------------------------------------------------------------
 
 LOG_PREFIX_RE = re.compile(r"^\[[^\]]+\] ")
-REBOOT_RE = re.compile(r"rst:0x|ESP-ROM:|Guru Meditation|Brownout detector|abort\(\) was called")
+BOOT_MARKER_RE = re.compile(r"rst:0x|ESP-ROM:")
+CRASH_RE = re.compile(r"Guru Meditation|Brownout detector|abort\(\) was called")
+REBOOT_RE = re.compile(f"{BOOT_MARKER_RE.pattern}|{CRASH_RE.pattern}")
 
 
 def iter_log_lines(text: str) -> Iterable[str]:
@@ -251,10 +253,26 @@ def reduce_t2_smoke(text: str, *, board: str, manifest: dict[str, Any] | None,
             reasons.append("aec_publish is not 0")
         toolchain = manifest.get("toolchain", {})
         tag = toolchain.get("esp_idf_tag") if isinstance(toolchain, dict) else None
-        if tag and boot.get("idf") and not str(boot["idf"]).startswith(tag):
+        if tag and not str(boot.get("idf", "")).startswith(tag):
             reasons.append(f"idf {boot.get('idf')!r} != manifest tag {tag!r}")
-    if len(boots) > 1 or reboot_markers > 1:
-        reasons.append(f"more than one boot in the capture (boots={len(boots)}, markers={reboot_markers})")
+    seen_telemetry = False
+    for line in iter_log_lines(text):
+        if CRASH_RE.search(line) or (seen_telemetry and BOOT_MARKER_RE.search(line)):
+            reasons.append("crash or reboot during telemetry capture")
+            break
+        if not seen_telemetry:
+            seen_telemetry = any(
+                r.get("role") == board and r["t"] in ("boot", "status", "stats")
+                for r in json_records(line)
+            )
+    if len(boots) > 1:
+        reasons.append(f"more than one boot record ({len(boots)})")
+    if any(r.get("version") != want_version or r.get("image") != want_image for r in stats):
+        reasons.append("one or more stats records differ from the manifest")
+    uptime = [r.get("up_ms") for r in stats]
+    if any(isinstance(a, int) and isinstance(b, int) and b < a
+           for a, b in zip(uptime, uptime[1:])):
+        reasons.append("stats uptime decreased")
     if len(stats) < 2:
         reasons.append(f"fewer than 2 stats records ({len(stats)})")
     if metrics["errors"]:
