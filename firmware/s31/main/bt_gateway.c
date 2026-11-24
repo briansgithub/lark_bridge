@@ -478,6 +478,7 @@ static void reconnect_worker(void *context)
 {
     uint32_t next_attempt_ms = now_ms() + S31_BT_RECONNECT_INITIAL_MS;
     uint32_t backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
+    bool prefer_hfp = true;
     reconnect_profile_t hfp = {
         .name = "HFP", .completions = &s_hfp_connection_completions,
         .connect = esp_hf_client_connect, .disconnect = esp_hf_client_disconnect,
@@ -507,10 +508,18 @@ static void reconnect_worker(void *context)
             if ((hfp_up && a2dp_up) || cancelled_hfp || cancelled_a2dp) {
                 backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
                 next_attempt_ms = current_ms + backoff_ms;
-            } else if ((int32_t)(current_ms - next_attempt_ms) >= 0) {
-                bool requested_hfp = request_reconnect(&hfp, peer, hfp_down, current_ms);
-                bool requested_a2dp = request_reconnect(&a2dp, peer, a2dp_down, current_ms);
-                if (requested_hfp || requested_a2dp) {
+                if (hfp_up && a2dp_up) {
+                    prefer_hfp = true;
+                }
+            } else if (!hfp.pending && !a2dp.pending &&
+                       (int32_t)(current_ms - next_attempt_ms) >= 0) {
+                /* Both profiles use the same ACL. Keep only one local connect
+                 * in flight, and give the other profile a turn after a stall. */
+                bool request_hfp = hfp_down && (prefer_hfp || !a2dp_down);
+                reconnect_profile_t *profile = request_hfp ? &hfp : &a2dp;
+                bool disconnected = request_hfp ? hfp_down : a2dp_down;
+                if (request_reconnect(profile, peer, disconnected, current_ms)) {
+                    prefer_hfp = !request_hfp;
                     next_attempt_ms = current_ms + backoff_ms;
                     backoff_ms = backoff_ms < S31_BT_RECONNECT_MAX_MS / 2U
                                      ? backoff_ms * 2U : S31_BT_RECONNECT_MAX_MS;
