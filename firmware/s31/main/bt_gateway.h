@@ -12,6 +12,8 @@ esp_err_t s31_bt_send_avrcp(uint8_t command, uint8_t key_state);
 typedef struct {
     int hfp_service_state;
     int a2dp_connection_state;
+    uint32_t a2dp_rx_packets; /* sink data callbacks since boot; wraps */
+    uint32_t a2dp_rx_bytes;   /* decoded PCM bytes since boot; wraps */
     bool hfp_audio_connected;
     bool avrcp_connected;
     bool hfp_profile_ready;

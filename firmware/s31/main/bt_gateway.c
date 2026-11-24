@@ -30,6 +30,8 @@ static atomic_bool s_a2dp_profile_ready;
 static atomic_bool s_tap_release_pending;
 static atomic_int s_hfp_service_state;
 static atomic_int s_a2dp_connection_state;
+static atomic_uint_fast32_t s_a2dp_rx_packets;
+static atomic_uint_fast32_t s_a2dp_rx_bytes;
 static bool s_call_present;
 static bool s_call_setup;
 static bool s_call_route_active;
@@ -252,6 +254,8 @@ static void hfp_callback(esp_hf_client_cb_event_t event, esp_hf_client_cb_param_
 
 static void a2dp_data_callback(const uint8_t *data, uint32_t length)
 {
+    atomic_fetch_add_explicit(&s_a2dp_rx_packets, 1U, memory_order_relaxed);
+    atomic_fetch_add_explicit(&s_a2dp_rx_bytes, length, memory_order_relaxed);
     if (atomic_load_explicit(&s_a2dp_format_supported, memory_order_acquire)) {
         s31_audio_router_write_a2dp(data, length);
     }
@@ -568,6 +572,9 @@ void s31_bt_get_status(s31_bt_status_t *status)
     status->hfp_service_state = atomic_load_explicit(&s_hfp_service_state, memory_order_acquire);
     status->a2dp_connection_state =
         atomic_load_explicit(&s_a2dp_connection_state, memory_order_acquire);
+    status->a2dp_rx_packets =
+        (uint32_t)atomic_load_explicit(&s_a2dp_rx_packets, memory_order_relaxed);
+    status->a2dp_rx_bytes = (uint32_t)atomic_load_explicit(&s_a2dp_rx_bytes, memory_order_relaxed);
     status->hfp_audio_connected = atomic_load(&s_hfp_audio_connected);
     status->avrcp_connected = atomic_load(&s_avrcp_connected);
     status->hfp_profile_ready = atomic_load(&s_hfp_profile_ready);

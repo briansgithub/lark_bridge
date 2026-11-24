@@ -135,6 +135,8 @@ static void add_bt(bridge_json_t *json, bool with_peer)
     bridge_json_object_begin(json, "bt");
     bridge_json_i32(json, "hfp_state", bt.hfp_service_state);
     bridge_json_i32(json, "a2dp_state", bt.a2dp_connection_state);
+    bridge_json_u32(json, "a2dp_rx", bt.a2dp_rx_packets);
+    bridge_json_u32(json, "a2dp_bytes", bt.a2dp_rx_bytes);
     bridge_json_bool(json, "hfp_audio", bt.hfp_audio_connected);
     bridge_json_bool(json, "avrcp", bt.avrcp_connected);
     bridge_json_bool(json, "peer_bound", bt.peer_bound);
