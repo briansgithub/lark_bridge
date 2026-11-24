@@ -50,54 +50,64 @@ static bool step_valid(uint64_t step_q32)
 void bridge_resampler_reset(bridge_resampler_t *resampler)
 {
     if (resampler != NULL) {
-        resampler->previous[0] = 0;
-        resampler->previous[1] = 0;
-        resampler->lag_q32 = 0U;
+        *resampler = (bridge_resampler_t){0};
     }
+}
+
+static bool block_valid(uint64_t step_q32, size_t output_frames)
+{
+    return step_valid(step_q32) && output_frames != 0U &&
+           output_frames <= (INT64_MAX - (Q32_ONE - 1U)) / step_q32 &&
+           output_frames <= SIZE_MAX / (4U * sizeof(int16_t));
 }
 
 size_t bridge_resampler_input_frames(const bridge_resampler_t *resampler,
                                      uint64_t step_q32, size_t output_frames)
 {
-    if (resampler == NULL || !step_valid(step_q32) || output_frames == 0U) {
+    if (resampler == NULL || !block_valid(step_q32, output_frames)) {
         return 0U;
     }
-    uint64_t end = (uint64_t)output_frames * step_q32 - resampler->lag_q32;
-    return (size_t)((end + Q32_ONE - 1U) >> 32);
+    int64_t end = (int64_t)(output_frames * step_q32) - resampler->lag_q32;
+    return (size_t)((end + (int64_t)(Q32_ONE - 1U)) / (int64_t)Q32_ONE);
 }
 
 bool bridge_resampler_process(bridge_resampler_t *resampler, uint64_t step_q32,
                               const int16_t *input, size_t input_frames,
                               int16_t *output, size_t output_frames)
 {
-    if (resampler == NULL || input == NULL || output == NULL || output_frames == 0U ||
-        input_frames == 0U ||
+    if (resampler == NULL || output == NULL || !block_valid(step_q32, output_frames) ||
+        (input_frames != 0U && input == NULL) ||
         input_frames != bridge_resampler_input_frames(resampler, step_q32, output_frames)) {
         return false;
     }
-    /* Position relative to `previous` (index 0); input[i] sits at i + 1. */
-    uint64_t position = step_q32 - resampler->lag_q32;
-    for (size_t frame = 0U; frame < output_frames; ++frame, position += step_q32) {
-        size_t upper = (size_t)((position + Q32_ONE - 1U) >> 32);
-        uint64_t fraction;
-        if (upper == 0U) {
-            upper = 1U;
-            fraction = 0U;
-        } else {
-            fraction = position - ((uint64_t)(upper - 1U) << 32);
+    /* Position relative to previous (index 0); input[i] sits at i + 1. */
+    int64_t position = -(int64_t)resampler->lag_q32;
+    for (size_t frame = 0U; frame < output_frames; ++frame) {
+        position += (int64_t)step_q32;
+        size_t upper = (size_t)((position + (int64_t)(Q32_ONE - 1U)) / (int64_t)Q32_ONE);
+        uint64_t fraction = (uint32_t)position;
+        const int16_t *a = resampler->penultimate;
+        const int16_t *b = resampler->previous;
+        if (upper != 0U) {
+            a = upper == 1U ? resampler->previous : &input[(upper - 2U) * 2U];
+            b = &input[(upper - 1U) * 2U];
+        }
+        if (fraction == 0U) {
+            fraction = Q32_ONE;
         }
         for (size_t channel = 0U; channel < 2U; ++channel) {
-            const int64_t a = upper == 1U ? resampler->previous[channel]
-                                          : input[(upper - 2U) * 2U + channel];
-            const int64_t b = input[(upper - 1U) * 2U + channel];
             const int64_t value =
-                a * (int64_t)(Q32_ONE - fraction) + b * (int64_t)fraction;
+                a[channel] * (int64_t)(Q32_ONE - fraction) + b[channel] * (int64_t)fraction;
             output[frame * 2U + channel] = (int16_t)(value >> 32);
         }
     }
-    position -= step_q32;
-    resampler->lag_q32 = (uint32_t)(((uint64_t)input_frames << 32) - position);
-    resampler->previous[0] = input[(input_frames - 1U) * 2U];
-    resampler->previous[1] = input[(input_frames - 1U) * 2U + 1U];
+    resampler->lag_q32 = (uint32_t)(-position);
+    if (input_frames != 0U) {
+        for (size_t channel = 0U; channel < 2U; ++channel) {
+            resampler->penultimate[channel] = input_frames == 1U ? resampler->previous[channel]
+                                            : input[(input_frames - 2U) * 2U + channel];
+            resampler->previous[channel] = input[(input_frames - 1U) * 2U + channel];
+        }
+    }
     return true;
 }

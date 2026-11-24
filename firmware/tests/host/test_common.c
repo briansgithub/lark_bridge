@@ -353,6 +353,37 @@ static int test_continuous_resampler(void) {
     return 0;
 }
 
+static int test_resampler_short_pulls(void) {
+    /* A pull can land before the last consumed input, even at nominal 48 kHz
+     * once negative drift compensation has introduced fractional phase. */
+    const uint64_t step = 3ULL << 30;
+    const int16_t input[] = {100, -100, 200, -200, 300, -300};
+    const size_t expected_input[] = {1U, 1U, 1U, 0U};
+    const int16_t expected_output[] = {75, 150, 225, 300};
+    bridge_resampler_t resampler;
+    bridge_resampler_reset(&resampler);
+    size_t consumed = 0U;
+    for (size_t i = 0U; i < 4U; ++i) {
+        int16_t output[2];
+        size_t frames = bridge_resampler_input_frames(&resampler, step, 1U);
+        CHECK(frames == expected_input[i]);
+        CHECK(bridge_resampler_process(&resampler, step,
+                                       frames ? &input[consumed * 2U] : NULL,
+                                       frames, output, 1U));
+        CHECK(output[0] == expected_output[i] && output[1] == -expected_output[i]);
+        consumed += frames;
+    }
+    CHECK(consumed == 3U && resampler.lag_q32 == 0U);
+    /* Change the step with almost one frame already buffered. */
+    resampler.lag_q32 = UINT32_MAX;
+    int16_t output[2];
+    CHECK(bridge_resampler_process(&resampler, 1ULL << 31, NULL, 0U, output, 1U));
+    CHECK(output[0] == 250 && output[1] == -251);
+    CHECK(bridge_resampler_input_frames(&resampler, step, SIZE_MAX) == 0U);
+    CHECK(!bridge_resampler_process(&resampler, step, NULL, 0U, output, SIZE_MAX));
+    return 0;
+}
+
 static int test_route_fence(void) {
     bridge_route_fence_t fence;
     bridge_route_fence_reset(&fence);
@@ -413,7 +444,7 @@ int main(void) {
         test_protocol() != 0 || test_protocol_random_stream() != 0 ||
         test_link_contract() != 0 || test_session() != 0 ||
         test_rate_controller() != 0 || test_elastic_resampler() != 0 ||
-        test_continuous_resampler() != 0 ||
+        test_continuous_resampler() != 0 || test_resampler_short_pulls() != 0 ||
         test_route_fence() != 0) {
         return 1;
     }
