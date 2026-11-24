@@ -461,7 +461,25 @@ static int test_route_fence(void) {
     return 0;
 }
 
+static int test_sparse_commands(void) {
+    bridge_tx_sequences_t tx = {0};
+    const bridge_message_type_t commands[] = {BRIDGE_MESSAGE_ROUTE, BRIDGE_MESSAGE_AVRCP_COMMAND};
+    for (size_t i = 0; i < 2; ++i) {
+        bridge_sequence_tracker_t rx = {0};
+        tx.next[commands[i]] = UINT16_MAX;
+        CHECK(bridge_sequence_tracker_accept(&rx, bridge_tx_next(&tx, commands[i])));
+        for (unsigned j = 0; j < 32768U; ++j) {
+            (void)bridge_tx_next(&tx, BRIDGE_MESSAGE_HEARTBEAT);
+        }
+        uint16_t next = bridge_tx_next(&tx, commands[i]);
+        CHECK(next == 0 && bridge_sequence_tracker_accept(&rx, next));
+        CHECK(!bridge_sequence_tracker_accept(&rx, next));
+    }
+    return 0;
+}
+
 int main(void) {
+    if (test_sparse_commands() != 0) return 1;
     if (test_byte_ring() != 0 || test_frame_ring() != 0 || test_pcm() != 0 ||
         test_protocol() != 0 || test_protocol_random_stream() != 0 ||
         test_link_contract() != 0 || test_session() != 0 ||
