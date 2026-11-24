@@ -34,4 +34,4 @@ date and the evidence.
 
 ## Codex review pass
 
-- **Docker access for T1-build.** Give the review session access to the existing Docker daemon, or have an authorized session run the pinned builds. The overnight account received permission denied on `/var/run/docker.sock`. Both targets still need release and test build verification.
+- **Docker access for T1-build.** Resolved on 2026-11-24. With Docker group access, both targets passed their pinned release and test builds. See [the review report](review-2026-11-24.md#verification).
