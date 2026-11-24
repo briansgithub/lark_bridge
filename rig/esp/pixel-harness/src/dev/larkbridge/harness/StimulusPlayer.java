@@ -15,26 +15,34 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-/** Plays a bundled 16-bit PCM WAV as call downlink audio (USAGE_VOICE_COMMUNICATION). */
+/**
+ * Plays a bundled 16-bit PCM WAV as call downlink audio (USAGE_VOICE_COMMUNICATION), or as media
+ * (USAGE_MEDIA, so it routes to A2DP) when {@code media} is set.
+ */
 final class StimulusPlayer extends Thread {
     private final Context ctx;
     private final String path;
     private final int loops;
     private final String tag;
     private final boolean inCall;
+    private final boolean media;
+    private final int progressSeconds;
     private volatile boolean cancelled;
     private volatile long framesWritten;
     private volatile long totalFrames;
     private volatile int rate;
     private volatile String state = "starting";
 
-    StimulusPlayer(Context ctx, String path, int loops, String tag, boolean inCall) {
+    StimulusPlayer(Context ctx, String path, int loops, String tag, boolean inCall, boolean media,
+                   int progressSeconds) {
         super("LarkHarness-stimulus");
         this.ctx = ctx;
         this.path = path;
         this.loops = loops;
         this.tag = tag;
         this.inCall = inCall;
+        this.media = media;
+        this.progressSeconds = Math.max(0, progressSeconds);
     }
 
     void cancel() {
@@ -47,6 +55,7 @@ final class StimulusPlayer extends Thread {
         o.put("asset", path);
         o.put("state", state);
         o.put("loops", loops);
+        o.put("usage", media ? "media" : "voice");
         o.put("frames_written", framesWritten);
         o.put("frames_total", totalFrames);
         o.put("rate", rate);
@@ -94,8 +103,8 @@ final class StimulusPlayer extends Thread {
             int minBuf = AudioTrack.getMinBufferSize(rate, af.getChannelMask(), AudioFormat.ENCODING_PCM_16BIT);
             track = new AudioTrack.Builder()
                     .setAudioAttributes(new AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .setUsage(media ? AudioAttributes.USAGE_MEDIA : AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(media ? AudioAttributes.CONTENT_TYPE_MUSIC : AudioAttributes.CONTENT_TYPE_SPEECH)
                             .build())
                     .setAudioFormat(af)
                     .setTransferMode(AudioTrack.MODE_STREAM)
@@ -105,10 +114,11 @@ final class StimulusPlayer extends Thread {
             long t0 = SystemClock.elapsedRealtime();
             state = "playing";
             Harness.log("stimulus_start", tag, "asset", path, "rate", rate, "channels", channels,
-                    "frames_total", totalFrames, "in_call", inCall,
+                    "frames_total", totalFrames, "in_call", inCall, "usage", media ? "media" : "voice",
                     "routed_device", Harness.deviceJson(track.getRoutedDevice()));
 
             int chunk = (rate / 50) * frameBytes; // 20 ms
+            long nextProgress = progressSeconds > 0 ? t0 + 1000L * progressSeconds : Long.MAX_VALUE;
             outer:
             for (int l = 0; l < loops; l++) {
                 for (int off = 0; off < framesPerLoop * frameBytes;) {
@@ -121,6 +131,14 @@ final class StimulusPlayer extends Thread {
                     }
                     off += w;
                     framesWritten += w / frameBytes;
+                    long now = SystemClock.elapsedRealtime();
+                    if (now >= nextProgress) {
+                        nextProgress = now + 1000L * progressSeconds;
+                        Harness.log("stimulus_progress", tag, "loop", l, "frames_written", framesWritten,
+                                "frames_played", track.getPlaybackHeadPosition() & 0xffffffffL,
+                                "underruns", track.getUnderrunCount(), "elapsed_ms", now - t0,
+                                "routed_device", Harness.deviceJson(track.getRoutedDevice()));
+                    }
                 }
             }
             // Wait for the tail to drain, then report.

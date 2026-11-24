@@ -47,6 +47,8 @@ final class Harness {
     static final String EXTRA_ASSET = "asset";   // PLAY_STIMULUS: file under assets/stimulus/
     static final String EXTRA_LOOPS = "loops";   // PLAY_STIMULUS: repeat count, default 1
     static final String EXTRA_ROUTE = "route";   // SET_ROUTE: bluetooth|earpiece|speaker|wired
+    static final String EXTRA_USAGE = "usage";   // PLAY_STIMULUS: voice (default) | media (A2DP)
+    static final String EXTRA_PROGRESS = "progress_s"; // PLAY_STIMULUS: progress log period, 0 = off
     static final String EXTRA_TAG = "tag";       // any command: echoed in its log lines
 
     static final String DEFAULT_ASSET = "tone_1k_16k_3s.wav";
@@ -78,7 +80,8 @@ final class Harness {
                 callEnd(tag);
             } else if (PLAY_STIMULUS.equals(action)) {
                 String asset = intent.getStringExtra(EXTRA_ASSET);
-                playStimulus(app, tag, asset == null ? DEFAULT_ASSET : asset, intent.getIntExtra(EXTRA_LOOPS, 1));
+                playStimulus(app, tag, asset == null ? DEFAULT_ASSET : asset, intent.getIntExtra(EXTRA_LOOPS, 1),
+                        "media".equals(intent.getStringExtra(EXTRA_USAGE)), intent.getIntExtra(EXTRA_PROGRESS, 0));
             } else if (STOP_STIMULUS.equals(action)) {
                 stopStimulus(tag);
             } else if (SET_ROUTE.equals(action)) {
@@ -212,10 +215,12 @@ final class Harness {
 
     // ---------------------------------------------------------------- stimulus
 
-    private static void playStimulus(Context ctx, String tag, String asset, int loops) {
+    private static void playStimulus(Context ctx, String tag, String asset, int loops, boolean media,
+                                     int progressSeconds) {
         stopStimulus(null);
         String path = asset.contains("/") ? asset : "stimulus/" + asset;
-        player = new StimulusPlayer(ctx, path, Math.max(1, loops), tag, connection != null);
+        player = new StimulusPlayer(ctx, path, Math.max(1, loops), tag, connection != null, media,
+                progressSeconds);
         player.start();
     }
 
@@ -278,7 +283,12 @@ final class Harness {
             o.put("perms", perms);
 
             TelecomManager tm = ctx.getSystemService(TelecomManager.class);
-            o.put("account_registered", tm.getPhoneAccount(accountHandle(ctx)) != null);
+            try {
+                o.put("account_registered", tm.getPhoneAccount(accountHandle(ctx)) != null);
+            } catch (SecurityException e) {
+                // getPhoneAccount needs READ_PHONE_NUMBERS on recent Android; the harness doesn't ask for it.
+                o.put("account_registered", "unknown: " + e.getMessage());
+            }
 
             String[] assets = ctx.getAssets().list("stimulus");
             o.put("stimuli", new JSONArray(assets == null ? new String[0] : assets));

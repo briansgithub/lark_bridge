@@ -147,7 +147,7 @@ replies.
 | --- | --- | --- |
 | `CALL_START` | none | registers the account and calls `TelecomManager.placeCall` on it; the connection goes ACTIVE at once. Only one call at a time. |
 | `CALL_END` | none | disconnects locally (`DisconnectCause.LOCAL`) |
-| `PLAY_STIMULUS` | `--es asset <file>` (default `tone_1k_16k_3s.wav`, under `assets/stimulus/`), `--ei loops <n>` (default 1) | plays the WAV with `USAGE_VOICE_COMMUNICATION` / `CONTENT_TYPE_SPEECH`; replaces any playing stimulus. It also plays without a call (logged as `"in_call":false`). |
+| `PLAY_STIMULUS` | `--es asset <file>` (default `tone_1k_16k_3s.wav`, under `assets/stimulus/`), `--ei loops <n>` (default 1), `--es usage voice\|media` (default voice), `--ei progress_s <n>` (default 0, off) | plays the WAV with `USAGE_VOICE_COMMUNICATION` / `CONTENT_TYPE_SPEECH` (HFP/SCO), or with `--es usage media` as `USAGE_MEDIA` / `CONTENT_TYPE_MUSIC` (A2DP). With `progress_s`, it logs a `stimulus_progress` line (frames written and played, underruns, routed device) every n seconds; replaces any playing stimulus. It also plays without a call (logged as `"in_call":false`). |
 | `STOP_STIMULUS` | none | stops playback |
 | `SET_ROUTE` | `--es route bluetooth\|earpiece\|speaker\|wired` | requests a call audio route (`requestCallEndpointChange` on API 34+) |
 | `STATUS` | none | logs one `"event":"status"` line |
