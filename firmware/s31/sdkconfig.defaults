@@ -1,5 +1,8 @@
 # ESP32-S31 is a preview target in the pinned ESP-IDF v6.1-rc1 toolchain.
-CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+# The S31 module has 16 MB of flash. The custom table keeps NVS at 0x9000 (bonds survive).
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # Bluedroid/BR-EDR only: the gateway is HFP HF + A2DP Sink + AVRCP Controller.
 CONFIG_BT_ENABLED=y
