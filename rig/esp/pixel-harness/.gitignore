@@ -1,0 +1,14 @@
+# Build outputs and local-only files for the harness app.
+build/
+.keystore/
+*.apk
+*.apks
+*.aab
+*.idsig
+*.dex
+*.keystore
+*.jks
+.gradle/
+local.properties
+.idea/
+*.iml
