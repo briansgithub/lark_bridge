@@ -60,9 +60,8 @@ static atomic_uint_fast32_t s_overruns;
 static atomic_uint_fast32_t s_tone_hz;
 static atomic_int s_tone_dbfs;
 
-static void fill_test_tone(int16_t *block, size_t frames, float *phase)
+static void fill_test_tone(int16_t *block, size_t frames, float *phase, uint32_t hz)
 {
-    uint32_t hz = (uint32_t)atomic_load_explicit(&s_tone_hz, memory_order_acquire);
     int dbfs = atomic_load_explicit(&s_tone_dbfs, memory_order_acquire);
     float amplitude = 32767.0f * powf(10.0f, (float)dbfs / 20.0f);
     float step = 2.0f * (float)M_PI * (float)hz / (float)S31_AUDIO_SAMPLE_RATE_HZ;
@@ -136,8 +135,9 @@ static void i2s_writer_task(void *argument)
             }
         }
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
-        if (atomic_load_explicit(&s_tone_hz, memory_order_acquire) != 0U) {
-            fill_test_tone((int16_t *)block, I2S_BLOCK_FRAMES, &tone_phase);
+        uint32_t tone_hz = (uint32_t)atomic_load_explicit(&s_tone_hz, memory_order_acquire);
+        if (tone_hz != 0U) {
+            fill_test_tone((int16_t *)block, I2S_BLOCK_FRAMES, &tone_phase, tone_hz);
         }
 #endif
         esp_err_t result = i2s_channel_write(s_i2s_tx, block, sizeof(block), &bytes_written, 1000U);

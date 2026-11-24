@@ -451,6 +451,7 @@ static void handle_line(const char *line)
         break;
     case BRIDGE_CMD_FAULT:
         if (strcmp(request.argv[0], "silence") == 0) {
+            s31_audio_router_set_test_tone(0U, 0);
             s31_gateway_force_silence();
             bridge_json_begin(&json, s_console_record, RECORD_BYTES, "resp");
             add_identity(&json);

@@ -420,6 +420,7 @@ static void handle_line(const char *line)
         break;
     case BRIDGE_CMD_FAULT:
         if (strcmp(request.argv[0], "silence") == 0) {
+            output_audio_set_test_tone(0U, 0);
             output_control_invalidate_local_audio();
             bridge_json_begin(&json, s_console_record, RECORD_BYTES, "resp");
             add_identity(&json);
