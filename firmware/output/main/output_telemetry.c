@@ -34,6 +34,7 @@ static const char *TAG = "output_telemetry";
 
 #define RECORD_BYTES 1280U
 
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
 typedef struct {
     atomic_uint_fast32_t sequence;
     atomic_uint_fast32_t crc;
@@ -43,6 +44,8 @@ typedef struct {
 
 static tap_slot_t s_taps[OUTPUT_TAP_COUNT];
 static const char *const TAP_NAMES[OUTPUT_TAP_COUNT] = {"i2s_in", "a2dp_out"};
+#endif
+
 static TaskHandle_t s_stats_task;
 static TaskHandle_t s_console_task;
 static char s_stats_record[RECORD_BYTES];
