@@ -236,7 +236,9 @@ def run_scenario(bench, gate, limits, analyzer=None, fake_car_address=None):
                     bench.wait(2)
                     pair = bench.pair("status")
                     audio = bench.command("output", "tap a2dp_out")
-                    had_audio = streaming(pair["output"]) and audio["ok"] and audio["rms_l"] > 0
+                    # status carries the local address as "bt"; stats has the link state.
+                    had_audio = (streaming(bench.command("output", "stats")) and audio["ok"]
+                                 and audio["rms_l"] > 0)
                     phase = f"{role}/{fault}"
                     bench.add(t="start", phase=phase, data=pair, audio=audio)
                     if fault == "reboot":
