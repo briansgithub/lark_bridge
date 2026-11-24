@@ -18,6 +18,7 @@ class BuildFirmwareTests(unittest.TestCase):
         command = build_firmware.docker_command("output", lock, "docker-test", pull=False)
         rendered = " ".join(command)
         self.assertEqual(command[:3], ["docker-test", "run", "--rm"])
+        self.assertEqual(command[3:5], ["--pull", "never"])
         self.assertIn("espressif/idf:v6.0.2", command)
         self.assertIn("7101770dc6db2667b3c477cc31365dd1acd6db4e", rendered)
         self.assertIn("set-target esp32", rendered)

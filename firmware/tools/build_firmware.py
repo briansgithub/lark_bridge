@@ -88,9 +88,7 @@ def docker_command(
         "idf.py size; "
         f"python /work/firmware/tools/build_manifest.py {target}"
     )
-    command = [docker, "run", "--rm"]
-    if pull:
-        command.extend(["--pull", "always"])
+    command = [docker, "run", "--rm", "--pull", "always" if pull else "never"]
     command.extend(
         [
             "-e",
