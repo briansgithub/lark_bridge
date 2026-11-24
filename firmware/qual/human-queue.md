@@ -8,7 +8,7 @@ date and the evidence.
 
 | # | Added | For gate | Step | Notes |
 |---|---|---|---|---|
-| P11 | 2026-11-24 | H3, H5, H7, H8 | Wake **MP43247**, explicitly put it into pairing mode, and confirm the Bluetooth name it advertises. | BigBoy removed the bond after the 12:43 ET approval. Three 30-second diagnostic inquiries logged 199 results for one address. None matched the speaker address, partial names, or unnamed audio-sink class. No A2DP connection was attempted. See `evidence/20261124-mp43247-32ue-retry/pair-summary.json`. |
+| ~~P11~~ | 2026-11-24 | H3, H5, H7, H8 | Brian put **MP43247** into pairing mode. COM4 confirmed the name and address and saved the bond. | 44.1 kHz SBC streamed and recovered after a COM4 reset. The H5 short smoke failed its drift and audio continuity checks. See [MP43247 bench report](mp43247-2026-11-24.md). |
 | ~~P10~~ | 2026-11-24 | H8 ingress | The Pixel reconnected to its existing **LarkBridge** bond during H1. | Foreground H8 ingress smoke passed with 180 streaming samples and no underruns. Downstream relay still needs P11. |
 | P9 | 2026-11-24 | H6 | When prompted during the H6 reconnect smoke, unplug and replug the **Lark receiver's USB** at the S31 10 times, about 20 s apart. Then switch the Lark **transmitter** off and on 5 times, about 20 s apart. | The S31 counts each USB replug (`uac.disc`/`opens`), and the reducer scores each one. 100/100 still needs the Pico fake Lark (P7). |
 | ~~P8~~ | 2026-11-24 | H6 acoustic source | Use BigBoy audio or the Pixel 7a speaker as the Lark source. | Brian reassigned MP43247 to the 32UE at 12:43 ET. P11 tracks its pairing blocker. |
