@@ -731,6 +731,14 @@ def run_two_boards(args, gate):
                             raise HilError(f"{role} sdkconfig does not confirm bond-erase is disabled")
                         manifests[role] = expected_version(manifest)
                         commands[role] = app_flash_command(role, port)
+                    preflight = module.Bench(ports, staging, arrival._quiet_serial_factory,
+                                             log_name="preflash.log")
+                    try:
+                        preflight.wait(2)
+                        saved = {role: reply["bt"].get("peer")
+                                 for role, reply in preflight.pair("peers").items()}
+                    finally:
+                        preflight.close()
                     for role, port in zip(module.ROLES, ports):
                         module.identify_ports((port,), (expected[role],))
                         with (staging / f"{role}-flash.log").open("w", encoding="utf-8") as log:
@@ -751,10 +759,14 @@ def run_two_boards(args, gate):
                         raise HilError(f"{role} requires the H2-H5 test image with bond erase disabled")
                     if args.flash and status.get("version") != manifests[role]:
                         raise HilError(f"{role} reported a version different from the flashed manifest")
+                if args.flash:
+                    current = {role: reply["bt"].get("peer") for role, reply in bench.pair("peers").items()}
+                    if current != saved:
+                        raise HilError("saved Bluetooth peer changed across app-only flash")
                 module.run_scenario(bench, args.gate, gate, args.analyzer, args.fake_car_address)
                 if args.recording:
                     shutil.copy2(args.recording, staging / "fake-car.wav")
-            except (OSError, HilError, module.BenchError, subprocess.TimeoutExpired) as error:
+            except (OSError, HilError, module.BenchError, subprocess.TimeoutExpired, KeyError) as error:
                 if bench is None:
                     records.append({"t": "abort", "reason": str(error)})
                     (staging / "bench.jsonl").write_text(json.dumps(records[0]) + "\n", encoding="utf-8")

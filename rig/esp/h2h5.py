@@ -21,7 +21,7 @@ class BenchError(RuntimeError):
 
 
 class Bench:
-    def __init__(self, ports, directory, quiet_serial):
+    def __init__(self, ports, directory, quiet_serial, *, log_name="bench.jsonl"):
         import serial
 
         self.directory = directory
@@ -35,7 +35,7 @@ class Bench:
         self.restart = None
         self.boots = dict.fromkeys(ROLES, 0)
         self.last_uptime = {}
-        self.log = (directory / "bench.jsonl").open("w", encoding="utf-8")
+        self.log = (directory / log_name).open("w", encoding="utf-8")
         try:
             for role in ROLES:
                 self.connect(role)
@@ -81,7 +81,12 @@ class Bench:
                     record = json.loads(line)
                 except (ValueError, UnicodeError):
                     if line.strip():
-                        self.add(role=role, t="console", line=line.decode(errors="replace"))
+                        message = line.decode(errors="replace").strip()
+                        self.add(role=role, t="console", line=message)
+                        if ("Guru Meditation Error" in message or
+                                (message.startswith("rst:0x") and role != self.restart and
+                                 role in self.last_uptime)):
+                            raise BenchError(f"unexpected boot or reset loop on {role}")
                     continue
                 if not isinstance(record, dict):
                     continue
