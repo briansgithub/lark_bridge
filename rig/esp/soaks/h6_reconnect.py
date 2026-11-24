@@ -22,10 +22,6 @@ def usb_cycle(bench, executable, cycle, seconds):
 
 
 def scenario(bench, args, metrics):
-    start = len(bench.records)
-    started = time.monotonic()
-    bench.wait(2)
-    bench.command("s31", "tap lark_in")
     metrics["p7_recovered"] = 0
     metrics["p9_usb_recovered"] = 0
     metrics["p9_tx_completed"] = 0
@@ -42,6 +38,14 @@ def scenario(bench, args, metrics):
                     (r["uac"]["rx"] - before["rx"]) % 2**32 > 0,
                     args.recovery_seconds, f"P9 transmitter cycle {cycle} disrupted USB capture")
             metrics["p9_tx_completed"] += 1
+    if args.p7_setup_hook:
+        hook(bench, args.p7_setup_hook)
+    observe(bench, "s31", lambda r: r["uac"]["started"], args.recovery_seconds,
+            "P7 fixture did not start UAC capture")
+    start = len(bench.records)
+    started = time.monotonic()
+    bench.wait(2)
+    bench.command("s31", "tap lark_in")
     for cycle in range(1, 101):
         usb_cycle(bench, args.p7_cycle_hook, cycle, args.recovery_seconds)
         metrics["p7_recovered"] += 1
@@ -53,12 +57,15 @@ def scenario(bench, args, metrics):
     verdict, scored, reasons = hil.reduce_h6_uac(
         text, boot_log=boot, min_seconds=args.seconds, span_seconds=time.monotonic() - started)
     metrics.update(scored)
+    require(scored.get("uac_disconnects") == 100 and scored.get("uac_reopens") == 100,
+            "P7 capture must show exactly 100 disconnects and reopens")
     return verdict, reasons
 
 
 def main():
     cli = parser(__doc__)
     cli.add_argument("--p7-cycle-hook", required=True, help="fake-Lark USB replug executable, takes cycle number")
+    cli.add_argument("--p7-setup-hook", help="optional fixture handover executable, takes no arguments")
     cli.add_argument("--p9-usb-hook", help="optional USB replug fixture executable, takes cycle number")
     cli.add_argument("--p9-tx-hook", help="optional transmitter off/on executable, takes cycle number")
     cli.add_argument("--boot-log", type=Path, help="S31 log with the initial UAC enumeration")
