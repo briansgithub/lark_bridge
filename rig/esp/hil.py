@@ -552,7 +552,27 @@ def app_flash_command(target: str, port: str, python: str = sys.executable) -> l
 
 
 def revisions(target: str | None) -> dict[str, Any]:
-    snapshot = arrival.git_snapshot(REPO_ROOT)
+    try:
+        snapshot = arrival.git_snapshot(REPO_ROOT)
+    except arrival.ArrivalError:
+        git_pointer = REPO_ROOT / ".git"
+        if os.name != "nt" or not git_pointer.is_file() or not git_pointer.read_text().startswith("gitdir: /"):
+            raise
+
+        # Windows Git cannot follow a linked worktree's Linux gitdir. Resolve
+        # that worktree using the same WSL Git which created it.
+        def wsl_git(*args):
+            return subprocess.check_output(
+                ["wsl.exe", "--cd", str(REPO_ROOT), "git", *args],
+                encoding="utf-8", stderr=subprocess.PIPE,
+            ).strip()
+
+        try:
+            commit = wsl_git("rev-parse", "HEAD")
+            paths = wsl_git("status", "--porcelain=v1", "--untracked-files=all", "--", ".").splitlines()
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise HilError(f"cannot inspect the WSL worktree from Windows: {error}") from error
+        snapshot = {"commit": commit, "dirty": bool(paths), "dirty_paths": paths}
     info: dict[str, Any] = {"checkout": snapshot, "hil_version": 0}
     lock = FIRMWARE_ROOT / "toolchain.lock.json"
     if lock.is_file():
@@ -566,7 +586,8 @@ def revisions(target: str | None) -> dict[str, Any]:
 
 def write_result(gate: str, verdict: str, metrics: dict[str, Any], reasons: list[str], *,
                  target: str | None, artifacts: Sequence[Path] = (), results_root: Path = RESULTS_ROOT,
-                 extra: dict[str, Any] | None = None) -> Path:
+                 extra: dict[str, Any] | None = None,
+                 source: dict[str, Any] | None = None) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = results_root / f"{stamp}-{gate}"
     suffix = 1
@@ -581,7 +602,8 @@ def write_result(gate: str, verdict: str, metrics: dict[str, Any], reasons: list
         recorded.append({"name": artifact.name, "sha256": arrival.sha256(destination),
                          "bytes": destination.stat().st_size})
     result = {"schema": 1, "gate": gate, "verdict": verdict, "reasons": reasons,
-              "recorded_at": utc_now(), "revisions": revisions(target), "artifacts": recorded,
+              "recorded_at": utc_now(), "revisions": source if source is not None else revisions(target),
+              "artifacts": recorded,
               **(extra or {})}
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n",
                                           encoding="utf-8")
@@ -708,6 +730,7 @@ def run_two_boards(args, gate):
     ports = (args.s31_port, args.output_port)
     if any(port is None or not arrival.PORT_RE.fullmatch(port) for port in ports) or ports[0] == ports[1]:
         raise HilError("specify distinct --s31-port and --output-port")
+    source = revisions(None)
     lease = default_lease_path()
     acquire_lease(lease, args.owner, ttl=max(600, gate.get("stream_seconds", 0) + 900,
                                             gate.get("clean_seconds", 0) + 900), renew=False)
@@ -778,7 +801,8 @@ def run_two_boards(args, gate):
             artifacts = list(staging.iterdir())
             verdict, metrics, reasons = module.reduce(args.gate, gate, records, artifacts)
             run_dir = write_result(args.gate, verdict, metrics, reasons, target=None, artifacts=artifacts,
-                                   results_root=args.results, extra={"ports": ports, "flashed": args.flash})
+                                   results_root=args.results, source=source,
+                                   extra={"ports": ports, "flashed": args.flash})
             print(json.dumps({"gate": args.gate, "verdict": verdict, "reasons": reasons,
                               "run_dir": str(run_dir)}, indent=2))
             return 0 if verdict == "PASS" else 2

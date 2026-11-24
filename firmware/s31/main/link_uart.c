@@ -493,11 +493,16 @@ static void link_task(void *argument)
 {
     (void)argument;
     uint8_t input[256];
-    TickType_t last_periodic = 0;
+    const TickType_t heartbeat_period = pdMS_TO_TICKS(S31_LINK_HEARTBEAT_PERIOD_MS);
+    const TickType_t max_read_wait = pdMS_TO_TICKS(50U);
+    TickType_t next_periodic = xTaskGetTickCount() + heartbeat_period;
     TickType_t last_drift_log = 0;
     announce_hello();
     for (;;) {
-        int count = uart_read_bytes(S31_LINK_UART_PORT, input, sizeof(input), pdMS_TO_TICKS(50));
+        int32_t until_periodic = (int32_t)(next_periodic - xTaskGetTickCount());
+        TickType_t read_wait = until_periodic > 0 ? (TickType_t)until_periodic : 0U;
+        if (read_wait > max_read_wait) read_wait = max_read_wait;
+        int count = uart_read_bytes(S31_LINK_UART_PORT, input, sizeof(input), read_wait);
         for (int index = 0; index < count; ++index) {
             bridge_packet_t packet;
             bridge_decoder_result_t result = bridge_stream_decoder_feed(
@@ -522,13 +527,16 @@ static void link_task(void *argument)
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
         run_link_test((uint32_t)(now * portTICK_PERIOD_MS));
 #endif
-        if ((now - last_periodic) >= pdMS_TO_TICKS(S31_LINK_HEARTBEAT_PERIOD_MS)) {
+        if ((int32_t)(now - next_periodic) >= 0) {
             send_heartbeat();
             send_status();
             /* Same-session HELLO is idempotent. Periodic advertisement makes
              * either board's reboot recovery independent of UART burst timing. */
             announce_hello();
-            last_periodic = now;
+            /* Keep the cadence tied to its deadline despite variable UART read times.
+             * A stall spanning a full interval should not cause a burst of stale sends. */
+            next_periodic += heartbeat_period;
+            if ((int32_t)(now - next_periodic) >= 0) next_periodic = now + heartbeat_period;
         }
         if (s_peer_seen &&
             (now - last_drift_log) >= pdMS_TO_TICKS(5000U)) {
