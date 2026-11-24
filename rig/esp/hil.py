@@ -445,32 +445,45 @@ def release_lease(path: Path, owner: str) -> bool:
 
 # --- flashing ------------------------------------------------------------------------------
 
-FORBIDDEN_ESPTOOL = re.compile(r"erase[_-]flash|erase[_-]region|efuse|secure|encrypt|write[_-]flash-status",
-                               re.IGNORECASE)
-
-
 def app_flash_command(target: str, port: str, python: str = sys.executable) -> list[str]:
-    """esptool command that writes only the application image at its generated offset."""
+    """Build the app-only esptool command from a verified bundle."""
+    if not arrival.PORT_RE.fullmatch(port):
+        raise HilError("serial port contains unsupported characters")
+    _, artifacts = arrival.validate_build_manifest(target)
+    build = FIRMWARE_ROOT / target / "build"
+    definition = json.loads((build / "flasher_args.json").read_text(encoding="utf-8"))
+    app = definition.get("app", {})
+    expected = {"output": ("esp32", "larkbridge_output.bin"),
+                "s31": ("esp32s31", "larkbridge_s31_gateway.bin")}
+    chip, filename = expected[target]
+    binary = (build / filename).resolve()
+    if (app.get("file") != filename or app.get("offset") != "0x10000"
+            or app.get("encrypted") not in (False, "false")
+            or binary not in artifacts):
+        raise HilError("flash definition does not describe the verified app at 0x10000")
 
-    manifest, _ = arrival.validate_build_manifest(target)
-    definition = json.loads((FIRMWARE_ROOT / target / "build" / "flasher_args.json")
-                            .read_text(encoding="utf-8"))
-    app = definition.get("app")
-    if not isinstance(app, dict) or not app.get("offset") or not app.get("file"):
-        raise HilError("flasher_args.json has no app entry")
     extra = definition.get("extra_esptool_args", {})
+    before = extra.get("before", "default-reset")
+    after = extra.get("after", "hard-reset")
+    if (extra.get("chip") != chip or before != "default-reset"
+            or after != "hard-reset"):
+        raise HilError("unexpected esptool chip or reset settings")
+
     write = definition.get("write_flash_args", [])
-    command = [python, "-m", "esptool", "--chip", str(extra["chip"]), "--port", port,
-               "--before", str(extra.get("before", "default-reset")),
-               "--after", str(extra.get("after", "hard-reset"))]
+    allowed = {"--flash-mode": r"dio|dout|qio|qout|keep",
+               "--flash-size": r"(?:1|2|4|8|16|32|64|128)MB|keep|detect",
+               "--flash-freq": r"(?:20|26|40|80)m|keep"}
+    if not isinstance(write, list) or len(write) % 2 or not all(
+        isinstance(flag, str) and flag in allowed and isinstance(value, str)
+        and re.fullmatch(allowed[flag], value) for flag, value in zip(write[::2], write[1::2])
+    ):
+        raise HilError("unexpected esptool write options")
+
+    command = [python, "-m", "esptool", "--chip", chip, "--port", port,
+               "--before", before, "--after", after]
     if extra.get("stub") is False:
         command.append("--no-stub")
-    # esptool 5 spelling; the offsets and flash settings come from the generated file only.
-    command += ["write-flash", *[str(a) for a in write], str(app["offset"]),
-                str(FIRMWARE_ROOT / target / "build" / app["file"])]
-    if any(FORBIDDEN_ESPTOOL.search(part) for part in command):
-        raise HilError(f"refusing a forbidden esptool operation: {command}")
-    return command
+    return command + ["write-flash", *write, app["offset"], str(binary)]
 
 
 # --- runs ----------------------------------------------------------------------------------

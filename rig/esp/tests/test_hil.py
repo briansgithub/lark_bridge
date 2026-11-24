@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -168,12 +169,29 @@ class LeaseTests(unittest.TestCase):
 
 
 class FlashCommandTests(unittest.TestCase):
-    def test_forbidden_operations_regex(self):
-        for word in ("erase_flash", "erase-flash", "erase-region", "burn-efuse",
-                     "--secure-boot", "--encrypt"):
-            self.assertTrue(hil.FORBIDDEN_ESPTOOL.search(word), word)
-        for word in ("write-flash", "--flash-size", "0x10000", "hard-reset"):
-            self.assertFalse(hil.FORBIDDEN_ESPTOOL.search(word), word)
+    def test_app_only_command_rejects_extra_write_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            build = root / "s31" / "build"
+            build.mkdir(parents=True)
+            app = build / "larkbridge_s31_gateway.bin"
+            definition = {
+                "app": {"offset": "0x10000", "file": app.name, "encrypted": "false"},
+                "extra_esptool_args": {"chip": "esp32s31", "stub": False},
+                "write_flash_args": ["--flash-mode", "dio"],
+            }
+            path = build / "flasher_args.json"
+            with patch.object(hil, "FIRMWARE_ROOT", root), patch.object(
+                hil.arrival, "validate_build_manifest", return_value=(MANIFEST, [app.resolve()])
+            ):
+                path.write_text(json.dumps(definition))
+                command = hil.app_flash_command("s31", "COM3")
+                self.assertEqual(command[-5:], ["write-flash", "--flash-mode", "dio",
+                                                "0x10000", str(app.resolve())])
+                definition["write_flash_args"] += ["--erase-all", "--force"]
+                path.write_text(json.dumps(definition))
+                with self.assertRaises(hil.HilError):
+                    hil.app_flash_command("s31", "COM3")
 
 
 if __name__ == "__main__":
