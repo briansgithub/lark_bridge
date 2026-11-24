@@ -382,10 +382,8 @@ static void respond_tap(const char *stage_name)
         bridge_json_u32(&json, "rms_l", rms_l);
         bridge_json_u32(&json, "rms_r", rms_r);
         bridge_json_u32(&json, "nz_blocks", nz_blocks);
-        if (stage == OUTPUT_TAP_I2S_IN) {
-            bridge_json_u32(&json, "tone_mhz_l", tone_mhz_l);
-            bridge_json_u32(&json, "tone_mhz_r", tone_mhz_r);
-        }
+        bridge_json_u32(&json, "tone_mhz_l", tone_mhz_l);
+        bridge_json_u32(&json, "tone_mhz_r", tone_mhz_r);
         emit(s_console_record, &json);
         return;
     }

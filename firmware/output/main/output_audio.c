@@ -377,6 +377,13 @@ static size_t pull_from_ring(void *destination, size_t length, uint32_t rate, bo
         }
         atomic_store_explicit(&s_primed, true, memory_order_release);
         portENTER_CRITICAL(&s_ring.mux);
+        /* The first pull can arrive well after the prefill was reached; start
+         * at the regulation target so the loop begins with zero error. */
+        size_t excess_bytes = s_ring.count - prefill_frames * PCM_BYTES_PER_FRAME;
+        excess_bytes -= excess_bytes % PCM_BYTES_PER_FRAME;
+        s_ring.read_index = (s_ring.read_index + excess_bytes) % ring_capacity();
+        s_ring.count -= excess_bytes;
+        fill_frames = s_ring.count / PCM_BYTES_PER_FRAME;
         s_ring.fifo_min_frames = (uint32_t)(s_ring.count / PCM_BYTES_PER_FRAME);
         if (s_ring.fifo_min_frames > s_ring.fifo_max_frames) {
             s_ring.fifo_max_frames = s_ring.fifo_min_frames;
