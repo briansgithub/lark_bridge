@@ -222,3 +222,37 @@ A `status` line looks like this:
    the phone side rather than the S31 tap.
 
 Uninstall: `adb uninstall dev.larkbridge.harness`.
+
+## H9 uplink measurement
+
+Keep the harness activity visible and grant `RECORD_AUDIO` before starting
+the call. Send `CALL_START` with `--ez record_uplink true`. On Android 14
+and later, the visible activity lets the app start its microphone foreground
+service under the while-in-use permission rules. A call without the extra
+uses the existing phone-call service alone.
+[Android foreground service rules](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start#wiu-restrictions)
+
+The recorder uses the app's `VOICE_COMMUNICATION` source for the self-managed
+call. It waits for the call's Bluetooth SCO communication device, then checks
+the recorder's actual input route and rejects PCM from a handset mic. It
+compares the input and output Bluetooth address when Android supplies both.
+`VOICE_UPLINK` is a privileged telephony source.
+[Android audio sources](https://developer.android.com/reference/android/media/MediaRecorder.AudioSource)
+
+1. Start the opted-in call, then poll `STATUS` until `uplink.state` is
+   `recording` and `uplink.routed_input.type` is `BLUETOOTH_SCO`. Compare
+   the reported input to the S31. A route or read failure sets `state=error`.
+2. Use a controlled signal at the Lark mic and compare `uplink.rms` and
+   `frequency_hz` to that stimulus. AEC-locked firmware should produce
+   silent uplink. Use a qualified image for an active-signal H9 result.
+3. Check `frames` against `read_span_ms` at 16 kHz. Inspect
+   `read_gaps_ge_100_ms` and `max_read_gap_ms` for recorder delivery gaps.
+   `silent_windows` and `longest_silence_ms` describe the content in
+   20 ms windows below RMS 32. These are app-side delivery measurements.
+4. Send `CALL_END`, then poll `STATUS` for `uplink.state=done`, or collect
+   the final `uplink_record_ended` log. A new call resets the prior result.
+   The recorder discards the PCM after measurement.
+
+For an in-place APK update from another checkout, set `DEBUG_KEYSTORE` to
+the path of the debug keystore used for the installed APK before running
+`build.sh`.

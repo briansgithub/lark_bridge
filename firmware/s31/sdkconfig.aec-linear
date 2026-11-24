@@ -1,0 +1,4 @@
+# D5 test overlay. Apply after sdkconfig.test.
+CONFIG_LARKBRIDGE_S31_AEC_ENGINE=y
+CONFIG_LARKBRIDGE_S31_AEC_LINEAR_ONLY=y
+# CONFIG_SPIRAM is not set
