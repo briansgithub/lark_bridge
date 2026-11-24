@@ -62,4 +62,3 @@ static inline bool output_sbc_select(const output_sbc_t *caps, bool fallback,
     *config = selected;
     return true;
 }
-
