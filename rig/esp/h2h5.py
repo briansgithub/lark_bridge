@@ -94,7 +94,8 @@ class Bench:
                 )
                 if restarted:
                     self.boots[role] += 1
-                    if role != self.restart or self.boots[role] > 1:
+                    unexpected = role != self.restart and role in self.last_uptime
+                    if unexpected or self.boots[role] > 1:
                         raise BenchError(f"unexpected boot or reset loop on {role}")
                     self.last_uptime.pop(role, None)
                 if uptime is not None:

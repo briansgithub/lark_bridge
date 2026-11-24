@@ -743,6 +743,7 @@ def run_two_boards(args, gate):
                         time.sleep(3)
                 bench = module.Bench(ports, staging, arrival._quiet_serial_factory)
                 records = bench.records
+                bench.wait(2)
                 for role, status in bench.pair("status").items():
                     if status.get("image") != "test" or status.get("erase_bonds") != 0 or (
                         "dec_err" not in status.get("uart", {})
