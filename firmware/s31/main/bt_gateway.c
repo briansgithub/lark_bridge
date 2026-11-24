@@ -476,7 +476,7 @@ static bool request_reconnect(reconnect_profile_t *profile, esp_bd_addr_t peer,
 
 static void reconnect_worker(void *context)
 {
-    uint32_t next_attempt_ms = now_ms() + S31_BT_RECONNECT_INITIAL_MS;
+    uint32_t next_attempt_ms = now_ms() + S31_BT_RECONNECT_BOOT_HOLD_MS;
     uint32_t backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
     reconnect_profile_t hfp = {
         .name = "HFP", .completions = &s_hfp_connection_completions,

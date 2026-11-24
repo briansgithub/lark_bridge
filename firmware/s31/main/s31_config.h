@@ -25,6 +25,11 @@ enum {
     S31_BT_RECONNECT_INITIAL_MS = 1000,
     S31_BT_RECONNECT_MAX_MS = 30000,
     S31_BT_RECONNECT_STALL_MS = 10000,
+    /* After a reset that cut a live link, the phone pages back within about
+     * 3 s. An outbound connect in that window collides (HCI 0x0B) and leaves
+     * Bluedroid ignoring later connect requests (D4). Let the phone's
+     * reconnect land first. */
+    S31_BT_RECONNECT_BOOT_HOLD_MS = 5000,
 };
 
 #define S31_BT_DEVICE_NAME "LarkBridge"
