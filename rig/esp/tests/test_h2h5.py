@@ -63,6 +63,43 @@ class TwoBoardTests(unittest.TestCase):
             tone.write_bytes(samples_on_wire([(l, l) for l in left]))
             self.assertEqual(h2h5.reduce("H4", limits, records, (tone, silence))[0], "FAIL")
 
+    def test_h2_requires_matching_decoder_probe_and_duplicate_counts(self):
+        limits = {**hil.load_gates()["H2"], "clean_seconds": 1, "post_seconds": 1}
+        records = []
+
+        def add(record_type, **fields):
+            record = {"host": len(records), "t": record_type, **fields}
+            records.append(record)
+            return record
+
+        def status(role, up=0, **increments):
+            uart = dict.fromkeys(h2h5.CLEAN + ("exec", "dup", "hb_rx"), 0)
+            return {"role": role, "up_ms": up, "stats_period_ms": 1000,
+                    "uart": {**uart, "peer": True, "alive": True, "hb_gap_max_ms": 500, **increments}}
+
+        def clean(phase):
+            add("start", phase=phase, data={r: status(r) for r in h2h5.ROLES})
+            for role in h2h5.ROLES:
+                add("stats", **status(role, 500))
+            add("end", phase=phase, data={r: status(r, up=1000, hb_rx=2) for r in h2h5.ROLES})
+
+        clean("clean")
+        for role in h2h5.ROLES:
+            peer = h2h5.other(role)
+            for kind, fault in enumerate(h2h5.FAULTS, 1):
+                phase = f"{role}/{fault}"
+                add("start", phase=phase, data=status(peer))
+                add("event", role=role, ev="inject", kind=kind, probe_seq=42)
+                probe = add("event", role=peer, ev="rx_recover", type=2, seq=42)
+                add("end", phase=phase, data=status(peer, dec_err=1, proto_err=1))
+        add("start", phase="s31/uart_dup", data=status("output"))
+        add("end", phase="s31/uart_dup", data=status("output", exec=1, dup=2))
+        clean("post")
+
+        self.assertEqual(h2h5.reduce("H2", limits, records)[0], "PASS")
+        probe["seq"] = 43
+        self.assertEqual(h2h5.reduce("H2", limits, records)[0], "FAIL")
+
     def test_h5_detects_counter_change_and_coverage(self):
         before, after = stream(0, 0), stream(4, 4000)
         rows = [stream(i, i * 1000, "stats") for i in range(4)]
