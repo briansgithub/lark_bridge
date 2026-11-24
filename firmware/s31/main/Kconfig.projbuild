@@ -28,6 +28,15 @@ config LARKBRIDGE_S31_AEC_ENGINE
         The full-duplex engine needs a registered PSRAM heap.
         Enable only to debug ESP-SR on the bench.
 
+config LARKBRIDGE_S31_AEC_LINEAR_ONLY
+    bool "Use the linear-only ESP-SR AEC mode for D5"
+    depends on LARKBRIDGE_S31_AEC_ENGINE
+    default n
+    help
+        Use SR_LOW_COST to bypass the nonlinear initializer. This bench
+        comparison does not require enabling PSRAM and does not qualify
+        the resulting echo suppression for call uplink use.
+
 config LARKBRIDGE_S31_EXPERIMENTAL_AEC_UPLINK
     bool "Enable unqualified ESP-SR AEC call uplink"
     depends on LARKBRIDGE_S31_AEC_ENGINE

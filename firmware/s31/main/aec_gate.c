@@ -32,6 +32,12 @@
 #define AEC_ALIGNMENT_RATE_SCALE 1000000LL
 #define AEC_OUTPUT_PREFILL_FRAMES 2U
 
+#ifdef CONFIG_LARKBRIDGE_S31_AEC_LINEAR_ONLY
+#define AEC_ENGINE_MODE AEC_MODE_SR_LOW_COST
+#else
+#define AEC_ENGINE_MODE AEC_MODE_FD_LOW_COST
+#endif
+
 #ifdef CONFIG_LARKBRIDGE_S31_EXPERIMENTAL_AEC_UPLINK
 #define AEC_PUBLISH_ENABLED true
 #else
@@ -133,7 +139,7 @@ static bool start_engine(aec_worker_t *worker)
         .filter_length = AEC_FILTER_LENGTH,
         .sample_rate = AEC_SAMPLE_RATE_HZ,
         .caps = MALLOC_CAP_8BIT,
-        .mode = AEC_MODE_FD_LOW_COST,
+        .mode = AEC_ENGINE_MODE,
         .nlp_level = AEC_NLP_LEVEL_AGGR,
     };
     int frame_samples;
@@ -351,8 +357,13 @@ static void aec_task(void *argument)
         }
 
         int64_t started_us = esp_timer_get_time();
-        aec_process(worker.handle, worker.mic_16k_mono,
-                    worker.reference_16k_mono, worker.output_16k_mono);
+        if (AEC_ENGINE_MODE == AEC_MODE_SR_LOW_COST) {
+            aec_linear_process(worker.handle, worker.mic_16k_mono,
+                               worker.reference_16k_mono, worker.output_16k_mono);
+        } else {
+            aec_process(worker.handle, worker.mic_16k_mono,
+                        worker.reference_16k_mono, worker.output_16k_mono);
+        }
         uint32_t elapsed_us = (uint32_t)(esp_timer_get_time() - started_us);
         if (elapsed_us > worker.max_process_us) {
             worker.max_process_us = elapsed_us;
@@ -395,7 +406,8 @@ esp_err_t s31_aec_gate_init(void)
 #endif
     /* ESP-SR 2.5.1's FD nonlinear initializer hardcodes SPIRAM caps.
      * With no such heap it can dereference a failed allocation. */
-    if (heap_caps_get_total_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) == 0U) {
+    if (AEC_ENGINE_MODE == AEC_MODE_FD_LOW_COST &&
+        heap_caps_get_total_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) == 0U) {
         ESP_LOGE(TAG, "D5: FD AEC requires a registered 8-bit PSRAM heap");
         s31_gateway_set_fault(BRIDGE_FAULT_AEC_NOT_READY);
         return ESP_OK;
