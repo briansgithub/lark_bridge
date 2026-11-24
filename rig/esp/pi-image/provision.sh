@@ -64,6 +64,9 @@ REBOOT_NEEDED=0
 # ---------------------------------------------------------------- 1. refuse the product card
 
 reasons="$(product_card_reasons "$R"; live_overlay_reasons)"
+if [ -r "$R/etc/hostname" ] && [ "$(cat "$R/etc/hostname")" = larkbridge ]; then
+  reasons+="${reasons:+$'\n'}product hostname present in /etc/hostname"
+fi
 if [ -n "$reasons" ]; then
   err "this looks like the PRODUCT LarkBridge card or an overlayroot system. Refusing."
   while IFS= read -r line; do err "  - $line"; done <<<"$reasons"

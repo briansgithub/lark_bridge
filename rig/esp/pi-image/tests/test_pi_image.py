@@ -180,6 +180,10 @@ class ProvisionTests(unittest.TestCase):
             self.assertIn("Refusing", proc.stderr)
         self.assertEqual(snapshot(self.root), before)
 
+    def test_refuses_product_hostname_on_the_card(self):
+        (self.root / "etc/hostname").write_text("larkbridge\n")
+        self.assert_refused("product hostname")
+
     def test_refuses_product_and_overlayroot_markers(self):
         markers = {
             "etc/overlayroot.local.conf": "file",
