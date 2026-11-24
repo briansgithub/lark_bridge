@@ -20,6 +20,10 @@
 #define I2S_READ_BYTES (I2S_READ_FRAMES * PCM_BYTES_PER_FRAME)
 #define I2S_CLOCK_ACTIVE_MS 100U
 #define ADAPTIVE_BLOCK_FRAMES 240U
+#define I2S_RATE_HZ 48000U
+#define MIN_SINK_RATE_HZ 44100U
+#define ADAPTIVE_INPUT_FRAMES \
+    ((ADAPTIVE_BLOCK_FRAMES * I2S_RATE_HZ + MIN_SINK_RATE_HZ - 1U) / MIN_SINK_RATE_HZ + 1U)
 #define RATE_CORRECTION_SCALE 1000000LL
 #define RATE_MAX_CORRECTION_PPM 500
 #define RATE_UPDATE_INTERVAL_MS 100U
@@ -50,10 +54,11 @@ static atomic_bool s_primed;
 static atomic_bool s_rate_reset_requested;
 static atomic_uint_fast32_t s_last_read_ms;
 static uint8_t s_i2s_buffer[I2S_READ_BYTES];
-static int16_t s_adaptive_input[(ADAPTIVE_BLOCK_FRAMES + 1U) * 2U];
+static int16_t s_adaptive_input[ADAPTIVE_INPUT_FRAMES * 2U];
 static int16_t s_adaptive_output[ADAPTIVE_BLOCK_FRAMES * 2U];
 static bridge_rate_controller_t s_rate_controller;
 static int64_t s_frame_adjustment_accumulator;
+static uint32_t s_nominal_input_remainder;
 static int32_t s_held_correction_ppm;
 static uint32_t s_last_rate_update_ms;
 
@@ -155,7 +160,7 @@ static void i2s_reader_task(void *context) {
 esp_err_t output_audio_start(void) {
     i2s_chan_config_t channel_config = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_SLAVE);
     i2s_std_config_t standard_config = {
-        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(48000U),
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(I2S_RATE_HZ),
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
             I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
         .gpio_cfg =
@@ -256,26 +261,29 @@ static atomic_uint_fast32_t s_tone_hz;
 static atomic_int s_tone_dbfs;
 static float s_tone_phase;
 
-static size_t apply_test_tone(uint8_t *output, size_t length) {
+static size_t apply_test_tone(uint8_t *output, size_t length, uint32_t rate, bool mono) {
     uint32_t hz = (uint32_t)atomic_load_explicit(&s_tone_hz, memory_order_acquire);
     int16_t *samples = (int16_t *)output;
-    size_t frames = length / PCM_BYTES_PER_FRAME;
+    size_t channels = mono ? 1U : 2U;
+    size_t frames = length / (channels * sizeof(int16_t));
     if (hz == 0U) {
         return 0U;
     }
     float amplitude =
         32767.0f * powf(10.0f, (float)atomic_load(&s_tone_dbfs) / 20.0f);
-    float step = 2.0f * (float)M_PI * (float)hz / 48000.0f;
+    float step = 2.0f * (float)M_PI * (float)hz / (float)rate;
     for (size_t frame = 0; frame < frames; ++frame) {
         int16_t sample = (int16_t)lrintf(amplitude * sinf(s_tone_phase));
-        samples[frame * 2U] = sample;
-        samples[frame * 2U + 1U] = (int16_t)(sample == INT16_MIN ? INT16_MAX : -sample);
+        samples[frame * channels] = sample;
+        if (!mono) {
+            samples[frame * 2U + 1U] = (int16_t)(sample == INT16_MIN ? INT16_MAX : -sample);
+        }
         s_tone_phase += step;
         if (s_tone_phase >= 2.0f * (float)M_PI) {
             s_tone_phase -= 2.0f * (float)M_PI;
         }
     }
-    return frames * PCM_BYTES_PER_FRAME;
+    return frames * channels * sizeof(int16_t);
 }
 #endif
 
@@ -291,17 +299,17 @@ bool output_audio_set_test_tone(uint32_t hz, int32_t dbfs) {
 #endif
 }
 
-static size_t pull_from_ring(void *destination, size_t length);
+static size_t pull_from_ring(void *destination, size_t length, uint32_t rate, bool mono);
 
-size_t output_audio_pull(void *destination, size_t length) {
-    size_t produced = pull_from_ring(destination, length);
+size_t output_audio_pull(void *destination, size_t length, uint32_t rate, bool mono) {
+    size_t produced = pull_from_ring(destination, length, rate, mono);
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
-    if (destination != NULL && length >= PCM_BYTES_PER_FRAME) {
-        size_t toned = apply_test_tone(destination, length - (length % PCM_BYTES_PER_FRAME));
+    if (destination != NULL && length >= sizeof(int16_t)) {
+        size_t toned = apply_test_tone(destination, length, rate, mono);
         if (toned != 0U) {
             produced = toned;
         }
-        if (produced != 0U) {
+        if (produced != 0U && !mono && rate == I2S_RATE_HZ) {
             output_telemetry_tap_note(OUTPUT_TAP_A2DP_OUT, destination, produced);
         }
     }
@@ -309,7 +317,7 @@ size_t output_audio_pull(void *destination, size_t length) {
     return produced;
 }
 
-static size_t pull_from_ring(void *destination, size_t length) {
+static size_t pull_from_ring(void *destination, size_t length, uint32_t rate, bool mono) {
     uint8_t *output = destination;
     size_t output_length;
     size_t output_offset = 0U;
@@ -321,7 +329,8 @@ static size_t pull_from_ring(void *destination, size_t length) {
     if (output == NULL || length == 0U) {
         return 0U;
     }
-    output_length = length - (length % PCM_BYTES_PER_FRAME);
+    size_t output_frame_bytes = mono ? sizeof(int16_t) : PCM_BYTES_PER_FRAME;
+    output_length = length - (length % output_frame_bytes);
     (void)memset(output, 0, output_length);
     if (!atomic_load_explicit(&s_capture_active, memory_order_acquire)) {
         return 0U;
@@ -329,6 +338,7 @@ static size_t pull_from_ring(void *destination, size_t length) {
     if (atomic_exchange_explicit(&s_rate_reset_requested, false, memory_order_acq_rel)) {
         bridge_rate_controller_reset(&s_rate_controller);
         s_frame_adjustment_accumulator = 0;
+        s_nominal_input_remainder = 0U;
         s_held_correction_ppm = 0;
         s_last_rate_update_ms = 0U;
     }
@@ -353,6 +363,7 @@ static size_t pull_from_ring(void *destination, size_t length) {
         portEXIT_CRITICAL(&s_ring.mux);
         bridge_rate_controller_reset(&s_rate_controller);
         s_frame_adjustment_accumulator = 0;
+        s_nominal_input_remainder = 0U;
         s_held_correction_ppm = 0;
     }
     current_ms = (uint32_t)(esp_timer_get_time() / 1000);
@@ -368,12 +379,16 @@ static size_t pull_from_ring(void *destination, size_t length) {
     portEXIT_CRITICAL(&s_ring.mux);
 
     while (output_offset < output_length) {
-        size_t output_frames = (output_length - output_offset) / PCM_BYTES_PER_FRAME;
+        size_t output_frames = (output_length - output_offset) / output_frame_bytes;
         int adjustment = 0;
         if (output_frames > ADAPTIVE_BLOCK_FRAMES) {
             output_frames = ADAPTIVE_BLOCK_FRAMES;
         }
-        s_frame_adjustment_accumulator -= (int64_t)correction * (int64_t)output_frames;
+        /* Keep fractional input frames across callbacks so only clock drift reaches the PI controller. */
+        uint32_t scaled_frames = (uint32_t)output_frames * I2S_RATE_HZ + s_nominal_input_remainder;
+        size_t nominal_input_frames = scaled_frames / rate;
+        s_nominal_input_remainder = scaled_frames % rate;
+        s_frame_adjustment_accumulator -= (int64_t)correction * (int64_t)nominal_input_frames;
         if (s_frame_adjustment_accumulator >= RATE_CORRECTION_SCALE) {
             adjustment = 1;
             s_frame_adjustment_accumulator -= RATE_CORRECTION_SCALE;
@@ -381,7 +396,7 @@ static size_t pull_from_ring(void *destination, size_t length) {
             adjustment = -1;
             s_frame_adjustment_accumulator += RATE_CORRECTION_SCALE;
         }
-        size_t input_frames = (size_t)((int)output_frames + adjustment);
+        size_t input_frames = (size_t)((int)nominal_input_frames + adjustment);
         size_t input_bytes = input_frames * PCM_BYTES_PER_FRAME;
         bool apply_adjustment;
 
@@ -392,14 +407,14 @@ static size_t pull_from_ring(void *destination, size_t length) {
                 s_frame_adjustment_accumulator +=
                     (int64_t)adjustment * RATE_CORRECTION_SCALE;
                 adjustment = 0;
-                input_frames = output_frames;
+                input_frames = nominal_input_frames;
                 input_bytes = input_frames * PCM_BYTES_PER_FRAME;
             }
             if (input_bytes > s_ring.count) {
                 input_bytes = s_ring.count - (s_ring.count % PCM_BYTES_PER_FRAME);
                 input_frames = input_bytes / PCM_BYTES_PER_FRAME;
                 ++s_ring.underruns;
-                s_ring.missing_frames += (uint32_t)(output_frames - input_frames);
+                s_ring.missing_frames += (uint32_t)(nominal_input_frames - input_frames);
             }
         }
         (void)ring_read_locked((uint8_t *)s_adaptive_input, input_bytes);
@@ -408,18 +423,27 @@ static size_t pull_from_ring(void *destination, size_t length) {
         }
         portEXIT_CRITICAL(&s_ring.mux);
 
-        if (input_frames == output_frames) {
-            (void)memcpy(output + output_offset, s_adaptive_input, input_bytes);
-            produced += input_bytes;
-        } else if (input_frames > 0U &&
-                   bridge_resample_stereo_s16(s_adaptive_input, input_frames,
-                                              s_adaptive_output,
-                                              output_frames)) {
-            (void)memcpy(output + output_offset, s_adaptive_output,
-                         output_frames * PCM_BYTES_PER_FRAME);
-            produced += output_frames * PCM_BYTES_PER_FRAME;
+        const int16_t *samples = s_adaptive_input;
+        if (input_frames != output_frames) {
+            samples = bridge_resample_stereo_s16(s_adaptive_input, input_frames,
+                                                 s_adaptive_output, output_frames)
+                          ? s_adaptive_output : NULL;
         }
-        output_offset += output_frames * PCM_BYTES_PER_FRAME;
+        size_t output_bytes = output_frames * output_frame_bytes;
+        if (samples != NULL) {
+            if (mono) {
+                for (size_t frame = 0; frame < output_frames; ++frame) {
+                    int16_t sample = (int16_t)(((int32_t)samples[frame * 2U] +
+                                                samples[frame * 2U + 1U]) / 2);
+                    (void)memcpy(output + output_offset + frame * sizeof(sample),
+                                 &sample, sizeof(sample));
+                }
+            } else {
+                (void)memcpy(output + output_offset, samples, output_bytes);
+            }
+            produced += output_bytes;
+        }
+        output_offset += output_bytes;
     }
     return produced;
 }

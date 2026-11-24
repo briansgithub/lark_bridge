@@ -63,7 +63,12 @@ static QueueHandle_t s_event_queue;
 static atomic_bool s_stack_ready;
 static atomic_bool s_peer_connected;
 static atomic_bool s_audio_streaming;
-static atomic_bool s_format_qualified;
+/* A nonzero PCM format publishes rate and channel count together to the data callback. */
+static atomic_uint s_pcm_format;
+static esp_a2d_mcc_t s_sink_caps;
+static esp_a2d_mcc_t s_requested_codec;
+static bool s_codec_request_pending;
+static bool s_codec_fallback;
 static bt_connection_state_t s_state = BT_STATE_WAITING;
 static portMUX_TYPE s_saved_peer_mux = portMUX_INITIALIZER_UNLOCKED;
 static portMUX_TYPE s_avrcp_peer_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -173,7 +178,7 @@ static bool avrcp_forwarding_allowed(void)
 
     return avrcp_peer_snapshot(peer) && saved_peer_matches(peer) &&
            atomic_load_explicit(&s_peer_connected, memory_order_acquire) &&
-           atomic_load_explicit(&s_format_qualified, memory_order_acquire);
+           (atomic_load_explicit(&s_pcm_format, memory_order_acquire) != 0U);
 }
 
 static void post_event(const bt_event_t *event) {
@@ -276,9 +281,10 @@ static int32_t a2dp_data_callback(uint8_t *data, int32_t length) {
         return 0;
     }
     (void)memset(data, 0, (size_t)length);
-    if (atomic_load_explicit(&s_format_qualified, memory_order_acquire) &&
-        output_control_audio_allowed()) {
-        (void)output_audio_pull(data, (size_t)length);
+    unsigned int format = atomic_load_explicit(&s_pcm_format, memory_order_acquire);
+    if (format != 0U && output_control_audio_allowed()) {
+        (void)output_audio_pull(data, (size_t)length, format >> 1U,
+                                (format & 1U) != 0U);
     }
     return length;
 }
@@ -443,7 +449,8 @@ static void gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *par
     }
 }
 
-static bool select_48k_stereo_codec(const esp_a2d_mcc_t *capabilities, esp_a2d_mcc_t *preferred) {
+static bool select_sbc_codec(const esp_a2d_mcc_t *capabilities, bool fallback,
+                             esp_a2d_mcc_t *preferred) {
     const esp_a2d_cie_sbc_t *caps;
     esp_a2d_cie_sbc_t *config;
 
@@ -451,36 +458,61 @@ static bool select_48k_stereo_codec(const esp_a2d_mcc_t *capabilities, esp_a2d_m
         return false;
     }
     caps = &capabilities->cie.sbc_info;
-    if ((caps->samp_freq & ESP_A2D_SBC_CIE_SF_48K) == 0U ||
-        (caps->ch_mode &
-         (ESP_A2D_SBC_CIE_CH_MODE_JOINT_STEREO | ESP_A2D_SBC_CIE_CH_MODE_STEREO)) == 0U) {
+    if ((caps->samp_freq & (ESP_A2D_SBC_CIE_SF_44K | ESP_A2D_SBC_CIE_SF_48K)) == 0U ||
+        (caps->ch_mode & (ESP_A2D_SBC_CIE_CH_MODE_JOINT_STEREO |
+                          ESP_A2D_SBC_CIE_CH_MODE_STEREO |
+                          ESP_A2D_SBC_CIE_CH_MODE_MONO)) == 0U ||
+        (caps->block_len & ESP_A2D_SBC_CIE_BLOCK_LEN_16) == 0U ||
+        (caps->num_subbands & ESP_A2D_SBC_CIE_NUM_SUBBANDS_8) == 0U ||
+        (caps->alloc_mthd & ESP_A2D_SBC_CIE_ALLOC_MTHD_LOUDNESS) == 0U) {
         return false;
     }
     (void)memset(preferred, 0, sizeof(*preferred));
     preferred->type = ESP_A2D_MCT_SBC;
     config = &preferred->cie.sbc_info;
-    config->samp_freq = ESP_A2D_SBC_CIE_SF_48K;
-    config->ch_mode = (caps->ch_mode & ESP_A2D_SBC_CIE_CH_MODE_JOINT_STEREO) != 0U
-                          ? ESP_A2D_SBC_CIE_CH_MODE_JOINT_STEREO
-                          : ESP_A2D_SBC_CIE_CH_MODE_STEREO;
-    if ((caps->block_len & ESP_A2D_SBC_CIE_BLOCK_LEN_16) != 0U) {
-        config->block_len = ESP_A2D_SBC_CIE_BLOCK_LEN_16;
-    } else if ((caps->block_len & ESP_A2D_SBC_CIE_BLOCK_LEN_12) != 0U) {
-        config->block_len = ESP_A2D_SBC_CIE_BLOCK_LEN_12;
-    } else if ((caps->block_len & ESP_A2D_SBC_CIE_BLOCK_LEN_8) != 0U) {
-        config->block_len = ESP_A2D_SBC_CIE_BLOCK_LEN_8;
+    bool supports_44k = (caps->samp_freq & ESP_A2D_SBC_CIE_SF_44K) != 0U;
+    bool supports_48k = (caps->samp_freq & ESP_A2D_SBC_CIE_SF_48K) != 0U;
+    config->samp_freq = supports_44k && !(fallback && supports_48k)
+                            ? ESP_A2D_SBC_CIE_SF_44K : ESP_A2D_SBC_CIE_SF_48K;
+    if ((caps->ch_mode & ESP_A2D_SBC_CIE_CH_MODE_JOINT_STEREO) != 0U &&
+        !(fallback && (caps->ch_mode & ESP_A2D_SBC_CIE_CH_MODE_STEREO) != 0U)) {
+        config->ch_mode = ESP_A2D_SBC_CIE_CH_MODE_JOINT_STEREO;
+    } else if ((caps->ch_mode & ESP_A2D_SBC_CIE_CH_MODE_STEREO) != 0U) {
+        config->ch_mode = ESP_A2D_SBC_CIE_CH_MODE_STEREO;
     } else {
-        config->block_len = ESP_A2D_SBC_CIE_BLOCK_LEN_4;
+        config->ch_mode = ESP_A2D_SBC_CIE_CH_MODE_MONO;
     }
-    config->num_subbands = (caps->num_subbands & ESP_A2D_SBC_CIE_NUM_SUBBANDS_8) != 0U
-                               ? ESP_A2D_SBC_CIE_NUM_SUBBANDS_8
-                               : ESP_A2D_SBC_CIE_NUM_SUBBANDS_4;
-    config->alloc_mthd = (caps->alloc_mthd & ESP_A2D_SBC_CIE_ALLOC_MTHD_LOUDNESS) != 0U
-                             ? ESP_A2D_SBC_CIE_ALLOC_MTHD_LOUDNESS
-                             : ESP_A2D_SBC_CIE_ALLOC_MTHD_SNR;
-    config->min_bitpool = caps->min_bitpool;
-    config->max_bitpool = caps->max_bitpool > 53U ? 53U : caps->max_bitpool;
+    config->block_len = ESP_A2D_SBC_CIE_BLOCK_LEN_16;
+    config->num_subbands = ESP_A2D_SBC_CIE_NUM_SUBBANDS_8;
+    config->alloc_mthd = ESP_A2D_SBC_CIE_ALLOC_MTHD_LOUDNESS;
+    config->min_bitpool = caps->min_bitpool < 2U ? 2U : caps->min_bitpool;
+    uint8_t limit = fallback && config->min_bitpool < 35U ? 35U : 53U;
+    config->max_bitpool = caps->max_bitpool > limit ? limit : caps->max_bitpool;
     return config->min_bitpool <= config->max_bitpool;
+}
+
+static bool request_sbc_codec(bool fallback)
+{
+    esp_a2d_mcc_t codec;
+    if (!select_sbc_codec(&s_sink_caps, fallback, &codec)) {
+        return false;
+    }
+    if (fallback && memcmp(&codec, &s_requested_codec, sizeof(codec)) == 0) {
+        return false;
+    }
+    s_requested_codec = codec;
+    s_codec_fallback = fallback;
+    const esp_a2d_cie_sbc_t *sbc = &codec.cie.sbc_info;
+    ESP_LOGI(TAG, "requesting SBC rate=%u mode=0x%x bitpool=%u-%u fallback=%u",
+             sbc->samp_freq == ESP_A2D_SBC_CIE_SF_44K ? 44100U : 48000U,
+             (unsigned int)sbc->ch_mode, (unsigned int)sbc->min_bitpool,
+             (unsigned int)sbc->max_bitpool, (unsigned int)fallback);
+    esp_err_t result = esp_a2d_source_set_pref_mcc(s_active_connection_handle, &codec);
+    s_codec_request_pending = result == ESP_OK;
+    if (!s_codec_request_pending) {
+        ESP_LOGW(TAG, "SBC request failed: %s", esp_err_to_name(result));
+    }
+    return s_codec_request_pending;
 }
 
 static void set_pairing_visibility(void) {
@@ -563,7 +595,9 @@ static void handle_connected(const bt_event_t *event, uint32_t current_ms) {
     s_media_ack_timeout_count = 0U;
     s_state = BT_STATE_CONNECTED;
     s_format_ready = false;
-    atomic_store_explicit(&s_format_qualified, false, memory_order_release);
+    s_codec_request_pending = false;
+    s_codec_fallback = false;
+    atomic_store_explicit(&s_pcm_format, 0U, memory_order_release);
     s_next_media_attempt_ms = current_ms;
     s_qualification_deadline_ms = current_ms + QUALIFICATION_TIMEOUT_MS;
     atomic_store_explicit(&s_peer_connected, true, memory_order_release);
@@ -603,7 +637,7 @@ static void reject_active_peer(const char *reason)
     (void)esp_bt_gap_remove_bond_device(s_active_peer);
     avrcp_peer_update(false, NULL);
     s_format_ready = false;
-    atomic_store_explicit(&s_format_qualified, false, memory_order_release);
+    atomic_store_explicit(&s_pcm_format, 0U, memory_order_release);
     atomic_store_explicit(&s_audio_streaming, false, memory_order_release);
     atomic_store_explicit(&s_peer_connected, false, memory_order_release);
     output_control_invalidate_local_audio();
@@ -619,7 +653,7 @@ static void recycle_active_connection(const char *reason)
     ESP_LOGW(TAG, "%s; disconnecting output peer for a bounded retry", reason);
     avrcp_peer_update(false, NULL);
     s_format_ready = false;
-    atomic_store_explicit(&s_format_qualified, false, memory_order_release);
+    atomic_store_explicit(&s_pcm_format, 0U, memory_order_release);
     atomic_store_explicit(&s_audio_streaming, false, memory_order_release);
     atomic_store_explicit(&s_peer_connected, false, memory_order_release);
     output_control_invalidate_local_audio();
@@ -678,7 +712,7 @@ static void handle_disconnected(const bt_event_t *event, uint32_t current_ms) {
     s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
     atomic_store_explicit(&s_peer_connected, false, memory_order_release);
     atomic_store_explicit(&s_audio_streaming, false, memory_order_release);
-    atomic_store_explicit(&s_format_qualified, false, memory_order_release);
+    atomic_store_explicit(&s_pcm_format, 0U, memory_order_release);
     output_control_invalidate_local_audio();
     set_pairing_visibility();
     ESP_LOGW(TAG, "downstream A2DP peer disconnected");
@@ -734,39 +768,39 @@ static void handle_bt_event(const bt_event_t *event, uint32_t current_ms) {
         output_control_invalidate_local_audio();
         s_next_media_attempt_ms = current_ms + MEDIA_RETRY_MS;
         break;
-    case BT_EVENT_SINK_CAPABILITIES: {
-        esp_a2d_mcc_t preferred;
-        if (!active_handle_matches(event)) {
-            ESP_LOGW(TAG, "ignoring stale sink-capabilities event");
+    case BT_EVENT_SINK_CAPABILITIES:
+        if (!active_handle_matches(event) || s_codec_request_pending || s_format_ready) {
             break;
         }
-        if (!select_48k_stereo_codec(&event->codec, &preferred)) {
-            reject_active_peer("sink does not support required 48-kHz stereo SBC");
-        } else {
-            esp_err_t error =
-                esp_a2d_source_set_pref_mcc(event->connection_handle, &preferred);
-            if (error != ESP_OK) {
-                ESP_LOGE(TAG, "cannot select 48-kHz stereo SBC: %s", esp_err_to_name(error));
-                reject_active_peer("preferred-codec request failed");
-            }
+        s_sink_caps = event->codec;
+        if (!request_sbc_codec(false) && !request_sbc_codec(true)) {
+            recycle_active_connection("no usable SBC configuration request");
         }
+        break;
+    case BT_EVENT_PREFERRED_CODEC_RESULT: {
+        if (!active_handle_matches(event) || !s_codec_request_pending) {
+            break;
+        }
+        s_codec_request_pending = false;
+        if (event->bt_status != ESP_BT_STATUS_SUCCESS) {
+            ESP_LOGW(TAG, "SBC configuration rejected, status=%u",
+                     (unsigned int)event->bt_status);
+            if (s_codec_fallback || !request_sbc_codec(true)) {
+                recycle_active_connection("SBC negotiation did not complete");
+            }
+            break;
+        }
+        const esp_a2d_cie_sbc_t *sbc = &s_requested_codec.cie.sbc_info;
+        unsigned int rate = sbc->samp_freq == ESP_A2D_SBC_CIE_SF_44K ? 44100U : 48000U;
+        unsigned int mono = sbc->ch_mode == ESP_A2D_SBC_CIE_CH_MODE_MONO ? 1U : 0U;
+        s_format_ready = true;
+        output_audio_flush();
+        atomic_store_explicit(&s_pcm_format, (rate << 1U) | mono, memory_order_release);
+        ESP_LOGI(TAG, "SBC format accepted: %u Hz, %u channel(s)", rate, mono ? 1U : 2U);
+        s_next_media_attempt_ms = current_ms;
+        qualify_active_peer();
         break;
     }
-    case BT_EVENT_PREFERRED_CODEC_RESULT:
-        if (!active_handle_matches(event)) {
-            ESP_LOGW(TAG, "ignoring stale preferred-codec event");
-            break;
-        }
-        s_format_ready = event->bt_status == ESP_BT_STATUS_SUCCESS;
-        atomic_store_explicit(&s_format_qualified, s_format_ready, memory_order_release);
-        if (!s_format_ready) {
-            ESP_LOGE(TAG, "sink rejected required SBC format, status=%u", event->bt_status);
-            reject_active_peer("sink rejected required SBC format");
-        } else {
-            s_next_media_attempt_ms = current_ms;
-            qualify_active_peer();
-        }
-        break;
     case BT_EVENT_MEDIA_ACK:
         if (s_state != BT_STATE_CONNECTED || !s_media_ack_pending ||
             event->media_command != s_expected_media_ack) {
@@ -831,9 +865,10 @@ static void bluetooth_worker(void *context) {
             s_state = BT_STATE_WAITING;
             s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
             set_pairing_visibility();
-        } else if (s_state == BT_STATE_CONNECTED && !saved_peer_snapshot(NULL) &&
+        } else if (s_state == BT_STATE_CONNECTED &&
+                   (!s_format_ready || !saved_peer_snapshot(NULL)) &&
                    (int32_t)(current_ms - s_qualification_deadline_ms) >= 0) {
-            reject_active_peer("output peer did not qualify before timeout");
+            recycle_active_connection("output peer did not qualify before timeout");
         } else if (s_state == BT_STATE_CONNECTED && s_media_ack_pending &&
                    (int32_t)(current_ms - s_media_ack_deadline_ms) >= 0) {
             s_media_ack_pending = false;
@@ -869,7 +904,7 @@ esp_err_t output_bluetooth_start(void) {
     atomic_init(&s_stack_ready, false);
     atomic_init(&s_peer_connected, false);
     atomic_init(&s_audio_streaming, false);
-    atomic_init(&s_format_qualified, false);
+    atomic_init(&s_pcm_format, 0U);
     s_active_connection_valid = false;
     avrcp_peer_update(false, NULL);
     s_media_ack_pending = false;
@@ -970,5 +1005,5 @@ bool output_bluetooth_peer_connected(void) {
 
 bool output_bluetooth_audio_streaming(void) {
     return atomic_load_explicit(&s_audio_streaming, memory_order_acquire) &&
-           atomic_load_explicit(&s_format_qualified, memory_order_acquire);
+           (atomic_load_explicit(&s_pcm_format, memory_order_acquire) != 0U);
 }
