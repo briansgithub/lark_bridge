@@ -1,0 +1,145 @@
+[2026-11-24T11:01:25+00:00] CAPTURE_START port=COM3
+[2026-11-24T11:01:25+00:00] I (301) esp_image: segment 3: paddr=00144990 vaddr=2f004ed4 size=10da4h ( 69028) load
+[2026-11-24T11:01:25+00:00] I (315) esp_image: segment 4: paddr=0015573c vaddr=2f015c80 size=0408ch ( 16524) load
+[2026-11-24T11:01:25+00:00] I (326) boot: Loaded app from partition at offset 0x10000
+[2026-11-24T11:01:25+00:00] I (326) boot: Disabling RNG early entropy source...
+[2026-11-24T11:01:25+00:00] I (337) cpu_start: Multicore app
+[2026-11-24T11:01:25+00:00] I (345) cpu_start: GPIO 59 and 58 are used as console UART I/O pins
+[2026-11-24T11:01:25+00:00] I (346) cpu_start: Pro cpu start user code
+[2026-11-24T11:01:25+00:00] I (346) cpu_start: cpu freq: 320000000 Hz
+[2026-11-24T11:01:25+00:00] I (348) app_init: Application information:
+[2026-11-24T11:01:25+00:00] I (351) app_init: Project name:     larkbridge_s31_gateway
+[2026-11-24T11:01:25+00:00] I (357) app_init: App version:      209f25ad4fc0-test
+[2026-11-24T11:01:25+00:00] I (361) app_init: Compile time:     Nov 24 2026 07:05:53
+[2026-11-24T11:01:25+00:00] I (366) app_init: ELF file SHA256:  38d0e6f83...
+[2026-11-24T11:01:25+00:00] I (371) app_init: ESP-IDF:          v6.1-rc1
+[2026-11-24T11:01:25+00:00] I (375) efuse_init: Min chip rev:     v0.0
+[2026-11-24T11:01:25+00:00] I (379) efuse_init: Max chip rev:     v0.99 
+[2026-11-24T11:01:25+00:00] I (383) efuse_init: Chip rev:         v0.0
+[2026-11-24T11:01:25+00:00] I (387) heap_init: Initializing. RAM available for dynamic allocation:
+[2026-11-24T11:01:25+00:00] I (393) heap_init: At 2F0484B0 len 00032B00 (202 KiB): RAM
+[2026-11-24T11:01:25+00:00] I (398) heap_init: At 2F07AFB0 len 000041C0 (16 KiB): RAM
+[2026-11-24T11:01:25+00:00] I (403) heap_init: At 2E000000 len 00007FE8 (31 KiB): RTCRAM
+[2026-11-24T11:01:25+00:00] I (409) spi_flash: detected chip: generic
+[2026-11-24T11:01:25+00:00] I (412) spi_flash: flash io: dio
+[2026-11-24T11:01:25+00:00] W (415) spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k). Using the size in the binary image header.
+[2026-11-24T11:01:25+00:00] I (428) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+[2026-11-24T11:01:25+00:00] I (434) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+[2026-11-24T11:01:25+00:00] I (449) main_task: Started on CPU0
+[2026-11-24T11:01:25+00:00] I (449) main_task: Calling app_main()
+[2026-11-24T11:01:25+00:00] I (459) s31_main: IDENTITY role=s31 project=larkbridge_s31_gateway version=209f25ad4fc0-test idf=v6.1-rc1 model=32 rev=0 cores=2 reset=11
+[2026-11-24T11:01:25+00:00] I (469) s31_main: IDENTITY bt=1c:29:04:d0:61:5f heap8=233688 largest8=180224 erase_bonds=0 aec_publish=0
+[2026-11-24T11:01:25+00:00] I (479) s31_audio: I2S TX ready: 48 kHz/S16/stereo, BCLK=47 WS=48 DATA=45
+[2026-11-24T11:01:25+00:00] I (489) s31_link: UART link ready at 115200 baud, TX=43 RX=44
+[2026-11-24T11:01:25+00:00] W (489) s31_aec: ESP-SR AEC is linked and observable, but uplink remains qualification-locked
+[2026-11-24T11:01:25+00:00] W (499) BTDM_INIT: esp_bt_controller_mem_release not implement yet!
+[2026-11-24T11:01:25+00:00] I (499) BTDM_INIT: BTDM version [39ed4dc]
+[2026-11-24T11:01:25+00:00] W (509) BTDM_SLEEP: Using 136 kHz RC as clock source, use with caution as it may not maintain ACL or Sync process due to low clock accuracy!
+[2026-11-24T11:01:25+00:00] I (519) BREDR_INIT: BT controller compile version [beae498]
+[2026-11-24T11:01:25+00:00] I (529) s31_uac: USB host installed
+[2026-11-24T11:01:25+00:00] I (529) uac-host: Install Succeed, Version: 1.5.0
+[2026-11-24T11:01:25+00:00] I (529) s31_uac: UAC class driver installed
+[2026-11-24T11:01:26+00:00] I (599) BTDM_INIT: BTDM controller init OK
+[2026-11-24T11:01:26+00:00] I (599) phy_init: phy_version 100,dd4c590,Jul 14 2026,10:33:03
+[2026-11-24T11:01:26+00:00] I (669) phy: libbtbb version: d5590f7, Jul 14 2026, 10:33:07
+[2026-11-24T11:01:26+00:00] W (759) BT_BTC: A2DP Enable with AVRC
+[2026-11-24T11:01:26+00:00] I (759) s31_bt: A2DP profile state=1
+[2026-11-24T11:01:26+00:00] I (769) s31_bt: HFP profile state=0
+[2026-11-24T11:01:26+00:00] I (769) s31_bt: BR/EDR gateway ready as LarkBridge
+[2026-11-24T11:01:26+00:00] {"t":"boot","role":"s31","version":"209f25ad4fc0-test","image":"test","reset":"usb","project":"larkbridge_s31_gateway","idf":"v6.1-rc1","model":32,"rev":0,"cores":2,"reset_code":11,"bt":"1c:29:04:d0:61:5f","erase_bonds":0,"aec_publish":0,"stats_period_ms":1000,"heap":{"free":114580,"min":114580,"largest":81920}}
+[2026-11-24T11:01:26+00:00] I (789) s31_telemetry: telemetry started: image=test stats_period_ms=1000
+[2026-11-24T11:01:26+00:00] W (799) s31_main: pre-hardware firmware started; call uplink remains digitally muted unless the explicit experimental AEC qualification option is enabled
+[2026-11-24T11:01:26+00:00] I (809) main_task: Returned from app_main()
+[2026-11-24T11:01:26+00:00] find UAC 1.0 Microphone device
+[2026-11-24T11:01:26+00:00] interface number: 2
+[2026-11-24T11:01:26+00:00] total alt interfaces number: 2
+[2026-11-24T11:01:26+00:00] --------alt interface[1]--------- 
+[2026-11-24T11:01:26+00:00] channels = 2 
+[2026-11-24T11:01:26+00:00] subframe_size = 3 
+[2026-11-24T11:01:26+00:00] bit_resolution = 24 
+[2026-11-24T11:01:26+00:00] sample_freq: 
+[2026-11-24T11:01:26+00:00] 	48000
+[2026-11-24T11:01:26+00:00] --------alt interface[2]--------- 
+[2026-11-24T11:01:26+00:00] channels = 2 
+[2026-11-24T11:01:26+00:00] subframe_size = 2 
+[2026-11-24T11:01:26+00:00] bit_resolution = 16 
+[2026-11-24T11:01:26+00:00] sample_freq: 
+[2026-11-24T11:01:26+00:00] 	48000
+[2026-11-24T11:01:26+00:00] I (919) uac-host: Resume Interface 2-2
+[2026-11-24T11:01:26+00:00] I (929) uac-host: Set EP 7 frequency 48000
+[2026-11-24T11:01:26+00:00] I (929) s31_uac: LARK 3547:0407 capture ready at 48 kHz/S16/stereo
+[2026-11-24T11:01:27+00:00] E (1789) s31_link: route ACK timed out
+[2026-11-24T11:01:27+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":1375,"reset":"usb","heap":{"free":78388,"min":78388,"largest":45056},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":0,"a2dp_state":0,"hfp_audio":false,"avrcp":false,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":1,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":70,"bytes":161088,"read_err":0,"xfer_err":0,"disc":0,"opens":1,"reopen":0},"hwm":{"stats":3408,"console":3460}}
+[2026-11-24T11:01:27+00:00] I (2019) s31_bt: HFP reconnect request: ESP_OK
+[2026-11-24T11:01:27+00:00] I (2019) s31_bt: A2DP reconnect request: ESP_OK
+[2026-11-24T11:01:27+00:00] W (2269) BT_HCI: hcif conn complete: hdl 0x802, st 0x0
+[2026-11-24T11:01:27+00:00] W (2289) BT_HCI: hcif link supv_to changed: hdl 0x802, supv_to 8000
+[2026-11-24T11:01:27+00:00] W (2459) BT_APPL: new conn_srvc id:27, app_id:1
+[2026-11-24T11:01:27+00:00] I (2469) s31_bt: HFP service state=2
+[2026-11-24T11:01:28+00:00] I (2549) s31_bt: HFP service state=3
+[2026-11-24T11:01:28+00:00] W (2549) BT_APPL: reset flags
+[2026-11-24T11:01:28+00:00] I (2549) s31_bt: A2DP connection state=1
+[2026-11-24T11:01:28+00:00] W (2599) BT_APPL: bta_hf_client_send_at: No service, skipping 11 command
+[2026-11-24T11:01:28+00:00] I (2629) s31_bt: A2DP media configured at 44100 Hz stereo SBC
+[2026-11-24T11:01:28+00:00] W (2709) BT_APPL: new conn_srvc id:19, app_id:0
+[2026-11-24T11:01:28+00:00] I (2709) s31_bt: A2DP connection state=2
+[2026-11-24T11:01:28+00:00] E (2779) s31_uac: LARK capture read failed: ESP_ERR_TIMEOUT
+[2026-11-24T11:01:28+00:00] I (2779) uac-host: Suspend Interface 2-0
+[2026-11-24T11:01:28+00:00] I (2779) s31_bt: AVRCP controller connected=1 accepted=1
+[2026-11-24T11:01:28+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":2375,"reset":"usb","heap":{"free":66700,"min":61328,"largest":32768},"ready":15,"fault":5,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":1,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":false,"rx":153,"bytes":353472,"read_err":1,"xfer_err":0,"disc":0,"opens":1,"reopen":0},"hwm":{"stats":3408,"console":3460}}
+[2026-11-24T11:01:28+00:00] E (3089) s31_link: route ACK timed out
+[2026-11-24T11:01:28+00:00] HOST_SENT status
+[2026-11-24T11:01:28+00:00] {"t":"status","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":2895,"reset":"usb","heap":{"free":98260,"min":61328,"largest":34816},"ready":7,"fault":1,"out_link":false,"session":{"lark":false,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":2,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":false,"rx":153,"bytes":353472,"read_err":1,"xfer_err":0,"disc":0,"opens":1,"reopen":0},"hwm":{"stats":3408,"console":3084},"project":"larkbridge_s31_gateway","idf":"v6.1-rc1","model":32,"rev":0,"cores":2,"reset_code":11,"bt":"1c:29:04:d0:61:5f","erase_bonds":0,"aec_publish":0,"stats_period_ms":1000}
+[2026-11-24T11:01:29+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":3375,"reset":"usb","heap":{"free":98260,"min":61328,"largest":34816},"ready":7,"fault":1,"out_link":false,"session":{"lark":false,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":2,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":false,"rx":153,"bytes":353472,"read_err":1,"xfer_err":0,"disc":0,"opens":1,"reopen":0},"hwm":{"stats":3408,"console":3084}}
+[2026-11-24T11:01:29+00:00] W (3929) s31_uac: retrying LARK UAC capture (1/5)
+[2026-11-24T11:01:29+00:00] find UAC 1.0 Microphone device
+[2026-11-24T11:01:29+00:00] interface number: 2
+[2026-11-24T11:01:29+00:00] total alt interfaces number: 2
+[2026-11-24T11:01:29+00:00] --------alt interface[1]--------- 
+[2026-11-24T11:01:29+00:00] channels = 2 
+[2026-11-24T11:01:29+00:00] subframe_size = 3 
+[2026-11-24T11:01:29+00:00] bit_resolution = 24 
+[2026-11-24T11:01:29+00:00] sample_freq: 
+[2026-11-24T11:01:29+00:00] 	48000
+[2026-11-24T11:01:29+00:00] --------alt interface[2]--------- 
+[2026-11-24T11:01:29+00:00] channels = 2 
+[2026-11-24T11:01:29+00:00] subframe_size = 2 
+[2026-11-24T11:01:29+00:00] bit_resolution = 16 
+[2026-11-24T11:01:29+00:00] sample_freq: 
+[2026-11-24T11:01:29+00:00] 	48000
+[2026-11-24T11:01:29+00:00] I (3949) uac-host: Resume Interface 2-2
+[2026-11-24T11:01:29+00:00] I (3949) uac-host: Set EP 7 frequency 48000
+[2026-11-24T11:01:29+00:00] I (3949) s31_uac: LARK 3547:0407 capture ready at 48 kHz/S16/stereo
+[2026-11-24T11:01:29+00:00] E (4389) s31_link: route ACK timed out
+[2026-11-24T11:01:30+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":4375,"reset":"usb","heap":{"free":68096,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":3,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":222,"bytes":512448,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3408,"console":3084}}
+[2026-11-24T11:01:31+00:00] E (5689) s31_link: route ACK timed out
+[2026-11-24T11:01:31+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":5375,"reset":"usb","heap":{"free":68096,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":4,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":305,"bytes":703680,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3408,"console":3084}}
+[2026-11-24T11:01:32+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":6375,"reset":"usb","heap":{"free":68096,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":4,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":388,"bytes":894912,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:32+00:00] E (6989) s31_link: route ACK timed out
+[2026-11-24T11:01:33+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":7375,"reset":"usb","heap":{"free":68096,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":5,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":472,"bytes":1088448,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:33+00:00] E (8289) s31_link: route ACK timed out
+[2026-11-24T11:01:34+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":8375,"reset":"usb","heap":{"free":68096,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":6,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":555,"bytes":1279680,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:35+00:00] E (9589) s31_link: route ACK timed out
+[2026-11-24T11:01:35+00:00] W (9729) BT_HCI: hcif mode change: hdl 0x802, mode 2, intv 768, status 0x0
+[2026-11-24T11:01:35+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":9375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":7,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":638,"bytes":1470912,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:36+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":10375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":7,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":722,"bytes":1664448,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:36+00:00] E (10889) s31_link: route ACK timed out
+[2026-11-24T11:01:37+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":11375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":8,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":805,"bytes":1855680,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:37+00:00] E (12189) s31_link: route ACK timed out
+[2026-11-24T11:01:38+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":12375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":9,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":888,"bytes":2046912,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:38+00:00] E (13489) s31_link: route ACK timed out
+[2026-11-24T11:01:39+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":13375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":10,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":972,"bytes":2240448,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:40+00:00] E (14789) s31_link: route ACK timed out
+[2026-11-24T11:01:40+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":14375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":11,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":1055,"bytes":2431680,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:41+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":15375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":11,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":1138,"bytes":2622912,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:41+00:00] E (16089) s31_link: route ACK timed out
+[2026-11-24T11:01:42+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":16375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":12,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":1222,"bytes":2816448,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:42+00:00] HOST_SENT status
+[2026-11-24T11:01:42+00:00] {"t":"status","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":16855,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":12,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":1262,"bytes":2908608,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084},"project":"larkbridge_s31_gateway","idf":"v6.1-rc1","model":32,"rev":0,"cores":2,"reset_code":11,"bt":"1c:29:04:d0:61:5f","erase_bonds":0,"aec_publish":0,"stats_period_ms":1000}
+[2026-11-24T11:01:42+00:00] E (17389) s31_link: route ACK timed out
+[2026-11-24T11:01:43+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":17375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":13,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":1305,"bytes":3007680,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:44+00:00] E (18689) s31_link: route ACK timed out
+[2026-11-24T11:01:44+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":18375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":14,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":1388,"bytes":3198912,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:45+00:00] {"t":"stats","role":"s31","version":"209f25ad4fc0-test","image":"test","up_ms":19375,"reset":"usb","heap":{"free":68072,"min":61328,"largest":34816},"ready":15,"fault":1,"out_link":false,"session":{"lark":true,"a2dp":false,"hfp":false,"call":false,"aec":false},"route":{"desired":0,"authorized":0,"effective":0,"generation":0},"bt":{"hfp_state":3,"a2dp_state":2,"hfp_audio":false,"avrcp":true,"peer_bound":true},"i2s":{"fifo":0,"under":0,"over":0},"uart":{"peer":false,"hello":false,"proto_err":0,"rel_fail":14,"out_fifo":0,"out_fifo_min":0,"out_fifo_max":0,"out_ppm":0},"uac":{"started":true,"rx":1472,"bytes":3392448,"read_err":1,"xfer_err":0,"disc":0,"opens":2,"reopen":1},"hwm":{"stats":3384,"console":3084}}
+[2026-11-24T11:01:45+00:00] E (19989) s31_link: route ACK timed out
+[2026-11-24T11:01:45+00:00] CAPTURE_END

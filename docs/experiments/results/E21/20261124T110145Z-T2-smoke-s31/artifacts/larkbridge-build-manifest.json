@@ -1,0 +1,62 @@
+{
+  "artifacts": [
+    {
+      "bytes": 22224,
+      "path": "build/bootloader/bootloader.bin",
+      "sha256": "ac9c598310070d9650a115031be734c80c58527626b51cac09ade2efd9af1c4d"
+    },
+    {
+      "bytes": 162,
+      "path": "build/flash_args",
+      "sha256": "c6f9f2726d5ba3ce3e2181034fd5e96ea6e1152bd7e1976260d5daee485c80e2"
+    },
+    {
+      "bytes": 943,
+      "path": "build/flasher_args.json",
+      "sha256": "80c109e3b6edd545adcc30d2e5c23f17fc7370f8133eba7b801b86e88ea777c4"
+    },
+    {
+      "bytes": 1349616,
+      "path": "build/larkbridge_s31_gateway.bin",
+      "sha256": "f758d07886638edde2baa200c3dc954381619e70f602e3006b0a2ff720001869"
+    },
+    {
+      "bytes": 15258500,
+      "path": "build/larkbridge_s31_gateway.elf",
+      "sha256": "38d0e6f8395753b5b8e4d199999954d9b0e8c9145e932609a1fca97af93739e7"
+    },
+    {
+      "bytes": 8065408,
+      "path": "build/larkbridge_s31_gateway.map",
+      "sha256": "a53b0c7c29ee39628024c07a0f9416147ecd05ebd6c8d99b05fa0dd410fe5398"
+    },
+    {
+      "bytes": 3072,
+      "path": "build/partition_table/partition-table.bin",
+      "sha256": "5295e8c42d6fb5f95e4e8a185932c6191d27cfc5078322475347e40e71af815a"
+    }
+  ],
+  "component_lock_sha256": "abc3c88a86040e3823199f072a29ca78f0eceb34cb8a012c4cb4819a6e822344",
+  "dirty_paths": [],
+  "generated_at": "2026-11-24T07:09:55.751927+00:00",
+  "image_kind": "test",
+  "schema": 1,
+  "source_commit": "209f25ad4fc033544b6971fb7fa2ce400b61b834",
+  "source_dirty": false,
+  "target": "s31",
+  "toolchain": {
+    "components": {
+      "espressif/esp-sr": "2.5.1",
+      "espressif/usb_host_uac": "1.5.0"
+    },
+    "esp_idf_commit": "44f0c59f7c81a72a5868a52d5f6dfbbf88829704",
+    "esp_idf_tag": "v6.1-rc1",
+    "planned_components_not_integrated": {
+      "espressif/esp_audio_codec": "2.6.2",
+      "espressif/esp_audio_effects": "1.4.2"
+    },
+    "preview_target": true,
+    "target": "esp32s31"
+  },
+  "toolchain_lock_sha256": "9ab42ddf52096f0b58f89de91c9ae08ceac680eede3da85270eac5b3681c72db"
+}

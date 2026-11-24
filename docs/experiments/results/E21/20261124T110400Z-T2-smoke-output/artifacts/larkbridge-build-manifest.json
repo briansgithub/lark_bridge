@@ -1,0 +1,54 @@
+{
+  "artifacts": [
+    {
+      "bytes": 26096,
+      "path": "build/bootloader/bootloader.bin",
+      "sha256": "5d4ed2370b219ba1a864db9f6562b04854265b57072baa355fcab7018bad9ea5"
+    },
+    {
+      "bytes": 157,
+      "path": "build/flash_args",
+      "sha256": "59ec0842a126df1204ac073817592999912c92bbe563307bfbb6332977c4f0c5"
+    },
+    {
+      "bytes": 929,
+      "path": "build/flasher_args.json",
+      "sha256": "2a313ac0191f0924b61d36f6010506f8ffea891637e9a838cd11234250eb3d9a"
+    },
+    {
+      "bytes": 1059024,
+      "path": "build/larkbridge_output.bin",
+      "sha256": "9dff0d113ff760b97bbf948f2077bcf3c957640b9da376bb820e0226c4e651ac"
+    },
+    {
+      "bytes": 10445528,
+      "path": "build/larkbridge_output.elf",
+      "sha256": "ce636174c69f6f21039060be3bff40be5eba00fadbb587f07e5080c81dc28d50"
+    },
+    {
+      "bytes": 10719764,
+      "path": "build/larkbridge_output.map",
+      "sha256": "81407e48f467bb77051d56ee62f59a3b5fa17c1899188e6d36f1aa8eea868ebf"
+    },
+    {
+      "bytes": 3072,
+      "path": "build/partition_table/partition-table.bin",
+      "sha256": "9e55990c580a2873465d13e44c8795fc07d3ddac996ff6d8fe170ddeecad9dcd"
+    }
+  ],
+  "component_lock_sha256": null,
+  "dirty_paths": [],
+  "generated_at": "2026-11-24T07:16:10.615553+00:00",
+  "image_kind": "test",
+  "schema": 1,
+  "source_commit": "209f25ad4fc033544b6971fb7fa2ce400b61b834",
+  "source_dirty": false,
+  "target": "output",
+  "toolchain": {
+    "esp_idf_commit": "7101770dc6db2667b3c477cc31365dd1acd6db4e",
+    "esp_idf_tag": "v6.0.2",
+    "preview_target": false,
+    "target": "esp32"
+  },
+  "toolchain_lock_sha256": "9ab42ddf52096f0b58f89de91c9ae08ceac680eede3da85270eac5b3681c72db"
+}

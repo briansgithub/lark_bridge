@@ -1,0 +1,85 @@
+[2026-11-24T11:03:40+00:00] CAPTURE_START port=COM4
+[2026-11-24T11:03:40+00:00] (49) boot: ## Label            Usage          Type ST Offset   Length
+[2026-11-24T11:03:40+00:00] I (56) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+[2026-11-24T11:03:40+00:00] I (62) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+[2026-11-24T11:03:40+00:00] I (69) boot:  2 factory          factory app      00 00 00010000 00200000
+[2026-11-24T11:03:40+00:00] I (75) boot:  3 coredump         Unknown data     01 03 00210000 00040000
+[2026-11-24T11:03:40+00:00] I (82) boot: End of partition table
+[2026-11-24T11:03:40+00:00] I (85) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=2f690h (194192) map
+[2026-11-24T11:03:40+00:00] I (162) esp_image: segment 1: paddr=0003f6b8 vaddr=3ffbdb60 size=00960h (  2400) load
+[2026-11-24T11:03:40+00:00] I (163) esp_image: segment 2: paddr=00040020 vaddr=400d0020 size=af95ch (719196) map
+[2026-11-24T11:03:40+00:00] I (422) esp_image: segment 3: paddr=000ef984 vaddr=3ffbe4c0 size=0cc10h ( 52240) load
+[2026-11-24T11:03:40+00:00] I (442) esp_image: segment 4: paddr=000fc59c vaddr=40080000 size=162d4h ( 90836) load
+[2026-11-24T11:03:40+00:00] I (480) esp_image: segment 5: paddr=00112878 vaddr=50000000 size=00028h (    40) load
+[2026-11-24T11:03:40+00:00] I (494) boot: Loaded app from partition at offset 0x10000
+[2026-11-24T11:03:40+00:00] I (494) boot: Disabling RNG early entropy source...
+[2026-11-24T11:03:40+00:00] I (505) cpu_start: Multicore app
+[2026-11-24T11:03:40+00:00] I (513) cpu_start: GPIO 3 and 1 are used as console UART I/O pins
+[2026-11-24T11:03:40+00:00] I (513) cpu_start: Pro cpu start user code
+[2026-11-24T11:03:40+00:00] I (513) cpu_start: cpu freq: 160000000 Hz
+[2026-11-24T11:03:40+00:00] I (515) app_init: Application information:
+[2026-11-24T11:03:40+00:00] I (519) app_init: Project name:     larkbridge_output
+[2026-11-24T11:03:40+00:00] I (523) app_init: App version:      209f25ad4fc0-test
+[2026-11-24T11:03:40+00:00] I (528) app_init: Compile time:     Nov 24 2026 07:14:43
+[2026-11-24T11:03:40+00:00] I (533) app_init: ELF file SHA256:  ce636174c...
+[2026-11-24T11:03:40+00:00] I (538) app_init: ESP-IDF:          v6.0.2
+[2026-11-24T11:03:40+00:00] I (541) efuse_init: Min chip rev:     v0.0
+[2026-11-24T11:03:40+00:00] I (545) efuse_init: Max chip rev:     v3.99 
+[2026-11-24T11:03:40+00:00] I (549) efuse_init: Chip rev:         v3.1
+[2026-11-24T11:03:40+00:00] I (553) heap_init: Initializing. RAM available for dynamic allocation:
+[2026-11-24T11:03:40+00:00] I (560) heap_init: At 3FFAFF10 len 000000F0 (0 KiB): DRAM
+[2026-11-24T11:03:40+00:00] I (564) heap_init: At 3FFB6388 len 00001C78 (7 KiB): DRAM
+[2026-11-24T11:03:40+00:00] I (570) heap_init: At 3FFB9A20 len 00004108 (16 KiB): DRAM
+[2026-11-24T11:03:40+00:00] I (575) heap_init: At 3FFD73A8 len 00008C58 (35 KiB): DRAM
+[2026-11-24T11:03:40+00:00] I (580) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+[2026-11-24T11:03:40+00:00] I (585) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+[2026-11-24T11:03:40+00:00] I (591) heap_init: At 400962D4 len 00009D2C (39 KiB): IRAM
+[2026-11-24T11:03:40+00:00] I (598) spi_flash: detected chip: generic
+[2026-11-24T11:03:40+00:00] I (600) spi_flash: flash io: dio
+[2026-11-24T11:03:40+00:00] I (604) esp_core_dump_flash: Init core dump to flash
+[2026-11-24T11:03:40+00:00] I (608) esp_core_dump_flash: Found partition 'coredump' @ 210000 262144 bytes
+[2026-11-24T11:03:40+00:00] I (615) coexist: coex firmware version: 6f3d08c
+[2026-11-24T11:03:40+00:00] I (620) main_task: Started on CPU0
+[2026-11-24T11:03:40+00:00] I (622) main_task: Calling app_main()
+[2026-11-24T11:03:40+00:00] I (625) larkbridge_output: starting ESP32 output controller
+[2026-11-24T11:03:41+00:00] I (644) larkbridge_output: IDENTITY role=output project=larkbridge_output version=209f25ad4fc0-test idf=v6.0.2 model=1 rev=301 cores=2 reset=1
+[2026-11-24T11:03:41+00:00] I (646) larkbridge_output: IDENTITY bt=88:f1:55:29:e5:42 heap8=167280 largest8=110592 erase_bonds=0
+[2026-11-24T11:03:41+00:00] I (657) output_audio: I2S slave RX ready: 48 kHz, S16 stereo, ring=8192 frames
+[2026-11-24T11:03:41+00:00] I (664) output_control: control UART ready at 115200 baud
+[2026-11-24T11:03:41+00:00] I (668) BTDM_INIT: BT controller compile version [e02a38e]
+[2026-11-24T11:03:41+00:00] I (673) BTDM_INIT: Using main XTAL as clock source
+[2026-11-24T11:03:41+00:00] I (674) output_control: link/audio fifo=0 min=0 max=0 correction=0ppm delta=0 missing=0 dropped=0 i2s_err=0 proto=0 reliable=0 heap=144912 min_heap=144912 largest=110592
+[2026-11-24T11:03:41+00:00] I (692) BTDM_INIT: Bluetooth MAC: 88:f1:55:29:e5:42
+[2026-11-24T11:03:41+00:00] I (699) phy_init: phy_version 4863,a3a4459,Oct 28 2025,14:30:06
+[2026-11-24T11:03:41+00:00] W (1403) BT_BTC: A2DP Enable with AVRC
+[2026-11-24T11:03:41+00:00] W (1405) BT_AVRC: For AVRCP Target Cateory 1 and 3, SDP record shall contain additional protocol list
+[2026-11-24T11:03:41+00:00] I (1427) output_bt: Bluetooth Classic ready as 'LarkBridge Output'; waiting for pairing
+[2026-11-24T11:03:41+00:00] {"t":"boot","role":"output","version":"209f25ad4fc0-test","image":"test","reset":"poweron","project":"larkbridge_output","idf":"v6.0.2","model":1,"rev":301,"cores":2,"reset_code":1,"bt":"88:f1:55:29:e5:42","erase_bonds":0,"stats_period_ms":1000,"heap":{"free":102624,"min":102220,"largest":98304}}
+[2026-11-24T11:03:41+00:00] I (1454) output_telemetry: telemetry started: image=test stats_period_ms=1000
+[2026-11-24T11:03:41+00:00] I (1467) larkbridge_output: readiness=0x07 muted
+[2026-11-24T11:03:42+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":1857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3372,"console":3296}}
+[2026-11-24T11:03:43+00:00] HOST_SENT status
+[2026-11-24T11:03:43+00:00] {"t":"status","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":2611,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":3104},"project":"larkbridge_output","idf":"v6.0.2","model":1,"rev":301,"cores":2,"reset_code":1,"bt":"88:f1:55:29:e5:42","erase_bonds":0,"stats_period_ms":1000}
+[2026-11-24T11:03:43+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":2857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:44+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":3857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:45+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":4857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:46+00:00] I (5683) output_control: link/audio fifo=0 min=0 max=0 correction=0ppm delta=0 missing=0 dropped=0 i2s_err=0 proto=0 reliable=0 heap=92488 min_heap=92488 largest=90112
+[2026-11-24T11:03:46+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":5857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:47+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":6857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:48+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":7857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:49+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":8857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:50+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":9857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:51+00:00] I (10687) output_control: link/audio fifo=0 min=0 max=0 correction=0ppm delta=0 missing=0 dropped=0 i2s_err=0 proto=0 reliable=0 heap=92488 min_heap=92488 largest=90112
+[2026-11-24T11:03:51+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":10857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:52+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":11857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:53+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":12857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:54+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":13857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:55+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":14857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:56+00:00] I (15692) output_control: link/audio fifo=0 min=0 max=0 correction=0ppm delta=0 missing=0 dropped=0 i2s_err=0 proto=0 reliable=0 heap=92488 min_heap=92488 largest=90112
+[2026-11-24T11:03:56+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":15857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:57+00:00] HOST_SENT status
+[2026-11-24T11:03:57+00:00] {"t":"status","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":16635,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800},"project":"larkbridge_output","idf":"v6.0.2","model":1,"rev":301,"cores":2,"reset_code":1,"bt":"88:f1:55:29:e5:42","erase_bonds":0,"stats_period_ms":1000}
+[2026-11-24T11:03:57+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":16857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:58+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":17857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:03:59+00:00] {"t":"stats","role":"output","version":"209f25ad4fc0-test","image":"test","up_ms":18857,"reset":"poweron","heap":{"free":92488,"min":92488,"largest":90112},"ready":7,"bt":{"stack":true,"connected":false,"streaming":false},"uart":{"init":true,"alive":false,"hello":false,"remote_ready":0,"route":0,"proto_err":0,"rel_fail":0},"fifo":{"level":0,"min":0,"max":0,"ppm":0,"adapt":0},"a2dp":{"under":0,"over":0,"missing":0,"dropped":0,"i2s_err":0},"hwm":{"stats":3068,"console":2800}}
+[2026-11-24T11:04:00+00:00] CAPTURE_END

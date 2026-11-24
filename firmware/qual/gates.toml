@@ -62,7 +62,8 @@ human = false
 resets = true
 reducer = "t2_smoke"
 seconds = 20
-status = "PENDING"
+status = "PASS"
+evidence = "docs/experiments/results/E21/20261124T110145Z-T2-smoke-s31"
 
 [gates.T2-smoke-output]
 title = "Output test image: flash app-only, boot JSON matches the manifest"
@@ -73,7 +74,8 @@ human = false
 resets = true
 reducer = "t2_smoke"
 seconds = 20
-status = "PENDING"
+status = "PASS"
+evidence = "docs/experiments/results/E21/20261124T110400Z-T2-smoke-output"
 
 [gates.stageB-exit]
 title = "Stage B exit: T2 smoke passes on both boards with no person present"
@@ -82,7 +84,8 @@ needs = ["T2-smoke-s31", "T2-smoke-output"]
 human = false
 resets = false
 reducer = "all_needs"
-status = "PENDING"
+status = "PASS"
+evidence = "T2-smoke-s31 and T2-smoke-output PASS, unattended, 2026-11-24 06:01-06:05 ET"
 
 [gates.BT-soak]
 title = "Passive Pixel<->S31 ACL soak (136 kHz RC slow clock check)"

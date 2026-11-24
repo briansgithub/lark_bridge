@@ -1,0 +1,43 @@
+{
+  "artifacts": [
+    {
+      "bytes": 110607,
+      "name": "flash.log",
+      "sha256": "5a1a06950e04143c6cf5622e11d8e9eae2e5794a6b3911c1f81da65d5e63640e"
+    },
+    {
+      "bytes": 25251,
+      "name": "s31-console.log",
+      "sha256": "1bd14db26f0ece3b3bb1d82665075508bc25390b299c5fbaca34daac4c1489c6"
+    },
+    {
+      "bytes": 2009,
+      "name": "larkbridge-build-manifest.json",
+      "sha256": "fbfcb72eb6137c9f70960262b58aa28cce478fd698e0fd193af0e25787729e61"
+    }
+  ],
+  "flashed": true,
+  "gate": "T2-smoke-s31",
+  "port": "COM3",
+  "reasons": [
+    "boot JSON matches the manifest"
+  ],
+  "recorded_at": "2026-11-24T11:01:45+00:00",
+  "revisions": {
+    "checkout": {
+      "commit": "f9210eec447940d07c9268cbd9b000e194f81434",
+      "dirty": true,
+      "dirty_paths": [
+        "?? docs/experiments/results/E21/20261124T110145Z-T2-smoke-s31/artifacts/flash.log",
+        "?? docs/experiments/results/E21/20261124T110145Z-T2-smoke-s31/artifacts/larkbridge-build-manifest.json",
+        "?? docs/experiments/results/E21/20261124T110145Z-T2-smoke-s31/artifacts/s31-console.log",
+        "?? firmware/qual/overnight-2026-11-24.md"
+      ]
+    },
+    "hil_version": 0,
+    "manifest_sha256": "fbfcb72eb6137c9f70960262b58aa28cce478fd698e0fd193af0e25787729e61",
+    "toolchain_lock_sha256": "9ab42ddf52096f0b58f89de91c9ae08ceac680eede3da85270eac5b3681c72db"
+  },
+  "schema": 1,
+  "verdict": "PASS"
+}

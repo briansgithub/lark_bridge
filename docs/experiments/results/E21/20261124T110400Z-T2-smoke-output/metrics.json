@@ -1,0 +1,18 @@
+{
+  "aec_publish": null,
+  "board": "output",
+  "boot_records": 1,
+  "bt": "88:f1:55:29:e5:42",
+  "erase_bonds": 0,
+  "errors": 0,
+  "expected_image": "test",
+  "expected_version": "209f25ad4fc0-test",
+  "identity_source": "boot",
+  "idf": "v6.0.2",
+  "image": "test",
+  "reboot_markers": 0,
+  "reset": "poweron",
+  "stats_records": 18,
+  "status_records": 2,
+  "version": "209f25ad4fc0-test"
+}

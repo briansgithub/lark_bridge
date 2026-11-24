@@ -1,0 +1,48 @@
+{
+  "artifacts": [
+    {
+      "bytes": 4210,
+      "name": "flash.log",
+      "sha256": "ae1967a29da60d1b77ef23fd184f8cc28297e1a4a06dd1173667bdd159966b1e"
+    },
+    {
+      "bytes": 16780,
+      "name": "output-console.log",
+      "sha256": "7de0c32653ab5a2ef3740430ffc5e5abe61fc0d547bd1c7ae215b9ffb293eca3"
+    },
+    {
+      "bytes": 1691,
+      "name": "larkbridge-build-manifest.json",
+      "sha256": "b41464e2cca022ed56544036095edd1654a5f500625d06ff9633c8057e32d50a"
+    }
+  ],
+  "flashed": true,
+  "gate": "T2-smoke-output",
+  "port": "COM4",
+  "reasons": [
+    "boot JSON matches the manifest"
+  ],
+  "recorded_at": "2026-11-24T11:04:00+00:00",
+  "revisions": {
+    "checkout": {
+      "commit": "f9210eec447940d07c9268cbd9b000e194f81434",
+      "dirty": true,
+      "dirty_paths": [
+        "?? docs/experiments/results/E21/20261124T110145Z-T2-smoke-s31/artifacts/flash.log",
+        "?? docs/experiments/results/E21/20261124T110145Z-T2-smoke-s31/artifacts/larkbridge-build-manifest.json",
+        "?? docs/experiments/results/E21/20261124T110145Z-T2-smoke-s31/artifacts/s31-console.log",
+        "?? docs/experiments/results/E21/20261124T110145Z-T2-smoke-s31/metrics.json",
+        "?? docs/experiments/results/E21/20261124T110145Z-T2-smoke-s31/result.json",
+        "?? docs/experiments/results/E21/20261124T110400Z-T2-smoke-output/artifacts/flash.log",
+        "?? docs/experiments/results/E21/20261124T110400Z-T2-smoke-output/artifacts/larkbridge-build-manifest.json",
+        "?? docs/experiments/results/E21/20261124T110400Z-T2-smoke-output/artifacts/output-console.log",
+        "?? firmware/qual/overnight-2026-11-24.md"
+      ]
+    },
+    "hil_version": 0,
+    "manifest_sha256": "b41464e2cca022ed56544036095edd1654a5f500625d06ff9633c8057e32d50a",
+    "toolchain_lock_sha256": "9ab42ddf52096f0b58f89de91c9ae08ceac680eede3da85270eac5b3681c72db"
+  },
+  "schema": 1,
+  "verdict": "PASS"
+}
