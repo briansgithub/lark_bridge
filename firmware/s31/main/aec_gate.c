@@ -321,7 +321,14 @@ static void aec_task(void *argument)
             uint32_t timeout = worker.engine_frames == 0U
                                    ? AEC_STARTUP_TIMEOUT_MS
                                    : AEC_STARVATION_MS;
-            if ((uint32_t)(current_ms - worker.last_progress_ms) >= timeout) {
+            /* last_progress_ms can be stamped after current_ms was sampled (engine start,
+             * initial delay discard, end of a frame): use a fresh, signed elapsed time so a
+             * stamp "in the future" reads as zero rather than wrapping to ~49 days. */
+            int32_t idle_ms = (int32_t)(now_ms() - worker.last_progress_ms);
+            if (idle_ms < 0) {
+                idle_ms = 0;
+            }
+            if ((uint32_t)idle_ms >= timeout) {
                 ++worker.starvations;
                 size_t mic_have = 0U, reference_have = 0U;
                 s31_audio_router_aec_ring_bytes(&mic_have, &reference_have);
@@ -330,7 +337,7 @@ static void aec_task(void *argument)
                          (unsigned)mic_have, (unsigned)mic_input_bytes,
                          (unsigned)reference_have, (unsigned)worker.reference_bytes,
                          (unsigned long)worker.engine_frames,
-                         (unsigned long)(current_ms - worker.last_progress_ms),
+                         (unsigned long)idle_ms,
                          (unsigned long)worker.max_process_us);
                 s31_gateway_set_fault(BRIDGE_FAULT_AEC_NOT_READY);
                 release_engine(&worker);
