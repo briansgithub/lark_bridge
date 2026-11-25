@@ -1,5 +1,6 @@
 #include "bridge_pcm.h"
 #include "bridge_link.h"
+#include "bridge_link_timing.h"
 #include "bridge_protocol.h"
 #include "bridge_rate.h"
 #include "bridge_resample.h"
@@ -461,6 +462,25 @@ static int test_route_fence(void) {
     return 0;
 }
 
+static int test_link_timing(void) {
+    bridge_link_timing_t timing = {0};
+    bridge_link_timing_note(&timing, UINT32_MAX - 99U, BRIDGE_MESSAGE_HEARTBEAT, UINT16_MAX);
+    CHECK(timing.count == 1U && timing.max_gap_ms == 0U);
+    bridge_link_timing_note(&timing, 400U, BRIDGE_MESSAGE_HEARTBEAT, 0U);
+    CHECK(timing.max_gap_ms == 500U && timing.gap_seq == 0U);
+    bridge_link_timing_note(&timing, 1850U, BRIDGE_MESSAGE_STATUS, 17U);
+    bridge_link_timing_note(&timing, 1900U, BRIDGE_MESSAGE_HEARTBEAT, 1U);
+    CHECK(timing.count == 4U && timing.last_ms == 1900U);
+    CHECK(timing.last_type == BRIDGE_MESSAGE_HEARTBEAT && timing.last_seq == 1U);
+    CHECK(timing.max_gap_ms == 1450U && timing.gap_type == BRIDGE_MESSAGE_STATUS &&
+          timing.gap_seq == 17U);
+
+    timing = (bridge_link_timing_t){0};
+    bridge_link_timing_note(&timing, 12000U, BRIDGE_MESSAGE_HEARTBEAT, 0U);
+    CHECK(timing.count == 1U && timing.max_gap_ms == 0U);
+    return 0;
+}
+
 static int test_sparse_commands(void) {
     bridge_tx_sequences_t tx = {0};
     const bridge_message_type_t commands[] = {BRIDGE_MESSAGE_ROUTE, BRIDGE_MESSAGE_AVRCP_COMMAND};
@@ -479,7 +499,7 @@ static int test_sparse_commands(void) {
 }
 
 int main(void) {
-    if (test_sparse_commands() != 0) return 1;
+    if (test_sparse_commands() != 0 || test_link_timing() != 0) return 1;
     if (test_byte_ring() != 0 || test_frame_ring() != 0 || test_pcm() != 0 ||
         test_protocol() != 0 || test_protocol_random_stream() != 0 ||
         test_link_contract() != 0 || test_session() != 0 ||

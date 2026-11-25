@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "bridge_console.h"
+#include "bridge_link_timing.h"
 #include "bridge_protocol.h"
 
 enum { BRIDGE_TEST_DUP = 5, BRIDGE_TEST_MUTE = 6 };
@@ -78,6 +79,20 @@ static inline void bridge_link_test_recover(bridge_link_test_t *test, const char
         printf("{\"t\":\"event\",\"role\":\"%s\",\"ev\":\"rx_recover\","
                "\"type\":%u,\"seq\":%u}\n", role, packet->type, packet->sequence);
     }
+}
+
+static inline void bridge_link_test_timing_json(bridge_json_t *json, const char *name,
+                                                const bridge_link_timing_t *timing)
+{
+    bridge_json_object_begin(json, name);
+    bridge_json_u32(json, "count", timing->count);
+    bridge_json_u32(json, "ms", timing->last_ms);
+    bridge_json_u32(json, "type", timing->last_type);
+    bridge_json_u32(json, "seq", timing->last_seq);
+    bridge_json_u32(json, "gap_ms", timing->max_gap_ms);
+    bridge_json_u32(json, "gap_type", timing->gap_type);
+    bridge_json_u32(json, "gap_seq", timing->gap_seq);
+    bridge_json_object_end(json);
 }
 
 static inline void bridge_link_test_stats(const bridge_link_test_t *test, bridge_json_t *json)

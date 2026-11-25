@@ -59,6 +59,10 @@ static uint32_t s_remote_session;
 static bool s_remote_session_valid;
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
 static bridge_link_test_t s_link_test;
+static portMUX_TYPE s_link_timing_mux = portMUX_INITIALIZER_UNLOCKED;
+static bridge_link_timing_t s_live_tx;
+static uint32_t s_live_write_max_ms;
+static uint32_t s_live_write_errors;
 #endif
 static _Atomic uint32_t s_protocol_errors;
 static _Atomic uint32_t s_reliable_failures;
@@ -101,9 +105,25 @@ static bool send_wire_packet(const bridge_packet_t *packet) {
         return false;
     }
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
-    if (bridge_link_test_muted(&s_link_test, now_ms())) return true;
+    uint32_t started_ms = now_ms();
+    if (bridge_link_test_muted(&s_link_test, started_ms)) return true;
+    bool live = packet->type == BRIDGE_MESSAGE_HEARTBEAT || packet->type == BRIDGE_MESSAGE_STATUS;
+    if (live) {
+        portENTER_CRITICAL(&s_link_timing_mux);
+        bridge_link_timing_note(&s_live_tx, started_ms, packet->type, packet->sequence);
+        portEXIT_CRITICAL(&s_link_timing_mux);
+    }
 #endif
     written = uart_write_bytes(CONTROL_UART, encoded, encoded_length);
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    if (live) {
+        uint32_t elapsed_ms = now_ms() - started_ms;
+        portENTER_CRITICAL(&s_link_timing_mux);
+        if (elapsed_ms > s_live_write_max_ms) s_live_write_max_ms = elapsed_ms;
+        if (written != (int)encoded_length) ++s_live_write_errors;
+        portEXIT_CRITICAL(&s_link_timing_mux);
+    }
+#endif
     return written == (int)encoded_length;
 }
 
@@ -472,6 +492,14 @@ bool output_control_test_fault(const char *kind)
 void output_control_test_stats(bridge_json_t *json)
 {
     bridge_link_test_stats(&s_link_test, json);
+    portENTER_CRITICAL(&s_link_timing_mux);
+    bridge_link_timing_t live_tx = s_live_tx;
+    uint32_t write_max_ms = s_live_write_max_ms;
+    uint32_t write_errors = s_live_write_errors;
+    portEXIT_CRITICAL(&s_link_timing_mux);
+    bridge_link_test_timing_json(json, "live_tx", &live_tx);
+    bridge_json_u32(json, "live_write_max_ms", write_max_ms);
+    bridge_json_u32(json, "live_write_err", write_errors);
 }
 
 static void run_link_test(uint32_t now)
