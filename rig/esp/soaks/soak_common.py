@@ -91,6 +91,7 @@ def run(name, args, seconds, scenario):
         hil.acquire_lease(lease, owner, ttl=seconds + 600, renew=False)
         acquired = True
         bench = h2h5.Bench((args.s31_port, args.output_port), out, hil.arrival._quiet_serial_factory)
+        bench.wait(1.2)
         for role, status in bench.pair("status").items():
             require(status.get("image") == "test" and status.get("erase_bonds") == 0,
                     f"{role} requires a test image with bond erase disabled")

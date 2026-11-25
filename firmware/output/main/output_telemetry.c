@@ -197,6 +197,7 @@ static void build_stats(bridge_json_t *json, char *buffer, const char *type)
     bridge_json_u32(json, "missing", audio.missing_frames);
     bridge_json_u32(json, "dropped", audio.dropped_frames);
     bridge_json_u32(json, "i2s_err", audio.i2s_read_errors);
+    bridge_json_u32(json, "i2s_gap_max_ms", audio.i2s_gap_max_ms);
     bridge_json_object_end(json);
     bridge_json_object_begin(json, "hwm");
     bridge_json_u32(json, "stats", (uint32_t)uxTaskGetStackHighWaterMark(s_stats_task));

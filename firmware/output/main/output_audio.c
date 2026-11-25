@@ -18,7 +18,7 @@
 #define PCM_BYTES_PER_FRAME 4U
 #define I2S_READ_FRAMES 480U
 #define I2S_READ_BYTES (I2S_READ_FRAMES * PCM_BYTES_PER_FRAME)
-#define I2S_CLOCK_ACTIVE_MS 250U
+#define I2S_CLOCK_ACTIVE_MS 100U
 #define ADAPTIVE_BLOCK_FRAMES 240U
 #define I2S_RATE_HZ 48000U
 #define MIN_SINK_RATE_HZ 44100U
@@ -43,6 +43,7 @@ typedef struct {
     uint32_t missing_frames;
     uint32_t dropped_frames;
     uint32_t i2s_read_errors;
+    uint32_t i2s_gap_max_ms;
     int32_t adaptive_input_delta_frames;
     int32_t correction_ppm;
     uint32_t fifo_min_frames;
@@ -171,7 +172,14 @@ static void i2s_reader_task(void *context) {
                 ring_write_overwrite_oldest(s_i2s_buffer, bytes_read);
             }
             portENTER_CRITICAL(&s_ring.mux);
-            s_last_read_us = esp_timer_get_time();
+            int64_t now_us = esp_timer_get_time();
+            if (s_last_read_us != 0 && now_us > s_last_read_us) {
+                uint32_t gap_ms = (uint32_t)((now_us - s_last_read_us) / 1000);
+                if (gap_ms > s_ring.i2s_gap_max_ms) {
+                    s_ring.i2s_gap_max_ms = gap_ms;
+                }
+            }
+            s_last_read_us = now_us;
             portEXIT_CRITICAL(&s_ring.mux);
         } else if (error != ESP_ERR_TIMEOUT) {
             portENTER_CRITICAL(&s_ring.mux);
@@ -215,6 +223,7 @@ esp_err_t output_audio_start(void) {
     s_ring.missing_frames = 0U;
     s_ring.dropped_frames = 0U;
     s_ring.i2s_read_errors = 0U;
+    s_ring.i2s_gap_max_ms = 0U;
     s_ring.adaptive_input_delta_frames = 0;
     s_ring.correction_ppm = 0;
     s_ring.fifo_min_frames = UINT32_MAX;
@@ -505,6 +514,7 @@ void output_audio_test_fifo_window(void)
     portENTER_CRITICAL(&s_ring.mux);
     s_ring.fifo_min_frames = s_ring.count / PCM_BYTES_PER_FRAME;
     s_ring.fifo_max_frames = s_ring.fifo_min_frames;
+    s_ring.i2s_gap_max_ms = 0U;
     portEXIT_CRITICAL(&s_ring.mux);
 }
 #endif
@@ -522,6 +532,7 @@ void output_audio_get_stats(output_audio_stats_t *stats) {
     stats->missing_frames = s_ring.missing_frames;
     stats->dropped_frames = s_ring.dropped_frames;
     stats->i2s_read_errors = s_ring.i2s_read_errors;
+    stats->i2s_gap_max_ms = s_ring.i2s_gap_max_ms;
     stats->adaptive_input_delta_frames = s_ring.adaptive_input_delta_frames;
     stats->correction_ppm = s_ring.correction_ppm;
     stats->fifo_frames = fifo_frames > UINT16_MAX ? UINT16_MAX : (uint16_t)fifo_frames;

@@ -162,6 +162,7 @@ def segment(out, limits, harness, source, seconds, index, sink_hook=None):
                                      and r['line'].rstrip().endswith('muted'))
         row['output']['live_tx'] = end['output']['uart'].get('live_tx')
         row['output']['live_write_max_ms'] = end['output']['uart'].get('live_write_max_ms')
+        row['output']['i2s_gap_max_ms'] = end['output']['a2dp'].get('i2s_gap_max_ms')
     except rig.BenchError as exc:
         row['error'] = str(exc)
         bench.add(t='abort', reason=str(exc))

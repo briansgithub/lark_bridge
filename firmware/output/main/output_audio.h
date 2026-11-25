@@ -13,6 +13,7 @@ typedef struct {
     uint32_t missing_frames;
     uint32_t dropped_frames;
     uint32_t i2s_read_errors;
+    uint32_t i2s_gap_max_ms;
     int32_t adaptive_input_delta_frames;
     int32_t correction_ppm;
     uint16_t fifo_frames;
