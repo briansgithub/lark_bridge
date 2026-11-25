@@ -65,7 +65,9 @@ parse_btmgmt_info() {
 
 bt_controllers() {
   command -v btmgmt >/dev/null 2>&1 || return 1
-  timeout 10 btmgmt info 2>/dev/null </dev/null | parse_btmgmt_info
+  # BlueZ 5.82 btmgmt exits before printing if stdin hits immediate EOF (e.g. /dev/null
+  # under systemd), so keep stdin open briefly without blocking.
+  (sleep 0.5) | timeout 10 btmgmt info 2>/dev/null | parse_btmgmt_info
 }
 
 # hci index of the pinned controller, or nothing.

@@ -81,7 +81,8 @@ else check openocd_rp2040 fail "target/rp2040.cfg not found in the OpenOCD scrip
 # ---------------------------------------------------------------- audio
 
 if have pw-dump; then
-  if pw-dump 2>/dev/null | grep -q "\"node.name\": \"${RIG_FAKE_CAR_SINK:-larkbridge_fake_car}\""; then
+  # Avoid `grep -q` under `set -o pipefail`: closing the pipe early causes pw-dump SIGPIPE (141).
+  if pw-dump 2>/dev/null | grep -F "\"node.name\": \"${RIG_FAKE_CAR_SINK:-larkbridge_fake_car}\"" >/dev/null; then
     check fake_car_sink pass "${RIG_FAKE_CAR_SINK:-larkbridge_fake_car} present"
   else
     check fake_car_sink fail "recording tap not found (PipeWire not running for $(id -un)?)"
