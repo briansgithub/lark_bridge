@@ -155,6 +155,11 @@ def segment(out, limits, harness, source, seconds, index, sink_hook=None):
         row['s31']['live_rx'] = end['s31']['uart'].get('live_rx')
         row['s31']['rx_loop_max_ms'] = end['s31']['uart'].get('rx_loop_max_ms')
         row['s31']['uac_lost'] = end['s31'].get('uac', {}).get('lost')
+        window = bench.records[first:]
+        # Brief READY_AUDIO drops (I2S reader idle > 100 ms) flush the FIFO; count them.
+        row['output']['mutes'] = sum(1 for r in window if r.get('role') == 'output' and
+                                     r['t'] == 'console' and 'readiness=' in r.get('line', '')
+                                     and r['line'].rstrip().endswith('muted'))
         row['output']['live_tx'] = end['output']['uart'].get('live_tx')
         row['output']['live_write_max_ms'] = end['output']['uart'].get('live_write_max_ms')
     except rig.BenchError as exc:
@@ -179,6 +184,8 @@ def main():
     ap.add_argument('--segment-min', type=float, default=20)
     ap.add_argument('--boot-every', type=int, default=2, help='segments between cold boots (0=never)')
     ap.add_argument('--source', choices=('media', 'tone'), default='media')
+    ap.add_argument('--max-boots-per-hour', type=float, default=4,
+                    help='relay guard; raise only for a short dry run')
     ap.add_argument('--sink-hook', default=None,
                     help='module:function scoring an extra sink per segment (Pi fake car)')
     a = ap.parse_args()
@@ -188,7 +195,7 @@ def main():
         module, _, name = a.sink_hook.partition(':')
         sink_hook = getattr(importlib.import_module(module), name)
     seconds = a.segment_min * 60
-    if a.boot_every and 3600 / (seconds * a.boot_every) > 4:
+    if a.boot_every and 3600 / (seconds * a.boot_every) > a.max_boots_per_hour:
         sys.exit('more than 4 cold boots per hour: raise --boot-every or --segment-min')
     a.out.mkdir(parents=True, exist_ok=True)
     limits = tomllib.loads((root / 'firmware/qual/gates.toml').read_text())['gates']['H5']
@@ -249,6 +256,7 @@ def main():
             'stream_hours': round(sum(r.get('metrics', {}).get('seconds', 0) for r in segs) / 3600, 2),
             'hb_timeouts': {role: sum(r.get(role, {}).get('timeouts', 0) for r in segs)
                             for role in rig.ROLES},
+            'output_mutes': sum(r.get('output', {}).get('mutes', 0) for r in segs),
             'cold_boots': len(cycs), 'cold_boots_pass': sum(c.get('h5') == 'PASS' for c in cycs),
             'cold_boot_timeouts': sum(c.get('s31', {}).get('timeouts_window', 0) for c in cycs),
             'rc': rc}
