@@ -72,13 +72,18 @@ bool bridge_byte_ring_pop(bridge_byte_ring_t *ring, uint8_t *value) {
 }
 
 size_t bridge_byte_ring_write(bridge_byte_ring_t *ring, const uint8_t *data, size_t length) {
-    size_t written = 0U;
-    if (data == NULL) {
+    if (ring == NULL || ring->storage == NULL || data == NULL || length == 0U) {
         return 0U;
     }
-    while (written < length && bridge_byte_ring_push(ring, data[written])) {
-        ++written;
-    }
+    size_t space = bridge_byte_ring_space(ring);
+    size_t written = length < space ? length : space;
+    size_t start = atomic_load_explicit(&ring->write_index, memory_order_relaxed);
+    size_t tail = ring->capacity - start;
+    size_t first = written < tail ? written : tail;
+    memcpy(ring->storage + start, data, first);
+    memcpy(ring->storage, data + first, written - first);
+    size_t end = written < tail ? start + written : written - tail;
+    atomic_store_explicit(&ring->write_index, end, memory_order_release);
     return written;
 }
 

@@ -1,6 +1,8 @@
 #ifndef BRIDGE_LINK_H
 #define BRIDGE_LINK_H
 
+#include "bridge_protocol.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -96,6 +98,15 @@ typedef struct {
     uint16_t newest;
     uint32_t seen;
 } bridge_sequence_tracker_t;
+
+/* One sender task owns the counters. ACK identifies both type and sequence. */
+typedef struct {
+    uint16_t next[BRIDGE_MESSAGE_ACK + 1];
+} bridge_tx_sequences_t;
+
+static inline uint16_t bridge_tx_next(bridge_tx_sequences_t *sequences, bridge_message_type_t type) {
+    return sequences->next[type]++;
+}
 
 void bridge_put_u16_le(uint8_t *output, uint16_t value);
 void bridge_put_u32_le(uint8_t *output, uint32_t value);

@@ -93,3 +93,5 @@ An obsolete ACK, timeout, peer reboot, malformed command, heartbeat loss, or loc
 boundary returns the system to silence. The output board also requires current local BT, peer,
 audio, I2S, UART, remote capability, heartbeat, and committed-route gates before its A2DP callback
 can read nonzero PCM.
+
+Each sender advances a separate 16-bit sequence counter for each message type. Retries reuse the original sequence.
