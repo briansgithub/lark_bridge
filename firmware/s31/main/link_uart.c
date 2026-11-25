@@ -59,6 +59,9 @@ static _Atomic uint32_t s_last_output_protocol_errors;
 static _Atomic uint32_t s_last_output_reliable_failures;
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
 static bridge_link_test_t s_link_test;
+static portMUX_TYPE s_link_timing_mux = portMUX_INITIALIZER_UNLOCKED;
+static bridge_link_timing_t s_live_rx;
+static bridge_link_timing_t s_rx_loop;
 #endif
 static _Atomic uint32_t s_protocol_errors;
 static _Atomic uint32_t s_reliable_failures;
@@ -119,7 +122,7 @@ static bool output_ready(uint8_t flags)
     return (flags & required) == required;
 }
 
-static void note_peer_status(uint8_t ready_flags)
+static void note_peer_status(const bridge_packet_t *packet, uint8_t ready_flags)
 {
     if (!s_output_hello_valid) {
         s31_gateway_set_output_link(false);
@@ -127,6 +130,14 @@ static void note_peer_status(uint8_t ready_flags)
     }
     s_peer_seen = true;
     s_last_peer_heartbeat = xTaskGetTickCount();
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    portENTER_CRITICAL(&s_link_timing_mux);
+    bridge_link_timing_note(&s_live_rx, (uint32_t)(s_last_peer_heartbeat * portTICK_PERIOD_MS),
+                            packet->type, packet->sequence);
+    portEXIT_CRITICAL(&s_link_timing_mux);
+#else
+    (void)packet;
+#endif
     s31_gateway_set_output_link(output_ready(ready_flags));
 }
 
@@ -267,6 +278,11 @@ static void handle_packet(const bridge_packet_t *packet)
                 s_output_session = output_session;
                 s_output_session_valid = true;
                 s_peer_seen = false;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+                portENTER_CRITICAL(&s_link_timing_mux);
+                s_live_rx = (bridge_link_timing_t){0};
+                portEXIT_CRITICAL(&s_link_timing_mux);
+#endif
                 s_pending_route.active = false;
                 bridge_route_fence_reset(&s_route_fence);
                 bridge_sequence_tracker_init(&s_avrcp_sequences);
@@ -284,7 +300,7 @@ static void handle_packet(const bridge_packet_t *packet)
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
             if (s_output_hello_valid) bridge_link_test_heartbeat(&s_link_test, (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS));
 #endif
-            note_peer_status(packet->payload[BRIDGE_HEARTBEAT_READY_OFFSET]);
+            note_peer_status(packet, packet->payload[BRIDGE_HEARTBEAT_READY_OFFSET]);
         } else {
             s31_gateway_set_fault(BRIDGE_FAULT_PROTOCOL);
             ++s_protocol_errors;
@@ -292,7 +308,7 @@ static void handle_packet(const bridge_packet_t *packet)
         break;
     case BRIDGE_MESSAGE_STATUS:
         if (packet->payload_length == BRIDGE_STATUS_PAYLOAD_SIZE) {
-            note_peer_status(packet->payload[BRIDGE_STATUS_READY_OFFSET]);
+            note_peer_status(packet, packet->payload[BRIDGE_STATUS_READY_OFFSET]);
             consume_output_fifo_status(packet);
         } else {
             s31_gateway_set_fault(BRIDGE_FAULT_PROTOCOL);
@@ -452,6 +468,12 @@ bool s31_link_uart_test_fault(const char *kind)
 void s31_link_uart_test_stats(bridge_json_t *json)
 {
     bridge_link_test_stats(&s_link_test, json);
+    portENTER_CRITICAL(&s_link_timing_mux);
+    bridge_link_timing_t live_rx = s_live_rx;
+    uint32_t rx_loop_max_ms = s_rx_loop.max_gap_ms;
+    portEXIT_CRITICAL(&s_link_timing_mux);
+    bridge_link_test_timing_json(json, "live_rx", &live_rx);
+    bridge_json_u32(json, "rx_loop_max_ms", rx_loop_max_ms);
 }
 
 static void run_link_test(uint32_t now)
@@ -503,6 +525,12 @@ static void link_task(void *argument)
         TickType_t read_wait = until_periodic > 0 ? (TickType_t)until_periodic : 0U;
         if (read_wait > max_read_wait) read_wait = max_read_wait;
         int count = uart_read_bytes(S31_LINK_UART_PORT, input, sizeof(input), read_wait);
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        uint32_t read_done_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+        portENTER_CRITICAL(&s_link_timing_mux);
+        bridge_link_timing_note(&s_rx_loop, read_done_ms, 0U, 0U);
+        portEXIT_CRITICAL(&s_link_timing_mux);
+#endif
         for (int index = 0; index < count; ++index) {
             bridge_packet_t packet;
             bridge_decoder_result_t result = bridge_stream_decoder_feed(
