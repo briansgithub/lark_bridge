@@ -88,13 +88,31 @@ Not measured: wire clock, slot width and edge timing.
 - **3. USB lifecycle loss:** fixed as described above. It was found on the
   bench, not by fault injection. The H6 detach-under-load case still needs
   a physical LARK replug.
-- **4. Output Bluetooth event loss:** not run. It needs a test hook that
-  delays the worker until its queue fills, then a power cycle of the
-  sink. The MP43247 is not on the plug.
-- **5. Stranded AVRCP release:** not run. It needs an S31 test hook that
-  injects release-submit failures. The Pixel also has no media session
-  that would show the key state (`dumpsys media_session`: none), so the
-  harness APK needs a MediaSession that logs down/up.
+- **4. Output Bluetooth event loss: reproduced (21:45).** Hooks are in
+  `df8ffd1` (output `39eb5e6`), and the runner is `firmware/rig/astra45.py`.
+  `fault bt_drop_disc` drops the next DISCONNECTED event, and
+  `fault bt_disconnect` then drops the speaker link. For 60 s afterwards
+  the output reported `connected: true, streaming: true` with `audio`
+  false and FIFO 0. It never reconnected and raised no fault beyond the
+  dropped event. A 32UE reboot then paged the saved peer every 5 s, but
+  the MP43247 refused (`BTA_AV_OPEN_EVT FAILED`, timeouts). It had most
+  likely gone to standby after the source-side disconnect. The speaker
+  needs a power-button press. The dropped DISCOVERY_STOPPED hook
+  (`bt_drop_dstop`) is built but not run: discovery only runs without a
+  saved peer, and forgetting the peer would mean re-pairing by hand.
+- **5. Stranded AVRCP release: reproduced (21:44).**
+  `fault avrcp_relfail` fails the next 5 release submissions. Then:
+  - five STOP taps each returned `ESP_FAIL` with the release still
+    pending;
+  - a PAUSE tap returned `ESP_ERR_INVALID_STATE`: a different key is
+    blocked;
+  - the next STOP tap returned `ESP_OK` but only completed the old
+    release, so no new STOP was sent;
+  - PAUSE then worked.
+
+  Pixel logcat showed no AVRCP or media-key lines at default log levels.
+  The phone-side key state still needs a harness MediaSession. Evidence:
+  `20261124-astra45/run1`.
 
 ## D5 AEC (FD + PSRAM): stopped 21:30, deferred to tomorrow
 

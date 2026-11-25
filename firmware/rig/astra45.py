@@ -45,6 +45,8 @@ def output_bt(bench):
 
 def case4(bench, observe):
     out = {}
+    bench.command('s31', 'fault test_a2dp')
+    bench.command('s31', 'tone routed_i2s 1000 -50')
     bench.wait_link(30, lambda pair: rig.streaming(bench.command('output', 'stats')))
     out['before'] = output_bt(bench)
     start = len(bench.records)
@@ -66,7 +68,7 @@ def case4(bench, observe):
     stale = all(s['connected'] for s in samples) and not samples[-1]['audio']
     out['result'] = ('reconnected' if reconnected else
                      'stale connected flags (Astra 4 reproduced)' if stale else 'other')
-    if not (samples[-1]['connected'] and samples[-1]['streaming']):
+    if not (samples[-1]['connected'] and samples[-1]['streaming'] and samples[-1]['audio']):
         bench.restart = 'output'
         bench.boots['output'] = 0
         bench.command('output', 'fault reboot')
