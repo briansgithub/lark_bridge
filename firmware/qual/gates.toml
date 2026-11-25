@@ -149,7 +149,8 @@ analyzer_rate = 24000000
 sample_rate_ppm = 1000
 tone_hz_tolerance = 1
 amplitude_tolerance = 0.01
-status = "PENDING"
+status = "PASS"
+evidence = "firmware/qual/bench-report-2026-11-24-night.md#h4 (scored from PCM taps and FIFO telemetry; logic analyzer waived by Brian 2026-11-24)"
 
 [gates.analyzer]
 title = "Logic analyzer clipped onto the harness (hil-rig.md 3.2)"
