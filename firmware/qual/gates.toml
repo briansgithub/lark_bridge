@@ -41,7 +41,8 @@ needs = []
 human = true
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PASS"
+evidence = "../lark_bridge-evidence/20261124-H0-photo/record.md (Brian photo 2026-11-24; 32UE U.FL to external antenna; SKU/revision from H1 boot identity)"
 
 [gates.H1]
 title = "Independent flash/boot"

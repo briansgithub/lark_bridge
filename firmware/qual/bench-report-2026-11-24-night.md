@@ -227,3 +227,18 @@ Images: S31 `6dbdb64`, output `36202f1` (fixes in `6dbdb64`). Host suite:
   pre-call a2dp_out RMS, and 20 or more. `hil.TAP_ACTIVE_RMS` scores the
   LARK microphone tap, not the speaker path, so the Pixel volume does not
   affect it and it is unchanged.
+
+## H0 from Brian's photo (22:30)
+
+`../lark_bridge-evidence/20261124-H0-photo/` (photo, SHA-256, record).
+The photo shows:
+
+- the S31 CoreBoard, with the LARK receiver on USB-HS;
+- the DevKitC with a WROOM-32UE-class module, whose U.FL pigtail runs
+  through an SMA bulkhead to the external antenna. That is one antenna
+  path, seated, with no visible damage;
+- five jumpers between the boards.
+
+Module markings are not legible in the photo. Chip identity comes from
+the boot logs: ESP32-D0WD-V3 rev v3.1 on the output and an esp32s31 rev
+v0.0 bootloader. `gates.toml` H0 is now PASS on that basis.
