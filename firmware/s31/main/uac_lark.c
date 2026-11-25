@@ -61,6 +61,11 @@ static atomic_uint_fast32_t s_transfer_errors;
 static atomic_uint_fast32_t s_disconnects;
 static atomic_uint_fast32_t s_opens;
 static atomic_uint_fast32_t s_reopen_total;
+/* RX_DONE is coalesced: at most one queued notification, so lifecycle events keep queue space. */
+static atomic_bool s_rx_notify_queued;
+/* Events dropped on a full queue. Counted in the callback, logged by the owner task. */
+static atomic_uint_fast32_t s_events_lost;
+static atomic_bool s_lifecycle_lost;
 
 static void post_driver_event(uint8_t address, uint8_t interface_number,
                               const uac_host_driver_event_t event, void *argument)
@@ -75,7 +80,9 @@ static void post_driver_event(uint8_t address, uint8_t interface_number,
         },
     };
     if (xQueueSend(s_events, &message, 0) != pdTRUE) {
-        ESP_EARLY_LOGE(TAG, "UAC driver event queue full");
+        /* Never log from the driver callback: a log per dropped event is a storm. */
+        atomic_fetch_add_explicit(&s_events_lost, 1U, memory_order_relaxed);
+        atomic_store_explicit(&s_lifecycle_lost, true, memory_order_release);
     }
 }
 
@@ -90,8 +97,17 @@ static void post_device_event(uac_host_device_handle_t handle,
             .event = event,
         },
     };
+    const bool rx = event == UAC_HOST_DEVICE_EVENT_RX_DONE;
+    if (rx && atomic_exchange_explicit(&s_rx_notify_queued, true, memory_order_acq_rel)) {
+        return; /* the queued notification will drain this data too */
+    }
     if (xQueueSend(s_events, &message, 0) != pdTRUE) {
-        ESP_EARLY_LOGE(TAG, "UAC device event queue full");
+        atomic_fetch_add_explicit(&s_events_lost, 1U, memory_order_relaxed);
+        if (rx) {
+            atomic_store_explicit(&s_rx_notify_queued, false, memory_order_release);
+        } else {
+            atomic_store_explicit(&s_lifecycle_lost, true, memory_order_release);
+        }
     }
 }
 
@@ -241,21 +257,35 @@ static void schedule_reopen(void)
 static void handle_device_event(const uac_queue_event_t *message)
 {
     uac_host_device_handle_t handle = message->data.device.handle;
+    if (message->data.device.event == UAC_HOST_DEVICE_EVENT_RX_DONE) {
+        /* Clear before any read (and for stale handles): a later callback queues afresh. */
+        atomic_store_explicit(&s_rx_notify_queued, false, memory_order_release);
+    }
     if (handle != s_lark_handle) {
         return;
     }
     switch (message->data.device.event) {
     case UAC_HOST_DEVICE_EVENT_RX_DONE:
         if (handle == s_lark_handle) {
-            uint8_t capture[UAC_READ_BYTES];
+            static uint8_t capture[UAC_READ_BYTES];
             uint32_t bytes_read = 0;
-            esp_err_t result = uac_host_device_read(handle, capture, sizeof(capture),
-                                                    &bytes_read, 0);
-            if (result == ESP_OK && bytes_read != 0U) {
+            esp_err_t result = ESP_OK;
+            /* Drain what is buffered, bounded to the driver buffer so one pass cannot spin. */
+            for (unsigned pass = 0U;
+                 pass < UAC_DRIVER_BUFFER_BYTES / UAC_READ_BYTES + 1U; ++pass) {
+                bytes_read = 0U;
+                result = uac_host_device_read(handle, capture, sizeof(capture), &bytes_read, 0);
+                if (result == ESP_ERR_TIMEOUT) {
+                    result = ESP_OK; /* ring empty: drained */
+                }
+                if (result != ESP_OK || bytes_read == 0U) {
+                    break;
+                }
                 atomic_fetch_add_explicit(&s_rx_packets, 1U, memory_order_relaxed);
                 atomic_fetch_add_explicit(&s_rx_bytes, bytes_read, memory_order_relaxed);
                 s31_audio_router_write_lark(capture, bytes_read);
-            } else if (result != ESP_OK) {
+            }
+            if (result != ESP_OK) {
                 atomic_fetch_add_explicit(&s_read_errors, 1U, memory_order_relaxed);
                 ESP_LOGE(TAG, "LARK capture read failed: %s", esp_err_to_name(result));
                 s31_gateway_set_fault(BRIDGE_FAULT_UAC_LOST);
@@ -279,6 +309,21 @@ static void handle_device_event(const uac_queue_event_t *message)
     case UAC_HOST_DEVICE_EVENT_TX_DONE:
     default:
         break;
+    }
+}
+
+static void report_lost_events(void)
+{
+    static uint32_t reported;
+    uint32_t lost = (uint32_t)atomic_load_explicit(&s_events_lost, memory_order_relaxed);
+    if (lost != reported) {
+        ESP_LOGE(TAG, "UAC event queue overflowed: %u events lost in total", (unsigned)lost);
+        reported = lost;
+    }
+    if (atomic_exchange_explicit(&s_lifecycle_lost, false, memory_order_acq_rel)) {
+        /* A lost connect/disconnect cannot be reconstructed here; surface it as a fault. */
+        ESP_LOGE(TAG, "a UAC lifecycle event was lost; device state may be stale");
+        s31_gateway_set_fault(BRIDGE_FAULT_UAC_LOST);
     }
 }
 
@@ -321,6 +366,7 @@ static void uac_task(void *argument)
             }
             continue;
         }
+        report_lost_events();
         if (message.kind == UAC_QUEUE_DRIVER_EVENT &&
             message.data.driver.event == UAC_HOST_DRIVER_EVENT_RX_CONNECTED) {
             if (s_lark_handle == NULL) {
@@ -398,4 +444,5 @@ void s31_uac_lark_get_stats(s31_uac_stats_t *stats)
     stats->opens = (uint32_t)atomic_load_explicit(&s_opens, memory_order_relaxed);
     stats->reopen_attempts =
         (uint32_t)atomic_load_explicit(&s_reopen_total, memory_order_relaxed);
+    stats->events_lost = (uint32_t)atomic_load_explicit(&s_events_lost, memory_order_relaxed);
 }

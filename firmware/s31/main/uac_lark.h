@@ -14,6 +14,7 @@ typedef struct {
     uint32_t disconnects;
     uint32_t opens;
     uint32_t reopen_attempts;
+    uint32_t events_lost; /* queue overflow drops since boot */
 } s31_uac_stats_t;
 
 esp_err_t s31_uac_lark_init(void);

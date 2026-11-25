@@ -210,6 +210,7 @@ static void build_stats(bridge_json_t *json, char *buffer, const char *type)
     bridge_json_u32(json, "disc", uac.disconnects);
     bridge_json_u32(json, "opens", uac.opens);
     bridge_json_u32(json, "reopen", uac.reopen_attempts);
+    bridge_json_u32(json, "lost", uac.events_lost);
     bridge_json_object_end(json);
     bridge_json_object_begin(json, "hwm");
     bridge_json_u32(json, "stats", (uint32_t)uxTaskGetStackHighWaterMark(s_stats_task));
