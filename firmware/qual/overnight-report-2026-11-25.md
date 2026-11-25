@@ -47,33 +47,31 @@
 
 ## Failures & Open Bugs Found (Actionable Next Steps)
 
-### Bug 1 (CRITICAL — Caught by P7): S31 `uac_lark.c` Panic on USB Disconnect Race
-- **Evidence**: `../lark_bridge-evidence/20261125-overnight-v2/final_gates/p7_h6/bench.jsonl`
-- **Trace**:
-  ```
-  E (105777) s31_uac: LARK capture read failed: ESP_ERR_INVALID_STATE
-  W (106837) s31_uac: retrying LARK UAC capture (1/5)
-  E (106837) USB HOST: usbh_devs_open error: ESP_ERR_NOT_FOUND
-  E (106837) uac-host: uac_host_device_open(2124): Unable to open USB device
-  Guru Meditation Error: Core  0 panic'ed (Load access fault). Exception was unhandled.
-  ```
-- **Root cause**: In `firmware/s31/main/uac_lark.c:288-294`, when a USB unplug races with `uac_host_device_read()`, `read()` returns `ESP_ERR_INVALID_STATE` before `UAC_HOST_DRIVER_EVENT_DISCONNECTED` arrives. `uac_lark.c` calls `close_lark(handle)` **and `schedule_reopen()`**, which 1 s later calls `uac_host_device_open()` on the stale/gone USB address while re-enumeration is in progress — triggering a Load access fault inside `espressif/usb_host_uac 1.5.0`.
-- **Recommended fix (for review before flashing)**: On `ESP_ERR_INVALID_STATE` / `ESP_ERR_NOT_FOUND` in `uac_lark.c`, call `close_lark(handle)` and do **NOT** call `schedule_reopen()` — wait for the next `UAC_HOST_DRIVER_EVENT_RX_CONNECTED`.
+### Bug 1 (FIXED & VERIFIED 100/100 in `9ccbd0bd53c9`): S31 `uac_lark.c` Panic on USB Disconnect Race
+- **Root cause**: During USB unplug teardown, `espressif/usb_host_uac 1.5.0` moves `iface->state` out of `ACTIVE` before posting `UAC_HOST_DRIVER_EVENT_DISCONNECTED`. A racing `uac_host_device_read()` returned `ESP_ERR_INVALID_STATE`; `uac_lark.c` closed `s_lark_handle` prematurely and armed `schedule_reopen()`, which 1 s later called `uac_host_device_open()` on the gone USB address (`ESP_ERR_NOT_FOUND`), hitting an upstream NULL dereference at `uac_host.c:2171` (`if (uac_iface->ringbuf)` with `uac_iface == NULL`).
+- **Fix (`9ccbd0b` + `8a13cb9`)**: Treat `ESP_ERR_INVALID_STATE` on `uac_host_device_read()` as disconnect teardown; unconditionally clear `s_reopen_pending` on `DISCONNECTED`; guard `open_lark()` and `schedule_reopen()` with `usb_host_device_addr_list_fill()`; use hardware `pico-ctl reset` in `p7_replug_hook.py`.
+- **Re-test result (`../lark_bridge-evidence/20261125-uac-fix-retest/p7_100/`)**:
+  - **P7 Automated Pico 100/100 + 30-min Soak: PASS (`rc=0`)** — `100/100` disconnects/reopens, `capture_seconds=1800.1`, `141,547` RX packets, `0` read/xfer errors, `0` failure lines, `0` RX gap intervals, `0` reboots, `tap_rms=2317` (`s16le_stereo_48k`).
+  - **H6 overall status**: `PARTIAL` (P7 100/100 PASS; real Lark A1 P9 10/10 physical replug still required with Brian to close H6).
 
 ### Bug 2 (H6 / P9 Real Lark A1 Physical Replug): `ENUM: CHECK_SHORT_DEV_DESC FAILED`
 - **Evidence**: `../lark_bridge-evidence/20261125-h6-p9/s31_console.log`
-- **Status**: Added `CONFIG_USB_HOST_DEBOUNCE_DELAY_MS=500`, `RESET_HOLD_MS=50`, `RESET_RECOVERY_MS=100`, `SET_ADDR_RECOVERY_MS=30` to `firmware/s31/sdkconfig.defaults` (`a0d7599`). Needs a 4-minute P9 real-Lark re-test with Brian after Bug 1 is fixed.
+- **Status**: USB host debounce/recovery margins (`a0d7599`) + Bug 1 fix (`9ccbd0b`) are both flashed on S31 (`9ccbd0bd53c9-test`). Ready for Brian's 4-minute P9 real-Lark re-test (`py -3 firmware/rig/p9_manual_h6.py`).
+
+### Open Bug 3 (H14 / D4): Pixel BT Adapter Cycle 3 Bluedroid Reconnect Hang
+- **Evidence**: `../lark_bridge-evidence/20261125-uac-fix-retest/h14/`
+- **Result**: Cycles 1 & 2 recovered cleanly in `1.66 s` and `1.63 s`; cycle 3 hit the known **D4** Bluedroid collision (`BT_L2CAP: L2CAP HOLD TIMEOUT`, `rcvd ACL for unknown handle:2049`, `BT_BTC: No Link At All`, 10 s cancel/retry loop).
 
 ### Minor Harness / Rig Notes
 1. **`cold_boot.py`**: Hardcodes MP43247 MAC (`c9:5c:fd:6e:28:46`), so cycle 1 rejected `b8:27:eb:43:8d:51` (`LarkRig Fake Car`). Parameterize `--expected-peer` before running overnight cold-boot soaks against the fake car.
 2. **`fake-car` reconnect after 32UE reboot**: `fake-car pair-accept` leaves `hci0` `Connectable: no`; run `sudo btmgmt --index 0 connectable on` on `larkbridge-rig` so 32UE auto-reconnects after reboots.
-3. **H14 (`h14_adapter_cycles.py`)**: Did not run its 10 cycles because S31 had just been flashed after D5 and Pixel profiles hadn't finished reconnecting within the 45 s pre-check; ready to re-run once Bug 1 is fixed.
+3. **S31 `sdkconfig` hygiene**: Note `9ccbd0bd53c9-test` was incrementally built atop the earlier `sdkconfig.aec-fd` `sdkconfig` (so `CONFIG_LARKBRIDGE_S31_AEC_ENGINE=y` with `publish=0` and PSRAM enabled); run `build_firmware.py --no-pull --image test s31` when regenerating a clean AEC-off image.
 
 ---
 
 ## Current Bench State (Safe & Idle)
 - **Shelly plug (`192.168.33.1`)**: ON (`output: true`, `5.5 W`).
 - **Task Scheduler (`LarkBridgeOvernightWatchdog`)**: Deleted cleanly.
-- **S31 (`COM3`)**: Standard AEC-off `aa745ab743fa-test` (Pixel 7a bond intact).
+- **S31 (`COM3`)**: `9ccbd0bd53c9-test` (Pixel 7a bond intact, Pico UAC streaming cleanly).
 - **32UE (`COM4`)**: `aa745ab743fa-test` (bonded to `LarkRig Fake Car` `b8:27:eb:43:8d:51`; MP43247 unpaired).
-- **Local git commits (unpushed)**: `1245c3f`, `16378dc`, `dd5074b`, `830ee1f`, `a0d7599`, `aa745ab` on `claude/esp32-wireless-port`.
+- **Local git commits (unpushed)**: `1245c3f`, `16378dc`, `dd5074b`, `830ee1f`, `a0d7599`, `aa745ab`, `b8132e1`, `9ccbd0b`, `ef9183f`, `8a13cb9` on `claude/esp32-wireless-port`.

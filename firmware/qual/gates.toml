@@ -199,8 +199,8 @@ human = false
 resets = false
 reducer = "h6_uac"
 seconds = 1800
-status = "FAIL"
-evidence = "firmware/qual/overnight-report-2026-11-25.md (P9 real Lark failed cycle 1/10 CHECK_SHORT_DEV_DESC on 6dbdb64; P7 Pico replug caught S31 uac_lark.c ESP_ERR_INVALID_STATE -> schedule_reopen panic on aa745ab; 5/5 negative USB profiles PASS)"
+status = "PARTIAL"
+evidence = "firmware/qual/overnight-report-2026-11-25.md (P7 Pico fake-Lark 100/100 reconnects + 1800.1s soak PASS on 9ccbd0bd53c9-test: 0 read/xfer errors, 0 reboots, 141,547 rx pkts, rms=2317; 5/5 negative USB profiles PASS; P9 real Lark A1 10/10 physical replug still required after earlier 6dbdb64 failure)"
 
 [gates.H7]
 title = "Output Bluetooth (fake car at T3, speaker/car at T4/T5)"
@@ -286,7 +286,8 @@ needs = ["H11"]
 human = false
 resets = true
 reducer = "manual"
-status = "PENDING"
+status = "FAIL"
+evidence = "firmware/qual/overnight-report-2026-11-25.md (h14_adapter_cycles on 9ccbd0bd53c9-test: cycles 1-2 recovered in 1.66s/1.63s; cycle 3 hit D4 BT_L2CAP HOLD TIMEOUT / rcvd ACL for unknown handle)"
 
 [gates.H15]
 title = "Repetition, ten cycles"
