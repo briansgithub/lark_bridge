@@ -200,8 +200,8 @@ human = false
 resets = false
 reducer = "h6_uac"
 seconds = 1800
-status = "PARTIAL"
-evidence = "firmware/qual/overnight-report-2026-11-25.md (P7 Pico fake-Lark 100/100 reconnects + 1800.1s soak PASS on 9ccbd0bd53c9-test: 0 read/xfer errors, 0 reboots, 141,547 rx pkts, rms=2317; 5/5 negative USB profiles PASS; P9 real Lark A1 10/10 physical replug still required after earlier 6dbdb64 failure)"
+status = "PASS"
+evidence = "firmware/qual/overnight-report-2026-11-25.md (P7 Pico fake-Lark 100/100 reconnects + 1800.1s soak PASS: 0 read/xfer errors, 0 reboots, 141,547 rx pkts, rms=2317; 5/5 negative USB profiles PASS; P9 real Hollyland Lark A1 PASS 10/10 USB replugs in 2.83-6.04s + 5/5 TX cycles, 0 read/xfer/lost/CHECK_SHORT errors in ../lark_bridge-evidence/20261125-h6-p9-fixed/)"
 
 [gates.H7]
 title = "Output Bluetooth (fake car at T3, speaker/car at T4/T5)"

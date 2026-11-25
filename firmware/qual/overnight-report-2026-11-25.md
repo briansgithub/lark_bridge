@@ -54,9 +54,11 @@
   - **P7 Automated Pico 100/100 + 30-min Soak: PASS (`rc=0`)** — `100/100` disconnects/reopens, `capture_seconds=1800.1`, `141,547` RX packets, `0` read/xfer errors, `0` failure lines, `0` RX gap intervals, `0` reboots, `tap_rms=2317` (`s16le_stereo_48k`).
   - **H6 overall status**: `PARTIAL` (P7 100/100 PASS; real Lark A1 P9 10/10 physical replug still required with Brian to close H6).
 
-### Bug 2 (H6 / P9 Real Lark A1 Physical Replug): `ENUM: CHECK_SHORT_DEV_DESC FAILED`
-- **Evidence**: `../lark_bridge-evidence/20261125-h6-p9/s31_console.log`
-- **Status**: USB host debounce/recovery margins (`a0d7599`) + Bug 1 fix (`9ccbd0b`) are both flashed on S31 (`9ccbd0bd53c9-test`). Ready for Brian's 4-minute P9 real-Lark re-test (`py -3 firmware/rig/p9_manual_h6.py`).
+### Bug 2 (FIXED & VERIFIED 10/10 + 5/5): H6 / P9 Real Lark A1 Physical Replug (`ENUM: CHECK_SHORT_DEV_DESC FAILED`)
+- **Prior failure evidence**: `../lark_bridge-evidence/20261125-h6-p9/s31_console.log` (failed cycle 1/10 on `6dbdb64` before USB host debounce/recovery margins `a0d7599` and `uac_lark.c` fix `9ccbd0b`).
+- **Re-test result (`../lark_bridge-evidence/20261125-h6-p9-fixed/summary.json`, 2026-11-25 17:15–17:18 ET)**:
+  - **P9 Real Hollyland Lark A1: PASS** — **10/10** physical USB receiver replugs (`2.83–6.04 s` recovery, `disc 11->21`, `opens 12->22`, `reopen=0`, `lost=0`, `read_err=0`, `xfer_err=0`, `0` `CHECK_SHORT_DEV_DESC`, `0` reboots) and **5/5** transmitter off/on cycles (`disc`/`opens` unchanged, continuous RX).
+  - **H6 overall status**: **PASS** (P7 100/100 + 30-min soak PASS + 5/5 negative USB profiles PASS + P9 real Lark A1 10/10 USB + 5/5 TX PASS).
 
 ### Bug 3 (FIXED & VERIFIED 20/20 in `c73c95f`): H14 / D4 Pixel BT Adapter Cycle Bluedroid Reconnect Hang
 - **Root cause**: `bt_gateway.c:reconnect_worker` fired HFP and A2DP reconnect requests simultaneously 620 ms after disconnect, started backoff before the 5.12 s BT page timeout finished, and reset `backoff_ms` back to `1000 ms` inside `cancel_stalled_request()` — keeping S31 paging at ~83% duty cycle until an outgoing `Create_Connection` collided with the Pixel's incoming ACL (`0x0b Conn Exists` / `L2CAP got conn_comp in bad state`), stranding an orphaned ACL handle in the BT controller.
