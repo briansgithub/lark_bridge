@@ -56,7 +56,7 @@ class TwoBoardTests(unittest.TestCase):
         self.assertEqual(h2h5.reduce("H4", limits, records)[0], "PARTIAL")
         with tempfile.TemporaryDirectory() as directory:
             tone, silence = (Path(directory) / f"{kind}.bin" for kind in ("tone", "silence"))
-            left = [round(3277 * math.sin(2 * math.pi * i / 48)) for i in range(500)]
+            left = [round(1036 * math.sin(2 * math.pi * i / 48)) for i in range(500)]
             tone.write_bytes(samples_on_wire([(l, -int(l / 2)) for l in left]))
             silence.write_bytes(samples_on_wire([(0, 0)] * 500))
             self.assertEqual(h2h5.reduce("H4", limits, records, (tone, silence))[0], "PASS")

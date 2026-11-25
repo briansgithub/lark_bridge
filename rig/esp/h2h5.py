@@ -202,9 +202,15 @@ def other(role):
     return "output" if role == "s31" else "s31"
 
 
+# Test tones reach the MP43247 at its maximum volume: never louder than -30 dBFS
+# (Brian, 2026-11-24). The routed keep-alive stays at -50 dBFS.
+TONE_DBFS = -30
+TONE_PEAK = round(32768 * 10 ** (TONE_DBFS / 20))  # 1036
+
+
 def tone(bench, routed=False):
     stage = "routed_i2s" if routed else "i2s_out"
-    bench.command("s31", f"tone {stage} 1000 -20")
+    bench.command("s31", f"tone {stage} 1000 {TONE_DBFS}")
 
 
 def run_scenario(bench, gate, limits, analyzer=None, fake_car_address=None):
@@ -502,7 +508,7 @@ def reduce_h4(e, limits, artifacts):
         e.metrics["wire_tone"] = {"sample_hz": pcm.frame_hz, "tone_hz": freq, "peak": peak,
                                   "step_events": len(glitches)}
         e.check(abs(freq - 1000) <= limits["tone_hz_tolerance"] and
-                abs(peak - 3277) <= 3277 * limits["amplitude_tolerance"] and not glitches,
+                abs(peak - TONE_PEAK) <= TONE_PEAK * limits["amplitude_tolerance"] and not glitches,
                 "wire tone frequency, amplitude or continuity outside tolerance")
         e.check(all(r == -int(l / 2) for l, r in zip(pcm.left, pcm.right)),
                 "wire right channel is not the inverted half-amplitude left channel")
