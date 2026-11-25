@@ -37,7 +37,7 @@ def scenario(bench, args, metrics):
             observe(bench, "output", lambda r: not r["audio"], args.recovery_seconds,
                     f"cycle {cycle} did not revoke downstream audio")
             bench.wait(args.off_seconds)
-            require(profiles_down(bench.command("s31", "status")),
+            require(profiles_down(bench.command("s31", "stats")),
                     f"cycle {cycle} profiles came back during the off interval")
         finally:
             enabled_at = time.monotonic()
@@ -47,7 +47,7 @@ def scenario(bench, args, metrics):
         require(bench.command("s31", "peers")["bt"]["peer"] == saved,
                 f"cycle {cycle} changed the saved phone identity")
         bench.wait(args.settle_seconds)
-        require(profiles_up(bench.command("s31", "status")),
+        require(profiles_up(bench.command("s31", "stats")),
                 f"cycle {cycle} did not stay connected")
         metrics["cycles"].append({"cycle": cycle, "recovery_seconds": recovered["host"] - enabled_at})
     return "PASS", []

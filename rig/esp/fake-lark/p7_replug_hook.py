@@ -7,10 +7,11 @@ import sys
 
 
 def main() -> int:
-    replug_ms = 800
+    # Hard-reset RP2040 via RUN pin for a clean hardware USB unplug/replug
+    # (avoids RP2040 TinyUSB DPRAM exhaustion across repeated soft REPLUGs).
     cmd = [
         "wsl", "-e", "ssh", "-o", "BatchMode=yes", "larkbridge-rig",
-        f"pico-ctl send 'REPLUG {replug_ms}'",
+        "pico-ctl reset",
     ]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
     if r.returncode != 0:
