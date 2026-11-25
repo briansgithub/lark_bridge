@@ -49,7 +49,10 @@ typedef enum {
     BT_EVENT_AUDIO_SUSPENDED,
     BT_EVENT_SINK_CAPABILITIES,
     BT_EVENT_PREFERRED_CODEC_RESULT,
-    BT_EVENT_MEDIA_ACK
+    BT_EVENT_MEDIA_ACK,
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    BT_EVENT_TEST_FORGET,
+#endif
 } bt_event_type_t;
 
 typedef struct {
@@ -221,6 +224,14 @@ bool output_bluetooth_test_fault(const char *kind) {
     }
     ESP_LOGW(TAG, "TEST: next %s event will be dropped", kind + 8);
     return true;
+}
+
+bool output_bluetooth_test_forget(void) {
+    if (s_event_queue == NULL) {
+        return false;
+    }
+    bt_event_t event = {.type = BT_EVENT_TEST_FORGET};
+    return xQueueSend(s_event_queue, &event, 0U) == pdTRUE;
 }
 #endif
 
@@ -868,6 +879,52 @@ static void handle_bt_event(const bt_event_t *event, uint32_t current_ms) {
             s_next_media_attempt_ms = current_ms + MEDIA_RETRY_MS;
         }
         break;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    case BT_EVENT_TEST_FORGET: {
+        ESP_LOGW(TAG, "TEST: forgetting saved output peer and clearing BT bonds");
+        (void)output_peer_store_clear();
+        esp_bd_addr_t old_peer;
+        if (saved_peer_snapshot(old_peer)) {
+            (void)esp_bt_gap_remove_bond_device(old_peer);
+        }
+        saved_peer_clear();
+        int bond_count = esp_bt_gap_get_bond_device_num();
+        if (bond_count > 0) {
+            if (bond_count > 8) {
+                bond_count = 8;
+            }
+            esp_bd_addr_t bonds[8];
+            if (esp_bt_gap_get_bond_device_list(&bond_count, bonds) == ESP_OK) {
+                for (int i = 0; i < bond_count; ++i) {
+                    (void)esp_bt_gap_remove_bond_device(bonds[i]);
+                }
+            }
+        }
+        avrcp_peer_update(false, NULL);
+        s_format_ready = false;
+        s_media_ack_pending = false;
+        s_media_ack_timeout_count = 0U;
+        s_have_discovered_peer = false;
+        atomic_store_explicit(&s_pcm_format, 0U, memory_order_release);
+        atomic_store_explicit(&s_audio_streaming, false, memory_order_release);
+        atomic_store_explicit(&s_peer_connected, false, memory_order_release);
+        output_control_invalidate_local_audio();
+        if (s_state == BT_STATE_CONNECTED && s_active_connection_valid) {
+            (void)esp_a2d_source_disconnect(s_active_peer);
+            s_state = BT_STATE_DISCONNECTING;
+            s_connect_deadline_ms = current_ms + CONNECT_TIMEOUT_MS;
+        } else if (s_state == BT_STATE_CONNECTING) {
+            (void)esp_a2d_source_disconnect(s_requested_peer);
+            s_state = BT_STATE_WAITING;
+            s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
+        } else {
+            s_state = BT_STATE_WAITING;
+            s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
+        }
+        set_pairing_visibility();
+        break;
+    }
+#endif
     default:
         break;
     }

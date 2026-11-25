@@ -13,6 +13,8 @@ bool output_bluetooth_audio_streaming(void);
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
 /* Test-image fault hooks for Astra case 4 (lost Bluetooth events). */
 bool output_bluetooth_test_fault(const char *kind);
+/* Test-image peer forget: clears NVS peer, removes BT bonds, disconnects, and enters pairing mode. */
+bool output_bluetooth_test_forget(void);
 #endif
 
 #endif

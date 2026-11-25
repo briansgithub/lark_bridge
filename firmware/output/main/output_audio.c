@@ -18,7 +18,7 @@
 #define PCM_BYTES_PER_FRAME 4U
 #define I2S_READ_FRAMES 480U
 #define I2S_READ_BYTES (I2S_READ_FRAMES * PCM_BYTES_PER_FRAME)
-#define I2S_CLOCK_ACTIVE_MS 100U
+#define I2S_CLOCK_ACTIVE_MS 250U
 #define ADAPTIVE_BLOCK_FRAMES 240U
 #define I2S_RATE_HZ 48000U
 #define MIN_SINK_RATE_HZ 44100U
@@ -252,7 +252,7 @@ esp_err_t output_audio_start(void) {
         s_rx_channel = NULL;
         return error;
     }
-    if (xTaskCreate(i2s_reader_task, "i2s_rx", 4096U, NULL, 18U, NULL) != pdPASS) {
+    if (xTaskCreatePinnedToCore(i2s_reader_task, "i2s_rx", 4096U, NULL, 18U, NULL, 1) != pdPASS) {
         (void)i2s_channel_disable(s_rx_channel);
         (void)i2s_del_channel(s_rx_channel);
         s_rx_channel = NULL;

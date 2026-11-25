@@ -279,6 +279,7 @@ static void aec_task(void *argument)
         if (generation != worker.generation) {
             ++worker.resynchronizations;
             release_engine(&worker);
+            vTaskDelay(pdMS_TO_TICKS(1U));
             continue;
         }
         if (!discard_initial_mic_delay(&worker)) {
@@ -410,6 +411,10 @@ static void aec_task(void *argument)
          * (possibly slow, PSRAM-resident) process call. */
         worker.last_progress_ms = now_ms();
         log_telemetry(&worker, current_ms);
+        /* Always yield at least 1 tick after each AEC frame so the core's IDLE task
+         * feeds the task watchdog even when PSRAM-resident FD processing runs near
+         * real-time and back-to-back input frames are already queued. */
+        vTaskDelay(pdMS_TO_TICKS(1U));
     }
 }
 

@@ -23,3 +23,11 @@ CONFIG_BT_CTRL_BR_EDR_MAX_SYNC_CONN=1
 # The managed UAC driver and our audio queues need a large single image.
 CONFIG_COMPILER_OPTIMIZATION_PERF=y
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# Give physical USB hot-plug insertions (e.g. Hollyland Lark A1 cold-boot +
+# VBUS inrush + mechanical bounce) extra debounce and reset-recovery margin so
+# enumeration does not fail at CHECK_SHORT_DEV_DESC.
+CONFIG_USB_HOST_DEBOUNCE_DELAY_MS=500
+CONFIG_USB_HOST_RESET_HOLD_MS=50
+CONFIG_USB_HOST_RESET_RECOVERY_MS=100
+CONFIG_USB_HOST_SET_ADDR_RECOVERY_MS=30

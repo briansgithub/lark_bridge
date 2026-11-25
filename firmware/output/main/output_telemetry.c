@@ -527,8 +527,20 @@ static void handle_line(const char *line)
 #endif
         break;
     case BRIDGE_CMD_FORGET:
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        if (!output_bluetooth_test_forget()) {
+            respond_error("forget", "busy");
+            break;
+        }
+        bridge_json_begin(&json, s_console_record, RECORD_BYTES, "resp");
+        add_identity(&json);
+        bridge_json_str(&json, "cmd", "forget");
+        bridge_json_bool(&json, "ok", true);
+        emit(s_console_record, &json);
+#else
         /* Bond changes stay out of v0: pairing gates use the recovery image. */
         respond_error("forget", "not_implemented");
+#endif
         break;
     default:
         respond_error("?", "unknown_command");
