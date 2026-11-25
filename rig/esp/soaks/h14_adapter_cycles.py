@@ -7,12 +7,14 @@ from soak_common import hook, observe, parser, positive, require, run, run_fixtu
 
 
 def profiles_up(record):
-    return record["session"]["hfp"] and record["session"]["a2dp"] and record["bt"]["avrcp"]
+    bt = record["bt"]
+    return bt["hfp_state"] == 3 and bt["a2dp_state"] == 2 and bt["avrcp"]
 
 
 def profiles_down(record):
-    return (not record["session"]["hfp"] and not record["session"]["a2dp"] and
-            not record["bt"]["avrcp"] and record["route"]["effective"] == 0)
+    bt = record["bt"]
+    return (bt["hfp_state"] == 0 and bt["a2dp_state"] == 0 and
+            not bt["avrcp"] and record["route"]["effective"] == 0)
 
 
 def adapter(bench, args, enabled):

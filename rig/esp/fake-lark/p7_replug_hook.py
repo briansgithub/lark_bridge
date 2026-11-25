@@ -7,10 +7,10 @@ import sys
 
 
 def main() -> int:
-    replug_ms = 600
+    replug_ms = 800
     cmd = [
-        "wsl", "-e", "bash", "-l", "-c",
-        f"ssh -o BatchMode=yes larkbridge-rig 'pico-ctl send REPLUG {replug_ms}'",
+        "wsl", "-e", "ssh", "-o", "BatchMode=yes", "larkbridge-rig",
+        f"pico-ctl send 'REPLUG {replug_ms}'",
     ]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
     if r.returncode != 0:
