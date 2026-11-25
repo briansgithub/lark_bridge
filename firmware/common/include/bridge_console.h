@@ -101,6 +101,7 @@ typedef struct {
     uint32_t rms_left;
     uint32_t rms_right;
     bool nonzero;
+    size_t nonzero_frames;
 } bridge_pcm16_stereo_stats_t;
 
 void bridge_pcm16_stereo_stats(const int16_t *interleaved, size_t frames,

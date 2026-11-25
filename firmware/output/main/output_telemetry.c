@@ -40,7 +40,7 @@ typedef struct {
     atomic_uint_fast32_t sequence;
     atomic_uint_fast32_t crc;
     atomic_uint_fast32_t rms;
-    atomic_uint_fast32_t rms_l, rms_r, nz_blocks;
+    atomic_uint_fast32_t rms_l, rms_r, nz_blocks, nz_frames;
     atomic_uint_fast32_t tone_mhz_l, tone_mhz_r;
     atomic_uint_fast32_t bytes;
 } tap_slot_t;
@@ -309,6 +309,7 @@ void output_telemetry_tap_note(output_tap_stage_t stage, const void *pcm, size_t
     atomic_store_explicit(&slot->rms_r, stereo.rms_right, memory_order_relaxed);
     atomic_store_explicit(&slot->tone_mhz_l, tone_mhz_l, memory_order_relaxed);
     atomic_store_explicit(&slot->tone_mhz_r, tone_mhz_r, memory_order_relaxed);
+    atomic_fetch_add_explicit(&slot->nz_frames, stereo.nonzero_frames, memory_order_relaxed);
     if (stereo.nonzero) atomic_fetch_add_explicit(&slot->nz_blocks, 1U, memory_order_relaxed);
     atomic_store_explicit(&slot->bytes, bytes, memory_order_relaxed);
     atomic_fetch_add_explicit(&slot->sequence, 1U, memory_order_acq_rel);
@@ -364,7 +365,7 @@ static void respond_tap(const char *stage_name)
         uint32_t before;
         uint32_t after;
         uint32_t crc;
-        uint32_t rms, rms_l, rms_r, nz_blocks;
+        uint32_t rms, rms_l, rms_r, nz_blocks, nz_frames;
         uint32_t tone_mhz_l, tone_mhz_r;
         uint32_t bytes;
         unsigned attempts = 0;
@@ -374,6 +375,7 @@ static void respond_tap(const char *stage_name)
             rms = (uint32_t)atomic_load_explicit(&slot->rms, memory_order_relaxed);
             rms_l = atomic_load_explicit(&slot->rms_l, memory_order_relaxed);
             rms_r = atomic_load_explicit(&slot->rms_r, memory_order_relaxed);
+            nz_frames = atomic_load_explicit(&slot->nz_frames, memory_order_relaxed);
             nz_blocks = atomic_load_explicit(&slot->nz_blocks, memory_order_relaxed);
             bytes = (uint32_t)atomic_load_explicit(&slot->bytes, memory_order_relaxed);
             tone_mhz_l = atomic_load_explicit(&slot->tone_mhz_l, memory_order_relaxed);
@@ -392,6 +394,7 @@ static void respond_tap(const char *stage_name)
         bridge_json_u32(&json, "rms", rms);
         bridge_json_u32(&json, "rms_l", rms_l);
         bridge_json_u32(&json, "rms_r", rms_r);
+        bridge_json_u32(&json, "nz_frames", nz_frames);
         bridge_json_u32(&json, "nz_blocks", nz_blocks);
         bridge_json_u32(&json, "tone_mhz_l", tone_mhz_l);
         bridge_json_u32(&json, "tone_mhz_r", tone_mhz_r);
