@@ -298,3 +298,29 @@ errors, and the keep-alive was restored at -50 dBFS (a2dp_out RMS 74).
 
 Change: routed rig tones (H3) now use -50 dBFS (`ROUTED_TONE_DBFS`).
 H3 only checks that audio is present (RMS > 0).
+
+## Overnight soak: scheduled for 00:30
+
+The soak is a systemd user timer `lark-overnight-soak.timer`, set for
+2026-11-25 00:30 ET, so it runs without this session. A test unit
+confirmed that Windows interop (py.exe, PowerShell) works from a
+systemd unit.
+
+- Command: `overnight_soak.sh ../lark_bridge-evidence/20261125-overnight
+  ../lark_bridge-evidence/soak-good --hours 7.5 --segment-min 20
+  --boot-every 2`.
+- Media only, with no calls: Pixel media at 4/25, about -51 dBFS peak at
+  the speaker.
+- A Shelly cold boot follows every second segment (about 11 in total).
+  Each cut powers off the whole hub, so keep the bench untouched while it
+  runs.
+- Images under test (on the boards now): S31 `6dbdb64` and 32UE
+  `36202f1`, which carry the UAC, Astra 4 and Astra 5 fixes.
+- On a reset loop it restores the `soak-good` images: S31 `09f0f2a` and
+  32UE `42be26f`. Its `images.sha256` lists that restore set, not the
+  images under test.
+- Watch: `tail -f ../lark_bridge-evidence/20261125-overnight/run.log`.
+- Move it: `systemctl --user stop lark-overnight-soak.timer`, then re-run
+  `systemd-run` with a new `--on-calendar`.
+- Stop a running soak: `systemctl --user stop lark-overnight-soak.service`.
+  The plug always comes back on, because every cycle uses `toggle_after`.
