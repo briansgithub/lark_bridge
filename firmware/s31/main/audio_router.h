@@ -11,6 +11,7 @@ typedef struct {
     uint16_t fifo_frames;
     uint32_t underruns;
     uint32_t overruns;
+    uint32_t write_errors;
 } s31_audio_stats_t;
 
 esp_err_t s31_audio_router_init(void);

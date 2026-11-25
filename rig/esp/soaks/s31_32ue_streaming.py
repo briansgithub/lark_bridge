@@ -30,6 +30,27 @@ def media(bench, args, start):
         run_fixture(bench, broadcast + ["-a", f"{HARNESS}.STOP_STIMULUS"])
 
 
+def check_tap(previous, current):
+    elapsed = current["host"] - previous["host"]
+    frames = (current["nz_frames"] - previous["nz_frames"]) % 2**32
+    # Allow tone zero crossings, loop boundaries and console timing jitter.
+    require(current["ok"] and elapsed > 0 and
+            0.75 * 44100 * elapsed <= frames <= 48000 * (elapsed + 0.5),
+            "downstream nonzero PCM frame count outside the continuous-stimulus range")
+
+
+def board_window(records, role, first, last):
+    rows = [first] + [r for r in records if r["role"] == role and r["t"] == "stats"
+                      and first["host"] < r["host"] < last["host"]] + [last]
+    for a, b in zip(rows, rows[1:]):
+        elapsed = b["host"] - a["host"]
+        uptime = (b["up_ms"] - a["up_ms"]) / 1000
+        require(uptime >= 0 and abs(uptime - elapsed) <= 1 + 0.01 * elapsed and
+                b["uart"]["sessions"] == a["uart"]["sessions"],
+                f"{role} uptime or UART session changed during streaming")
+    return rows
+
+
 def scenario(bench, args, metrics):
     peer = bench.command("output", "peers")["bt"]
     require(peer.get("connected") and peer.get("peer", "").lower() == args.sink_address.lower(),
@@ -48,21 +69,17 @@ def scenario(bench, args, metrics):
         while time.monotonic() < begin + args.seconds:
             bench.wait(min(60, max(0, begin + args.seconds - time.monotonic())))
             current = bench.command("output", "tap a2dp_out")
-            require(current["ok"] and (current["nz_blocks"] - tap["nz_blocks"]) % 2**32 > 0,
-                    "no new nonzero PCM blocks at the downstream A2DP tap")
+            check_tap(tap, current)
             tap = current
         after = bench.pair("status")
         records = bench.records[start:]
         evidence = h2h5.Evidence(records)
         for role in ("s31", "output"):
             h2h5.coverage(evidence, records, before[role], after[role], role, 0.98)
-        output = [before["output"]] + [
-            r for r in records if r["role"] == "output" and r["t"] == "stats"
-        ] + [after["output"]]
-        source = [before["s31"]] + [
-            r for r in records if r["role"] == "s31" and r["t"] == "stats" and
-            before["s31"]["up_ms"] < r["up_ms"] < after["s31"]["up_ms"]
-        ] + [after["s31"]]
+        output = board_window(records, "output", before["output"], after["output"])
+        source = board_window(records, "s31", before["s31"], after["s31"])
+        evidence.check(before["s31"]["i2s"]["write_err"] == after["s31"]["i2s"]["write_err"],
+                       "source I2S write errors increased")
         errors = h2h5.delta(before["output"], after["output"], ("under", "over", "i2s_err"), "a2dp")
         metrics.update(seconds=time.monotonic() - begin, **errors)
         metrics["nonzero_output_blocks"] = (tap["nz_blocks"] - tap_before["nz_blocks"]) % 2**32

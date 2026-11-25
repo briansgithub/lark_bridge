@@ -8,6 +8,7 @@
 #include "audio_convert.h"
 #include "bridge_ring.h"
 #include "driver/i2s_std.h"
+#include "gateway_state.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -53,6 +54,7 @@ static atomic_bool s_a2dp_flush_requested;
 static atomic_uint_fast32_t s_aec_generation;
 static atomic_uint_fast32_t s_hfp_rate_hz;
 static atomic_uint_fast32_t s_a2dp_rate_hz;
+static atomic_uint_fast32_t s_write_errors;
 static atomic_uint_fast32_t s_underruns;
 static atomic_uint_fast32_t s_overruns;
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
@@ -101,6 +103,7 @@ static void i2s_writer_task(void *argument)
 {
     uint8_t block[I2S_BLOCK_BYTES];
     int16_t reference[I2S_BLOCK_FRAMES / 3U];
+    bool writer_ready = false;
     bridge_route_t previous_route = BRIDGE_ROUTE_SILENCE;
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
     float tone_phase = 0.0f;
@@ -156,7 +159,13 @@ static void i2s_writer_task(void *argument)
             s31_telemetry_tap_note(S31_TAP_I2S_OUT, block, sizeof(block));
         }
 #endif
-        if (result != ESP_OK || bytes_written != sizeof(block)) {
+        bool complete = result == ESP_OK && bytes_written == sizeof(block);
+        if (complete != writer_ready) {
+            writer_ready = complete;
+            s31_gateway_set_i2s_ready(complete);
+        }
+        if (!complete) {
+            atomic_fetch_add_explicit(&s_write_errors, 1U, memory_order_relaxed);
             ESP_LOGE(TAG, "I2S write failed: %s (%u/%u bytes)", esp_err_to_name(result),
                      (unsigned)bytes_written, (unsigned)sizeof(block));
             if (route == BRIDGE_ROUTE_HFP) {
@@ -525,6 +534,7 @@ void s31_audio_router_get_stats(s31_audio_stats_t *stats)
     }
     size_t frames = bytes / 4U;
     stats->fifo_frames = frames > UINT16_MAX ? UINT16_MAX : (uint16_t)frames;
+    stats->write_errors = (uint32_t)atomic_load_explicit(&s_write_errors, memory_order_relaxed);
     stats->underruns = (uint32_t)atomic_load_explicit(&s_underruns, memory_order_relaxed);
     stats->overruns = (uint32_t)atomic_load_explicit(&s_overruns, memory_order_relaxed);
 }

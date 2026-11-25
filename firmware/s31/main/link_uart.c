@@ -361,7 +361,7 @@ static void send_status(void)
     bridge_put_u32_le(&payload[BRIDGE_STATUS_ADAPTIVE_DELTA_OFFSET], 0U);
     bridge_put_u32_le(&payload[BRIDGE_STATUS_MISSING_FRAMES_OFFSET], 0U);
     bridge_put_u32_le(&payload[BRIDGE_STATUS_DROPPED_FRAMES_OFFSET], 0U);
-    bridge_put_u32_le(&payload[BRIDGE_STATUS_I2S_ERRORS_OFFSET], 0U);
+    bridge_put_u32_le(&payload[BRIDGE_STATUS_I2S_ERRORS_OFFSET], stats.write_errors);
     bridge_put_u16_le(&payload[BRIDGE_STATUS_FIFO_MIN_OFFSET], 0U);
     bridge_put_u16_le(&payload[BRIDGE_STATUS_FIFO_MAX_OFFSET], 0U);
     bridge_put_u32_le(&payload[BRIDGE_STATUS_PROTOCOL_ERRORS_OFFSET],

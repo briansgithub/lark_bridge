@@ -369,7 +369,7 @@ void bridge_pcm16_stereo_stats(const int16_t *interleaved, size_t frames,
 {
     uint64_t left = 0;
     uint64_t right = 0;
-    bool nonzero = false;
+    size_t nonzero_frames = 0;
     if (stats == NULL) {
         return;
     }
@@ -378,9 +378,10 @@ void bridge_pcm16_stereo_stats(const int16_t *interleaved, size_t frames,
         int32_t r = interleaved[frame * 2U + 1U];
         left += (uint64_t)(l * l);
         right += (uint64_t)(r * r);
-        nonzero = nonzero || l != 0 || r != 0;
+        if (l != 0 || r != 0) ++nonzero_frames;
     }
     stats->rms_left = interleaved != NULL ? rms_from_sum(left, frames) : 0U;
     stats->rms_right = interleaved != NULL ? rms_from_sum(right, frames) : 0U;
-    stats->nonzero = nonzero;
+    stats->nonzero_frames = nonzero_frames;
+    stats->nonzero = nonzero_frames != 0U;
 }

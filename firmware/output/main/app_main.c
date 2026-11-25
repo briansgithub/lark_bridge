@@ -51,14 +51,7 @@ static esp_err_t initialize_nvs(void) {
         return erase_error;
     }
 #endif
-    esp_err_t error = nvs_flash_init();
-    if (error == ESP_ERR_NVS_NO_FREE_PAGES || error == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        error = nvs_flash_erase();
-        if (error == ESP_OK) {
-            error = nvs_flash_init();
-        }
-    }
-    return error;
+    return nvs_flash_init();
 }
 
 void app_main(void) {
