@@ -495,7 +495,8 @@ static void handle_line(const char *line)
             s31_gateway_test_route(BRIDGE_ROUTE_SILENCE);
         } else if (strcmp(request.argv[0], "test_off") == 0) {
             s31_gateway_test_route(-1);
-        } else if (!reboot && !s31_link_uart_test_fault(request.argv[0])) {
+        } else if (!reboot && !s31_link_uart_test_fault(request.argv[0]) &&
+                   !s31_bt_test_fault(request.argv[0])) {
             respond_error("fault", "unsupported_or_busy");
             break;
         }

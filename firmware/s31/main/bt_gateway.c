@@ -579,6 +579,29 @@ esp_err_t s31_bt_gateway_init(void)
     return ESP_OK;
 }
 
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+/* Astra case 5: fail the next N TAP release submissions (test image only). */
+static atomic_uint s_test_release_failures;
+#endif
+
+static esp_err_t submit_tap_release(uint8_t label, uint8_t command)
+{
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    unsigned pending = atomic_load_explicit(&s_test_release_failures, memory_order_acquire);
+    while (pending != 0U &&
+           !atomic_compare_exchange_weak_explicit(&s_test_release_failures, &pending,
+                                                  pending - 1U, memory_order_acq_rel,
+                                                  memory_order_acquire)) {
+    }
+    if (pending != 0U) {
+        ESP_LOGW(TAG, "TEST: injected AVRCP release submit failure (cmd=0x%02x, %u left)",
+                 command, pending - 1U);
+        return ESP_FAIL;
+    }
+#endif
+    return esp_avrc_ct_send_passthrough_cmd(label, command, BRIDGE_KEY_RELEASED);
+}
+
 esp_err_t s31_bt_send_avrcp(uint8_t command, uint8_t key_state)
 {
     if (!s31_bt_avrcp_command_supported(command) || key_state > BRIDGE_KEY_TAP) {
@@ -608,8 +631,7 @@ esp_err_t s31_bt_send_avrcp(uint8_t command, uint8_t key_state)
             atomic_store_explicit(&s_tap_label, label, memory_order_relaxed);
             atomic_store_explicit(&s_tap_release_pending, true, memory_order_release);
         }
-        result = esp_avrc_ct_send_passthrough_cmd(
-            label, command, BRIDGE_KEY_RELEASED);
+        result = submit_tap_release(label, command);
         if (result == ESP_OK) {
             atomic_store_explicit(&s_tap_release_pending, false, memory_order_release);
         }
@@ -641,3 +663,28 @@ void s31_bt_get_status(s31_bt_status_t *status)
     status->a2dp_profile_ready = atomic_load(&s_a2dp_profile_ready);
     status->peer_bound = upstream_snapshot(status->peer);
 }
+
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+bool s31_bt_test_fault(const char *kind)
+{
+    uint8_t command;
+    if (strcmp(kind, "avrcp_relfail") == 0) {
+        /* The output retries a reliable AVRCP packet up to five times. */
+        atomic_store_explicit(&s_test_release_failures, 5U, memory_order_release);
+        ESP_LOGW(TAG, "TEST: next 5 AVRCP release submissions will fail");
+        return true;
+    } else if (strcmp(kind, "avrcp_tap_stop") == 0) {
+        command = ESP_AVRC_PT_CMD_STOP;
+    } else if (strcmp(kind, "avrcp_tap_pause") == 0) {
+        command = ESP_AVRC_PT_CMD_PAUSE;
+    } else {
+        return false;
+    }
+    /* Same entry point the UART AVRCP handler uses for a car tap. */
+    esp_err_t result = s31_bt_send_avrcp(command, BRIDGE_KEY_TAP);
+    ESP_LOGI(TAG, "TEST: avrcp tap cmd=0x%02x result=%s release_pending=%d", command,
+             esp_err_to_name(result),
+             (int)atomic_load_explicit(&s_tap_release_pending, memory_order_acquire));
+    return true;
+}
+#endif

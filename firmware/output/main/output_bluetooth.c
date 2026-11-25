@@ -182,7 +182,51 @@ static bool avrcp_forwarding_allowed(void)
            (atomic_load_explicit(&s_pcm_format, memory_order_acquire) != 0U);
 }
 
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+/* Astra case 4: drop the next DISCONNECTED / DISCOVERY_STOPPED as a queue overflow would. */
+static atomic_bool s_test_drop_disconnected;
+static atomic_bool s_test_drop_discovery_stopped;
+
+static bool test_drop_event(const bt_event_t *event) {
+    atomic_bool *flag = event->type == BT_EVENT_DISCONNECTED ? &s_test_drop_disconnected
+                        : event->type == BT_EVENT_DISCOVERY_STOPPED ? &s_test_drop_discovery_stopped
+                                                                    : NULL;
+    if (flag == NULL || !atomic_exchange_explicit(flag, false, memory_order_acq_rel)) {
+        return false;
+    }
+    ESP_LOGE(TAG, "TEST: dropped Bluetooth event %d (simulated queue overflow)", (int)event->type);
+    (void)output_control_report_fault(BRIDGE_FAULT_BLUETOOTH);
+    return true;
+}
+
+bool output_bluetooth_test_fault(const char *kind) {
+    if (strcmp(kind, "bt_drop_disc") == 0) {
+        atomic_store_explicit(&s_test_drop_disconnected, true, memory_order_release);
+    } else if (strcmp(kind, "bt_drop_dstop") == 0) {
+        atomic_store_explicit(&s_test_drop_discovery_stopped, true, memory_order_release);
+    } else if (strcmp(kind, "bt_disconnect") == 0) {
+        /* Stands in for sink power loss: the link drops without a worker request. */
+        esp_bd_addr_t peer;
+        if (!avrcp_peer_snapshot(peer) && !saved_peer_snapshot(peer)) {
+            return false;
+        }
+        esp_err_t result = esp_a2d_source_disconnect(peer);
+        ESP_LOGW(TAG, "TEST: A2DP source disconnect requested: %s", esp_err_to_name(result));
+        return result == ESP_OK;
+    } else {
+        return false;
+    }
+    ESP_LOGW(TAG, "TEST: next %s event will be dropped", kind + 8);
+    return true;
+}
+#endif
+
 static void post_event(const bt_event_t *event) {
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    if (test_drop_event(event)) {
+        return;
+    }
+#endif
     if (s_event_queue == NULL || xQueueSend(s_event_queue, event, 0U) != pdTRUE) {
         ESP_LOGE(TAG, "Bluetooth event queue overflow");
         (void)output_control_report_fault(BRIDGE_FAULT_BLUETOOTH);

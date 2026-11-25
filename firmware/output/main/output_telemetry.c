@@ -506,7 +506,8 @@ static void handle_line(const char *line)
         bool reboot = strcmp(request.argv[0], "reboot") == 0;
         if (strcmp(request.argv[0], "fifo_window") == 0) {
             output_audio_test_fifo_window();
-        } else if (!reboot && !output_control_test_fault(request.argv[0])) {
+        } else if (!reboot && !output_control_test_fault(request.argv[0]) &&
+                   !output_bluetooth_test_fault(request.argv[0])) {
             respond_error("fault", "unsupported_or_busy");
             break;
         }
