@@ -170,10 +170,32 @@ static void close_lark(uac_host_device_handle_t handle)
     }
 }
 
+static bool usb_addr_present(uint8_t address)
+{
+    uint8_t addr_list[16];
+    int count = 0;
+    if (usb_host_device_addr_list_fill((int)(sizeof(addr_list) / sizeof(addr_list[0])),
+                                       addr_list, &count) != ESP_OK) {
+        return false;
+    }
+    for (int i = 0; i < count; ++i) {
+        if (addr_list[i] == address) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool open_lark(uint8_t address, uint8_t interface_number)
 {
     if (s_lark_handle != NULL) {
         ESP_LOGW(TAG, "Ignoring a second USB microphone interface");
+        return false;
+    }
+    /* Guard against espressif/usb_host_uac 1.5.0 uac_host.c:2171 NULL-deref
+     * panic on uac_iface->ringbuf when usb_host_device_open() returns NOT_FOUND. */
+    if (!usb_addr_present(address)) {
+        ESP_LOGW(TAG, "Skipping UAC open for absent USB address %u", (unsigned)address);
         return false;
     }
     const uac_host_device_config_t device_config = {
@@ -261,6 +283,11 @@ static void handle_device_event(const uac_queue_event_t *message)
         /* Clear before any read (and for stale handles): a later callback queues afresh. */
         atomic_store_explicit(&s_rx_notify_queued, false, memory_order_release);
     }
+    if (message->data.device.event == UAC_HOST_DRIVER_EVENT_DISCONNECTED) {
+        /* Never attempt a stale-address reopen after a physical/soft disconnect. */
+        s_reopen_pending = false;
+        s_reopen_attempts = 0U;
+    }
     if (handle != s_lark_handle) {
         return;
     }
@@ -285,12 +312,19 @@ static void handle_device_event(const uac_queue_event_t *message)
                 atomic_fetch_add_explicit(&s_rx_bytes, bytes_read, memory_order_relaxed);
                 s31_audio_router_write_lark(capture, bytes_read);
             }
+            if (result == ESP_ERR_INVALID_STATE) {
+                /* Interface already left ACTIVE during uac_host disconnect teardown;
+                 * let the imminent UAC_HOST_DRIVER_EVENT_DISCONNECTED close cleanly. */
+                break;
+            }
             if (result != ESP_OK) {
                 atomic_fetch_add_explicit(&s_read_errors, 1U, memory_order_relaxed);
                 ESP_LOGE(TAG, "LARK capture read failed: %s", esp_err_to_name(result));
                 s31_gateway_set_fault(BRIDGE_FAULT_UAC_LOST);
                 close_lark(handle);
-                schedule_reopen();
+                if (usb_addr_present(s_lark_address)) {
+                    schedule_reopen();
+                }
             }
         }
         break;
@@ -299,7 +333,9 @@ static void handle_device_event(const uac_queue_event_t *message)
         ESP_LOGE(TAG, "LARK UAC transfer error");
         s31_gateway_set_fault(BRIDGE_FAULT_UAC_LOST);
         close_lark(handle);
-        schedule_reopen();
+        if (usb_addr_present(s_lark_address)) {
+            schedule_reopen();
+        }
         break;
     case UAC_HOST_DRIVER_EVENT_DISCONNECTED:
         atomic_fetch_add_explicit(&s_disconnects, 1U, memory_order_relaxed);
