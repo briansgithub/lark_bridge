@@ -52,7 +52,7 @@ static portMUX_TYPE s_policy_mux = portMUX_INITIALIZER_UNLOCKED;
 static atomic_bool s_initialized;
 static atomic_bool s_local_audio_blocked;
 static atomic_uint_fast8_t s_local_ready_flags;
-static uint16_t s_next_sequence = 1U;
+static bridge_tx_sequences_t s_tx_sequences;
 static uint16_t s_remote_capabilities;
 static uint32_t s_local_session;
 static uint32_t s_remote_session;
@@ -113,7 +113,7 @@ static bridge_packet_t make_packet(const tx_request_t *request) {
     (void)memset(&packet, 0, sizeof(packet));
     packet.version = BRIDGE_PROTOCOL_VERSION;
     packet.type = request->type;
-    packet.sequence = s_next_sequence++;
+    packet.sequence = bridge_tx_next(&s_tx_sequences, request->type);
     packet.payload_length = request->payload_length;
     (void)memcpy(packet.payload, request->payload, request->payload_length);
     return packet;
@@ -484,7 +484,7 @@ static void run_link_test(uint32_t now)
     }
     if (bridge_link_test_muted(&s_link_test, now)) return;
     bridge_packet_t packet = {
-        .version = BRIDGE_PROTOCOL_VERSION, .sequence = s_next_sequence++,
+        .version = BRIDGE_PROTOCOL_VERSION, .sequence = bridge_tx_next(&s_tx_sequences, BRIDGE_MESSAGE_AVRCP_COMMAND),
         .type = BRIDGE_MESSAGE_AVRCP_COMMAND, .payload_length = BRIDGE_AVRCP_PAYLOAD_SIZE,
         .payload = {0x44, BRIDGE_KEY_TAP},
     };
@@ -494,7 +494,7 @@ static void run_link_test(uint32_t now)
                                        wire, sizeof(wire), &length) == 0 &&
         uart_write_bytes(CONTROL_UART, wire, length) == (int)length) {
         printf("{\"t\":\"event\",\"role\":\"output\",\"ev\":\"inject\","
-               "\"kind\":%u,\"probe_seq\":%u}\n", kind, s_next_sequence);
+               "\"kind\":%u,\"probe_seq\":%u}\n", kind, s_tx_sequences.next[BRIDGE_MESSAGE_HEARTBEAT]);
         send_heartbeat(now);
     }
 }

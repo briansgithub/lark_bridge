@@ -34,7 +34,7 @@ typedef struct {
 } pending_route_t;
 
 static const char *TAG = "s31_link";
-static uint16_t s_tx_sequence;
+static bridge_tx_sequences_t s_tx_sequences;
 static bridge_stream_decoder_t s_decoder;
 static bridge_sequence_tracker_t s_avrcp_sequences;
 static pending_route_t s_pending_route;
@@ -93,7 +93,7 @@ static esp_err_t send_packet(uint8_t type, const uint8_t *payload, uint16_t payl
 static esp_err_t send_next(uint8_t type, const uint8_t *payload, uint16_t payload_length,
                            uint16_t *sequence)
 {
-    uint16_t next = s_tx_sequence++;
+    uint16_t next = bridge_tx_next(&s_tx_sequences, type);
     if (sequence != NULL) {
         *sequence = next;
     }
@@ -464,7 +464,7 @@ static void run_link_test(uint32_t now)
     }
     if (bridge_link_test_muted(&s_link_test, now)) return;
     bridge_packet_t packet = {
-        .version = BRIDGE_PROTOCOL_VERSION, .sequence = s_tx_sequence++,
+        .version = BRIDGE_PROTOCOL_VERSION, .sequence = bridge_tx_next(&s_tx_sequences, BRIDGE_MESSAGE_ROUTE),
         .type = BRIDGE_MESSAGE_ROUTE, .payload_length = BRIDGE_ROUTE_PAYLOAD_SIZE,
         .payload = {BRIDGE_ROUTE_SILENCE},
     };
@@ -483,7 +483,7 @@ static void run_link_test(uint32_t now)
                                        wire, sizeof(wire), &length) == 0 &&
         uart_write_bytes(S31_LINK_UART_PORT, wire, length) == (int)length) {
         printf("{\"t\":\"event\",\"role\":\"s31\",\"ev\":\"inject\","
-               "\"kind\":%u,\"probe_seq\":%u}\n", kind, s_tx_sequence);
+               "\"kind\":%u,\"probe_seq\":%u}\n", kind, s_tx_sequences.next[BRIDGE_MESSAGE_HEARTBEAT]);
         send_heartbeat();
     }
 }
