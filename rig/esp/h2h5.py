@@ -208,9 +208,14 @@ TONE_DBFS = -30
 TONE_PEAK = round(32768 * 10 ** (TONE_DBFS / 20))  # 1036
 
 
+# Routed tones reach the speaker through fault injection (H3 mutes and reboots, which click):
+# they use the keep-alive level; only presence (RMS > 0) is scored on that path.
+ROUTED_TONE_DBFS = -50
+
+
 def tone(bench, routed=False):
     stage = "routed_i2s" if routed else "i2s_out"
-    bench.command("s31", f"tone {stage} 1000 {TONE_DBFS}")
+    bench.command("s31", f"tone {stage} 1000 {ROUTED_TONE_DBFS if routed else TONE_DBFS}")
 
 
 def run_scenario(bench, gate, limits, analyzer=None, fake_car_address=None):

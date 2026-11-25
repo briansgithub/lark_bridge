@@ -276,3 +276,25 @@ PARTIAL.
   - The S31 side was clean: no I2S write errors and a steady route.
   - It is open. The overnight soak counts these per segment
     (`output.mutes`) to measure the rate.
+
+## Speaker complaint at 22:48: caused by the H3 run
+
+Brian heard the speaker get louder, then crackle, cut in and out,
+disconnect and reconnect. All of it was H3 fault injection (bundle
+`20261125T034804Z-H3`, `artifacts/bench.jsonl`). Times are from the
+22:48:04 start:
+
+- 2.5 s: `tone routed_i2s 1000 -30`, 20 dB above the -50 dBFS keep-alive.
+- 5.5–8.7 s: the S31 UART was muted, so the output muted and recovered.
+- 14.5–15.1 s: S31 reboot, a mute then READY.
+- 23.6 s: a brief mute; 25.0 s: the output UART was muted.
+- 34.1–38.6 s: 32UE reboot. The speaker disconnected and reconnected
+  (`downstream A2DP peer connected`).
+
+Each mute and unmute is a hard step on a 1 kHz tone, which is the
+crackle. Nothing raised the volume: Pixel media is 4/25 and the Pixel
+AVRCP volume manager reports 4. After the run: no underruns or I2S
+errors, and the keep-alive was restored at -50 dBFS (a2dp_out RMS 74).
+
+Change: routed rig tones (H3) now use -50 dBFS (`ROUTED_TONE_DBFS`).
+H3 only checks that audio is present (RMS > 0).
