@@ -368,9 +368,9 @@ static void uac_task(void *argument)
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     const uac_host_driver_config_t driver_config = {
         .create_background_task = true,
-        .task_priority = 8,
+        .task_priority = 11,
         .stack_size = 4096,
-        .core_id = tskNO_AFFINITY,
+        .core_id = 0,
         .callback = post_driver_event,
         .callback_arg = NULL,
     };
@@ -451,12 +451,12 @@ esp_err_t s31_uac_lark_init(void)
         return ESP_ERR_NO_MEM;
     }
     TaskHandle_t uac_task_handle = NULL;
-    if (xTaskCreate(uac_task, "s31_uac", 8192, NULL, 8, &uac_task_handle) != pdPASS) {
+    if (xTaskCreatePinnedToCore(uac_task, "s31_uac", 8192, NULL, 10, &uac_task_handle, 0) != pdPASS) {
         vQueueDelete(s_events);
         s_events = NULL;
         return ESP_ERR_NO_MEM;
     }
-    if (xTaskCreate(usb_host_task, "s31_usb", 4096, uac_task_handle, 9, NULL) != pdPASS) {
+    if (xTaskCreatePinnedToCore(usb_host_task, "s31_usb", 4096, uac_task_handle, 12, NULL, 0) != pdPASS) {
         vTaskDelete(uac_task_handle);
         vQueueDelete(s_events);
         s_events = NULL;

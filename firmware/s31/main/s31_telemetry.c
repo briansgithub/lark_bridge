@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "aec_gate.h"
 #include "audio_router.h"
 #include "bridge_console.h"
 #include "bt_gateway.h"
@@ -496,7 +497,8 @@ static void handle_line(const char *line)
         } else if (strcmp(request.argv[0], "test_off") == 0) {
             s31_gateway_test_route(-1);
         } else if (!reboot && !s31_link_uart_test_fault(request.argv[0]) &&
-                   !s31_bt_test_fault(request.argv[0])) {
+                   !s31_bt_test_fault(request.argv[0]) &&
+                   !s31_aec_test_fault(request.argv[0])) {
             respond_error("fault", "unsupported_or_busy");
             break;
         }

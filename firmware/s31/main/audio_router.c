@@ -8,6 +8,7 @@
 #include "audio_convert.h"
 #include "bridge_ring.h"
 #include "driver/i2s_std.h"
+#include "esp_heap_caps.h"
 #include "gateway_state.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -17,7 +18,9 @@
 
 #define AUDIO_RING_BYTES (32U * 1024U)
 #define MIC_RING_BYTES (48U * 1024U)
+#define MIC_RING_PSRAM_BYTES (256U * 1024U)
 #define AEC_REFERENCE_RING_BYTES (16U * 1024U)
+#define AEC_REFERENCE_RING_PSRAM_BYTES (64U * 1024U)
 #define AEC_OUTPUT_RING_BYTES (8U * 1024U)
 #define I2S_BLOCK_FRAMES 240U
 #define I2S_BLOCK_BYTES (I2S_BLOCK_FRAMES * S31_AUDIO_CHANNELS * sizeof(int16_t))
@@ -30,8 +33,10 @@
 static const char *TAG = "s31_audio";
 static uint8_t s_a2dp_storage[AUDIO_RING_BYTES];
 static uint8_t s_hfp_storage[AUDIO_RING_BYTES];
+#ifndef CONFIG_SPIRAM
 static uint8_t s_mic_storage[MIC_RING_BYTES];
 static uint8_t s_aec_reference_storage[AEC_REFERENCE_RING_BYTES];
+#endif
 static uint8_t s_aec_output_storage[AEC_OUTPUT_RING_BYTES];
 /* Bluedroid's BTC task stack is intentionally small. These buffers are safe as
  * static storage because the A2DP Sink callback is the sole media producer. */
@@ -57,6 +62,7 @@ static atomic_uint_fast32_t s_a2dp_rate_hz;
 static atomic_uint_fast32_t s_write_errors;
 static atomic_uint_fast32_t s_underruns;
 static atomic_uint_fast32_t s_overruns;
+static uint32_t s_uplink_consec_underruns;
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
 /* Test-image stage-isolation tone at I2S-out: 0 Hz means off. */
 static atomic_uint_fast32_t s_tone_hz;
@@ -193,11 +199,36 @@ static void i2s_writer_task(void *argument)
 
 esp_err_t s31_audio_router_init(void)
 {
-    if (!bridge_byte_ring_init(&s_a2dp_ring, s_a2dp_storage, sizeof(s_a2dp_storage)) ||
+    uint8_t *mic_storage = NULL;
+    size_t mic_storage_bytes = 0U;
+    uint8_t *ref_storage = NULL;
+    size_t ref_storage_bytes = 0U;
+#ifdef CONFIG_SPIRAM
+    mic_storage = heap_caps_malloc(MIC_RING_PSRAM_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (mic_storage != NULL) {
+        mic_storage_bytes = MIC_RING_PSRAM_BYTES;
+    } else {
+        mic_storage = heap_caps_malloc(MIC_RING_BYTES, MALLOC_CAP_8BIT);
+        mic_storage_bytes = MIC_RING_BYTES;
+    }
+    ref_storage = heap_caps_malloc(AEC_REFERENCE_RING_PSRAM_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (ref_storage != NULL) {
+        ref_storage_bytes = AEC_REFERENCE_RING_PSRAM_BYTES;
+    } else {
+        ref_storage = heap_caps_malloc(AEC_REFERENCE_RING_BYTES, MALLOC_CAP_8BIT);
+        ref_storage_bytes = AEC_REFERENCE_RING_BYTES;
+    }
+#else
+    mic_storage = s_mic_storage;
+    mic_storage_bytes = sizeof(s_mic_storage);
+    ref_storage = s_aec_reference_storage;
+    ref_storage_bytes = sizeof(s_aec_reference_storage);
+#endif
+    if (mic_storage == NULL || ref_storage == NULL ||
+        !bridge_byte_ring_init(&s_a2dp_ring, s_a2dp_storage, sizeof(s_a2dp_storage)) ||
         !bridge_byte_ring_init(&s_hfp_ring, s_hfp_storage, sizeof(s_hfp_storage)) ||
-        !bridge_byte_ring_init(&s_mic_ring, s_mic_storage, sizeof(s_mic_storage)) ||
-        !bridge_byte_ring_init(&s_aec_reference_ring, s_aec_reference_storage,
-                               sizeof(s_aec_reference_storage)) ||
+        !bridge_byte_ring_init(&s_mic_ring, mic_storage, mic_storage_bytes) ||
+        !bridge_byte_ring_init(&s_aec_reference_ring, ref_storage, ref_storage_bytes) ||
         !bridge_byte_ring_init(&s_aec_output_ring, s_aec_output_storage,
                                sizeof(s_aec_output_storage))) {
         return ESP_ERR_INVALID_STATE;
@@ -245,7 +276,7 @@ esp_err_t s31_audio_router_init(void)
         s_i2s_tx = NULL;
         return result;
     }
-    if (xTaskCreate(i2s_writer_task, "s31_i2s_tx", 4096, NULL, 9, NULL) != pdPASS) {
+    if (xTaskCreatePinnedToCore(i2s_writer_task, "s31_i2s_tx", 4096, NULL, 11, NULL, 0) != pdPASS) {
         i2s_channel_disable(s_i2s_tx);
         i2s_del_channel(s_i2s_tx);
         s_i2s_tx = NULL;
@@ -472,6 +503,35 @@ uint32_t s31_audio_router_aec_generation(void)
 
 size_t s31_audio_router_write_aec_output(const uint8_t *pcm, size_t length)
 {
+    if (pcm == NULL || length == 0U || (length % sizeof(int16_t)) != 0U) {
+        return 0U;
+    }
+    /* Absorb small long-term clock drift between S31 I2S (AEC producer) and
+     * remote BT HFP SCO TX (uplink consumer) without resetting the AEC engine:
+     * gently trim/pad 1 sample (62.5 us) when the post-AEC output FIFO drifts
+     * outside [32 ms, 128 ms] at 16 kHz mono. */
+    if (atomic_load_explicit(&s_uplink_ready, memory_order_acquire)) {
+        size_t fill = bridge_byte_ring_count(&s_aec_output_ring);
+        if (fill > 4096U && length > sizeof(int16_t)) {
+            /* S31 I2S slightly faster than SCO TX: trim 1 sample. */
+            size_t written = write_aligned_ring(&s_aec_output_ring, pcm,
+                                                length - sizeof(int16_t),
+                                                sizeof(int16_t));
+            return written == length - sizeof(int16_t) ? length : written;
+        }
+        if (fill < 1024U &&
+            bridge_byte_ring_space(&s_aec_output_ring) >= length + sizeof(int16_t)) {
+            /* SCO TX slightly faster than S31 I2S: pad 1 sample (hold last). */
+            size_t written = write_aligned_ring(&s_aec_output_ring, pcm, length,
+                                                sizeof(int16_t));
+            if (written == length) {
+                (void)write_aligned_ring(&s_aec_output_ring,
+                                         pcm + length - sizeof(int16_t),
+                                         sizeof(int16_t), sizeof(int16_t));
+            }
+            return written;
+        }
+    }
     return write_aligned_ring(&s_aec_output_ring, pcm, length, sizeof(int16_t));
 }
 
@@ -488,6 +548,7 @@ uint32_t s31_audio_router_fill_hfp_uplink(uint8_t *pcm, uint32_t length)
     if (atomic_exchange_explicit(&s_aec_output_reset_requested, false,
                                  memory_order_acq_rel)) {
         discard_ring(&s_aec_output_ring);
+        s_uplink_consec_underruns = 0U;
     }
 
     /* HFP can read only the distinct processed-AEC ring. Raw LARK capture is
@@ -510,10 +571,14 @@ uint32_t s31_audio_router_fill_hfp_uplink(uint8_t *pcm, uint32_t length)
             memset(pcm + produced_total * sizeof(int16_t), 0,
                    (requested_samples - produced_total) * sizeof(int16_t));
             atomic_fetch_add_explicit(&s_underruns, 1U, memory_order_relaxed);
-            atomic_store_explicit(&s_uplink_ready, false, memory_order_release);
-            request_aec_reset();
+            if (++s_uplink_consec_underruns >= 4U) {
+                s_uplink_consec_underruns = 0U;
+                atomic_store_explicit(&s_uplink_ready, false, memory_order_release);
+                request_aec_reset();
+            }
             return length;
         }
+        s_uplink_consec_underruns = 0U;
         int16_t *destination = (int16_t *)(pcm + produced_total * sizeof(int16_t));
         for (uint32_t index = 0U; index < chunk_samples; ++index) {
             if (factor == 1U) {

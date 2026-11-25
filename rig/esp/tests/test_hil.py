@@ -56,7 +56,7 @@ class RegistryTests(unittest.TestCase):
     def test_stage_b_exit_follows_both_smokes(self):
         gates = hil.load_gates()
         # Independent of the live registry, where these gates may already have passed.
-        for name in ("T2-smoke-s31", "T2-smoke-output", "stageB-exit"):
+        for name in ("T2-smoke-s31", "T2-smoke-output", "stageB-exit", "H6", "H2"):
             gates[name]["status"] = "PENDING"
         verdicts = {"T2-smoke-s31": {"verdict": "PASS"}}
         self.assertNotEqual(hil.effective_status(gates, verdicts)["stageB-exit"], "PASS")

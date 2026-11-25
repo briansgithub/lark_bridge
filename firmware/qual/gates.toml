@@ -250,7 +250,8 @@ needs = ["H6", "H9"]
 human = true
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PASS"
+evidence = "firmware/qual/h10-aec-2026-11-25.md & ../lark_bridge-evidence/20261125-h10-qual-pass/ (real Hollyland Lark A1 + MP43247 1 ft acoustic fixture + Pixel 7a; ESP-SR VOIP_LOW_COST 16 ms frames at 615 ms calibrated delay: 3 consecutive 34 s runs mean ERLE 22.29 / 22.00 / 20.48 dB [min 15.07, max 28.41 dB], 0/1,544,704 clips [0.00000%], starve=0, output_drop=0, resync=0, max_us=5.6-6.2 ms, 81 KB free internal SRAM; fail-to-silence PASS on route_silence, lark_lost [472/472 Pixel uplink silent windows, rms=1.25 / -88.4 dBFS], and call_end)"
 
 [gates.H11]
 title = "Audio focus"

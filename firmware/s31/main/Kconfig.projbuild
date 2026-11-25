@@ -21,12 +21,11 @@ config LARKBRIDGE_S31_AEC_ENGINE
     bool "Create the ESP-SR AEC engine during calls"
     default n
     help
-        Off by default: on this esp32s31 build, aec_create_from_config()
-        faults inside ESP-SR (esp_aec3_hps16fft_init -> esp_aec3_nlp_init)
-        even at boot with over 200 KB free, so the first HFP call rebooted
-        the S31. With the engine off, the call uplink stays digital silence.
-        The full-duplex engine needs a registered PSRAM heap.
-        Enable only to debug ESP-SR on the bench.
+        Off by default in base images until H10 qualification is frozen.
+        With the engine off, the call uplink stays digital silence.
+        When enabled with PSRAM (sdkconfig.aec-fd), runs ESP-SR VOIP_LOW_COST
+        on Core 1 with PSRAM-backed mic/reference rings and BT PSRAM-first
+        allocation.
 
 config LARKBRIDGE_S31_AEC_LINEAR_ONLY
     bool "Use the linear-only ESP-SR AEC mode for D5"
@@ -50,14 +49,13 @@ config LARKBRIDGE_S31_EXPERIMENTAL_AEC_UPLINK
 
 config LARKBRIDGE_S31_AEC_REFERENCE_DELAY_MS
     int "Initial acoustic-reference delay compensation (ms)"
-    range 0 200
+    range 0 950
     default 160
     help
         Delays the microphone stream relative to the HFP downlink reference
         before AEC processing, compensating for I2S, downstream A2DP, car, and
-        acoustic latency. The value is intentionally arrival-day tunable and
-        must be measured with the assembled car/output path. The 200-ms limit
-        preserves headroom in the fixed raw-microphone ring.
+        acoustic latency. The value is arrival-day tunable per downstream sink
+        (PSRAM mic/reference rings accommodate up to 950 ms).
 
 config LARKBRIDGE_TEST_IMAGE
     bool "Build a qualification test image (tone/tap/fault hooks)"
