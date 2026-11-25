@@ -160,3 +160,41 @@ Brian reported the speaker as too loud. It runs at maximum volume.
   RMS thresholds such as H11's 200 need re-measuring.
 - The overnight soak stops media louder than -30 dBFS peak (a2dp_out
   RMS above 733) and falls back to the -50 dBFS keep-alive.
+
+## Blocked at 21:55: speaker offline
+
+Since the case 4 run, the MP43247 has refused every page from the 32UE.
+It needs its power button pressed. Waiting on it:
+
+- the overnight media soak;
+- H3 with a live sink;
+- the Shelly 2 s-off brownouts, which score the stream.
+
+H14 adapter cycles stopped at "baseline profiles are down". Its baseline
+needs active SCO audio and active A2DP audio (`session.hfp` and
+`session.a2dp`), so run it with a harness call and media playing, once
+the speaker is back.
+
+## Overnight plan (launch about 00:30)
+
+Boards run `soak-good`: S31 `09f0f2a` (AEC off, UAC fix) and 32UE
+`42be26f`, both verified in today's runs. Pixel media is at 4/25, which
+the level guard checks. The routed keep-alive stays at -50 dBFS, and
+there are no calls.
+
+```sh
+bash firmware/rig/overnight_soak.sh ../lark_bridge-evidence/20261125-overnight \
+    ../lark_bridge-evidence/soak-good --hours 7.5 --segment-min 20 --boot-every 2
+```
+
+- That gives about 21 scored 20-minute media segments (Pixel → S31 →
+  I2S → 32UE → MP43247), with the H5 reducer and heartbeat, UAC-lost and
+  liveness-gap counters per segment.
+- A Shelly cold boot follows every second segment: 1 s off, S31 reset
+  pulse, roughly 1.5 per hour and about 11 cycles in total, each scored.
+- Exit codes: 0 pass, 2 a segment failed, 3 unsafe bench state (stops),
+  4 reset loop (stops and restores the `soak-good` images).
+- Pi fake car: `--sink-hook module:function` runs per segment to score
+  the car sink alongside.
+- Reflash the `soak-good` images first if the boards hold the hook
+  images (`df8ffd1` / `39eb5e6`).
