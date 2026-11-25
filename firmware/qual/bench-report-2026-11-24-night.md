@@ -198,3 +198,32 @@ bash firmware/rig/overnight_soak.sh ../lark_bridge-evidence/20261125-overnight \
   the car sink alongside.
 - Reflash the `soak-good` images first if the boards hold the hook
   images (`df8ffd1` / `39eb5e6`).
+
+## Astra 4 and 5 fixed and verified (22:20–22:25)
+
+Images: S31 `6dbdb64`, output `36202f1` (fixes in `6dbdb64`). Host suite:
+9 CTest targets, with `bridge_tap_tests` new.
+
+- **Case 5** (`bridge_tap`, with origin = output session and sequence).
+  The run was relfail, then five STOP retries (`ESP_FAIL`, pending), a
+  new PAUSE tap, a new STOP tap and a new PAUSE tap.
+  - The three new taps all returned `ESP_OK`, with nothing left pending.
+  - The new harness media session (`36202f1`) logged on the Pixel, in
+    order: `STOP down` (the tap whose releases failed), `STOP up` (the
+    stale release, sent before the new key), `PAUSE down/up`,
+    `STOP down/up` and `PAUSE down/up`. That is exactly one press and one
+    release per tap. Nothing was blocked or swallowed.
+  - Evidence: `20261124-astra45/fix-case5`.
+- **Case 4** (A2DP pull watchdog, 3 s).
+  - 74.5 s: the DISCONNECTED event was dropped.
+  - 77.3 s: "A2DP source stopped pulling audio; link presumed lost";
+    connected and streaming went false.
+  - 92.4 s: the disconnect deadline released the stale peer.
+  - 98.6 s: the speaker reconnected and audio resumed (FIFO 4,005).
+  - Recovery took 24 s from the drop, with no reboot. Before the fix the
+    output stayed "connected" for as long as it was watched (60 s).
+    Evidence: `20261124-astra45/fix-case4`.
+- The H11 media level check is now relative: at least half the
+  pre-call a2dp_out RMS, and 20 or more. `hil.TAP_ACTIVE_RMS` scores the
+  LARK microphone tap, not the speaker path, so the Pixel volume does not
+  affect it and it is unchanged.

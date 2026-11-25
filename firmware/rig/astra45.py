@@ -81,11 +81,21 @@ def case4(bench, observe):
     return out
 
 
+def harness(action, tag, *extra):
+    subprocess.run([ADB, '-s', PIXEL, 'shell', 'am', 'broadcast', '-f', '0x20', '-n',
+                    'dev.larkbridge.harness/.ControlReceiver', '-a',
+                    f'dev.larkbridge.harness.{action}', '--es', 'tag', tag, *extra],
+                   capture_output=True, text=True, timeout=20)
+
+
 def case5(bench, logcat_lines, args_new_taps=False):
     out = {'taps': []}
     peers = bench.command('s31', 'peers')['bt']
     if not peers.get('avrcp'):
         return {'skipped': f'AVRCP not connected: {peers}'}
+    harness('PLAY_STIMULUS', 'a5-media', '--es', 'usage', 'media', '--ei', 'loops', '20')
+    harness('MEDIA_SESSION_START', 'a5-keys')
+    bench.wait(3)
     del logcat_lines[:]
 
     def tap(kind):
@@ -112,7 +122,18 @@ def case5(bench, logcat_lines, args_new_taps=False):
         bench.command('s31', 'fault avrcp_next')
     out['different_key_after_recovery'] = tap('avrcp_tap_pause')
     bench.wait(2)
+    harness('MEDIA_SESSION_STOP', 'a5-keys')
+    harness('STOP_STIMULUS', 'a5-media')
     out['pixel_logcat'] = list(logcat_lines)[:60]
+    keys = []
+    for line in logcat_lines:
+        if '"media_key"' in line:
+            try:
+                k = json.loads(line[line.index('{'):])
+                keys.append(f"{k.get('keycode')}:{k.get('action')}")
+            except ValueError:
+                pass
+    out['pixel_keys'] = keys
     blocked = out['different_key_after_exhaustion']['result'] not in ('ESP_OK', None)
     out['result'] = ('different key blocked while release pending (Astra 5 reproduced)'
                      if blocked else 'different key accepted')
@@ -134,7 +155,7 @@ def main():
         subprocess.run([ADB, '-s', PIXEL, 'logcat', '-c'], timeout=15)
         proc = subprocess.Popen([ADB, '-s', PIXEL, 'logcat', '-v', 'time'], stdout=subprocess.PIPE,
                                 text=True, encoding='utf-8', errors='replace')
-        pat = re.compile(r'avrc|passthrough|media_?key|keycode_media|KEYCODE_MEDIA|MediaButton', re.I)
+        pat = re.compile(r'media_key|media_session|avrc|passthrough|media_?key|keycode_media|KEYCODE_MEDIA|MediaButton', re.I)
 
         def reader():
             with (a.out / 'pixel-logcat-avrcp.log').open('w', encoding='utf-8') as sink:
