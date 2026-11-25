@@ -26,6 +26,9 @@
 #define CONNECT_TIMEOUT_MS 15000U
 #define QUALIFICATION_TIMEOUT_MS 20000U
 #define MEDIA_RETRY_MS 1000U
+/* While streaming, the A2DP stack pulls PCM every few ms. A silence this long means the
+ * link is gone even if its DISCONNECTED event was lost (Astra finding 4). */
+#define A2DP_PULL_STALL_MS 3000U
 #define MEDIA_ACK_TIMEOUT_MS 1500U
 #define MEDIA_ACK_MAX_TIMEOUTS 3U
 
@@ -317,7 +320,12 @@ static void avrcp_callback(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t 
     }
 }
 
+static atomic_uint_fast32_t s_last_pull_ms;
+
 static int32_t a2dp_data_callback(uint8_t *data, int32_t length) {
+    if (length > 0) {
+        atomic_store_explicit(&s_last_pull_ms, now_ms(), memory_order_relaxed);
+    }
     if (length < 0) {
         output_control_invalidate_local_audio();
         return 0;
@@ -779,6 +787,7 @@ static void handle_bt_event(const bt_event_t *event, uint32_t current_ms) {
             ESP_LOGW(TAG, "ignoring stale audio-start event");
             break;
         }
+        atomic_store_explicit(&s_last_pull_ms, now_ms(), memory_order_relaxed);
         atomic_store_explicit(&s_audio_streaming, true, memory_order_release);
         s_media_ack_pending = false;
         s_media_ack_timeout_count = 0U;
@@ -896,6 +905,13 @@ static void bluetooth_worker(void *context) {
             s_state = BT_STATE_WAITING;
             s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
             set_pairing_visibility();
+        } else if (s_state == BT_STATE_CONNECTED &&
+                   atomic_load_explicit(&s_audio_streaming, memory_order_acquire) &&
+                   /* Signed: the data callback may stamp a time after current_ms. */
+                   (int32_t)(current_ms - (uint32_t)atomic_load_explicit(
+                                              &s_last_pull_ms, memory_order_relaxed)) >=
+                       (int32_t)A2DP_PULL_STALL_MS) {
+            recycle_active_connection("A2DP source stopped pulling audio; link presumed lost");
         } else if (s_state == BT_STATE_CONNECTED &&
                    (!s_format_ready || !saved_peer_snapshot(NULL)) &&
                    (int32_t)(current_ms - s_qualification_deadline_ms) >= 0) {

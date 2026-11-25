@@ -15,6 +15,7 @@ add_library(bridge_common STATIC
     common/src/bridge_route_fence.c
     common/src/bridge_session.c
     common/src/bridge_console.c
+    common/src/bridge_tap.c
 )
 target_include_directories(bridge_common PUBLIC common/include)
 

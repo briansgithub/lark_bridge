@@ -41,3 +41,12 @@ else()
 endif()
 
 add_test(NAME bridge_fault_frame_tests COMMAND bridge_fault_frame_tests)
+
+add_executable(bridge_tap_tests test_tap.c)
+target_link_libraries(bridge_tap_tests PRIVATE bridge_common)
+if(MSVC)
+    target_compile_options(bridge_tap_tests PRIVATE /W4 /WX /experimental:c11atomics)
+else()
+    target_compile_options(bridge_tap_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME bridge_tap_tests COMMAND bridge_tap_tests)

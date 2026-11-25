@@ -7,6 +7,7 @@
 
 #include "audio_router.h"
 #include "bridge_link.h"
+#include "bridge_tap.h"
 #include "bridge_protocol.h"
 #include "bridge_link_test.h"
 #include "bridge_route_fence.h"
@@ -181,7 +182,8 @@ static bridge_ack_status_t dispatch_avrcp(const bridge_packet_t *packet)
     if (!bridge_sequence_tracker_would_accept(&s_avrcp_sequences, packet->sequence)) {
         return BRIDGE_ACK_OK;
     }
-    esp_err_t result = s31_bt_send_avrcp(command, key_state);
+    esp_err_t result = s31_bt_send_avrcp(command, key_state,
+                                         bridge_tap_origin(s_output_session, packet->sequence));
     if (result == ESP_OK) {
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
         ++s_link_test.executed;

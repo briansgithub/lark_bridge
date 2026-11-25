@@ -9,5 +9,6 @@ idf_component_register(
         "src/bridge_route_fence.c"
         "src/bridge_session.c"
         "src/bridge_console.c"
+        "src/bridge_tap.c"
     INCLUDE_DIRS "include"
 )

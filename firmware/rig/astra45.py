@@ -81,7 +81,7 @@ def case4(bench, observe):
     return out
 
 
-def case5(bench, logcat_lines):
+def case5(bench, logcat_lines, args_new_taps=False):
     out = {'taps': []}
     peers = bench.command('s31', 'peers')['bt']
     if not peers.get('avrcp'):
@@ -100,10 +100,16 @@ def case5(bench, logcat_lines):
         return row
 
     bench.command('s31', 'fault avrcp_relfail')
-    for _ in range(5):
+    for _ in range(5):          # the output's retries of one car tap (same origin)
         tap('avrcp_tap_stop')
+    if args_new_taps:           # fixed images: each later tap is a new car tap
+        bench.command('s31', 'fault avrcp_next')
     out['different_key_after_exhaustion'] = tap('avrcp_tap_pause')
+    if args_new_taps:
+        bench.command('s31', 'fault avrcp_next')
     out['same_key_again'] = tap('avrcp_tap_stop')
+    if args_new_taps:
+        bench.command('s31', 'fault avrcp_next')
     out['different_key_after_recovery'] = tap('avrcp_tap_pause')
     bench.wait(2)
     out['pixel_logcat'] = list(logcat_lines)[:60]
@@ -118,6 +124,8 @@ def main():
     ap.add_argument('out', type=Path)
     ap.add_argument('--case', choices=('4', '5', 'both'), default='both')
     ap.add_argument('--observe', type=int, default=60)
+    ap.add_argument('--new-taps', action='store_true',
+                    help='S31 image with fault avrcp_next (bridge_tap origin tracking)')
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     logcat_lines = []
@@ -141,7 +149,7 @@ def main():
         bench.wait(1)
         summary['versions'] = {r: bench.command(r, 'status')['version'] for r in rig.ROLES}
         if a.case in ('5', 'both'):
-            summary['case5'] = case5(bench, logcat_lines)
+            summary['case5'] = case5(bench, logcat_lines, a.new_taps)
             print('case5', json.dumps({k: v for k, v in summary['case5'].items()
                                        if k != 'pixel_logcat'}), flush=True)
         if a.case in ('4', 'both'):

@@ -6,6 +6,7 @@
 #include "audio_router.h"
 #include "bridge_link.h"
 #include "bridge_session.h"
+#include "bridge_tap.h"
 #include "esp_a2dp_api.h"
 #include "esp_avrc_api.h"
 #include "esp_bt.h"
@@ -16,6 +17,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "gateway_state.h"
 #include "s31_peer_store.h"
@@ -40,8 +42,11 @@ static bool s_call_setup;
 static bool s_call_route_active;
 static uint8_t s_next_transaction_label;
 static uint8_t s_key_transaction_label[128];
-static atomic_uint_fast8_t s_tap_command;
-static atomic_uint_fast8_t s_tap_label;
+/* Tap bookkeeping (bridge_tap.c) and the passthrough labels, under s_avrcp_lock. */
+static bridge_tap_state_t s_tap;
+static SemaphoreHandle_t s_avrcp_lock;
+/* Set from the AVRCP callback on disconnect; the next submission forgets owed releases. */
+static atomic_bool s_tap_reset_requested;
 static portMUX_TYPE s_upstream_mux = portMUX_INITIALIZER_UNLOCKED;
 static esp_bd_addr_t s_upstream_bda;
 static bool s_upstream_bda_valid;
@@ -345,6 +350,7 @@ static void avrcp_callback(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t 
         bool connected = parameter->conn_stat.connected && accepted;
         atomic_store(&s_avrcp_connected, connected);
         if (!connected) {
+            atomic_store_explicit(&s_tap_reset_requested, true, memory_order_release);
             atomic_store_explicit(&s_tap_release_pending, false, memory_order_release);
         }
         s31_gateway_set_avrcp_connected(connected);
@@ -535,8 +541,14 @@ esp_err_t s31_bt_gateway_init(void)
     atomic_init(&s_hfp_profile_ready, false);
     atomic_init(&s_a2dp_profile_ready, false);
     atomic_init(&s_tap_release_pending, false);
-    atomic_init(&s_tap_command, 0U);
-    atomic_init(&s_tap_label, 0U);
+    atomic_init(&s_tap_reset_requested, false);
+    bridge_tap_init(&s_tap);
+    if (s_avrcp_lock == NULL) {
+        s_avrcp_lock = xSemaphoreCreateMutex();
+        if (s_avrcp_lock == NULL) {
+            return ESP_ERR_NO_MEM;
+        }
+    }
     atomic_init(&s_hfp_service_state, ESP_HF_CLIENT_CONNECTION_STATE_DISCONNECTED);
     atomic_init(&s_a2dp_connection_state, ESP_A2D_CONNECTION_STATE_DISCONNECTED);
     memset(s_key_transaction_label, 0, sizeof(s_key_transaction_label));
@@ -602,48 +614,58 @@ static esp_err_t submit_tap_release(uint8_t label, uint8_t command)
     return esp_avrc_ct_send_passthrough_cmd(label, command, BRIDGE_KEY_RELEASED);
 }
 
-esp_err_t s31_bt_send_avrcp(uint8_t command, uint8_t key_state)
+static bool tap_send(void *context, uint8_t label, uint8_t command, uint8_t state)
+{
+    (void)context;
+    esp_err_t result = state == BRIDGE_KEY_STATE_RELEASED
+                           ? submit_tap_release(label, command)
+                           : esp_avrc_ct_send_passthrough_cmd(label, command, BRIDGE_KEY_PRESSED);
+    return result == ESP_OK;
+}
+
+esp_err_t s31_bt_send_avrcp(uint8_t command, uint8_t key_state, uint32_t origin)
 {
     if (!s31_bt_avrcp_command_supported(command) || key_state > BRIDGE_KEY_TAP) {
         return ESP_ERR_INVALID_ARG;
     }
     if (!atomic_load_explicit(&s_avrcp_connected, memory_order_acquire)) {
+        atomic_store_explicit(&s_tap_reset_requested, true, memory_order_release);
         atomic_store_explicit(&s_tap_release_pending, false, memory_order_release);
         return ESP_ERR_INVALID_STATE;
     }
-    uint8_t label;
+    if (xSemaphoreTake(s_avrcp_lock, pdMS_TO_TICKS(200U)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+    if (atomic_exchange_explicit(&s_tap_reset_requested, false, memory_order_acq_rel)) {
+        bridge_tap_reset(&s_tap);
+    }
+    esp_err_t result;
     if (key_state == BRIDGE_KEY_TAP) {
-        esp_err_t result;
-        if (atomic_load_explicit(&s_tap_release_pending, memory_order_acquire)) {
-            if ((uint8_t)atomic_load_explicit(&s_tap_command, memory_order_acquire) !=
-                command) {
-                return ESP_ERR_INVALID_STATE;
-            }
-            label = (uint8_t)atomic_load_explicit(&s_tap_label, memory_order_acquire);
-        } else {
-            label = s_next_transaction_label++ & 0x0fU;
-            result = esp_avrc_ct_send_passthrough_cmd(
-                label, command, BRIDGE_KEY_PRESSED);
-            if (result != ESP_OK) {
-                return result;
-            }
-            atomic_store_explicit(&s_tap_command, command, memory_order_relaxed);
-            atomic_store_explicit(&s_tap_label, label, memory_order_relaxed);
-            atomic_store_explicit(&s_tap_release_pending, true, memory_order_release);
+        uint32_t stale_sent = s_tap.stale_releases_sent;
+        uint32_t stale_dropped = s_tap.stale_releases_dropped;
+        s_tap.next_label = s_next_transaction_label;
+        bridge_tap_result_t tap = bridge_tap_submit(&s_tap, command, origin, tap_send, NULL);
+        s_next_transaction_label = s_tap.next_label;
+        atomic_store_explicit(&s_tap_release_pending, s_tap.release_pending,
+                              memory_order_release);
+        if (s_tap.stale_releases_dropped != stale_dropped) {
+            ESP_LOGW(TAG, "dropped a stale AVRCP release (submit failed) for a new key");
+        } else if (s_tap.stale_releases_sent != stale_sent) {
+            ESP_LOGI(TAG, "released a stale AVRCP key before a new tap");
         }
-        result = submit_tap_release(label, command);
-        if (result == ESP_OK) {
-            atomic_store_explicit(&s_tap_release_pending, false, memory_order_release);
-        }
-        return result;
-    }
-    if (key_state == BRIDGE_KEY_PRESSED) {
-        label = s_next_transaction_label++ & 0x0fU;
-        s_key_transaction_label[command] = label;
+        result = tap == BRIDGE_TAP_OK ? ESP_OK : ESP_FAIL;
     } else {
-        label = s_key_transaction_label[command];
+        uint8_t label;
+        if (key_state == BRIDGE_KEY_PRESSED) {
+            label = s_next_transaction_label++ & 0x0fU;
+            s_key_transaction_label[command] = label;
+        } else {
+            label = s_key_transaction_label[command];
+        }
+        result = esp_avrc_ct_send_passthrough_cmd(label, command, key_state);
     }
-    return esp_avrc_ct_send_passthrough_cmd(label, command, key_state);
+    xSemaphoreGive(s_avrcp_lock);
+    return result;
 }
 
 void s31_bt_get_status(s31_bt_status_t *status)
@@ -665,6 +687,8 @@ void s31_bt_get_status(s31_bt_status_t *status)
 }
 
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
+static uint32_t s_test_origin = 0x7e570000U;
+
 bool s31_bt_test_fault(const char *kind)
 {
     uint8_t command;
@@ -672,6 +696,10 @@ bool s31_bt_test_fault(const char *kind)
         /* The output retries a reliable AVRCP packet up to five times. */
         atomic_store_explicit(&s_test_release_failures, 5U, memory_order_release);
         ESP_LOGW(TAG, "TEST: next 5 AVRCP release submissions will fail");
+        return true;
+    } else if (strcmp(kind, "avrcp_next") == 0) {
+        /* The next test tap is a new car tap; without this, taps repeat as retries. */
+        ++s_test_origin;
         return true;
     } else if (strcmp(kind, "avrcp_tap_stop") == 0) {
         command = ESP_AVRC_PT_CMD_STOP;
@@ -681,7 +709,7 @@ bool s31_bt_test_fault(const char *kind)
         return false;
     }
     /* Same entry point the UART AVRCP handler uses for a car tap. */
-    esp_err_t result = s31_bt_send_avrcp(command, BRIDGE_KEY_TAP);
+    esp_err_t result = s31_bt_send_avrcp(command, BRIDGE_KEY_TAP, s_test_origin);
     ESP_LOGI(TAG, "TEST: avrcp tap cmd=0x%02x result=%s release_pending=%d", command,
              esp_err_to_name(result),
              (int)atomic_load_explicit(&s_tap_release_pending, memory_order_acquire));
