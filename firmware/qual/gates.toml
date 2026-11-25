@@ -187,7 +187,8 @@ needs = []
 human = true
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PASS"
+evidence = "firmware/qual/rig-bringup-2026-11-25.md (larkbridge-rig Trixie 64-bit, rig-selftest 13/13 PASS, PipeWire larkbridge_fake_car, SWD 1000 kHz)"
 
 [gates.H6]
 title = "LARK UAC1"
@@ -198,8 +199,8 @@ human = false
 resets = false
 reducer = "h6_uac"
 seconds = 1800
-status = "PARTIAL"
-evidence = "firmware/qual/overnight-2026-11-24.md (read-only; no transmitter; 0/100 reconnects)"
+status = "FAIL"
+evidence = "firmware/qual/overnight-report-2026-11-25.md (P9 real Lark failed cycle 1/10 CHECK_SHORT_DEV_DESC on 6dbdb64; P7 Pico replug caught S31 uac_lark.c ESP_ERR_INVALID_STATE -> schedule_reopen panic on aa745ab; 5/5 negative USB profiles PASS)"
 
 [gates.H7]
 title = "Output Bluetooth (fake car at T3, speaker/car at T4/T5)"
@@ -208,7 +209,8 @@ needs = ["H1", "fake-car"]
 human = false
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PASS"
+evidence = "firmware/qual/overnight-report-2026-11-25.md (LarkRig Fake Car B8:27:EB:43:8D:51, live Pixel A2DP audio rms=67.0 peak=100 0.0% clip on a0d75996029d-test)"
 
 [gates.H8]
 title = "Pixel media"
@@ -226,7 +228,8 @@ needs = []
 human = false
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PASS"
+evidence = "dev.larkbridge.harness installed and exercised on Pixel 7a 3C081JEHN14930 (H7/H9/H11/H12)"
 
 [gates.H9]
 title = "Pixel call"
@@ -235,7 +238,8 @@ needs = ["H8"]
 human = false
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PASS"
+evidence = "firmware/qual/overnight-report-2026-11-25.md (10-min self-managed call AEC-off baseline on a0d75996029d-test, 0 resets, 0 hb timeouts, mid-call fake-car WAV rms=12658.0 0.0% clip)"
 
 [gates.H10]
 title = "LARK call + AEC"
@@ -253,7 +257,8 @@ needs = ["H9"]
 human = false
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PASS"
+evidence = "firmware/qual/overnight-report-2026-11-25.md (10/10 call audio-focus interruptions A2DP->HFP->A2DP on a0d75996029d-test, 0 resets)"
 
 [gates.H12]
 title = "Steering controls"
@@ -262,7 +267,8 @@ needs = ["H7", "H8"]
 human = true
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PARTIAL"
+evidence = "firmware/qual/overnight-report-2026-11-25.md (T3 fake-car AVRCP 4/4 play/pause/next/prev PASS on a0d75996029d-test; T5 real car still pending)"
 
 [gates.H13]
 title = "RF coexistence"
