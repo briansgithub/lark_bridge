@@ -419,6 +419,16 @@ bool s31_audio_router_read_aec_inputs(uint8_t *mic_48k_stereo, size_t mic_length
                                  reference_length) == reference_length;
 }
 
+void s31_audio_router_aec_ring_bytes(size_t *mic, size_t *reference)
+{
+    if (mic != NULL) {
+        *mic = bridge_byte_ring_count(&s_mic_ring);
+    }
+    if (reference != NULL) {
+        *reference = bridge_byte_ring_count(&s_aec_reference_ring);
+    }
+}
+
 int32_t s31_audio_router_aec_fill_difference_samples(void)
 {
     /* Normalize both FIFO depths to 16-kHz mono sample time. The value is

@@ -31,6 +31,8 @@ size_t s31_audio_router_aec_output_bytes(void);
 void s31_audio_router_reset_aec_inputs(void);
 void s31_audio_router_reset_aec_stream(void);
 uint32_t s31_audio_router_aec_generation(void);
+/* Diagnostic: bytes buffered in the LARK mic ring and the HFP reference ring. */
+void s31_audio_router_aec_ring_bytes(size_t *mic, size_t *reference);
 /* Processed AEC output is always 16-kHz signed little-endian mono PCM. */
 size_t s31_audio_router_write_aec_output(const uint8_t *pcm, size_t length);
 uint32_t s31_audio_router_fill_hfp_uplink(uint8_t *pcm, uint32_t length);

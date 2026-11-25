@@ -323,7 +323,15 @@ static void aec_task(void *argument)
                                    : AEC_STARVATION_MS;
             if ((uint32_t)(current_ms - worker.last_progress_ms) >= timeout) {
                 ++worker.starvations;
-                ESP_LOGW(TAG, "AEC input starved; restarting fail-closed pipeline");
+                size_t mic_have = 0U, reference_have = 0U;
+                s31_audio_router_aec_ring_bytes(&mic_have, &reference_have);
+                ESP_LOGW(TAG, "AEC input starved; restarting fail-closed pipeline "
+                         "(mic %u/%u ref %u/%u bytes, frames=%lu, idle=%lu ms, max_proc=%lu us)",
+                         (unsigned)mic_have, (unsigned)mic_input_bytes,
+                         (unsigned)reference_have, (unsigned)worker.reference_bytes,
+                         (unsigned long)worker.engine_frames,
+                         (unsigned long)(current_ms - worker.last_progress_ms),
+                         (unsigned long)worker.max_process_us);
                 s31_gateway_set_fault(BRIDGE_FAULT_AEC_NOT_READY);
                 release_engine(&worker);
             } else {
@@ -391,6 +399,9 @@ static void aec_task(void *argument)
         ++worker.processed_frames;
         ++worker.engine_frames;
         worker.last_frame_ms = current_ms;
+        /* Input deadlines count from when the worker is idle again, not from before a
+         * (possibly slow, PSRAM-resident) process call. */
+        worker.last_progress_ms = now_ms();
         log_telemetry(&worker, current_ms);
     }
 }
