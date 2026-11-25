@@ -1,0 +1,30 @@
+{
+  "output/reboot": {
+    "recover_seconds": 4.335203199996613,
+    "sessions": 1,
+    "timeout_ms": [],
+    "timeouts": 0
+  },
+  "output/uart_mute": {
+    "recover_seconds": 4.6319984999718145,
+    "sessions": 0,
+    "timeout_ms": [
+      1410
+    ],
+    "timeouts": 1
+  },
+  "s31/reboot": {
+    "recover_seconds": 5.310412700055167,
+    "sessions": 1,
+    "timeout_ms": [],
+    "timeouts": 0
+  },
+  "s31/uart_mute": {
+    "recover_seconds": 4.633630899945274,
+    "sessions": 0,
+    "timeout_ms": [
+      1401
+    ],
+    "timeouts": 1
+  }
+}

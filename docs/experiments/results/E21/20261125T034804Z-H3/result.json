@@ -1,0 +1,31 @@
+{
+  "artifacts": [
+    {
+      "bytes": 213650,
+      "name": "bench.jsonl",
+      "sha256": "5025d689bb0438ea084fd178c09b7a6b271ee437b712f3a71ed65c99b7b252b4"
+    }
+  ],
+  "flashed": false,
+  "gate": "H3",
+  "ports": [
+    "COM3",
+    "COM4"
+  ],
+  "reasons": [
+    "s31/reboot reboot recovered before the heartbeat timeout",
+    "output/reboot reboot recovered before the heartbeat timeout"
+  ],
+  "recorded_at": "2026-11-25T03:48:04+00:00",
+  "revisions": {
+    "checkout": {
+      "commit": "9fa27dd5ec1cbcda9af7caf837f11f9b32061278",
+      "dirty": false,
+      "dirty_paths": []
+    },
+    "hil_version": 0,
+    "toolchain_lock_sha256": "9ab42ddf52096f0b58f89de91c9ae08ceac680eede3da85270eac5b3681c72db"
+  },
+  "schema": 1,
+  "verdict": "PARTIAL"
+}

@@ -242,3 +242,37 @@ The photo shows:
 Module markings are not legible in the photo. Chip identity comes from
 the boot logs: ESP32-D0WD-V3 rev v3.1 on the output and an esp32s31 rev
 v0.0 bootloader. `gates.toml` H0 is now PASS on that basis.
+
+## H3 with the live speaker (22:48), images `6dbdb64` and `36202f1`
+
+Bundle: `docs/experiments/results/E21/20261125T034804Z-H3`. Verdict
+PARTIAL.
+
+- Both UART-mute faults muted the output and recovered, with one new
+  session each and bonds kept.
+- Every phase had live audio before and after (the speaker was the sink).
+  That was the evening's missing piece.
+- The two remaining reasons are "reboot recovered before the heartbeat
+  timeout". Each board's reboot started a new session sooner than the
+  1.4 s timeout, so no timeout-driven mute was observed on reboot. The
+  session reset forces silence on that path.
+- To close H3, either score the reboot mute from the session change, or
+  accept the uart_mute evidence. That is Brian's call.
+
+## Other short runs on the fixed images (22:30–22:46)
+
+- D4: 5/5 resets PASS. H8 media relay: PASS. H11 was skipped because the
+  Pixel call volume is 5/15 and the call audio would go to the speaker.
+- Shelly brownouts with a 2 s cut: 5/5 PASS with 0 heartbeat timeouts.
+  Times from the requested power-on: stream 10.3–10.7 s, Pixel
+  12.3–12.7 s. The 32UE app started about 0.9 s *before* the requested
+  end of the cut, so the real outage is shorter than 2 s.
+- Soak dry run 2 (4 × 2 min of Pixel media): 3 of 4 segments PASS, with
+  0 heartbeat timeouts and `uac.lost` 0.
+  - Segment 4 failed on one FIFO flush. The output logged
+    `readiness=0x27 muted` and then READY 120 ms later: READY_AUDIO
+    dropped because the 32UE's I2S reader went more than 100 ms
+    (`I2S_CLOCK_ACTIVE_MS`) without a read.
+  - The S31 side was clean: no I2S write errors and a steady route.
+  - It is open. The overnight soak counts these per segment
+    (`output.mutes`) to measure the rate.
