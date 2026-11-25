@@ -1,4 +1,4 @@
-Open: intermittent S31 heartbeat timeouts (~1 per 5 s in some runs) mute audio and fail H5. D4 fixed 10/10. D5 FD+PSRAM AEC constructs. H8/H9/H11/H14 scoped smokes pass.
+H5 30-min soak PASS (0 heartbeat timeouts). Open: heartbeat timeouts appear after a 32UE reboot while the S31 keeps running, and clear on S31 reboot. D4 fixed 10/10. D5 FD+PSRAM AEC constructs. H8/H9/H11/H14 scoped smokes pass.
 
 # Evening bench report, 2026-11-24 (16:45–19:35 ET)
 
@@ -62,9 +62,18 @@ So this looks intermittent, not tied to a commit. My console-lock theory
 (`98d5296`, reverted for S31 in `3bb3419`) did not hold. Next: log
 per-heartbeat TX time on the 32UE and RX time on the S31, then compare.
 
-A 30-minute H5 soak was running at the time of this report (S31
-`3bb34194c48c-test`, 32UE `1b8bb3a08417-dirty-test`, -50 dBFS keep-alive).
-Its result measures how often the timeouts happen: see
+**H5 30-minute soak: PASS** (S31 `3bb34194c48c-test`, 32UE
+`1b8bb3a08417-dirty-test`, -50 dBFS). FIFO 3,225–5,214 frames, max |ppm|
+333, no underrun, overrun or I2S errors, and no interruption over 1,800 s.
+The S31 logged **zero** heartbeat timeouts over 31 minutes (max gap
+1,000 ms).
+
+The H5 smoke right before it, on the same images, had 18 timeouts across
+S31 uptime 41–136 s. H3 then rebooted the S31, which cleared them. Pattern
+across all runs: timeouts follow a 32UE flash or reboot while the S31 keeps
+running, and stop after an S31 reboot. Runs where the S31 booted last, or
+where the 32UE was untouched, were clean. The gap meter records real
+arrival times, so the 32UE sends late in that state. Evidence:
 `../lark_bridge-evidence/20261124-final/`.
 
 Details: `followup-2026-11-24.md`, `mp43247-2026-11-24.md`,
