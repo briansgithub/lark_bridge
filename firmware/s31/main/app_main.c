@@ -69,11 +69,9 @@ void app_main(void)
     }
     log_identity_banner();
 
-    result = s31_audio_router_init();
     s31_gateway_state_init();
-    if (result == ESP_OK) {
-        s31_gateway_set_i2s_ready(true);
-    } else {
+    result = s31_audio_router_init();
+    if (result != ESP_OK) {
         ESP_LOGE(TAG, "audio/I2S initialization failed: %s", esp_err_to_name(result));
         s31_gateway_set_fault(BRIDGE_FAULT_AUDIO_UNDERRUN);
     }

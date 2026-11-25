@@ -184,6 +184,7 @@ static void build_stats(bridge_json_t *json, char *buffer, const char *type)
     add_bt(json, false);
     bridge_json_object_begin(json, "i2s");
     bridge_json_u32(json, "fifo", audio.fifo_frames);
+    bridge_json_u32(json, "write_err", audio.write_errors);
     bridge_json_u32(json, "under", audio.underruns);
     bridge_json_u32(json, "over", audio.overruns);
     bridge_json_object_end(json);
