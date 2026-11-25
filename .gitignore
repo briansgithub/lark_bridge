@@ -11,6 +11,7 @@ __pycache__/
 .pio/
 pico/build/
 pico/test/host/build/
+rig/esp/fake-lark/build/
 firmware/s31/sdkconfig
 firmware/s31/sdkconfig.old
 firmware/output/sdkconfig
