@@ -22,9 +22,13 @@ enum {
     S31_LINK_HEARTBEAT_PERIOD_MS = 500,
     S31_LINK_TIMEOUT_MS = 1400,
 
-    S31_BT_RECONNECT_INITIAL_MS = 1000,
+    S31_BT_RECONNECT_INITIAL_MS = 6000,
+    S31_BT_RECONNECT_PEER_PROFILE_MS = 2000,
+    S31_BT_RECONNECT_DISCONNECT_HOLD_MS = 6000,
     S31_BT_RECONNECT_MAX_MS = 30000,
     S31_BT_RECONNECT_STALL_MS = 10000,
+    S31_BT_RECONNECT_RECYCLE_STALLS = 2,
+    S31_BT_RECONNECT_RECYCLE_COOLDOWN_MS = 30000,
     /* After a reset that cut a live link, the phone keeps the stale ACL
      * until its link supervision timeout (the Pixel negotiates 8000 slots,
      * 5 s). Paging it before then fails with HCI 0x0B ("connection already

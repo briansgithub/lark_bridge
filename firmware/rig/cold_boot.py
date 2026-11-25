@@ -33,6 +33,24 @@ ALLOWED = set(EXPECTED) | {'COM1'}
 SPEAKER = 'c9:5c:fd:6e:28:46'
 
 
+def allowed_peers(expected_peer=None):
+    """Return allowed lowercase BT sink addresses (or None if 'any')."""
+    if expected_peer is not None:
+        val = expected_peer.strip().lower()
+        return None if val == 'any' else {val}
+    peers = {SPEAKER}
+    inv_path = root / 'rig/inventory.toml'
+    if inv_path.is_file():
+        try:
+            inv = tomllib.loads(inv_path.read_text(encoding='utf-8'))
+            rig_bt = inv.get('rig_bt_addr')
+            if isinstance(rig_bt, str) and rig_bt.strip():
+                peers.add(rig_bt.strip().lower())
+        except (OSError, tomllib.TOMLDecodeError):
+            pass
+    return peers
+
+
 class Stop(RuntimeError):
     """Abort the whole run (unsafe or unexpected bench state)."""
 
@@ -96,9 +114,10 @@ def s31_reset():
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
 
-def one_cycle(n, out, limits, window, off, reset_s31=False):
+def one_cycle(n, out, limits, window, off, reset_s31=False, expected_peer=None):
     cyc = out / f'cycle{n}'
     cyc.mkdir(parents=True, exist_ok=True)
+    peers_allowed = allowed_peers(expected_peer)
     result = {'cycle': n}
     before = shelly('status')
     t_cmd = time.monotonic()
@@ -158,8 +177,11 @@ def one_cycle(n, out, limits, window, off, reset_s31=False):
             if 'output' in pair:
                 bt = bench.command('output', 'peers')['bt']
                 if bt['connected'] and 'speaker_connected' not in marks:
-                    if bt['peer'].lower() != SPEAKER:
-                        raise rig.BenchError(f'unexpected speaker peer {bt}')
+                    peer_addr = bt['peer'].lower()
+                    if peers_allowed is not None and peer_addr not in peers_allowed:
+                        raise rig.BenchError(
+                            f'unexpected speaker peer {bt} (allowed: {sorted(peers_allowed)})')
+                    result['speaker_peer'] = peer_addr
                     mark('speaker_connected')
                 if 'uart_link' in marks and rig.streaming(bench.command('output', 'stats')):
                     mark('stream')
@@ -209,6 +231,8 @@ def main():
     ap.add_argument('--s31-reset', action='store_true',
                     help='also hard-reset the S31 (not on the plug) as power returns')
     ap.add_argument('--settle', type=float, default=0, help='seconds idle between cycles')
+    ap.add_argument('--expected-peer', default=None,
+                    help='expected 32UE BT sink address (default: MP43247 or rig_bt_addr; or "any")')
     a = ap.parse_args()
     if not 1 <= a.cycles <= 40:
         sys.exit('cycles must be 1..40 (mechanical relay)')
@@ -218,7 +242,7 @@ def main():
     results, rc = [], 0
     for n in range(1, a.cycles + 1):
         try:
-            r = one_cycle(n, a.out, limits, a.window, a.off, a.s31_reset)
+            r = one_cycle(n, a.out, limits, a.window, a.off, a.s31_reset, a.expected_peer)
         except rig.BenchError as exc:
             r, rc = {'cycle': n, 'error': str(exc)}, 4 if 'loop' in str(exc) else 2
         except Stop as exc:

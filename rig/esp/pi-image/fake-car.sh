@@ -30,7 +30,7 @@ adapter_path() {
 }
 
 cmd_pair_accept() {
-  local seconds=120 until=()
+  local seconds=120 until=() adapter idx rc=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --until-paired) until=(--until-paired) ;;
@@ -40,8 +40,16 @@ cmd_pair_accept() {
     shift
   done
   [ "$seconds" -ge 5 ] && [ "$seconds" -le 600 ] || die "pair-accept: seconds must be 5..600"
-  info "pairing window open for ${seconds}s on $(adapter_path)"
-  python3 "$HERE/fake_car_agent.py" --adapter "$(adapter_path)" --seconds "$seconds" "${until[@]}"
+  adapter="$(adapter_path)"
+  idx="${adapter##*/hci}"
+  info "pairing window open for ${seconds}s on $adapter"
+  python3 "$HERE/fake_car_agent.py" --adapter "$adapter" --seconds "$seconds" "${until[@]}" || rc=$?
+  # BlueZ 5.82 clears Connectable when Discoverable/Pairable are turned off;
+  # re-assert connectable so bonded peers (32UE) can reconnect after reboots.
+  (sleep 0.5) | timeout 5 btmgmt --index "$idx" connectable on >/dev/null 2>&1 ||
+    (sleep 0.5) | timeout 5 sudo -n btmgmt --index "$idx" connectable on >/dev/null 2>&1 ||
+    warn "could not re-enable connectable on hci$idx after pair-accept"
+  return "$rc"
 }
 
 a2dp_streams() {

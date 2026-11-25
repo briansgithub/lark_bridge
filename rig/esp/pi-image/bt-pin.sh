@@ -40,6 +40,8 @@ while read -r idx addr; do
 done < <(bt_controllers)
 
 for id in $(rfkill_ids "$pinned"); do rfkill unblock "$id" || true; done
+(sleep 0.5) | timeout 5 btmgmt --index "${pinned#hci}" connectable on >/dev/null 2>&1 ||
+  warn "could not set $pinned connectable"
 busctl set-property org.bluez "/org/bluez/$pinned" org.bluez.Adapter1 Alias s "$ALIAS" \
   >/dev/null 2>&1 || warn "could not set the adapter alias (bluetoothd not ready?)"
 ok "pinned to $pinned ($ADDR)"

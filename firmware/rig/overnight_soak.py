@@ -189,6 +189,8 @@ def main():
                     help='relay guard; raise only for a short dry run')
     ap.add_argument('--sink-hook', default=None,
                     help='module:function scoring an extra sink per segment (Pi fake car)')
+    ap.add_argument('--expected-peer', default=None,
+                    help='expected 32UE BT sink address for cold boots (or "any")')
     a = ap.parse_args()
     sink_hook = None
     if a.sink_hook:
@@ -225,7 +227,8 @@ def main():
             if a.boot_every and index % a.boot_every == 0 and time.monotonic() + 300 < deadline:
                 boots += 1
                 try:
-                    cyc = cold_boot.one_cycle(boots, a.out / 'coldboot', limits, 60, 1, True)
+                    cyc = cold_boot.one_cycle(boots, a.out / 'coldboot', limits, 60, 1, True,
+                                              expected_peer=a.expected_peer)
                 except rig.BenchError as exc:
                     cyc = {'cycle': boots, 'error': str(exc)}
                 except cold_boot.Stop as exc:

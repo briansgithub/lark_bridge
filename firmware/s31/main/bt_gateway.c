@@ -31,6 +31,7 @@ static atomic_bool s_a2dp_format_supported;
 static atomic_bool s_hfp_profile_ready;
 static atomic_bool s_a2dp_profile_ready;
 static atomic_bool s_tap_release_pending;
+static atomic_bool s_acl_exists_collision;
 static atomic_int s_hfp_service_state;
 static atomic_int s_a2dp_connection_state;
 static atomic_uint s_hfp_connection_completions;
@@ -387,6 +388,16 @@ static void gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *par
         esp_bt_gap_pin_reply(parameter->pin_req.bda, accept, accept ? 4 : 0, pin);
         break;
     }
+    case ESP_BT_GAP_ACL_CONN_CMPL_STAT_EVT:
+        if (parameter->acl_conn_cmpl_stat.stat == ESP_BT_STATUS_HCI_CONNECTION_EXISTS ||
+            (int)parameter->acl_conn_cmpl_stat.stat == ESP_HCI_ERR_CONN_ALREADY_EXISTS) {
+            atomic_store_explicit(&s_acl_exists_collision, true, memory_order_release);
+            ESP_LOGW(TAG, "ACL connection collision (0x0b Conn Exists) detected");
+        } else if (parameter->acl_conn_cmpl_stat.stat == ESP_BT_STATUS_SUCCESS ||
+                   parameter->acl_conn_cmpl_stat.stat == ESP_BT_STATUS_HCI_SUCCESS) {
+            atomic_store_explicit(&s_acl_exists_collision, false, memory_order_release);
+        }
+        break;
     default:
         break;
     }
@@ -481,11 +492,82 @@ static bool request_reconnect(reconnect_profile_t *profile, esp_bd_addr_t peer,
     return true;
 }
 
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+/* Test-image fault hook to exercise local BT stack recycle on live hardware. */
+static atomic_bool s_test_recycle_requested;
+#endif
+
+static esp_err_t recycle_bt_stack(void)
+{
+    ESP_LOGW(TAG, "recycling local BT stack to clear wedged ACL/L2CAP state");
+    s31_gateway_set_bt_ready(false);
+    atomic_store_explicit(&s_hfp_audio_connected, false, memory_order_release);
+    atomic_store_explicit(&s_avrcp_connected, false, memory_order_release);
+    atomic_store_explicit(&s_a2dp_format_supported, false, memory_order_release);
+    atomic_store_explicit(&s_hfp_profile_ready, false, memory_order_release);
+    atomic_store_explicit(&s_a2dp_profile_ready, false, memory_order_release);
+    atomic_store_explicit(&s_tap_reset_requested, true, memory_order_release);
+    atomic_store_explicit(&s_tap_release_pending, false, memory_order_release);
+    atomic_store_explicit(&s_acl_exists_collision, false, memory_order_release);
+    atomic_store_explicit(&s_hfp_service_state, ESP_HF_CLIENT_CONNECTION_STATE_DISCONNECTED,
+                          memory_order_release);
+    atomic_store_explicit(&s_a2dp_connection_state, ESP_A2D_CONNECTION_STATE_DISCONNECTED,
+                          memory_order_release);
+    s_call_present = false;
+    s_call_setup = false;
+    update_call_route();
+    s31_gateway_set_avrcp_connected(false);
+    s31_gateway_apply_session_event(BRIDGE_SESSION_EVENT_HFP_DOWN);
+    s31_gateway_apply_session_event(BRIDGE_SESSION_EVENT_A2DP_DOWN);
+
+    /* Per IDF docs, AVRCP must be deinitialized before A2DP. */
+    (void)esp_avrc_ct_deinit();
+    (void)esp_a2d_sink_deinit();
+    (void)esp_hf_client_deinit();
+    vTaskDelay(pdMS_TO_TICKS(500U));
+
+    /* Recycle Bluedroid (sends HCI_Reset on re-enable to clear orphaned ACLs)
+     * without toggling esp_bt_controller_disable(), which leaves ESP32-S31 rev0
+     * libbtbb in an OLC resched-failed state. */
+    (void)esp_bluedroid_disable();
+    (void)esp_bluedroid_deinit();
+    vTaskDelay(pdMS_TO_TICKS(200U));
+
+    esp_bluedroid_config_t bluedroid_config = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
+    esp_err_t result = esp_bluedroid_init_with_cfg(&bluedroid_config);
+    if (result != ESP_OK) {
+        ESP_LOGE(TAG, "BT recycle bluedroid init failed: %s", esp_err_to_name(result));
+        s31_gateway_set_fault(BRIDGE_FAULT_BLUETOOTH);
+        return result;
+    }
+    result = esp_bluedroid_enable();
+    if (result != ESP_OK) {
+        ESP_LOGE(TAG, "BT recycle bluedroid enable failed: %s", esp_err_to_name(result));
+        s31_gateway_set_fault(BRIDGE_FAULT_BLUETOOTH);
+        return result;
+    }
+    result = initialize_profiles();
+    if (result != ESP_OK) {
+        ESP_LOGE(TAG, "BT recycle profile init failed: %s", esp_err_to_name(result));
+        s31_gateway_set_fault(BRIDGE_FAULT_BLUETOOTH);
+        return result;
+    }
+    s31_gateway_set_bt_ready(true);
+    ESP_LOGI(TAG, "local BT stack recycle complete");
+    return ESP_OK;
+}
+
 static void reconnect_worker(void *context)
 {
     uint32_t started_ms = now_ms();
     uint32_t next_attempt_ms = started_ms + S31_BT_RECONNECT_BOOT_HOLD_MS;
     bool boot_held = true;
+    bool was_connected = false;
+    bool partial_grace_armed = false;
+    bool prefer_hfp = true;
+    bool has_recycled = false;
+    uint32_t last_recycle_ms = 0U;
+    unsigned int consecutive_stalls = 0U;
     uint32_t backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
     reconnect_profile_t hfp = {
         .name = "HFP", .completions = &s_hfp_connection_completions,
@@ -510,22 +592,128 @@ static void reconnect_worker(void *context)
 
         bool hfp_down = hfp_state == ESP_HF_CLIENT_CONNECTION_STATE_DISCONNECTED;
         bool a2dp_down = a2dp_state == ESP_A2D_CONNECTION_STATE_DISCONNECTED;
+        bool both_down = hfp_down && a2dp_down;
+
+        bool force_recycle = false;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        force_recycle = atomic_exchange_explicit(&s_test_recycle_requested, false,
+                                                 memory_order_acq_rel);
+#endif
+        if (force_recycle) {
+            (void)recycle_bt_stack();
+            hfp.pending = false;
+            a2dp.pending = false;
+            was_connected = false;
+            partial_grace_armed = false;
+            prefer_hfp = true;
+            consecutive_stalls = 0U;
+            backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
+            boot_held = true;
+            started_ms = now_ms();
+            next_attempt_ms = started_ms + S31_BT_RECONNECT_BOOT_HOLD_MS;
+            has_recycled = true;
+            last_recycle_ms = started_ms;
+            vTaskDelay(pdMS_TO_TICKS(250U));
+            continue;
+        }
+
         if (!s31_reconnect_boot_held(&boot_held, started_ms, current_ms) &&
             profiles_ready && upstream_snapshot(peer)) {
+            bool hfp_was_pending = hfp.pending;
+            bool a2dp_was_pending = a2dp.pending;
             bool cancelled_hfp = cancel_stalled_request(&hfp, peer, hfp_up, hfp_down, current_ms);
-            bool cancelled_a2dp = cancel_stalled_request(&a2dp, peer, a2dp_up, a2dp_down, current_ms);
-            if ((hfp_up && a2dp_up) || cancelled_hfp || cancelled_a2dp) {
+            bool cancelled_a2dp =
+                cancel_stalled_request(&a2dp, peer, a2dp_up, a2dp_down, current_ms);
+            bool hfp_failed_done = hfp_was_pending && !hfp.pending && !hfp_up && !cancelled_hfp;
+            bool a2dp_failed_done =
+                a2dp_was_pending && !a2dp.pending && !a2dp_up && !cancelled_a2dp;
+
+            if (hfp_up && a2dp_up) {
+                was_connected = true;
+                partial_grace_armed = false;
+                prefer_hfp = true;
+                consecutive_stalls = 0U;
+                atomic_store_explicit(&s_acl_exists_collision, false, memory_order_release);
                 backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
                 next_attempt_ms = current_ms + backoff_ms;
-            } else if ((int32_t)(current_ms - next_attempt_ms) >= 0) {
-                bool requested_hfp = request_reconnect(&hfp, peer, hfp_down, current_ms);
-                bool requested_a2dp = request_reconnect(&a2dp, peer, a2dp_down, current_ms);
-                if (requested_hfp || requested_a2dp) {
+            } else if (hfp_up || a2dp_up) {
+                was_connected = true;
+                consecutive_stalls = 0U;
+                atomic_store_explicit(&s_acl_exists_collision, false, memory_order_release);
+                if (!partial_grace_armed || cancelled_hfp || cancelled_a2dp ||
+                    hfp_failed_done || a2dp_failed_done) {
+                    partial_grace_armed = true;
+                    next_attempt_ms = current_ms + S31_BT_RECONNECT_PEER_PROFILE_MS;
+                }
+            } else {
+                partial_grace_armed = false;
+                if (was_connected && both_down) {
+                    /* Hold quietly after a full disconnect so the phone can settle
+                     * or reconnect cleanly without colliding with an outbound page. */
+                    was_connected = false;
+                    prefer_hfp = true;
+                    consecutive_stalls = 0U;
+                    backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
+                    next_attempt_ms = current_ms + S31_BT_RECONNECT_DISCONNECT_HOLD_MS;
+                }
+                if ((cancelled_hfp || cancelled_a2dp) && both_down) {
+                    ++consecutive_stalls;
                     next_attempt_ms = current_ms + backoff_ms;
-                    backoff_ms = backoff_ms < S31_BT_RECONNECT_MAX_MS / 2U
-                                     ? backoff_ms * 2U : S31_BT_RECONNECT_MAX_MS;
-                } else {
-                    next_attempt_ms = current_ms + S31_BT_RECONNECT_INITIAL_MS;
+                    backoff_ms = s31_reconnect_next_backoff(backoff_ms);
+                } else if (hfp_failed_done || a2dp_failed_done) {
+                    /* Normal page timeout completed: wait a full quiet backoff window
+                     * before paging again so incoming phone reconnects have open air. */
+                    next_attempt_ms = current_ms + backoff_ms;
+                    backoff_ms = s31_reconnect_next_backoff(backoff_ms);
+                }
+
+                bool acl_collision =
+                    atomic_load_explicit(&s_acl_exists_collision, memory_order_acquire);
+                if (s31_reconnect_should_recycle(consecutive_stalls, acl_collision, both_down) &&
+                    s31_reconnect_cooldown_elapsed(has_recycled, last_recycle_ms, current_ms)) {
+                    (void)recycle_bt_stack();
+                    hfp.pending = false;
+                    a2dp.pending = false;
+                    was_connected = false;
+                    partial_grace_armed = false;
+                    prefer_hfp = true;
+                    consecutive_stalls = 0U;
+                    backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
+                    boot_held = true;
+                    started_ms = now_ms();
+                    next_attempt_ms = started_ms + S31_BT_RECONNECT_BOOT_HOLD_MS;
+                    has_recycled = true;
+                    last_recycle_ms = started_ms;
+                    vTaskDelay(pdMS_TO_TICKS(250U));
+                    continue;
+                }
+            }
+
+            if (!(hfp_up && a2dp_up) && (int32_t)(current_ms - next_attempt_ms) >= 0) {
+                s31_reconnect_target_t target = s31_reconnect_choose_profile(
+                    hfp_up, hfp_down, a2dp_up, a2dp_down, hfp.pending || a2dp.pending, prefer_hfp);
+                reconnect_profile_t *profile = NULL;
+                bool disconnected = false;
+                if (target == S31_RECONNECT_HFP) {
+                    profile = &hfp;
+                    disconnected = hfp_down;
+                } else if (target == S31_RECONNECT_A2DP) {
+                    profile = &a2dp;
+                    disconnected = a2dp_down;
+                }
+                if (profile != NULL) {
+                    bool requested = request_reconnect(profile, peer, disconnected, current_ms);
+                    if (both_down) {
+                        prefer_hfp = (target != S31_RECONNECT_HFP);
+                    }
+                    if (!requested || !profile->pending) {
+                        next_attempt_ms = current_ms +
+                                          ((hfp_up || a2dp_up) ? S31_BT_RECONNECT_PEER_PROFILE_MS
+                                                               : backoff_ms);
+                        if (both_down) {
+                            backoff_ms = s31_reconnect_next_backoff(backoff_ms);
+                        }
+                    }
                 }
             }
         }
@@ -542,6 +730,10 @@ esp_err_t s31_bt_gateway_init(void)
     atomic_init(&s_a2dp_profile_ready, false);
     atomic_init(&s_tap_release_pending, false);
     atomic_init(&s_tap_reset_requested, false);
+    atomic_init(&s_acl_exists_collision, false);
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    atomic_init(&s_test_recycle_requested, false);
+#endif
     bridge_tap_init(&s_tap);
     if (s_avrcp_lock == NULL) {
         s_avrcp_lock = xSemaphoreCreateMutex();
@@ -700,6 +892,10 @@ bool s31_bt_test_fault(const char *kind)
     } else if (strcmp(kind, "avrcp_next") == 0) {
         /* The next test tap is a new car tap; without this, taps repeat as retries. */
         ++s_test_origin;
+        return true;
+    } else if (strcmp(kind, "bt_recycle") == 0) {
+        atomic_store_explicit(&s_test_recycle_requested, true, memory_order_release);
+        ESP_LOGW(TAG, "TEST: requested local BT stack recycle");
         return true;
     } else if (strcmp(kind, "avrcp_tap_stop") == 0) {
         command = ESP_AVRC_PT_CMD_STOP;
