@@ -35,6 +35,7 @@ def hook(bench, executable, *args):
 
 def run_fixture(bench, command, timeout=30):
     """Keep servicing the consoles while a fixture command is running."""
+    bench.poll()
     bench.add(t="hook", command=command)
     with (bench.directory / "hooks.log").open("a", encoding="utf-8") as log:
         log.write(f"{command!r}\n")
