@@ -1,0 +1,30 @@
+{
+  "artifacts": [
+    {
+      "bytes": 1457414,
+      "name": "bench.jsonl",
+      "sha256": "f055e4b93e21ea4b189abdae6b7a4caf5a103579dbc7dcc750c71049076c1b20"
+    }
+  ],
+  "flashed": false,
+  "gate": "H2",
+  "ports": [
+    "COM3",
+    "COM4"
+  ],
+  "reasons": [],
+  "recorded_at": "2026-11-25T21:20:49+00:00",
+  "revisions": {
+    "checkout": {
+      "commit": "50506f8f06ab54dd6aed2a485345d0a036832e79",
+      "dirty": true,
+      "dirty_paths": [
+        "M rig/esp/soaks/s31_32ue_streaming.py"
+      ]
+    },
+    "hil_version": 0,
+    "toolchain_lock_sha256": "9ab42ddf52096f0b58f89de91c9ae08ceac680eede3da85270eac5b3681c72db"
+  },
+  "schema": 1,
+  "verdict": "PASS"
+}

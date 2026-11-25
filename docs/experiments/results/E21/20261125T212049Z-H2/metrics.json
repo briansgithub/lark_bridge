@@ -1,0 +1,115 @@
+{
+  "clean/output": {
+    "dec_err": 0,
+    "hb_rx": 1201,
+    "proto_err": 0,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "clean/s31": {
+    "dec_err": 0,
+    "hb_rx": 1188,
+    "proto_err": 0,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "output/uart_cobs": {
+    "dec_err": 1,
+    "dup": 0,
+    "exec": 0,
+    "proto_err": 1,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "output/uart_crc": {
+    "dec_err": 1,
+    "dup": 0,
+    "exec": 0,
+    "proto_err": 1,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "output/uart_overlong": {
+    "dec_err": 1,
+    "dup": 0,
+    "exec": 0,
+    "proto_err": 1,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "output/uart_version": {
+    "dec_err": 1,
+    "dup": 0,
+    "exec": 0,
+    "proto_err": 1,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "post/output": {
+    "dec_err": 0,
+    "hb_rx": 61,
+    "proto_err": 0,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "post/s31": {
+    "dec_err": 0,
+    "hb_rx": 60,
+    "proto_err": 0,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "s31/uart_cobs": {
+    "dec_err": 1,
+    "dup": 0,
+    "exec": 0,
+    "proto_err": 1,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "s31/uart_crc": {
+    "dec_err": 1,
+    "dup": 0,
+    "exec": 0,
+    "proto_err": 1,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "s31/uart_dup": {
+    "dec_err": 0,
+    "dup": 2,
+    "exec": 1,
+    "proto_err": 0,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "s31/uart_overlong": {
+    "dec_err": 1,
+    "dup": 0,
+    "exec": 0,
+    "proto_err": 1,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  },
+  "s31/uart_version": {
+    "dec_err": 1,
+    "dup": 0,
+    "exec": 0,
+    "proto_err": 1,
+    "rel_fail": 0,
+    "sessions": 0,
+    "timeouts": 0
+  }
+}

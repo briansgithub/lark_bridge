@@ -60,8 +60,12 @@ def scenario(bench, args, metrics):
         observe(bench, "output", h2h5.streaming, 60, "output never started streaming")
         bench.wait(10)
         bench.command("output", "fault fifo_window")
+        status_pair = bench.pair("status")
+        periods = {r: status_pair[r].get("stats_period_ms", 1000) for r in ("s31", "output")}
         start = len(bench.records)
-        before = bench.pair("status")
+        before = bench.pair("stats")
+        for r, period in periods.items():
+            before[r].setdefault("stats_period_ms", period)
         begin = time.monotonic()
         tap_before = bench.command("output", "tap a2dp_out")
         require(tap_before["ok"], "could not read a consistent downstream PCM tap")
@@ -71,7 +75,9 @@ def scenario(bench, args, metrics):
             current = bench.command("output", "tap a2dp_out")
             check_tap(tap, current)
             tap = current
-        after = bench.pair("status")
+        after = bench.pair("stats")
+        for r, period in periods.items():
+            after[r].setdefault("stats_period_ms", period)
         records = bench.records[start:]
         evidence = h2h5.Evidence(records)
         for role in ("s31", "output"):

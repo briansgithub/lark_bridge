@@ -112,7 +112,8 @@ post_seconds = 30
 hb_tolerance = 0.02
 hb_gap_ms = 1000
 coverage = 0.98
-status = "PENDING"
+status = "PASS"
+evidence = "docs/experiments/results/E21/20261125T212049Z-H2 (hil.py run H2 PASS: 10-min clean hb_rx=1188/1201, 0 timeouts/dec_err/proto_err, 8/8 malformed frame faults rejected dec_err=1 proto_err=1, uart_dup exec=1 dup=2, 30s post clean)"
 
 [gates.harness]
 title = "Six-wire harness fitted and continuity-checked (wiring.md)"
@@ -219,7 +220,8 @@ needs = ["H5", "H7", "pixel-harness"]
 human = false
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PASS"
+evidence = "../lark_bridge-evidence/20261125-auto-gates/h8-pass/summary.json & h8-fake-car.wav (s31_32ue_streaming PASS 60.5s + earlier 180.6s stream: under=0 over=0 i2s_err=0, 20,673/62,012 nonzero output blocks; mid-stream Pi fake-car stereo WAV 48kHz/2ch rms_l=73.2 rms_r=36.4 0.0% clip)"
 
 [gates.pixel-harness]
 title = "Pixel harness app installed and granted (rig/esp/pixel-harness)"
