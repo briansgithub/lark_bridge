@@ -136,3 +136,28 @@ docker run --rm -v "$PWD/firmware:/work/firmware" -w /work/firmware/s31 \
    continuity, RMS and frequency against the controlled Lark stimulus.
    Both D5 trials should still give a silence baseline.
    [Harness H9 measurement instructions](../../rig/esp/pixel-harness/README.md#h9-uplink-measurement)
+
+## Hardware trials, 19:00 ET
+
+The prebuilt images matched the hashes above. Each was app-only flashed to
+COM3 with the 32UE on `h5-fix3-test`. Each got a 20-second boot capture,
+then three self-managed harness calls on one boot. Every call used
+`record_uplink`, a Bluetooth route, 16 kHz HFP audio and a 15-second voice
+stimulus. Merged harness APK `06d68960...`.
+
+| Trial | Result |
+|---|---|
+| FD with PSRAM (`55c5e00d...`) | **Constructor fixed.** Octal PSRAM detected (AP, 128 Mbit) and registered, about 16.7 MB free. `aec_create_from_config` succeeded on all 3 calls (mode 5, 512 samples/frame). No fault, no reboot, keep-alive restored afterward. Uplink at the Pixel was digital silence with publishing locked: RMS 0–0.9, about 287k frames per call. **Processing did not stabilise.** Every call logged `AEC input starved; restarting fail-closed pipeline` every 150 ms to 1.2 s, so the 10 s processed-frame telemetry never printed. |
+| Linear only, no PSRAM (`7009e1c9...`) | **Fail.** Create logged mode 0 with no PSRAM. `dl rfft` still could not allocate its FFT table, and the AEC frame-buffer allocation failed on calls 1 and 2. During call 3 the S31 hit a Core 0 store access fault and rebooted. The script restored `213deadc858d-test` (AEC off). It then booted once, cleanly. |
+
+Next for D5:
+- Keep FD with PSRAM as the candidate.
+- Debug the starvation. The worker restarts when the 48 kHz Lark mic ring
+  or the 16 kHz HFP reference ring lacks one 512-sample frame within 125 ms
+  of the last processed frame.
+- Log per-frame `aec_process` time and both ring fills at the restart.
+  FD processing out of 40 MHz PSRAM may exceed the 32 ms frame budget.
+- The linear path also needs PSRAM, or some other home for the `dl_fft`
+  tables.
+
+Evidence: `../lark_bridge-evidence/20261124-d5-trials/fd/` and `linear/`.
