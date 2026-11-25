@@ -54,6 +54,8 @@
                 <action android:name="dev.larkbridge.harness.STOP_STIMULUS" />
                 <action android:name="dev.larkbridge.harness.SET_ROUTE" />
                 <action android:name="dev.larkbridge.harness.STATUS" />
+                <action android:name="dev.larkbridge.harness.MEDIA_SESSION_START" />
+                <action android:name="dev.larkbridge.harness.MEDIA_SESSION_STOP" />
             </intent-filter>
         </receiver>
 

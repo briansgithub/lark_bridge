@@ -43,6 +43,8 @@ final class Harness {
     static final String STOP_STIMULUS = PREFIX + "STOP_STIMULUS";
     static final String SET_ROUTE = PREFIX + "SET_ROUTE";
     static final String STATUS = PREFIX + "STATUS";
+    static final String MEDIA_SESSION_START = PREFIX + "MEDIA_SESSION_START";
+    static final String MEDIA_SESSION_STOP = PREFIX + "MEDIA_SESSION_STOP";
 
     static final String EXTRA_ASSET = "asset";   // PLAY_STIMULUS: file under assets/stimulus/
     static final String EXTRA_LOOPS = "loops";   // PLAY_STIMULUS: repeat count, default 1
@@ -94,6 +96,10 @@ final class Harness {
                 setRoute(tag, intent.getStringExtra(EXTRA_ROUTE));
             } else if (STATUS.equals(action)) {
                 status(app, tag);
+            } else if (MEDIA_SESSION_START.equals(action)) {
+                MediaKeySession.start(app, tag);
+            } else if (MEDIA_SESSION_STOP.equals(action)) {
+                MediaKeySession.stop(tag);
             } else {
                 log("error", tag, "error", "unknown_action", "action", action);
             }
