@@ -286,8 +286,8 @@ needs = ["H11"]
 human = false
 resets = true
 reducer = "manual"
-status = "FAIL"
-evidence = "firmware/qual/overnight-report-2026-11-25.md (h14_adapter_cycles on 9ccbd0bd53c9-test: cycles 1-2 recovered in 1.66s/1.63s; cycle 3 hit D4 BT_L2CAP HOLD TIMEOUT / rcvd ACL for unknown handle)"
+status = "PASS"
+evidence = "firmware/qual/overnight-report-2026-11-25.md (D4 fixed in c73c95f; h14_adapter_cycles PASS 10/10 in 2.06-7.03s in ../lark_bridge-evidence/20261125-d4-fix-clean/h14 plus 10/10 in 1.41-3.48s in 20261125-d4-fix/h14; live bt_recycle recovery PASS in 11.08s; 0 stalls, 0 ACL collisions)"
 
 [gates.H15]
 title = "Repetition, ten cycles"

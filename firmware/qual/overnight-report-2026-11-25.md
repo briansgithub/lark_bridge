@@ -58,20 +58,26 @@
 - **Evidence**: `../lark_bridge-evidence/20261125-h6-p9/s31_console.log`
 - **Status**: USB host debounce/recovery margins (`a0d7599`) + Bug 1 fix (`9ccbd0b`) are both flashed on S31 (`9ccbd0bd53c9-test`). Ready for Brian's 4-minute P9 real-Lark re-test (`py -3 firmware/rig/p9_manual_h6.py`).
 
-### Open Bug 3 (H14 / D4): Pixel BT Adapter Cycle 3 Bluedroid Reconnect Hang
-- **Evidence**: `../lark_bridge-evidence/20261125-uac-fix-retest/h14/`
-- **Result**: Cycles 1 & 2 recovered cleanly in `1.66 s` and `1.63 s`; cycle 3 hit the known **D4** Bluedroid collision (`BT_L2CAP: L2CAP HOLD TIMEOUT`, `rcvd ACL for unknown handle:2049`, `BT_BTC: No Link At All`, 10 s cancel/retry loop).
+### Bug 3 (FIXED & VERIFIED 20/20 in `c73c95f`): H14 / D4 Pixel BT Adapter Cycle Bluedroid Reconnect Hang
+- **Root cause**: `bt_gateway.c:reconnect_worker` fired HFP and A2DP reconnect requests simultaneously 620 ms after disconnect, started backoff before the 5.12 s BT page timeout finished, and reset `backoff_ms` back to `1000 ms` inside `cancel_stalled_request()` — keeping S31 paging at ~83% duty cycle until an outgoing `Create_Connection` collided with the Pixel's incoming ACL (`0x0b Conn Exists` / `L2CAP got conn_comp in bad state`), stranding an orphaned ACL handle in the BT controller.
+- **Fix (`c73c95f`)**:
+  - Added 6 s post-disconnect quiet hold (`S31_BT_RECONNECT_DISCONNECT_HOLD_MS = 6000`), serialized single-profile outbound connects (`s31_reconnect_choose_profile`), and scheduled exponential backoff (`6 s -> 12 s -> 24 s -> 30 s`) *after* page completion/cancellation without resetting on stalls.
+  - Added GAP `ESP_BT_GAP_ACL_CONN_CMPL_STAT_EVT` (`0x0b`) tracking and a bounded self-healing Bluedroid-only recycle (`recycle_bt_stack()`, which triggers `HCI_Reset` on re-enable without calling `esp_bt_controller_disable()` — live silicon probing caught that `esp_bt_controller_disable()` leaves ESP32-S31 rev0 `libbtbb` in `OLC: resched failed:1`), plus `-test`-only `fault bt_recycle` and expanded `s31_reconnect_timer_tests` (9/9 host C tests PASS).
+- **Hardware verification (`../lark_bridge-evidence/20261125-d4-fix-clean/` & `20261125-d4-fix/`, clean AEC-off S31 build of `c73c95f`)**:
+  - **H14 Pixel BT Adapter Cycles**: **PASS 10/10** (`2.06–7.03 s` recovery; plus pre-commit **10/10** in `1.41–3.48 s` = **20/20** consecutive cycles, `0` stalls, `0` `0x0b` collisions, `0` reboots).
+  - **Live `fault bt_recycle` Fallback**: **PASS** — full HFP+A2DP+AVRCP recovery in `11.08 s`, `boots: {s31: 0, output: 0}`, `heap.free: 75748 -> 75700 B`, UAC uninterrupted (`rx 825 -> 1752`, `0` errors).
+  - **10-Cycle Pico UAC Hot-Plug Sanity (clean AEC-off S31 build)**: **PASS 10/10** (`disc=10`, `opens=11`, `read_err=0`, `xfer_err=0`, `lost=0`, `boots.s31=0`, `tap lark_in` RMS `2317`).
 
-### Minor Harness / Rig Notes
-1. **`cold_boot.py`**: Hardcodes MP43247 MAC (`c9:5c:fd:6e:28:46`), so cycle 1 rejected `b8:27:eb:43:8d:51` (`LarkRig Fake Car`). Parameterize `--expected-peer` before running overnight cold-boot soaks against the fake car.
-2. **`fake-car` reconnect after 32UE reboot**: `fake-car pair-accept` leaves `hci0` `Connectable: no`; run `sudo btmgmt --index 0 connectable on` on `larkbridge-rig` so 32UE auto-reconnects after reboots.
-3. **S31 `sdkconfig` hygiene**: Note `9ccbd0bd53c9-test` was incrementally built atop the earlier `sdkconfig.aec-fd` `sdkconfig` (so `CONFIG_LARKBRIDGE_S31_AEC_ENGINE=y` with `publish=0` and PSRAM enabled); run `build_firmware.py --no-pull --image test s31` when regenerating a clean AEC-off image.
+### Minor Harness / Rig Notes (ALL FIXED & VERIFIED in `c73c95f`)
+1. **`cold_boot.py` & `overnight_soak.py`**: Parameterized `--expected-peer` (defaulting to MP43247 or `rig/inventory.toml` `rig_bt_addr`). **Verified live** in `../lark_bridge-evidence/20261125-d4-fix-clean/coldboot/cycle1/result.json`: Shelly 1 s cold boot + S31 reset recovered `uart_link` (`11.27 s`), `pixel` (`14.76 s`), `speaker_connected` (`b8:27:eb:43:8d:51` `LarkRig Fake Car`, `34.50 s`), `stream` (`35.85 s`), and **60.31 s H5 PASS** (`fifo=3229..4758`, `max_abs_ppm=88`, `under=0`, `over=0`, `i2s_err=0`, `timeouts_window=0`).
+2. **`fake-car.sh`, `bt-pin.sh`, and `50-larkbridge-fake-car.pipewire.conf`**: Re-asserted `btmgmt connectable on` (using the BlueZ 5.82 `(sleep 0.5) | timeout 5` pipe-EOF workaround after catching a systemd stdin hang) in `fake-car pair-accept` and `bt-pin.sh`, and set `priority.session = 2000` on `larkbridge_fake_car`. Verified **47/47** Pi-image unit tests PASS, deployed to `larkbridge-rig`, `larkbridge-rig-bt-pin.service` restarted cleanly, and `rig-selftest` **13/13 PASS**.
+3. **S31 `sdkconfig` hygiene**: Removed scratch `firmware/s31/build-aec-fd/` and regenerated clean AEC-off `sdkconfig` from `sdkconfig.defaults;sdkconfig.test` via `build_firmware.py --no-pull --image test s31` (verified `aec_publish: 0` in boot JSON; note the incremental `idf.py reconfigure build` after committing `c73c95f` kept cached `-DLARKBRIDGE_VERSION=9982370cb44f-dirty-test` in `CMakeCache.txt` while compiling exact `c73c95f` sources).
 
 ---
 
 ## Current Bench State (Safe & Idle)
-- **Shelly plug (`192.168.33.1`)**: ON (`output: true`, `5.5 W`).
+- **Shelly plug (`192.168.33.1`)**: ON (`output: true`, `7.8 W`).
 - **Task Scheduler (`LarkBridgeOvernightWatchdog`)**: Deleted cleanly.
-- **S31 (`COM3`)**: `9ccbd0bd53c9-test` (Pixel 7a bond intact, Pico UAC streaming cleanly).
+- **S31 (`COM3`)**: Clean AEC-off test image from `c73c95f` (Pixel 7a bond intact, Pico UAC streaming cleanly).
 - **32UE (`COM4`)**: `aa745ab743fa-test` (bonded to `LarkRig Fake Car` `b8:27:eb:43:8d:51`; MP43247 unpaired).
-- **Local git commits (unpushed)**: `1245c3f`, `16378dc`, `dd5074b`, `830ee1f`, `a0d7599`, `aa745ab`, `b8132e1`, `9ccbd0b`, `ef9183f`, `8a13cb9` on `claude/esp32-wireless-port`.
+- **Local git commits (unpushed)**: `1245c3f`..`c73c95f` (+ qual doc update) on `claude/esp32-wireless-port`.
