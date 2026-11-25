@@ -111,6 +111,12 @@ whenever the S31 is off.
 The Pi reflashes the Pico over SWD with OpenOCD, as proven in R15 of the bring-up report. No
 BOOTSEL press or unplugging is needed.
 
+> **Wiring rule (SWD crosstalk):** Never run `SWCLK` and `SWDIO` side-by-side in a flat ribbon
+> cable behind the 1 kΩ series resistors. The Pico's fast `SWDIO` falling edge (`1 → 0`) couples
+> across parallel ribbon capacitance into the high-impedance `1 kΩ`-isolated `SWCLK` line and
+> double-clocks the RP2040 regardless of SWD clock frequency. Keep `SWCLK` and `SWDIO` physically
+> peeled apart and routed separately (see `firmware/qual/rig-bringup-2026-11-25.md`).
+
 ### 3.5 Acoustic fixture (Stage E, T4 part of H10)
 
 - Mount the Lark transmitter on a stand at a fixed, labeled position.
