@@ -48,7 +48,8 @@
 #define AEC_LAG_HISTORY_BINS 1024U /* 2048 ms window */
 #define AEC_LAG_MAX_SHIFT 448 /* 0..896 ms total acoustic delay search */
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
-#define AEC_TEST_DIAG_MS 2000U
+#define AEC_TEST_DIAG_SAMPLES 32000U /* Exact 2.000 s at 16 kHz (125 x 256 frames) */
+#define AEC_TEST_NEAR_BINS 12U
 #endif
 
 #ifdef CONFIG_LARKBRIDGE_S31_AEC_LINEAR_ONLY
@@ -114,12 +115,19 @@ typedef struct {
     int pending_delay_ms;
     uint8_t pending_delay_hits;
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
-    uint32_t last_diag_ms;
     uint64_t diag_ref_sq;
     uint64_t diag_mic_sq;
+    uint64_t diag_echo_sq;
+    uint64_t diag_near_sq;
     uint64_t diag_out_sq;
     uint32_t diag_samples;
     uint32_t diag_clip_samples;
+    uint32_t near_sample_idx;
+    uint32_t noise_rng;
+    float noise_lp1;
+    float noise_lp2;
+    float diag_iq_re[AEC_TEST_NEAR_BINS];
+    float diag_iq_im[AEC_TEST_NEAR_BINS];
     int16_t loop_delay[256];
 #endif
 } aec_worker_t;
@@ -130,8 +138,10 @@ static atomic_int s_test_delay_ms = CONFIG_LARKBRIDGE_S31_AEC_REFERENCE_DELAY_MS
 static atomic_bool s_test_auto_delay = true;
 static atomic_int s_test_mode = (int)AEC_ENGINE_MODE;
 static atomic_int s_test_filter_len = AEC_FILTER_LENGTH;
-static atomic_int s_test_nlp_level = (int)AEC_NLP_LEVEL_AGGR;
+static atomic_int s_test_nlp_level = (int)AEC_NLP_LEVEL_NORMAL;
 static atomic_int s_test_drift_ppm = 0;
+static atomic_int s_test_near_rms = 0;
+static atomic_int s_test_noise_rms = 0;
 static atomic_bool s_test_loopback = false;
 #endif
 
@@ -208,9 +218,17 @@ static void release_engine(aec_worker_t *worker)
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
     worker->diag_ref_sq = 0U;
     worker->diag_mic_sq = 0U;
+    worker->diag_echo_sq = 0U;
+    worker->diag_near_sq = 0U;
     worker->diag_out_sq = 0U;
     worker->diag_samples = 0U;
     worker->diag_clip_samples = 0U;
+    worker->near_sample_idx = 0U;
+    worker->noise_rng = 0x2468ACE1U;
+    worker->noise_lp1 = 0.0f;
+    worker->noise_lp2 = 0.0f;
+    memset(worker->diag_iq_re, 0, sizeof(worker->diag_iq_re));
+    memset(worker->diag_iq_im, 0, sizeof(worker->diag_iq_im));
     memset(worker->loop_delay, 0, sizeof(worker->loop_delay));
 #endif
 }
@@ -238,7 +256,7 @@ static bool start_engine(aec_worker_t *worker)
         .sample_rate = AEC_SAMPLE_RATE_HZ,
         .caps = aec_heap_caps(),
         .mode = AEC_ENGINE_MODE,
-        .nlp_level = AEC_NLP_LEVEL_AGGR,
+        .nlp_level = AEC_NLP_LEVEL_NORMAL,
     };
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
     config.mode = (aec_mode_t)atomic_load_explicit(&s_test_mode, memory_order_acquire);
@@ -318,6 +336,11 @@ static bool start_engine(aec_worker_t *worker)
     worker->last_frame_ms = now_ms();
     worker->last_progress_ms = worker->last_frame_ms;
     worker->last_delay_track_ms = worker->last_frame_ms;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    worker->noise_rng = 0x2468ACE1U;
+    worker->noise_lp1 = 0.0f;
+    worker->noise_lp2 = 0.0f;
+#endif
     ESP_LOGI(TAG, "ESP-SR AEC active: %u samples/frame, init_delay=%d ms, publish=%d",
              (unsigned)worker->frame_samples,
              ref_delay_ms,
@@ -481,9 +504,117 @@ static void track_acoustic_delay(aec_worker_t *worker, uint32_t current_ms)
 }
 
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
+static const float s_near_base_hz[4] = {300.0f, 625.0f, 1175.0f, 2125.0f};
+static const float s_near_weights[4] = {1.00f, 0.85f, 0.65f, 0.40f};
+static const float s_near_bin_hz[AEC_TEST_NEAR_BINS] = {
+    297.5f, 300.0f, 302.5f,
+    622.5f, 625.0f, 627.5f,
+    1172.5f, 1175.0f, 1177.5f,
+    2122.5f, 2125.0f, 2127.5f,
+};
+
+static void inject_test_mic_signals(aec_worker_t *worker)
+{
+    const size_t n = worker->frame_samples;
+    const int near_rms = atomic_load_explicit(&s_test_near_rms, memory_order_acquire);
+    const int noise_rms = atomic_load_explicit(&s_test_noise_rms, memory_order_acquire);
+
+    for (size_t i = 0; i < n; ++i) {
+        int32_t raw = worker->mic_16k_mono[i];
+        worker->diag_echo_sq += (uint64_t)(raw * raw);
+    }
+    if (near_rms <= 0 && noise_rms <= 0) {
+        return;
+    }
+
+    const float two_pi_over_fs = 6.28318530718f / (float)AEC_SAMPLE_RATE_HZ;
+    const float near_scale = (float)near_rms / 0.71211f;
+    const float noise_scale = (float)noise_rms / 0.09379f;
+
+    float mod_c = 1.0f, mod_s = 0.0f, mod_dc = 1.0f, mod_ds = 0.0f;
+    float c[4] = {0}, s[4] = {0}, dc[4] = {0}, ds[4] = {0};
+    if (near_rms > 0) {
+        uint32_t idx0 = worker->near_sample_idx;
+        float ph_mod = two_pi_over_fs * 2.5f * (float)idx0;
+        mod_c = cosf(ph_mod);
+        mod_s = sinf(ph_mod);
+        mod_dc = cosf(two_pi_over_fs * 2.5f);
+        mod_ds = sinf(two_pi_over_fs * 2.5f);
+        for (int k = 0; k < 4; ++k) {
+            float ph = two_pi_over_fs * s_near_base_hz[k] * (float)idx0;
+            c[k] = cosf(ph);
+            s[k] = sinf(ph);
+            dc[k] = cosf(two_pi_over_fs * s_near_base_hz[k]);
+            ds[k] = sinf(two_pi_over_fs * s_near_base_hz[k]);
+        }
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+        float add = 0.0f;
+        if (noise_rms > 0) {
+            uint32_t x = worker->noise_rng;
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            worker->noise_rng = x;
+            float u = ((float)(x >> 8) * (1.0f / 8388608.0f)) - 1.0f;
+            worker->noise_lp1 += 0.10f * (u - worker->noise_lp1);
+            worker->noise_lp2 += 0.10f * (worker->noise_lp1 - worker->noise_lp2);
+            add += worker->noise_lp2 * noise_scale;
+        }
+        if (near_rms > 0) {
+            float env = 0.6f + 0.4f * mod_c;
+            float chord = 0.0f;
+            for (int k = 0; k < 4; ++k) {
+                chord += s_near_weights[k] * s[k];
+                float nc = c[k] * dc[k] - s[k] * ds[k];
+                float ns = s[k] * dc[k] + c[k] * ds[k];
+                c[k] = nc;
+                s[k] = ns;
+            }
+            float nmc = mod_c * mod_dc - mod_s * mod_ds;
+            float nms = mod_s * mod_dc + mod_c * mod_ds;
+            mod_c = nmc;
+            mod_s = nms;
+            float near_f = env * chord * near_scale;
+            int32_t near_i = (int32_t)lrintf(near_f);
+            worker->diag_near_sq += (uint64_t)(near_i * near_i);
+            add += near_f;
+        }
+        int32_t v = (int32_t)worker->mic_16k_mono[i] + (int32_t)lrintf(add);
+        if (v > INT16_MAX) {
+            v = INT16_MAX;
+        } else if (v < INT16_MIN) {
+            v = INT16_MIN;
+        }
+        worker->mic_16k_mono[i] = (int16_t)v;
+    }
+    if (near_rms > 0) {
+        worker->near_sample_idx += (uint32_t)n;
+    }
+}
+
 static void record_h10_diag(aec_worker_t *worker, uint32_t current_ms)
 {
-    size_t n = worker->frame_samples;
+    (void)current_ms;
+    const size_t n = worker->frame_samples;
+    const uint32_t idx0 = worker->diag_samples;
+    const bool track_near = (worker->diag_near_sq > 0U) ||
+                            (atomic_load_explicit(&s_test_near_rms, memory_order_acquire) > 0);
+    const float two_pi_over_fs = 6.28318530718f / (float)AEC_SAMPLE_RATE_HZ;
+    float bc[AEC_TEST_NEAR_BINS];
+    float bs[AEC_TEST_NEAR_BINS];
+    float bdc[AEC_TEST_NEAR_BINS];
+    float bds[AEC_TEST_NEAR_BINS];
+    if (track_near) {
+        for (size_t b = 0; b < AEC_TEST_NEAR_BINS; ++b) {
+            float ph = two_pi_over_fs * s_near_bin_hz[b] * (float)idx0;
+            bc[b] = cosf(ph);
+            bs[b] = sinf(ph);
+            bdc[b] = cosf(two_pi_over_fs * s_near_bin_hz[b]);
+            bds[b] = sinf(two_pi_over_fs * s_near_bin_hz[b]);
+        }
+    }
     for (size_t i = 0; i < n; ++i) {
         int32_t r = worker->reference_delayed_16k_mono[i];
         int32_t m = worker->mic_16k_mono[i];
@@ -494,14 +625,23 @@ static void record_h10_diag(aec_worker_t *worker, uint32_t current_ms)
         if (o >= INT16_MAX || o <= INT16_MIN) {
             ++worker->diag_clip_samples;
         }
+        if (track_near) {
+            float of = (float)o;
+            for (size_t b = 0; b < AEC_TEST_NEAR_BINS; ++b) {
+                worker->diag_iq_re[b] += of * bc[b];
+                worker->diag_iq_im[b] += of * bs[b];
+                float nc = bc[b] * bdc[b] - bs[b] * bds[b];
+                float ns = bs[b] * bdc[b] + bc[b] * bds[b];
+                bc[b] = nc;
+                bs[b] = ns;
+            }
+        }
     }
     worker->diag_samples += (uint32_t)n;
 
-    if ((uint32_t)(current_ms - worker->last_diag_ms) < AEC_TEST_DIAG_MS ||
-        worker->diag_samples == 0U) {
+    if (worker->diag_samples < AEC_TEST_DIAG_SAMPLES) {
         return;
     }
-    worker->last_diag_ms = current_ms;
     double ref_rms = sqrt((double)worker->diag_ref_sq / (double)worker->diag_samples);
     double mic_rms = sqrt((double)worker->diag_mic_sq / (double)worker->diag_samples);
     double out_rms = sqrt((double)worker->diag_out_sq / (double)worker->diag_samples);
@@ -509,22 +649,59 @@ static void record_h10_diag(aec_worker_t *worker, uint32_t current_ms)
                          ? 20.0 * log10(mic_rms / out_rms)
                          : (mic_rms >= 20.0 ? 60.0 : 0.0);
 
-    ESP_LOGI(TAG,
-             "H10_AEC ref_rms=%.1f mic_rms=%.1f out_rms=%.1f erle_db=%.2f "
-             "clip=%lu/%lu res_lag_ms=%d corr=%.2f int_free=%u int_lrg=%u delay_ms=%u",
-             ref_rms, mic_rms, out_rms, erle_db,
-             (unsigned long)worker->diag_clip_samples,
-             (unsigned long)worker->diag_samples,
-             worker->last_res_lag_ms,
-             (double)worker->last_lag_corr,
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-             (unsigned)(worker->ref_delay_samples / (AEC_SAMPLE_RATE_HZ / 1000U)));
+    if (worker->diag_near_sq > 0U) {
+        double e_out_near = 0.0;
+        for (size_t b = 0; b < AEC_TEST_NEAR_BINS; ++b) {
+            double re = (double)worker->diag_iq_re[b];
+            double im = (double)worker->diag_iq_im[b];
+            e_out_near += (2.0 / (double)worker->diag_samples) * (re * re + im * im);
+        }
+        double e_out_total = (double)worker->diag_out_sq;
+        double e_near_in = (double)worker->diag_near_sq;
+        double e_echo_in = (double)worker->diag_echo_sq;
+        double e_res = e_out_total - e_out_near;
+        if (e_res < 1.0) {
+            e_res = 1.0;
+        }
+        double near_rms = sqrt(e_near_in / (double)worker->diag_samples);
+        double near_gain_db = 10.0 * log10(fmax(e_out_near, 1.0) / fmax(e_near_in, 1.0));
+        double dt_snr_db = 10.0 * log10(fmax(e_out_near, 1.0) / e_res);
+        double dt_erle_db = 10.0 * log10(fmax(e_echo_in, 1.0) / e_res);
+        ESP_LOGI(TAG,
+                 "H10_AEC ref_rms=%.1f mic_rms=%.1f out_rms=%.1f erle_db=%.2f "
+                 "clip=%lu/%lu res_lag_ms=%d corr=%.2f int_free=%u int_lrg=%u delay_ms=%u "
+                 "near_rms=%.1f near_gain_db=%.2f dt_snr_db=%.2f dt_erle_db=%.2f",
+                 ref_rms, mic_rms, out_rms, erle_db,
+                 (unsigned long)worker->diag_clip_samples,
+                 (unsigned long)worker->diag_samples,
+                 worker->last_res_lag_ms,
+                 (double)worker->last_lag_corr,
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)(worker->ref_delay_samples / (AEC_SAMPLE_RATE_HZ / 1000U)),
+                 near_rms, near_gain_db, dt_snr_db, dt_erle_db);
+    } else {
+        ESP_LOGI(TAG,
+                 "H10_AEC ref_rms=%.1f mic_rms=%.1f out_rms=%.1f erle_db=%.2f "
+                 "clip=%lu/%lu res_lag_ms=%d corr=%.2f int_free=%u int_lrg=%u delay_ms=%u",
+                 ref_rms, mic_rms, out_rms, erle_db,
+                 (unsigned long)worker->diag_clip_samples,
+                 (unsigned long)worker->diag_samples,
+                 worker->last_res_lag_ms,
+                 (double)worker->last_lag_corr,
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+                 (unsigned)(worker->ref_delay_samples / (AEC_SAMPLE_RATE_HZ / 1000U)));
+    }
     worker->diag_ref_sq = 0U;
     worker->diag_mic_sq = 0U;
+    worker->diag_echo_sq = 0U;
+    worker->diag_near_sq = 0U;
     worker->diag_out_sq = 0U;
     worker->diag_samples = 0U;
     worker->diag_clip_samples = 0U;
+    memset(worker->diag_iq_re, 0, sizeof(worker->diag_iq_re));
+    memset(worker->diag_iq_im, 0, sizeof(worker->diag_iq_im));
 }
 #endif
 
@@ -696,6 +873,9 @@ static void aec_task(void *argument)
             release_engine(&worker);
             continue;
         }
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+        inject_test_mic_signals(&worker);
+#endif
         track_acoustic_delay(&worker, current_ms);
         {
             const uint32_t dmask = AEC_REF_DELAY_CAP_SAMPLES - 1U;
@@ -843,6 +1023,24 @@ bool s31_aec_test_fault(const char *kind)
         atomic_store_explicit(&s_test_filter_len, (int)flen, memory_order_release);
         s31_audio_router_reset_aec_stream();
         ESP_LOGI(TAG, "TEST: set AEC filter_length=%ld and reset AEC stream", flen);
+        return true;
+    }
+    if (strncmp(kind, "aec_near", 8U) == 0 && kind[8] != '\0') {
+        long rms = strtol(kind + 8, &end, 10);
+        if (end == NULL || *end != '\0' || rms < 0L || rms > 2000L) {
+            return false;
+        }
+        atomic_store_explicit(&s_test_near_rms, (int)rms, memory_order_release);
+        ESP_LOGI(TAG, "TEST: set AEC near-end speech rms=%ld", rms);
+        return true;
+    }
+    if (strncmp(kind, "aec_noise", 9U) == 0 && kind[9] != '\0') {
+        long rms = strtol(kind + 9, &end, 10);
+        if (end == NULL || *end != '\0' || rms < 0L || rms > 1000L) {
+            return false;
+        }
+        atomic_store_explicit(&s_test_noise_rms, (int)rms, memory_order_release);
+        ESP_LOGI(TAG, "TEST: set AEC car cabin noise rms=%ld", rms);
         return true;
     }
     if (strncmp(kind, "aec_n", 5U) == 0 && kind[5] != '\0') {
