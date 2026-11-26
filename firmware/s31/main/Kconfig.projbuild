@@ -49,13 +49,14 @@ config LARKBRIDGE_S31_EXPERIMENTAL_AEC_UPLINK
 
 config LARKBRIDGE_S31_AEC_REFERENCE_DELAY_MS
     int "Initial acoustic-reference delay compensation (ms)"
-    range 0 950
+    range 0 880
     default 160
     help
-        Delays the microphone stream relative to the HFP downlink reference
-        before AEC processing, compensating for I2S, downstream A2DP, car, and
-        acoustic latency. The value is arrival-day tunable per downstream sink
-        (PSRAM mic/reference rings accommodate up to 950 ms).
+        Initial delay applied to the HFP downlink reference in the PSRAM
+        reference delay line before AEC processing, compensating for I2S,
+        downstream A2DP, car head-unit, and acoustic latency (up to 880 ms).
+        The runtime cross-correlation tracker automatically adjusts this delay
+        when the downstream sink's acoustic path differs or drifts mid-call.
 
 config LARKBRIDGE_TEST_IMAGE
     bool "Build a qualification test image (tone/tap/fault hooks)"

@@ -519,15 +519,18 @@ size_t s31_audio_router_write_aec_output(const uint8_t *pcm, size_t length)
                                                 sizeof(int16_t));
             return written == length - sizeof(int16_t) ? length : written;
         }
-        if (fill < 1024U &&
-            bridge_byte_ring_space(&s_aec_output_ring) >= length + sizeof(int16_t)) {
-            /* SCO TX slightly faster than S31 I2S: pad 1 sample (hold last). */
+        if (fill < 1536U &&
+            bridge_byte_ring_space(&s_aec_output_ring) >= length + 2U * sizeof(int16_t)) {
+            /* SCO TX slightly faster than S31 I2S: pad 1-2 samples (hold last). */
+            size_t pad = fill < 1024U ? 2U : 1U;
             size_t written = write_aligned_ring(&s_aec_output_ring, pcm, length,
                                                 sizeof(int16_t));
             if (written == length) {
-                (void)write_aligned_ring(&s_aec_output_ring,
-                                         pcm + length - sizeof(int16_t),
-                                         sizeof(int16_t), sizeof(int16_t));
+                for (size_t p = 0U; p < pad; ++p) {
+                    (void)write_aligned_ring(&s_aec_output_ring,
+                                             pcm + length - sizeof(int16_t),
+                                             sizeof(int16_t), sizeof(int16_t));
+                }
             }
             return written;
         }
@@ -571,7 +574,7 @@ uint32_t s31_audio_router_fill_hfp_uplink(uint8_t *pcm, uint32_t length)
             memset(pcm + produced_total * sizeof(int16_t), 0,
                    (requested_samples - produced_total) * sizeof(int16_t));
             atomic_fetch_add_explicit(&s_underruns, 1U, memory_order_relaxed);
-            if (++s_uplink_consec_underruns >= 4U) {
+            if (++s_uplink_consec_underruns >= 8U) {
                 s_uplink_consec_underruns = 0U;
                 atomic_store_explicit(&s_uplink_ready, false, memory_order_release);
                 request_aec_reset();
