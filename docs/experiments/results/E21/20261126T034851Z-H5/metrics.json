@@ -1,0 +1,9 @@
+{
+  "fifo_max": 4853,
+  "fifo_min": 3204,
+  "i2s_err": 0,
+  "max_abs_ppm": 184,
+  "over": 0,
+  "seconds": 1800.386,
+  "under": 0
+}

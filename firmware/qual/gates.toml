@@ -134,7 +134,8 @@ reducer = "h2h5"
 link_seconds = 60
 recovery_seconds = 60
 mute_max_ms = 1500
-status = "PENDING"
+status = "PARTIAL"
+evidence = "docs/experiments/results/E21/20261126T031015Z-H3 (3/4 sub-checks PASS: s31/uart_mute 1402ms/4.70s, s31/reboot 1400ms/5.31s, output/uart_mute 1430ms/4.55s; output/reboot accepted new session & recovered in 4.27s faster than 1.4s heartbeat timeout; Pixel & MP43247 bonds + audio preserved)"
 
 [gates.H4]
 title = "I2S electrical/PCM"
@@ -179,7 +180,8 @@ fifo_high = 7168
 ppm_limit = 500
 recording_segment_seconds = 30
 recording_min_amplitude = 0.01
-status = "PENDING"
+status = "PASS"
+evidence = "docs/experiments/results/E21/20261126T034851Z-H5 (hil.py run H5 PASS on MP43247 c9:5c:fd:6e:28:46: 1800.4s continuous stream, fifo 3204-4853 within [1024,7168], max_abs_ppm=184 < 500, under=0 over=0 i2s_err=0)"
 
 [gates.fake-car]
 title = "Rig Pi on its own rig SD card, fake car provisioned (rig/esp/pi-image)"
@@ -299,7 +301,8 @@ needs = ["H14"]
 human = false
 resets = true
 reducer = "manual"
-status = "PENDING"
+status = "PASS"
+evidence = "../lark_bridge-evidence/20261125-h15-ten-cycles/ (10/10 end-to-end cycles PASS on 136be89: A2DP media -> HFP call + active VOIP_LOW_COST NORMAL AEC [mean ERLE 16.02-19.50 dB, peak 20.97 dB] -> teardown, 0 clips, 0 resync/starve/drop, 0 UAC/out_over/i2s errors, 0 Pixel read gaps >= 100 ms; Cycle 5 S31 reboot recovered in 9.51 s, Cycle 10 32UE reboot recovered in 0.5 s)"
 
 [gates.H16]
 title = "Endurance, 3,600 s active call"
@@ -308,7 +311,8 @@ needs = ["H15", "H10"]
 human = false
 resets = false
 reducer = "manual"
-status = "PENDING"
+status = "PARTIAL"
+evidence = "../lark_bridge-evidence/20261125-h16-endurance-3600s/ (full 3600s active-call production soak on 136be89: 0 resets, 0 panics, 1800 active AEC windows mean ERLE 19.21 dB [min 11.00, max 23.96], 0/57,600,000 clips, 0 resync/starve/drop/UAC/32UE errors, 0 bytes warm heap drop on S31 [16,393,196 B total / 81,008 B internal], 32UE heap +8,728 B, 0 Pixel read gaps >= 100 ms [max 35 ms]; 10 brief 2.5 ms s_aec_output_ring burst underruns at t=863/1922/3107 s triggered fix raising s_aec_output_ring band to [96, 176] ms — needs clean 3600s rerun to promote to PASS)"
 
 [gates.H17]
 title = "Vehicle power"

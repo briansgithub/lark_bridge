@@ -1,0 +1,33 @@
+{
+  "artifacts": [
+    {
+      "bytes": 3942765,
+      "name": "bench.jsonl",
+      "sha256": "097ec05e007833b0cb535c3aebf91da1240f425903b29e928ab7ae3cbf94e6d2"
+    }
+  ],
+  "flashed": false,
+  "gate": "H5",
+  "ports": [
+    "COM3",
+    "COM4"
+  ],
+  "reasons": [],
+  "recorded_at": "2026-11-26T03:48:51+00:00",
+  "revisions": {
+    "checkout": {
+      "commit": "136be894d07c4fadb78d56f7910dcbfe1e8df93e",
+      "dirty": true,
+      "dirty_paths": [
+        "M rig/esp/h2h5.py",
+        "?? docs/experiments/results/E21/20261126T031015Z-H3/artifacts/bench.jsonl",
+        "?? docs/experiments/results/E21/20261126T031015Z-H3/metrics.json",
+        "?? docs/experiments/results/E21/20261126T031015Z-H3/result.json"
+      ]
+    },
+    "hil_version": 0,
+    "toolchain_lock_sha256": "9ab42ddf52096f0b58f89de91c9ae08ceac680eede3da85270eac5b3681c72db"
+  },
+  "schema": 1,
+  "verdict": "PASS"
+}

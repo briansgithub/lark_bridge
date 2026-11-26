@@ -506,23 +506,23 @@ size_t s31_audio_router_write_aec_output(const uint8_t *pcm, size_t length)
     if (pcm == NULL || length == 0U || (length % sizeof(int16_t)) != 0U) {
         return 0U;
     }
-    /* Absorb small long-term clock drift between S31 I2S (AEC producer) and
-     * remote BT HFP SCO TX (uplink consumer) without resetting the AEC engine:
-     * gently trim/pad 1 sample (62.5 us) when the post-AEC output FIFO drifts
-     * outside [32 ms, 128 ms] at 16 kHz mono. */
+    /* Absorb small long-term clock drift and Bluedroid eSCO TX bursts between
+     * S31 I2S (AEC producer) and remote BT HFP SCO TX (uplink consumer) without
+     * resetting the AEC engine: gently trim/pad 1-2 samples when the post-AEC
+     * output FIFO drifts outside [96 ms, 176 ms] at 16 kHz mono. */
     if (atomic_load_explicit(&s_uplink_ready, memory_order_acquire)) {
         size_t fill = bridge_byte_ring_count(&s_aec_output_ring);
-        if (fill > 4096U && length > sizeof(int16_t)) {
+        if (fill > 5632U && length > sizeof(int16_t)) {
             /* S31 I2S slightly faster than SCO TX: trim 1 sample. */
             size_t written = write_aligned_ring(&s_aec_output_ring, pcm,
                                                 length - sizeof(int16_t),
                                                 sizeof(int16_t));
             return written == length - sizeof(int16_t) ? length : written;
         }
-        if (fill < 1536U &&
+        if (fill < 3072U &&
             bridge_byte_ring_space(&s_aec_output_ring) >= length + 2U * sizeof(int16_t)) {
             /* SCO TX slightly faster than S31 I2S: pad 1-2 samples (hold last). */
-            size_t pad = fill < 1024U ? 2U : 1U;
+            size_t pad = fill < 2560U ? 2U : 1U;
             size_t written = write_aligned_ring(&s_aec_output_ring, pcm, length,
                                                 sizeof(int16_t));
             if (written == length) {

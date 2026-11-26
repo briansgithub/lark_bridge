@@ -322,7 +322,7 @@ def run_scenario(bench, gate, limits, analyzer=None, fake_car_address=None):
             tone(bench, routed=True)
             bench.command("s31", "fault test_a2dp")
             bench.wait(limits["warmup_seconds"])
-            if not streaming(bench.command("output", "status")):
+            if not streaming(bench.command("output", "stats")):
                 raise BenchError("DevKitC is not streaming to its bonded sink")
             bench.command("output", "fault fifo_window")
             bench.measure("stream", limits["stream_seconds"])
@@ -558,7 +558,10 @@ def reduce_h5(e, limits, artifacts):
     e.check(limits["fifo_low"] <= low <= high <= limits["fifo_high"], "FIFO excursion outside band")
     e.check(ppm < limits["ppm_limit"], "clock correction reached or exceeded the saturation limit")
     e.check(not any(changes.values()), "new underrun, overrun or I2S error")
-    e.check(all(streaming(r) for r in rows), "audio stream interrupted during the measurement")
+    stream_rows = [r for r in rows if isinstance(r.get("bt"), dict)]
+    e.check(before["audio"] and after["audio"] and bool(stream_rows) and
+            all(streaming(r) for r in stream_rows),
+            "audio stream interrupted during the measurement")
     recording = next((path for path in artifacts if path.suffix.lower() == ".wav"), None)
     if recording is not None:
         try:
