@@ -68,3 +68,85 @@ static inline bool s31_reconnect_cooldown_elapsed(bool has_recycled, uint32_t la
 {
     return !has_recycled || (uint32_t)(now_ms - last_recycle_ms) >= S31_BT_RECONNECT_RECYCLE_COOLDOWN_MS;
 }
+
+/* Intentional-disconnect suppression (car UX feature 1). RAM only: a power
+ * cycle starts clean. One user disconnect still auto-reconnects (H14 single
+ * toggle recovery); the second within one connected stretch stops all
+ * outbound pages. The phone can still connect to us, which lifts it. */
+typedef struct {
+    unsigned int strike_count;
+    bool suppressed;
+    bool connected;
+    uint32_t connected_since_ms;
+} s31_reconnect_disconn_tracker_t;
+
+typedef enum {
+    S31_DISCONN_NOT_COUNTED = 0, /* link loss, local recycle, other reasons */
+    S31_DISCONN_STRIKE,          /* counted, reconnect stays enabled */
+    S31_DISCONN_SUPPRESSED,      /* this strike reached the limit */
+} s31_disconn_outcome_t;
+
+static inline void s31_disconn_tracker_init(s31_reconnect_disconn_tracker_t *tracker)
+{
+    tracker->strike_count = 0U;
+    tracker->suppressed = false;
+    tracker->connected = false;
+    tracker->connected_since_ms = 0U;
+}
+
+/* hci_reason is the raw HCI disconnect reason (0x13 = remote user terminated). */
+static inline s31_disconn_outcome_t s31_disconn_tracker_on_disconnect(
+    s31_reconnect_disconn_tracker_t *tracker, uint8_t hci_reason)
+{
+    tracker->connected = false;
+    if (hci_reason != (uint8_t)S31_BT_HCI_REMOTE_USER_TERMINATED || tracker->suppressed) {
+        return S31_DISCONN_NOT_COUNTED;
+    }
+    if (tracker->strike_count < (unsigned int)S31_BT_INTENTIONAL_DISCONN_LIMIT) {
+        ++tracker->strike_count;
+    }
+    if (tracker->strike_count >= (unsigned int)S31_BT_INTENTIONAL_DISCONN_LIMIT) {
+        tracker->suppressed = true;
+        return S31_DISCONN_SUPPRESSED;
+    }
+    return S31_DISCONN_STRIKE;
+}
+
+/* ACL up with the bound phone. While suppressed we never page, so any
+ * connection is phone-initiated: that is the escape hatch. Returns true when
+ * this connection lifted suppression. The strike count is NOT reset here:
+ * disconnect, auto-reconnect 5 s later, disconnect again must reach strike 2. */
+static inline bool s31_disconn_tracker_on_connected(s31_reconnect_disconn_tracker_t *tracker,
+                                                    uint32_t now_ms)
+{
+    bool lifted = tracker->suppressed;
+    tracker->connected = true;
+    tracker->connected_since_ms = now_ms;
+    if (lifted) {
+        tracker->suppressed = false;
+        tracker->strike_count = 0U;
+    }
+    return lifted;
+}
+
+/* Call periodically. A continuous connection of RESET_MS forgives strikes.
+ * Returns true when strikes were just cleared. Wrap-safe. */
+static inline bool s31_disconn_tracker_tick(s31_reconnect_disconn_tracker_t *tracker,
+                                            uint32_t now_ms)
+{
+    if (!tracker->connected || tracker->strike_count == 0U || tracker->suppressed) {
+        return false;
+    }
+    if ((uint32_t)(now_ms - tracker->connected_since_ms) <
+        (uint32_t)S31_BT_INTENTIONAL_DISCONN_RESET_MS) {
+        return false;
+    }
+    tracker->strike_count = 0U;
+    return true;
+}
+
+static inline bool s31_disconn_tracker_reconnect_allowed(
+    const s31_reconnect_disconn_tracker_t *tracker)
+{
+    return !tracker->suppressed;
+}

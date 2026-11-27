@@ -142,6 +142,8 @@ static void add_bt(bridge_json_t *json, bool with_peer)
     bridge_json_bool(json, "hfp_audio", bt.hfp_audio_connected);
     bridge_json_bool(json, "avrcp", bt.avrcp_connected);
     bridge_json_bool(json, "peer_bound", bt.peer_bound);
+    bridge_json_u32(json, "intentional_disconn_count", (uint32_t)bt.intentional_disconn_count);
+    bridge_json_bool(json, "reconnect_suppressed", bt.reconnect_suppressed);
     if (with_peer && bt.peer_bound) {
         char address[18];
         format_address(address, sizeof(address), bt.peer);

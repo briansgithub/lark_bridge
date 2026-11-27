@@ -51,6 +51,9 @@ static atomic_bool s_tap_reset_requested;
 static portMUX_TYPE s_upstream_mux = portMUX_INITIALIZER_UNLOCKED;
 static esp_bd_addr_t s_upstream_bda;
 static bool s_upstream_bda_valid;
+/* Feature 1: intentional-disconnect strikes (RAM only), under s_disconn_mux. */
+static portMUX_TYPE s_disconn_mux = portMUX_INITIALIZER_UNLOCKED;
+static s31_reconnect_disconn_tracker_t s_disconn;
 
 static bool address_matches(const uint8_t first[ESP_BD_ADDR_LEN],
                             const uint8_t second[ESP_BD_ADDR_LEN])
@@ -133,6 +136,73 @@ static bool upstream_allowed(const uint8_t address[ESP_BD_ADDR_LEN])
     portENTER_CRITICAL(&s_upstream_mux);
     allowed = s_upstream_bda_valid && address_matches(s_upstream_bda, address);
     portEXIT_CRITICAL(&s_upstream_mux);
+    return allowed;
+}
+
+static uint8_t hci_reason_of(esp_bt_status_t status)
+{
+    /* Bluedroid reports HCI reasons offset by ESP_BT_STATUS_BASE_FOR_HCI_ERR. */
+    int value = (int)status;
+    if (value >= (int)ESP_BT_STATUS_BASE_FOR_HCI_ERR) {
+        value -= (int)ESP_BT_STATUS_BASE_FOR_HCI_ERR;
+    }
+    return (uint8_t)value;
+}
+
+static void disconn_on_acl_up(const uint8_t address[ESP_BD_ADDR_LEN])
+{
+    if (!upstream_allowed(address)) {
+        return;
+    }
+    portENTER_CRITICAL(&s_disconn_mux);
+    bool lifted = s31_disconn_tracker_on_connected(&s_disconn, now_ms());
+    unsigned int strikes = s_disconn.strike_count;
+    portEXIT_CRITICAL(&s_disconn_mux);
+    if (lifted) {
+        ESP_LOGI(TAG, "phone-initiated reconnect while suppressed: auto-reconnect re-enabled, "
+                      "strikes reset");
+    } else if (strikes != 0U) {
+        ESP_LOGI(TAG, "phone ACL up with %u/%u intentional-disconnect strikes", strikes,
+                 (unsigned int)S31_BT_INTENTIONAL_DISCONN_LIMIT);
+    }
+}
+
+static void disconn_on_acl_down(const uint8_t address[ESP_BD_ADDR_LEN], esp_bt_status_t reason)
+{
+    if (!upstream_allowed(address)) {
+        return;
+    }
+    uint8_t hci = hci_reason_of(reason);
+    portENTER_CRITICAL(&s_disconn_mux);
+    s31_disconn_outcome_t outcome = s31_disconn_tracker_on_disconnect(&s_disconn, hci);
+    unsigned int strikes = s_disconn.strike_count;
+    portEXIT_CRITICAL(&s_disconn_mux);
+    switch (outcome) {
+    case S31_DISCONN_STRIKE:
+        ESP_LOGI(TAG, "intentional disconnect (reason=0x%02x) strike %u/%u; auto-reconnect stays on",
+                 hci, strikes, (unsigned int)S31_BT_INTENTIONAL_DISCONN_LIMIT);
+        break;
+    case S31_DISCONN_SUPPRESSED:
+        ESP_LOGW(TAG, "intentional disconnect (reason=0x%02x) strike %u/%u; reconnect_suppressed=1 "
+                      "until power cycle or phone-initiated connect",
+                 hci, strikes, (unsigned int)S31_BT_INTENTIONAL_DISCONN_LIMIT);
+        break;
+    default:
+        ESP_LOGI(TAG, "phone ACL down reason=0x%02x (not an intentional-disconnect strike)", hci);
+        break;
+    }
+}
+
+static bool disconn_tick_allows_reconnect(uint32_t current_ms)
+{
+    portENTER_CRITICAL(&s_disconn_mux);
+    bool forgiven = s31_disconn_tracker_tick(&s_disconn, current_ms);
+    bool allowed = s31_disconn_tracker_reconnect_allowed(&s_disconn);
+    portEXIT_CRITICAL(&s_disconn_mux);
+    if (forgiven) {
+        ESP_LOGI(TAG, "connection sustained %u ms: intentional-disconnect strikes reset",
+                 (unsigned int)S31_BT_INTENTIONAL_DISCONN_RESET_MS);
+    }
     return allowed;
 }
 
@@ -396,7 +466,12 @@ static void gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *par
         } else if (parameter->acl_conn_cmpl_stat.stat == ESP_BT_STATUS_SUCCESS ||
                    parameter->acl_conn_cmpl_stat.stat == ESP_BT_STATUS_HCI_SUCCESS) {
             atomic_store_explicit(&s_acl_exists_collision, false, memory_order_release);
+            disconn_on_acl_up(parameter->acl_conn_cmpl_stat.bda);
         }
+        break;
+    case ESP_BT_GAP_ACL_DISCONN_CMPL_STAT_EVT:
+        disconn_on_acl_down(parameter->acl_disconn_cmpl_stat.bda,
+                            parameter->acl_disconn_cmpl_stat.reason);
         break;
     default:
         break;
@@ -516,6 +591,9 @@ static esp_err_t recycle_bt_stack(void)
     s_call_present = false;
     s_call_setup = false;
     update_call_route();
+    portENTER_CRITICAL(&s_disconn_mux);
+    s_disconn.connected = false; /* a local recycle is never a strike */
+    portEXIT_CRITICAL(&s_disconn_mux);
     s31_gateway_set_avrcp_connected(false);
     s31_gateway_apply_session_event(BRIDGE_SESSION_EVENT_HFP_DOWN);
     s31_gateway_apply_session_event(BRIDGE_SESSION_EVENT_A2DP_DOWN);
@@ -617,7 +695,18 @@ static void reconnect_worker(void *context)
             continue;
         }
 
-        if (!s31_reconnect_boot_held(&boot_held, started_ms, current_ms) &&
+        bool reconnect_allowed = disconn_tick_allows_reconnect(current_ms);
+        if (!reconnect_allowed) {
+            /* Suppressed: stay connectable (scan mode is untouched) but never page.
+             * Forget any in-flight request bookkeeping so resuming starts clean. */
+            hfp.pending = false;
+            a2dp.pending = false;
+            was_connected = false;
+            partial_grace_armed = false;
+            consecutive_stalls = 0U;
+            backoff_ms = S31_BT_RECONNECT_INITIAL_MS;
+            next_attempt_ms = current_ms + S31_BT_RECONNECT_DISCONNECT_HOLD_MS;
+        } else if (!s31_reconnect_boot_held(&boot_held, started_ms, current_ms) &&
             profiles_ready && upstream_snapshot(peer)) {
             bool hfp_was_pending = hfp.pending;
             bool a2dp_was_pending = a2dp.pending;
@@ -747,6 +836,7 @@ esp_err_t s31_bt_gateway_init(void)
     s_call_present = false;
     s_call_setup = false;
     s_call_route_active = false;
+    s31_disconn_tracker_init(&s_disconn);
     esp_bd_addr_t saved_peer = {0};
     bool have_saved_peer = false;
     esp_err_t result = s31_peer_store_load(saved_peer, &have_saved_peer);
@@ -876,6 +966,10 @@ void s31_bt_get_status(s31_bt_status_t *status)
     status->hfp_profile_ready = atomic_load(&s_hfp_profile_ready);
     status->a2dp_profile_ready = atomic_load(&s_a2dp_profile_ready);
     status->peer_bound = upstream_snapshot(status->peer);
+    portENTER_CRITICAL(&s_disconn_mux);
+    status->intentional_disconn_count = s_disconn.strike_count;
+    status->reconnect_suppressed = s_disconn.suppressed;
+    portEXIT_CRITICAL(&s_disconn_mux);
 }
 
 #if CONFIG_LARKBRIDGE_TEST_IMAGE

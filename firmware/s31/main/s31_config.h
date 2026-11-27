@@ -36,6 +36,11 @@ enum {
      * The reconnect task starts about 0.8 s after boot, so this places the
      * first page about 6 s after reset. */
     S31_BT_RECONNECT_BOOT_HOLD_MS = 5000,
+    /* Two user disconnects (HCI 0x13 from the phone) without a sustained
+     * connection in between mean "stop paging me" until power cycle. */
+    S31_BT_INTENTIONAL_DISCONN_LIMIT = 2,
+    S31_BT_INTENTIONAL_DISCONN_RESET_MS = 120000,
+    S31_BT_HCI_REMOTE_USER_TERMINATED = 0x13,
 };
 
 #define S31_BT_DEVICE_NAME "LarkBridge"

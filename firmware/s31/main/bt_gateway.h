@@ -26,6 +26,8 @@ typedef struct {
     bool hfp_profile_ready;
     bool a2dp_profile_ready;
     bool peer_bound;
+    bool reconnect_suppressed;          /* feature 1: two user disconnects */
+    unsigned int intentional_disconn_count;
     uint8_t peer[6];
 } s31_bt_status_t;
 

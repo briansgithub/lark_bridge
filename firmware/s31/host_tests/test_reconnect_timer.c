@@ -68,5 +68,60 @@ int main(void)
                                           S31_BT_RECONNECT_RECYCLE_COOLDOWN_MS - 1002U));
     CHECK(s31_reconnect_cooldown_elapsed(true, UINT32_MAX - 1000U,
                                          S31_BT_RECONNECT_RECYCLE_COOLDOWN_MS - 1001U));
+
+    /* Feature 1: 2-strike intentional-disconnect suppression. */
+    {
+        s31_reconnect_disconn_tracker_t t;
+        s31_disconn_tracker_init(&t);
+        CHECK(s31_disconn_tracker_reconnect_allowed(&t));
+        CHECK(!s31_disconn_tracker_on_connected(&t, 1000U));
+
+        /* Link loss / local recycle never count. */
+        CHECK(s31_disconn_tracker_on_disconnect(&t, 0x08U) == S31_DISCONN_NOT_COUNTED);
+        CHECK(s31_disconn_tracker_on_disconnect(&t, 0x16U) == S31_DISCONN_NOT_COUNTED);
+        CHECK(t.strike_count == 0U && s31_disconn_tracker_reconnect_allowed(&t));
+
+        /* Strike 1 keeps reconnect enabled (H14 single toggle recovery). */
+        CHECK(!s31_disconn_tracker_on_connected(&t, 2000U));
+        CHECK(s31_disconn_tracker_on_disconnect(&t, 0x13U) == S31_DISCONN_STRIKE);
+        CHECK(t.strike_count == 1U && s31_disconn_tracker_reconnect_allowed(&t));
+
+        /* Auto-reconnect 5 s later must NOT reset the strike count... */
+        CHECK(!s31_disconn_tracker_on_connected(&t, 7000U));
+        CHECK(!s31_disconn_tracker_tick(&t, 7000U + 60000U));
+        CHECK(t.strike_count == 1U);
+        /* ...so the second user disconnect suppresses. */
+        CHECK(s31_disconn_tracker_on_disconnect(&t, 0x13U) == S31_DISCONN_SUPPRESSED);
+        CHECK(t.suppressed && !s31_disconn_tracker_reconnect_allowed(&t));
+        /* Further disconnects while suppressed change nothing. */
+        CHECK(s31_disconn_tracker_on_disconnect(&t, 0x13U) == S31_DISCONN_NOT_COUNTED);
+        CHECK(t.strike_count == 2U);
+        /* Ticks while suppressed never lift it. */
+        CHECK(!s31_disconn_tracker_tick(&t, 900000U));
+        CHECK(t.suppressed);
+
+        /* Escape hatch: phone-initiated connect lifts suppression and strikes. */
+        CHECK(s31_disconn_tracker_on_connected(&t, 1000000U));
+        CHECK(!t.suppressed && t.strike_count == 0U && s31_disconn_tracker_reconnect_allowed(&t));
+    }
+    {
+        /* Sustained 120 s connection forgives a strike (boundary, wrap-safe). */
+        const uint32_t base = UINT32_MAX - 30000U;
+        s31_reconnect_disconn_tracker_t t;
+        s31_disconn_tracker_init(&t);
+        (void)s31_disconn_tracker_on_connected(&t, base);
+        CHECK(s31_disconn_tracker_on_disconnect(&t, 0x13U) == S31_DISCONN_STRIKE);
+        (void)s31_disconn_tracker_on_connected(&t, base);
+        CHECK(!s31_disconn_tracker_tick(&t, base + S31_BT_INTENTIONAL_DISCONN_RESET_MS - 1U));
+        CHECK(t.strike_count == 1U);
+        CHECK(s31_disconn_tracker_tick(&t, base + S31_BT_INTENTIONAL_DISCONN_RESET_MS));
+        CHECK(t.strike_count == 0U);
+        CHECK(!s31_disconn_tracker_tick(&t, base + S31_BT_INTENTIONAL_DISCONN_RESET_MS + 5U));
+        /* After forgiveness a single user disconnect is strike 1 again. */
+        CHECK(s31_disconn_tracker_on_disconnect(&t, 0x13U) == S31_DISCONN_STRIKE);
+        /* A disconnected stretch never counts as sustained. */
+        CHECK(!s31_disconn_tracker_tick(&t, base + 10U * S31_BT_INTENTIONAL_DISCONN_RESET_MS));
+        CHECK(t.strike_count == 1U);
+    }
     return 0;
 }
