@@ -20,6 +20,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "output_audio.h"
+#include "output_avrcp_meta.h"
 #include "output_bluetooth.h"
 #include "output_control.h"
 #include "output_peer_store.h"
@@ -171,6 +172,24 @@ static void build_stats(bridge_json_t *json, char *buffer, const char *type)
     bridge_json_bool(json, "connected", output_bluetooth_peer_connected());
     bridge_json_bool(json, "streaming", output_bluetooth_audio_streaming());
     bridge_json_object_end(json);
+    {
+        output_avrcp_meta_stats_t meta;
+        char title[40];
+        output_avrcp_meta_get_stats(&meta);
+        output_avrcp_meta_get_title(title, sizeof(title));
+        bridge_json_object_begin(json, "meta");
+        bridge_json_u32(json, "records", meta.records);
+        bridge_json_u32(json, "bad", meta.bad_records);
+        bridge_json_u32(json, "gen", meta.generation);
+        bridge_json_u32(json, "status", meta.play_status);
+        bridge_json_str(json, "title", title);
+        bridge_json_u32(json, "elem_q", meta.elem_attr_queries);
+        bridge_json_u32(json, "ps_q", meta.play_status_queries);
+        bridge_json_u32(json, "interim", meta.interim_sent);
+        bridge_json_u32(json, "changed", meta.changed_sent);
+        bridge_json_u32(json, "track_chg", meta.track_changes);
+        bridge_json_object_end(json);
+    }
     bridge_json_bool(json, "audio", output_control_audio_allowed());
     bridge_json_object_begin(json, "uart");
 #if CONFIG_LARKBRIDGE_TEST_IMAGE

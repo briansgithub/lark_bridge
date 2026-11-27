@@ -10,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "output_avrcp_meta.h"
 #include "output_audio.h"
 #include "output_policy.h"
 
@@ -300,6 +301,7 @@ static void handle_hello(const bridge_packet_t *packet) {
          * replayed into the new one. This task is the sole pending-window owner. */
         discard_outbound_session_work();
         output_audio_set_capture_active(false);
+        output_avrcp_meta_clear("new S31 session");
         ESP_LOGI(TAG, "accepted S31 session 0x%08lx, caps=0x%04x",
                  (unsigned long)remote_session, capabilities);
     }
@@ -370,6 +372,9 @@ static void handle_packet(const bridge_packet_t *packet, uint32_t current_ms) {
     case BRIDGE_MESSAGE_ACK:
         handle_ack(packet);
         break;
+    case BRIDGE_MESSAGE_MEDIA_META:
+        output_avrcp_meta_handle_packet(packet);
+        break;
     case BRIDGE_MESSAGE_STATUS:
     case BRIDGE_MESSAGE_FAULT:
         /* S31 diagnostics are consumed by the coordinator/operator, not this endpoint. */
@@ -403,7 +408,8 @@ static void retry_pending(uint32_t current_ms) {
 
 static void send_hello(void) {
     const uint16_t capabilities = (uint16_t)(BRIDGE_CAP_A2DP_SOURCE | BRIDGE_CAP_AVRCP_TARGET |
-                                             BRIDGE_CAP_I2S_RX | BRIDGE_CAP_FAIL_CLOSED);
+                                             BRIDGE_CAP_I2S_RX | BRIDGE_CAP_FAIL_CLOSED |
+                                             BRIDGE_CAP_MEDIA_META);
     tx_request_t request = {
         .type = BRIDGE_MESSAGE_HELLO,
         .payload_length = BRIDGE_HELLO_PAYLOAD_SIZE,
@@ -586,6 +592,7 @@ static void control_task(void *context) {
 #endif
             discard_outbound_session_work();
             output_audio_set_capture_active(false);
+            output_avrcp_meta_clear("S31 link timeout");
             (void)output_control_report_fault(BRIDGE_FAULT_HEARTBEAT_TIMEOUT);
         }
 

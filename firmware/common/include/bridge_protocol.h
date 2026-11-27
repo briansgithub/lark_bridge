@@ -19,7 +19,11 @@ typedef enum {
     BRIDGE_MESSAGE_AVRCP_COMMAND = 4,
     BRIDGE_MESSAGE_STATUS = 5,
     BRIDGE_MESSAGE_FAULT = 6,
-    BRIDGE_MESSAGE_ACK = 7
+    BRIDGE_MESSAGE_ACK = 7,
+    /* Best-effort AVRCP now-playing metadata, S31 -> output (bridge_meta.h).
+     * Sent only to an output whose HELLO advertises BRIDGE_CAP_MEDIA_META, so
+     * an older output image never sees an unknown type. Never ACKed. */
+    BRIDGE_MESSAGE_MEDIA_META = 8
 } bridge_message_type_t;
 
 typedef struct {

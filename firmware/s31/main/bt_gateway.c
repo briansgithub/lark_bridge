@@ -20,6 +20,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "gateway_state.h"
+#include "media_meta_cache.h"
 #include "s31_peer_store.h"
 #include "reconnect_timer.h"
 #include "s31_config.h"
@@ -51,6 +52,17 @@ static atomic_bool s_tap_reset_requested;
 static portMUX_TYPE s_upstream_mux = portMUX_INITIALIZER_UNLOCKED;
 static esp_bd_addr_t s_upstream_bda;
 static bool s_upstream_bda_valid;
+/* Feature 3B: now-playing cache, written by AVRCP CT callbacks and drained by
+ * link_task, under s_meta_mux. Metadata commands use their own 4-bit labels. */
+static portMUX_TYPE s_meta_mux = portMUX_INITIALIZER_UNLOCKED;
+static s31_meta_cache_t s_meta;
+static uint8_t s_meta_label;
+static atomic_bool s_meta_active;
+#define S31_META_ATTR_MASK                                                                    \
+    (ESP_AVRC_MD_ATTR_TITLE | ESP_AVRC_MD_ATTR_ARTIST | ESP_AVRC_MD_ATTR_ALBUM |              \
+     ESP_AVRC_MD_ATTR_TRACK_NUM | ESP_AVRC_MD_ATTR_NUM_TRACKS | ESP_AVRC_MD_ATTR_GENRE |      \
+     ESP_AVRC_MD_ATTR_PLAYING_TIME)
+#define S31_META_POS_INTERVAL_S 2U
 /* Feature 1: intentional-disconnect strikes (RAM only), under s_disconn_mux. */
 static portMUX_TYPE s_disconn_mux = portMUX_INITIALIZER_UNLOCKED;
 static s31_reconnect_disconn_tracker_t s_disconn;
@@ -412,8 +424,142 @@ static void a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *paramete
     }
 }
 
+static uint8_t meta_next_label(void)
+{
+    uint8_t label = s_meta_label;
+    s_meta_label = (uint8_t)((s_meta_label + 1U) & 0x0fU);
+    return label;
+}
+
+static void meta_request_track_info(void)
+{
+    esp_err_t md = esp_avrc_ct_send_metadata_cmd(meta_next_label(), S31_META_ATTR_MASK);
+    esp_err_t ps = esp_avrc_ct_send_get_play_status_cmd(meta_next_label());
+    if (md != ESP_OK || ps != ESP_OK) {
+        ESP_LOGW(TAG, "metadata request: element=%s play_status=%s", esp_err_to_name(md),
+                 esp_err_to_name(ps));
+    }
+}
+
+static void meta_register(uint8_t event_id)
+{
+    uint32_t parameter = event_id == ESP_AVRC_RN_PLAY_POS_CHANGED ? S31_META_POS_INTERVAL_S : 0U;
+    esp_err_t result =
+        esp_avrc_ct_send_register_notification_cmd(meta_next_label(), event_id, parameter);
+    if (result != ESP_OK) {
+        ESP_LOGW(TAG, "AVRCP register notification 0x%02x failed: %s", event_id,
+                 esp_err_to_name(result));
+    }
+}
+
+static uint8_t meta_attr_id_from_mask(uint8_t mask)
+{
+    for (uint8_t id = 1U; id <= BRIDGE_META_ATTR_COUNT; ++id) {
+        if (mask == (uint8_t)(1U << (id - 1U))) {
+            return id;
+        }
+    }
+    return 0U;
+}
+
+static void meta_handle_ct_event(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *parameter)
+{
+    if (!atomic_load_explicit(&s_meta_active, memory_order_acquire)) {
+        return;
+    }
+    switch (event) {
+    case ESP_AVRC_CT_GET_RN_CAPABILITIES_RSP_EVT: {
+        esp_avrc_rn_evt_cap_mask_t caps = parameter->get_rn_caps_rsp.evt_set;
+        ESP_LOGI(TAG, "phone AVRCP TG notification caps 0x%04x", (unsigned int)caps.bits);
+        static const uint8_t wanted[] = {ESP_AVRC_RN_TRACK_CHANGE, ESP_AVRC_RN_PLAY_STATUS_CHANGE,
+                                         ESP_AVRC_RN_PLAY_POS_CHANGED};
+        for (size_t i = 0U; i < sizeof(wanted); ++i) {
+            if (esp_avrc_rn_evt_bit_mask_operation(ESP_AVRC_BIT_MASK_OP_TEST, &caps, wanted[i])) {
+                meta_register(wanted[i]);
+            }
+        }
+        break;
+    }
+    case ESP_AVRC_CT_CHANGE_NOTIFY_EVT: {
+        uint8_t event_id = parameter->change_ntf.event_id;
+        /* One-shot: re-register before anything else so no change is missed. */
+        meta_register(event_id);
+        if (event_id == ESP_AVRC_RN_TRACK_CHANGE) {
+            portENTER_CRITICAL(&s_meta_mux);
+            s31_meta_cache_track_changed(&s_meta);
+            uint8_t generation = s_meta.generation;
+            portEXIT_CRITICAL(&s_meta_mux);
+            ESP_LOGI(TAG, "phone track changed (generation %u); requesting metadata", generation);
+            meta_request_track_info();
+        } else if (event_id == ESP_AVRC_RN_PLAY_STATUS_CHANGE) {
+            uint8_t status = (uint8_t)parameter->change_ntf.event_parameter.playback;
+            portENTER_CRITICAL(&s_meta_mux);
+            bool length_valid = (s_meta.flags & BRIDGE_META_FLAG_LENGTH_VALID) != 0U;
+            bool position_valid = (s_meta.flags & BRIDGE_META_FLAG_POSITION_VALID) != 0U;
+            s31_meta_cache_set_play_status(&s_meta, status, length_valid, s_meta.song_length_ms,
+                                           position_valid, s_meta.song_position_ms);
+            portEXIT_CRITICAL(&s_meta_mux);
+            ESP_LOGI(TAG, "phone play status=%u", status);
+            (void)esp_avrc_ct_send_get_play_status_cmd(meta_next_label());
+        } else if (event_id == ESP_AVRC_RN_PLAY_POS_CHANGED) {
+            uint32_t position = parameter->change_ntf.event_parameter.play_pos;
+            portENTER_CRITICAL(&s_meta_mux);
+            s31_meta_cache_set_position(&s_meta, position);
+            portEXIT_CRITICAL(&s_meta_mux);
+        }
+        break;
+    }
+    case ESP_AVRC_CT_METADATA_RSP_EVT: {
+        uint8_t attr_id = meta_attr_id_from_mask(parameter->meta_rsp.attr_id);
+        int length = parameter->meta_rsp.attr_length;
+        if (attr_id == 0U || length < 0) {
+            break;
+        }
+        portENTER_CRITICAL(&s_meta_mux);
+        (void)s31_meta_cache_set_text(&s_meta, attr_id, parameter->meta_rsp.attr_text,
+                                      (size_t)length);
+        portEXIT_CRITICAL(&s_meta_mux);
+        ESP_LOGI(TAG, "phone metadata attr=%u '%.*s'", attr_id, length > 48 ? 48 : length,
+                 (const char *)parameter->meta_rsp.attr_text);
+        break;
+    }
+    case ESP_AVRC_CT_PLAY_STATUS_RSP_EVT: {
+        uint32_t length = parameter->play_status_rsp.song_length;
+        uint32_t position = parameter->play_status_rsp.song_position;
+        uint8_t status = (uint8_t)parameter->play_status_rsp.play_status;
+        portENTER_CRITICAL(&s_meta_mux);
+        s31_meta_cache_set_play_status(&s_meta, status, length != UINT32_MAX, length,
+                                       position != UINT32_MAX, position);
+        portEXIT_CRITICAL(&s_meta_mux);
+        ESP_LOGI(TAG, "phone play status=%u len=%lu pos=%lu", status, (unsigned long)length,
+                 (unsigned long)position);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+size_t s31_bt_meta_next_record(uint8_t *output, size_t capacity)
+{
+    portENTER_CRITICAL(&s_meta_mux);
+    size_t length = s31_meta_cache_next_record(&s_meta, output, capacity);
+    portEXIT_CRITICAL(&s_meta_mux);
+    return length;
+}
+
+void s31_bt_meta_resync(void)
+{
+    portENTER_CRITICAL(&s_meta_mux);
+    s31_meta_cache_mark_all_dirty(&s_meta);
+    portEXIT_CRITICAL(&s_meta_mux);
+}
+
 static void avrcp_callback(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t *parameter)
 {
+    if (event != ESP_AVRC_CT_CONNECTION_STATE_EVT) {
+        meta_handle_ct_event(event, parameter);
+    }
     if (event == ESP_AVRC_CT_CONNECTION_STATE_EVT) {
         bool accepted = parameter->conn_stat.connected
                             ? accept_or_bind_upstream(parameter->conn_stat.remote_bda)
@@ -427,6 +573,24 @@ static void avrcp_callback(esp_avrc_ct_cb_event_t event, esp_avrc_ct_cb_param_t 
         s31_gateway_set_avrcp_connected(connected);
         ESP_LOGI(TAG, "AVRCP controller connected=%d accepted=%d",
                  parameter->conn_stat.connected, accepted);
+        bool was_active = atomic_exchange_explicit(&s_meta_active, connected, memory_order_acq_rel);
+        if (connected) {
+            /* Capabilities first (registrations follow in its response), then
+             * the current track and status so the car is filled immediately. */
+            esp_err_t caps = esp_avrc_ct_send_get_rn_capabilities_cmd(meta_next_label());
+            if (caps != ESP_OK) {
+                ESP_LOGW(TAG, "AVRCP get capabilities failed: %s", esp_err_to_name(caps));
+            }
+            portENTER_CRITICAL(&s_meta_mux);
+            s31_meta_cache_track_changed(&s_meta);
+            portEXIT_CRITICAL(&s_meta_mux);
+            meta_request_track_info();
+        } else if (was_active) {
+            portENTER_CRITICAL(&s_meta_mux);
+            s31_meta_cache_clear(&s_meta);
+            portEXIT_CRITICAL(&s_meta_mux);
+            ESP_LOGI(TAG, "phone AVRCP gone: metadata cleared");
+        }
     }
 }
 
@@ -578,6 +742,11 @@ static esp_err_t recycle_bt_stack(void)
     s31_gateway_set_bt_ready(false);
     atomic_store_explicit(&s_hfp_audio_connected, false, memory_order_release);
     atomic_store_explicit(&s_avrcp_connected, false, memory_order_release);
+    if (atomic_exchange_explicit(&s_meta_active, false, memory_order_acq_rel)) {
+        portENTER_CRITICAL(&s_meta_mux);
+        s31_meta_cache_clear(&s_meta);
+        portEXIT_CRITICAL(&s_meta_mux);
+    }
     atomic_store_explicit(&s_a2dp_format_supported, false, memory_order_release);
     atomic_store_explicit(&s_hfp_profile_ready, false, memory_order_release);
     atomic_store_explicit(&s_a2dp_profile_ready, false, memory_order_release);
@@ -837,6 +1006,8 @@ esp_err_t s31_bt_gateway_init(void)
     s_call_setup = false;
     s_call_route_active = false;
     s31_disconn_tracker_init(&s_disconn);
+    s31_meta_cache_init(&s_meta);
+    atomic_init(&s_meta_active, false);
     esp_bd_addr_t saved_peer = {0};
     bool have_saved_peer = false;
     esp_err_t result = s31_peer_store_load(saved_peer, &have_saved_peer);

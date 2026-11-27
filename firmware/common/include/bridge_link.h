@@ -54,7 +54,8 @@ typedef enum {
     BRIDGE_CAP_A2DP_SOURCE = 1U << 5,
     BRIDGE_CAP_AVRCP_TARGET = 1U << 6,
     BRIDGE_CAP_I2S_RX = 1U << 7,
-    BRIDGE_CAP_FAIL_CLOSED = 1U << 8
+    BRIDGE_CAP_FAIL_CLOSED = 1U << 8,
+    BRIDGE_CAP_MEDIA_META = 1U << 9 /* output accepts BRIDGE_MESSAGE_MEDIA_META */
 } bridge_capability_t;
 
 typedef enum {
@@ -101,7 +102,7 @@ typedef struct {
 
 /* One sender task owns the counters. ACK identifies both type and sequence. */
 typedef struct {
-    uint16_t next[BRIDGE_MESSAGE_ACK + 1];
+    uint16_t next[BRIDGE_MESSAGE_MEDIA_META + 1];
 } bridge_tx_sequences_t;
 
 static inline uint16_t bridge_tx_next(bridge_tx_sequences_t *sequences, bridge_message_type_t type) {

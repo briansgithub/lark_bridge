@@ -26,3 +26,13 @@ else()
     target_compile_options(s31_reconnect_timer_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 add_test(NAME s31_reconnect_timer_tests COMMAND s31_reconnect_timer_tests)
+
+add_executable(s31_media_meta_cache_tests test_media_meta_cache.c ../main/media_meta_cache.c
+               ../../common/src/bridge_meta.c ../../common/src/bridge_link.c)
+target_include_directories(s31_media_meta_cache_tests PRIVATE ../main ../../common/include)
+if(MSVC)
+    target_compile_options(s31_media_meta_cache_tests PRIVATE /W4 /WX)
+else()
+    target_compile_options(s31_media_meta_cache_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME s31_media_meta_cache_tests COMMAND s31_media_meta_cache_tests)

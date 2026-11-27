@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "esp_err.h"
@@ -32,3 +33,9 @@ typedef struct {
 } s31_bt_status_t;
 
 void s31_bt_get_status(s31_bt_status_t *status);
+
+/* Car UX feature 3B: pops one pending BRIDGE_MESSAGE_MEDIA_META record (0 when
+ * none). Called only from link_task. */
+size_t s31_bt_meta_next_record(uint8_t *output, size_t capacity);
+/* A new output session: resend all known metadata. */
+void s31_bt_meta_resync(void);

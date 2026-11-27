@@ -40,3 +40,13 @@ else()
     target_compile_options(output_sink_policy_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 add_test(NAME output_sink_policy_tests COMMAND output_sink_policy_tests)
+
+add_executable(output_meta_cache_tests test_meta_cache.c ../main/output_meta_cache.c
+               ../../common/src/bridge_meta.c ../../common/src/bridge_link.c)
+target_include_directories(output_meta_cache_tests PRIVATE ../main ../../common/include)
+if(MSVC)
+    target_compile_options(output_meta_cache_tests PRIVATE /W4 /WX)
+else()
+    target_compile_options(output_meta_cache_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME output_meta_cache_tests COMMAND output_meta_cache_tests)

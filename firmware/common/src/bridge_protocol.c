@@ -13,7 +13,7 @@ enum {
 };
 
 static bool message_type_valid(uint8_t type) {
-    return type >= (uint8_t)BRIDGE_MESSAGE_HELLO && type <= (uint8_t)BRIDGE_MESSAGE_ACK;
+    return type >= (uint8_t)BRIDGE_MESSAGE_HELLO && type <= (uint8_t)BRIDGE_MESSAGE_MEDIA_META;
 }
 
 uint16_t bridge_crc16_ccitt(const uint8_t *data, size_t length) {

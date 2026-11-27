@@ -7,6 +7,7 @@ idf_component_register(
         "bt_gateway.c"
         "gateway_state.c"
         "link_uart.c"
+        "media_meta_cache.c"
         "s31_peer_store.c"
         "s31_telemetry.c"
         "uac_lark.c"

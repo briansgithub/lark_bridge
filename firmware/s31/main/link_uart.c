@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "audio_router.h"
+#include "bridge_meta.h"
 #include "bridge_link.h"
 #include "bridge_tap.h"
 #include "bridge_protocol.h"
@@ -48,6 +49,8 @@ static _Atomic bool s_output_hello_valid;
 static uint32_t s_local_session;
 static uint32_t s_output_session;
 static _Atomic bool s_output_session_valid;
+/* The output advertised BRIDGE_CAP_MEDIA_META: send it now-playing records. */
+static _Atomic bool s_output_meta;
 static _Atomic uint16_t s_last_output_fifo_frames;
 static _Atomic int16_t s_last_output_correction_ppm;
 static int32_t s_last_output_adaptive_delta;
@@ -265,6 +268,7 @@ static void handle_packet(const bridge_packet_t *packet)
         uint32_t output_session = bridge_get_u32_le(
             &packet->payload[BRIDGE_HELLO_SESSION_OFFSET]);
         s_output_hello_valid = (capabilities & required) == required;
+        bool output_meta = (capabilities & BRIDGE_CAP_MEDIA_META) != 0U;
         if (!s_output_hello_valid) {
             ESP_LOGE(TAG, "output HELLO lacks required capabilities: 0x%04x", capabilities);
             ++s_protocol_errors;
@@ -291,8 +295,13 @@ static void handle_packet(const bridge_packet_t *packet)
                 s31_gateway_force_silence();
                 s31_gateway_set_output_link(false);
                 announce_hello();
-                ESP_LOGI(TAG, "accepted output session 0x%08lx, caps=0x%04x",
-                         (unsigned long)output_session, capabilities);
+                s_output_meta = output_meta;
+                if (output_meta) {
+                    s31_bt_meta_resync();
+                }
+                ESP_LOGI(TAG, "accepted output session 0x%08lx, caps=0x%04x%s",
+                         (unsigned long)output_session, capabilities,
+                         output_meta ? " (media metadata)" : "");
             }
         }
         break;
@@ -554,6 +563,18 @@ static void link_task(void *argument)
         }
         TickType_t now = xTaskGetTickCount();
         maintain_route();
+        if (s_output_meta && s_output_hello_valid) {
+            /* Best effort, never ACKed: a few records per pass keeps the
+             * heartbeat cadence untouched (each is <= 100 B at 115200 baud). */
+            uint8_t meta[BRIDGE_META_MAX_RECORD];
+            for (int sent = 0; sent < 3; ++sent) {
+                size_t length = s31_bt_meta_next_record(meta, sizeof(meta));
+                if (length == 0U) {
+                    break;
+                }
+                (void)send_next(BRIDGE_MESSAGE_MEDIA_META, meta, (uint16_t)length, NULL);
+            }
+        }
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
         run_link_test((uint32_t)(now * portTICK_PERIOD_MS));
 #endif

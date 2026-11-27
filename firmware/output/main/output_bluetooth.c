@@ -13,6 +13,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "output_audio.h"
+#include "output_avrcp_meta.h"
 #include "output_control.h"
 #include "output_peer_store.h"
 #include "output_sink_policy.h"
@@ -421,19 +422,24 @@ static void avrcp_callback(esp_avrc_tg_cb_event_t event, esp_avrc_tg_cb_param_t 
     case ESP_AVRC_TG_PROF_STATE_EVT:
         if (parameter->avrc_tg_init_stat.state == ESP_AVRC_INIT_SUCCESS) {
             configure_avrcp_filter();
+            output_avrcp_meta_configure_tg();
         }
         break;
     case ESP_AVRC_TG_CONNECTION_STATE_EVT:
         avrcp_peer_update(parameter->conn_stat.connected, parameter->conn_stat.remote_bda);
+        output_avrcp_meta_on_connection(parameter->conn_stat.connected);
         if (parameter->conn_stat.connected &&
             !saved_peer_allows(parameter->conn_stat.remote_bda)) {
             ESP_LOGW(TAG, "rejecting AVRCP session from a non-selected output peer");
             (void)esp_bt_gap_remove_bond_device(parameter->conn_stat.remote_bda);
         }
         break;
+    case ESP_AVRC_TG_REGISTER_NOTIFICATION_EVT:
+        output_avrcp_meta_on_register(parameter->reg_ntf.event_id,
+                                      parameter->reg_ntf.event_parameter);
+        break;
     case ESP_AVRC_TG_REMOTE_FEATURES_EVT:
     case ESP_AVRC_TG_SET_ABSOLUTE_VOLUME_CMD_EVT:
-    case ESP_AVRC_TG_REGISTER_NOTIFICATION_EVT:
     case ESP_AVRC_TG_SET_PLAYER_APP_VALUE_EVT:
         break;
     default:
@@ -1427,6 +1433,10 @@ esp_err_t output_bluetooth_start(void) {
     }
     (void)esp_bt_gap_set_pin(ESP_BT_PIN_TYPE_FIXED, (uint8_t)pin_length, pin);
 
+    error = output_avrcp_meta_init();
+    if (error != ESP_OK) {
+        ESP_LOGW(TAG, "AVRCP metadata init failed: %s", esp_err_to_name(error));
+    }
     error = esp_avrc_tg_register_callback(avrcp_callback);
     if (error != ESP_OK) {
         return error;

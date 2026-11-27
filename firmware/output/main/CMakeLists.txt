@@ -2,6 +2,8 @@ idf_component_register(
     SRCS
         "app_main.c"
         "output_audio.c"
+        "output_avrcp_meta.c"
+        "output_meta_cache.c"
         "output_bluetooth.c"
         "output_control.c"
         "output_peer_store.c"
