@@ -127,6 +127,8 @@ static uint32_t s_next_media_attempt_ms;
 static uint32_t s_media_ack_deadline_ms;
 static uint32_t s_qualification_deadline_ms;
 
+static void apply_class_of_device(const char *why);
+
 static uint32_t now_ms(void) {
     return (uint32_t)(esp_timer_get_time() / 1000);
 }
@@ -506,8 +508,12 @@ static void a2dp_callback(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *paramete
         queued.media_status = parameter->media_ctrl_stat.status;
         post_event(&queued);
         break;
-    case ESP_A2D_AUDIO_CFG_EVT:
     case ESP_A2D_PROF_STATE_EVT:
+        if (parameter->a2d_prof_stat.init_state == ESP_A2D_INIT_SUCCESS) {
+            apply_class_of_device("on A2DP init");
+        }
+        break;
+    case ESP_A2D_AUDIO_CFG_EVT:
     case ESP_A2D_SEP_REG_STATE_EVT:
     case ESP_A2D_SNK_PSC_CFG_EVT:
     case ESP_A2D_SNK_SET_DELAY_VALUE_EVT:
@@ -711,6 +717,32 @@ static bool request_sbc_codec(bool fallback)
         ESP_LOGW(TAG, "SBC request failed: %s", esp_err_to_name(result));
     }
     return s_codec_request_pending;
+}
+
+/* Head units such as the Honda CR-V list only phones when they search, so
+ * present as a smartphone offering audio + rendering services. Bluedroid's AV
+ * registration (bta_av_main.c) rewrites the major class to Audio after
+ * esp_a2d_source_init() returns, so this is re-applied once the profile is up
+ * and every time pairing mode opens. */
+static void apply_class_of_device(const char *why) {
+    esp_bt_cod_t class_of_device = {
+        .minor = 0x03, /* smartphone */
+        .major = ESP_BT_COD_MAJOR_DEV_PHONE,
+        .service = ESP_BT_COD_SRVC_AUDIO | ESP_BT_COD_SRVC_RENDERING,
+    };
+    esp_err_t error = esp_bt_gap_set_cod(class_of_device, ESP_BT_SET_COD_ALL);
+    if (error != ESP_OK) {
+        ESP_LOGW(TAG, "cannot set Class of Device (%s): %s", why, esp_err_to_name(error));
+        return;
+    }
+    esp_bt_cod_t applied = {0};
+    if (esp_bt_gap_get_cod(&applied) == ESP_OK) {
+        uint32_t raw = ((uint32_t)applied.service << 13U) | ((uint32_t)applied.major << 8U) |
+                       ((uint32_t)applied.minor << 2U);
+        ESP_LOGI(TAG, "Class of Device 0x%06lx (major=0x%02x minor=0x%02x service=0x%03x) %s",
+                 (unsigned long)raw, (unsigned int)applied.major, (unsigned int)applied.minor,
+                 (unsigned int)applied.service, why);
+    }
 }
 
 static void set_pairing_visibility(void) {
@@ -994,6 +1026,7 @@ static void enter_pairing(uint32_t current_ms, const char *why)
     if (s_state == BT_STATE_WAITING) {
         s_next_action_ms = current_ms;
     }
+    apply_class_of_device("on pairing");
     set_pairing_visibility();
     ESP_LOGI(TAG, "pairing mode on (%s) for %u s: discoverable as '%s' and scanning for sinks",
              why, PAIRING_WINDOW_MS / 1000U, CONFIG_LARKBRIDGE_OUTPUT_DEVICE_NAME);
@@ -1224,12 +1257,18 @@ static void bluetooth_worker(void *context) {
     (void)context;
 
     s_next_action_ms = now_ms();
+    uint32_t cod_reapply_ms = s_next_action_ms + 1500U;
+    bool cod_reapplied = false;
     for (;;) {
         uint32_t current_ms;
         if (xQueueReceive(s_event_queue, &event, pdMS_TO_TICKS(100U)) == pdTRUE) {
             handle_bt_event(&event, now_ms());
         }
         current_ms = now_ms();
+        if (!cod_reapplied && (int32_t)(current_ms - cod_reapply_ms) >= 0) {
+            cod_reapplied = true;
+            apply_class_of_device("after A2DP registration");
+        }
         if (pairing_open() &&
             (int32_t)(current_ms - atomic_load_explicit(&s_pairing_deadline_ms,
                                                         memory_order_acquire)) >= 0) {
@@ -1387,25 +1426,6 @@ esp_err_t output_bluetooth_start(void) {
         (void)memcpy(pin, CONFIG_LARKBRIDGE_OUTPUT_LEGACY_PIN, pin_length);
     }
     (void)esp_bt_gap_set_pin(ESP_BT_PIN_TYPE_FIXED, (uint8_t)pin_length, pin);
-
-    /* Head units such as the Honda CR-V list only phones when they search, so
-     * present as a smartphone offering audio + rendering services. */
-    esp_bt_cod_t class_of_device = {
-        .minor = 0x03, /* smartphone */
-        .major = ESP_BT_COD_MAJOR_DEV_PHONE,
-        .service = ESP_BT_COD_SRVC_AUDIO | ESP_BT_COD_SRVC_RENDERING,
-    };
-    error = esp_bt_gap_set_cod(class_of_device, ESP_BT_SET_COD_ALL);
-    if (error != ESP_OK) {
-        ESP_LOGW(TAG, "cannot set Class of Device: %s", esp_err_to_name(error));
-    } else {
-        esp_bt_cod_t applied = {0};
-        if (esp_bt_gap_get_cod(&applied) == ESP_OK) {
-            ESP_LOGI(TAG, "Class of Device major=0x%02x minor=0x%02x service=0x%03x",
-                     (unsigned int)applied.major, (unsigned int)applied.minor,
-                     (unsigned int)applied.service);
-        }
-    }
 
     error = esp_avrc_tg_register_callback(avrcp_callback);
     if (error != ESP_OK) {
