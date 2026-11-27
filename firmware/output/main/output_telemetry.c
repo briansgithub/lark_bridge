@@ -439,6 +439,57 @@ static void respond_tone(const bridge_console_request_t *request)
     emit(s_console_record, &json);
 }
 
+static bool parse_address(const char *text, uint8_t address[6])
+{
+    unsigned int values[6];
+    char tail;
+    if (sscanf(text, "%2x:%2x:%2x:%2x:%2x:%2x%c", &values[0], &values[1], &values[2],
+               &values[3], &values[4], &values[5], &tail) != 6) {
+        return false;
+    }
+    for (unsigned int i = 0U; i < 6U; ++i) {
+        address[i] = (uint8_t)values[i];
+    }
+    return true;
+}
+
+static void respond_sinks(void)
+{
+    static output_bluetooth_sinks_t status;
+    bridge_json_t json;
+    char key[8];
+    char address[18];
+
+    memset(&status, 0, sizeof(status));
+    output_bluetooth_get_sinks(&status);
+    bridge_json_begin(&json, s_console_record, RECORD_BYTES, "sinks");
+    add_identity(&json);
+    bridge_json_bool(&json, "pairing", status.pairing);
+    bridge_json_u32(&json, "pairing_remaining_ms", status.pairing_remaining_ms);
+    bridge_json_bool(&json, "connected", status.connected);
+    bridge_json_bool(&json, "streaming", status.streaming);
+    bridge_json_u32(&json, "count", status.sinks.count);
+    for (unsigned int i = 0U; i < status.sinks.count; ++i) {
+        (void)snprintf(key, sizeof(key), "slot%u", i);
+        bridge_json_object_begin(&json, key);
+        format_address(address, sizeof(address), status.sinks.sinks[i].addr);
+        bridge_json_str(&json, "addr", address);
+        bridge_json_str(&json, "name", status.sinks.sinks[i].name);
+        bridge_json_object_end(&json);
+    }
+    emit(s_console_record, &json);
+}
+
+static void respond_ok(const char *command)
+{
+    bridge_json_t json;
+    bridge_json_begin(&json, s_console_record, RECORD_BYTES, "resp");
+    add_identity(&json);
+    bridge_json_str(&json, "cmd", command);
+    bridge_json_bool(&json, "ok", true);
+    emit(s_console_record, &json);
+}
+
 static void handle_line(const char *line)
 {
     bridge_console_request_t request;
@@ -543,6 +594,35 @@ static void handle_line(const char *line)
         respond_error("forget", "not_implemented");
 #endif
         break;
+    case BRIDGE_CMD_PAIR:
+        if (output_bluetooth_request_pairing()) {
+            respond_ok("pair");
+        } else {
+            respond_error("pair", "busy");
+        }
+        break;
+    case BRIDGE_CMD_SINKS:
+        respond_sinks();
+        break;
+    case BRIDGE_CMD_FORGET_SINK: {
+        uint8_t address[6];
+        uint32_t index = 0U;
+        bool queued;
+        if (parse_address(request.argv[0], address)) {
+            queued = output_bluetooth_forget_sink(-1, address);
+        } else if (bridge_console_parse_u32(request.argv[0], 0U, OUTPUT_SINK_MAX - 1U, &index)) {
+            queued = output_bluetooth_forget_sink((int)index, NULL);
+        } else {
+            respond_error("forget_sink", "bad_args");
+            break;
+        }
+        if (queued) {
+            respond_ok("forget_sink");
+        } else {
+            respond_error("forget_sink", "busy");
+        }
+        break;
+    }
     default:
         respond_error("?", "unknown_command");
         break;

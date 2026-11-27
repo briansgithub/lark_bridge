@@ -31,6 +31,21 @@ static int test_parse_release(void) {
           BRIDGE_CONSOLE_TEST_ONLY);
     CHECK(bridge_console_parse("forget pixel", BRIDGE_IMAGE_RELEASE, &request) ==
           BRIDGE_CONSOLE_TEST_ONLY);
+    /* Sink management works on release images (same gestures as the BOOT button). */
+    CHECK(bridge_console_parse("pair", BRIDGE_IMAGE_RELEASE, &request) == BRIDGE_CONSOLE_OK);
+    CHECK(request.command == BRIDGE_CMD_PAIR && request.argc == 0U);
+    CHECK(bridge_console_parse("sinks", BRIDGE_IMAGE_RELEASE, &request) == BRIDGE_CONSOLE_OK);
+    CHECK(request.command == BRIDGE_CMD_SINKS);
+    CHECK(bridge_console_parse("forget_sink aa:bb:cc:dd:ee:ff", BRIDGE_IMAGE_RELEASE, &request) ==
+          BRIDGE_CONSOLE_OK);
+    CHECK(request.command == BRIDGE_CMD_FORGET_SINK && request.argc == 1U &&
+          strcmp(request.argv[0], "aa:bb:cc:dd:ee:ff") == 0);
+    CHECK(bridge_console_parse("forget_sink", BRIDGE_IMAGE_RELEASE, &request) ==
+          BRIDGE_CONSOLE_BAD_ARGS);
+    CHECK(bridge_console_parse("pair now", BRIDGE_IMAGE_RELEASE, &request) ==
+          BRIDGE_CONSOLE_BAD_ARGS);
+    CHECK(!bridge_console_command_is_test_only(BRIDGE_CMD_PAIR));
+    CHECK(strcmp(bridge_console_command_name(BRIDGE_CMD_FORGET_SINK), "forget_sink") == 0);
     return 0;
 }
 

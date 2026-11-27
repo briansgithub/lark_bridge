@@ -22,6 +22,10 @@ static const command_spec_t COMMANDS[] = {
     {"tap", BRIDGE_CMD_TAP, 1U, 1U},
     {"fault", BRIDGE_CMD_FAULT, 1U, 1U},
     {"forget", BRIDGE_CMD_FORGET, 1U, 1U},
+    {"pair", BRIDGE_CMD_PAIR, 0U, 0U},
+    {"sinks", BRIDGE_CMD_SINKS, 0U, 0U},
+    /* forget_sink <index|aa:bb:cc:dd:ee:ff> */
+    {"forget_sink", BRIDGE_CMD_FORGET_SINK, 1U, 1U},
 };
 
 const char *bridge_console_command_name(bridge_console_command_t command)

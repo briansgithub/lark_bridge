@@ -15,6 +15,7 @@
 #include "output_audio.h"
 #include "output_control.h"
 #include "output_peer_store.h"
+#include "output_sink_policy.h"
 
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -31,6 +32,10 @@
 #define A2DP_PULL_STALL_MS 3000U
 #define MEDIA_ACK_TIMEOUT_MS 1500U
 #define MEDIA_ACK_MAX_TIMEOUTS 3U
+/* Car UX feature 2: dual pairing mode (discoverable + CoD-filtered inquiry). */
+#define PAIRING_WINDOW_MS 45000U
+#define PAIRING_RETRY_MS 1000U
+#define NAME_CACHE_SIZE 8U
 
 typedef enum {
     BT_STATE_WAITING = 0,
@@ -50,6 +55,11 @@ typedef enum {
     BT_EVENT_SINK_CAPABILITIES,
     BT_EVENT_PREFERRED_CODEC_RESULT,
     BT_EVENT_MEDIA_ACK,
+    BT_EVENT_CANDIDATE,
+    BT_EVENT_AUTH_FAILED,
+    BT_EVENT_PAIR_REQUEST,
+    BT_EVENT_FACTORY_WIPE,
+    BT_EVENT_FORGET_SINK,
 #if CONFIG_LARKBRIDGE_TEST_IMAGE
     BT_EVENT_TEST_FORGET,
 #endif
@@ -63,6 +73,10 @@ typedef struct {
     esp_a2d_media_ctrl_t media_command;
     esp_a2d_media_ctrl_ack_t media_status;
     esp_bt_status_t bt_status;
+    int8_t rssi;
+    uint32_t cod;
+    int32_t index;
+    bool address_valid;
 } bt_event_t;
 
 static const char *TAG = "output_bt";
@@ -79,12 +93,26 @@ static bool s_codec_fallback;
 static bt_connection_state_t s_state = BT_STATE_WAITING;
 static portMUX_TYPE s_saved_peer_mux = portMUX_INITIALIZER_UNLOCKED;
 static portMUX_TYPE s_avrcp_peer_mux = portMUX_INITIALIZER_UNLOCKED;
-static esp_bd_addr_t s_saved_peer;
+/* MRU list of saved sinks (slot 0 = most recent). Written only by the worker,
+ * read from Bluedroid callbacks and telemetry under s_saved_peer_mux. */
+static output_sink_list_t s_sinks;
+static atomic_bool s_pairing_open;
+static atomic_uint s_pairing_deadline_ms;
+static output_sink_candidates_t s_candidates;
+static unsigned int s_rr_cursor;
+/* Legacy PIN fallback (0000 -> 1234) for one candidate, under s_saved_peer_mux. */
+static bool s_pin_fallback_active;
+static esp_bd_addr_t s_pin_fallback_bda;
+static struct {
+    esp_bd_addr_t address;
+    char name[OUTPUT_SINK_NAME_MAX];
+    bool used;
+} s_names[NAME_CACHE_SIZE];
+static unsigned int s_names_next;
 static esp_bd_addr_t s_active_peer;
 static esp_bd_addr_t s_requested_peer;
 static esp_bd_addr_t s_discovered_peer;
 static esp_bd_addr_t s_avrcp_peer;
-static bool s_have_saved_peer;
 static bool s_have_discovered_peer;
 static bool s_avrcp_peer_connected;
 static bool s_format_ready;
@@ -103,17 +131,37 @@ static uint32_t now_ms(void) {
     return (uint32_t)(esp_timer_get_time() / 1000);
 }
 
+static bool pairing_open(void)
+{
+    return atomic_load_explicit(&s_pairing_open, memory_order_acquire);
+}
+
+/* Slot 0 (most recently used) sink. */
 static bool saved_peer_snapshot(esp_bd_addr_t address)
 {
     bool present;
 
     portENTER_CRITICAL(&s_saved_peer_mux);
-    present = s_have_saved_peer;
+    present = s_sinks.count > 0U;
     if (present && address != NULL) {
-        (void)memcpy(address, s_saved_peer, ESP_BD_ADDR_LEN);
+        (void)memcpy(address, s_sinks.sinks[0].addr, ESP_BD_ADDR_LEN);
     }
     portEXIT_CRITICAL(&s_saved_peer_mux);
     return present;
+}
+
+static void sinks_snapshot(output_sink_list_t *list)
+{
+    portENTER_CRITICAL(&s_saved_peer_mux);
+    *list = s_sinks;
+    portEXIT_CRITICAL(&s_saved_peer_mux);
+}
+
+static void sinks_commit(const output_sink_list_t *list)
+{
+    portENTER_CRITICAL(&s_saved_peer_mux);
+    s_sinks = *list;
+    portEXIT_CRITICAL(&s_saved_peer_mux);
 }
 
 static bool saved_peer_matches(const esp_bd_addr_t address)
@@ -121,37 +169,97 @@ static bool saved_peer_matches(const esp_bd_addr_t address)
     bool matches;
 
     portENTER_CRITICAL(&s_saved_peer_mux);
-    matches = s_have_saved_peer &&
-              memcmp(s_saved_peer, address, ESP_BD_ADDR_LEN) == 0;
+    matches = output_sink_list_find(&s_sinks, address) >= 0;
     portEXIT_CRITICAL(&s_saved_peer_mux);
     return matches;
 }
 
+/* Pairing gate: any peer while pairing is open or nothing is saved yet,
+ * otherwise only saved sinks. */
 static bool saved_peer_allows(const esp_bd_addr_t address)
 {
     bool allowed;
 
+    if (pairing_open()) {
+        return true;
+    }
     portENTER_CRITICAL(&s_saved_peer_mux);
-    allowed = !s_have_saved_peer ||
-              memcmp(s_saved_peer, address, ESP_BD_ADDR_LEN) == 0;
+    allowed = s_sinks.count == 0U || output_sink_list_find(&s_sinks, address) >= 0;
     portEXIT_CRITICAL(&s_saved_peer_mux);
     return allowed;
 }
 
-static void saved_peer_set(const esp_bd_addr_t address)
+static void name_cache_put(const esp_bd_addr_t address, const char *name)
 {
+    if (name == NULL || name[0] == '\0') {
+        return;
+    }
     portENTER_CRITICAL(&s_saved_peer_mux);
-    (void)memcpy(s_saved_peer, address, ESP_BD_ADDR_LEN);
-    s_have_saved_peer = true;
+    unsigned int slot = s_names_next;
+    bool found = false;
+    for (unsigned int i = 0U; i < NAME_CACHE_SIZE; ++i) {
+        if (s_names[i].used && memcmp(s_names[i].address, address, ESP_BD_ADDR_LEN) == 0) {
+            slot = i;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        s_names_next = (s_names_next + 1U) % NAME_CACHE_SIZE;
+    }
+    (void)memcpy(s_names[slot].address, address, ESP_BD_ADDR_LEN);
+    size_t length = strnlen(name, OUTPUT_SINK_NAME_MAX - 1U);
+    (void)memcpy(s_names[slot].name, name, length);
+    s_names[slot].name[length] = '\0';
+    s_names[slot].used = true;
     portEXIT_CRITICAL(&s_saved_peer_mux);
 }
 
-static void saved_peer_clear(void)
+static void name_cache_get(const esp_bd_addr_t address, char name[OUTPUT_SINK_NAME_MAX])
+{
+    name[0] = '\0';
+    portENTER_CRITICAL(&s_saved_peer_mux);
+    for (unsigned int i = 0U; i < NAME_CACHE_SIZE; ++i) {
+        if (s_names[i].used && memcmp(s_names[i].address, address, ESP_BD_ADDR_LEN) == 0) {
+            (void)memcpy(name, s_names[i].name, OUTPUT_SINK_NAME_MAX);
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&s_saved_peer_mux);
+}
+
+static bool pin_fallback_for(const esp_bd_addr_t address)
+{
+    bool active;
+
+    portENTER_CRITICAL(&s_saved_peer_mux);
+    active = s_pin_fallback_active && memcmp(s_pin_fallback_bda, address, ESP_BD_ADDR_LEN) == 0;
+    portEXIT_CRITICAL(&s_saved_peer_mux);
+    return active;
+}
+
+static void pin_fallback_set(const uint8_t *address, bool active)
 {
     portENTER_CRITICAL(&s_saved_peer_mux);
-    s_have_saved_peer = false;
-    (void)memset(s_saved_peer, 0, sizeof(s_saved_peer));
+    s_pin_fallback_active = active;
+    if (address != NULL) {
+        (void)memcpy(s_pin_fallback_bda, address, ESP_BD_ADDR_LEN);
+    }
     portEXIT_CRITICAL(&s_saved_peer_mux);
+}
+
+#define ADDR_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
+#define ADDR_ARGS(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
+
+static void log_sinks(const char *why)
+{
+    output_sink_list_t list;
+    sinks_snapshot(&list);
+    ESP_LOGI(TAG, "MRU sinks (%s): %u saved", why, (unsigned int)list.count);
+    for (unsigned int i = 0U; i < list.count; ++i) {
+        ESP_LOGI(TAG, "MRU slot %u: " ADDR_FMT " '%s'", i, ADDR_ARGS(list.sinks[i].addr),
+                 list.sinks[i].name);
+    }
 }
 
 static void avrcp_peer_update(bool connected, const esp_bd_addr_t address)
@@ -464,7 +572,32 @@ static void gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *par
     }
     switch (event) {
     case ESP_BT_GAP_DISC_RES_EVT:
-        if (CONFIG_LARKBRIDGE_OUTPUT_PEER_NAME[0] != '\0') {
+        if (pairing_open()) {
+            char name[ESP_BT_GAP_MAX_BDNAME_LEN + 1U];
+            uint32_t cod = 0U;
+            int8_t rssi = -127;
+            bool have_name = name_from_discovery(parameter, name, sizeof(name));
+            for (int i = 0; i < parameter->disc_res.num_prop; ++i) {
+                esp_bt_gap_dev_prop_t *property = &parameter->disc_res.prop[i];
+                if (property->type == ESP_BT_GAP_DEV_PROP_COD && property->val != NULL &&
+                    property->len >= (int)sizeof(uint32_t)) {
+                    (void)memcpy(&cod, property->val, sizeof(cod));
+                } else if (property->type == ESP_BT_GAP_DEV_PROP_RSSI && property->val != NULL &&
+                           property->len >= 1) {
+                    rssi = *(int8_t *)property->val;
+                }
+            }
+            if (have_name) {
+                name_cache_put(parameter->disc_res.bda, name);
+            }
+            if (output_sink_cod_is_audio(cod) && !(have_name && output_sink_name_is_self(name))) {
+                queued.type = BT_EVENT_CANDIDATE;
+                (void)memcpy(queued.address, parameter->disc_res.bda, ESP_BD_ADDR_LEN);
+                queued.cod = cod;
+                queued.rssi = rssi;
+                post_event(&queued);
+            }
+        } else if (CONFIG_LARKBRIDGE_OUTPUT_PEER_NAME[0] != '\0') {
             char name[ESP_BT_GAP_MAX_BDNAME_LEN + 1U];
             if (name_from_discovery(parameter, name, sizeof(name)) &&
                 strcmp(name, CONFIG_LARKBRIDGE_OUTPUT_PEER_NAME) == 0) {
@@ -489,6 +622,14 @@ static void gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *par
         } else {
             (void)memcpy(pin, CONFIG_LARKBRIDGE_OUTPUT_LEGACY_PIN, length);
         }
+        if (pin_fallback_for(parameter->pin_req.bda)) {
+            const char *fallback =
+                strcmp(CONFIG_LARKBRIDGE_OUTPUT_LEGACY_PIN, "1234") == 0 ? "0000" : "1234";
+            length = 4U;
+            (void)memcpy(pin, fallback, length);
+            ESP_LOGW(TAG, "legacy PIN fallback %s for " ADDR_FMT, fallback,
+                     ADDR_ARGS(parameter->pin_req.bda));
+        }
         bool allowed = saved_peer_allows(parameter->pin_req.bda);
         (void)esp_bt_gap_pin_reply(parameter->pin_req.bda, allowed,
                                    allowed ? (uint8_t)length : 0U, pin);
@@ -503,9 +644,16 @@ static void gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *par
         if (parameter->auth_cmpl.stat != ESP_BT_STATUS_SUCCESS) {
             ESP_LOGE(TAG, "pairing failed, status=%u", parameter->auth_cmpl.stat);
             (void)output_control_report_fault(BRIDGE_FAULT_BLUETOOTH);
+            queued.type = BT_EVENT_AUTH_FAILED;
+            (void)memcpy(queued.address, parameter->auth_cmpl.bda, ESP_BD_ADDR_LEN);
+            post_event(&queued);
         } else if (!saved_peer_allows(parameter->auth_cmpl.bda)) {
             ESP_LOGE(TAG, "removing bond attempted by a non-selected output peer");
             (void)esp_bt_gap_remove_bond_device(parameter->auth_cmpl.bda);
+        } else {
+            name_cache_put(parameter->auth_cmpl.bda, (const char *)parameter->auth_cmpl.device_name);
+            ESP_LOGI(TAG, "paired with " ADDR_FMT " '%s'", ADDR_ARGS(parameter->auth_cmpl.bda),
+                     (const char *)parameter->auth_cmpl.device_name);
         }
         break;
     default:
@@ -568,7 +716,8 @@ static bool request_sbc_codec(bool fallback)
 static void set_pairing_visibility(void) {
     esp_err_t error = esp_bt_gap_set_scan_mode(
         ESP_BT_CONNECTABLE,
-        saved_peer_snapshot(NULL) ? ESP_BT_NON_DISCOVERABLE : ESP_BT_GENERAL_DISCOVERABLE);
+        (pairing_open() || !saved_peer_snapshot(NULL)) ? ESP_BT_GENERAL_DISCOVERABLE
+                                                       : ESP_BT_NON_DISCOVERABLE);
     if (error != ESP_OK) {
         ESP_LOGW(TAG, "cannot enter pairing scan mode: %s", esp_err_to_name(error));
     }
@@ -601,7 +750,12 @@ static void begin_discovery(uint32_t current_ms) {
     if (esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, (uint8_t)units, 0U) ==
         ESP_OK) {
         s_state = BT_STATE_DISCOVERING;
-        ESP_LOGI(TAG, "discovering target '%s'", CONFIG_LARKBRIDGE_OUTPUT_PEER_NAME);
+        if (pairing_open()) {
+            output_sink_candidates_init(&s_candidates);
+            ESP_LOGI(TAG, "pairing inquiry: scanning for audio sinks (CoD major A/V)");
+        } else {
+            ESP_LOGI(TAG, "discovering target '%s'", CONFIG_LARKBRIDGE_OUTPUT_PEER_NAME);
+        }
     } else {
         s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
     }
@@ -616,9 +770,10 @@ static void handle_connected(const bt_event_t *event, uint32_t current_ms) {
         return;
     }
     if ((s_state == BT_STATE_CONNECTING &&
-         memcmp(s_requested_peer, event->address, ESP_BD_ADDR_LEN) != 0) ||
+         memcmp(s_requested_peer, event->address, ESP_BD_ADDR_LEN) != 0 &&
+         !saved_peer_allows(event->address)) ||
         (!have_saved_peer && CONFIG_LARKBRIDGE_OUTPUT_PEER_NAME[0] != '\0' &&
-         s_state != BT_STATE_CONNECTING)) {
+         s_state != BT_STATE_CONNECTING && !pairing_open())) {
         esp_bd_addr_t rejected_address;
         (void)memcpy(rejected_address, event->address, ESP_BD_ADDR_LEN);
         ESP_LOGW(TAG, "rejecting unsolicited peer during an active connection attempt");
@@ -638,6 +793,9 @@ static void handle_connected(const bt_event_t *event, uint32_t current_ms) {
         (void)esp_a2d_source_disconnect((uint8_t *)event->address);
         return;
     }
+    if (s_state == BT_STATE_DISCOVERING) {
+        (void)esp_bt_gap_cancel_discovery();
+    }
     (void)memcpy(s_active_peer, event->address, ESP_BD_ADDR_LEN);
     s_active_connection_handle = event->connection_handle;
     s_active_connection_valid = true;
@@ -653,35 +811,65 @@ static void handle_connected(const bt_event_t *event, uint32_t current_ms) {
     atomic_store_explicit(&s_peer_connected, true, memory_order_release);
     atomic_store_explicit(&s_audio_streaming, false, memory_order_release);
     (void)esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-    ESP_LOGI(TAG, "downstream A2DP peer connected");
+    ESP_LOGI(TAG, "downstream A2DP peer connected: " ADDR_FMT "%s", ADDR_ARGS(event->address),
+             pairing_open() ? " (pairing mode)" : "");
+}
+
+static void exit_pairing(const char *why)
+{
+    if (!atomic_exchange_explicit(&s_pairing_open, false, memory_order_acq_rel)) {
+        return;
+    }
+    pin_fallback_set(NULL, false);
+    output_sink_candidates_init(&s_candidates);
+    if (s_state == BT_STATE_DISCOVERING) {
+        (void)esp_bt_gap_cancel_discovery();
+    }
+    if (s_state != BT_STATE_CONNECTED) {
+        set_pairing_visibility();
+    }
+    ESP_LOGI(TAG, "pairing mode off (%s)", why);
 }
 
 static void qualify_active_peer(void)
 {
-    if (saved_peer_snapshot(NULL) || !s_format_ready ||
-        !atomic_load_explicit(&s_audio_streaming, memory_order_acquire)) {
+    if (!s_format_ready || !atomic_load_explicit(&s_audio_streaming, memory_order_acquire)) {
         return;
     }
-    esp_err_t result = output_peer_store_save(s_active_peer);
-    if (result != ESP_OK) {
-        ESP_LOGE(TAG, "qualified output peer could not be persisted: %s",
-                 esp_err_to_name(result));
-        (void)output_control_report_fault(BRIDGE_FAULT_BLUETOOTH);
-        return;
+    char name[OUTPUT_SINK_NAME_MAX];
+    output_sink_list_t next;
+    name_cache_get(s_active_peer, name);
+    sinks_snapshot(&next);
+    bool was_saved = output_sink_list_find(&next, s_active_peer) >= 0;
+    if (output_sink_list_promote(&next, s_active_peer, name)) {
+        esp_err_t result = output_peer_store_save_list(&next);
+        if (result != ESP_OK) {
+            ESP_LOGE(TAG, "qualified output peer could not be persisted: %s",
+                     esp_err_to_name(result));
+            (void)output_control_report_fault(BRIDGE_FAULT_BLUETOOTH);
+            return;
+        }
+        sinks_commit(&next);
+        ESP_LOGI(TAG, "%s sink " ADDR_FMT " '%s' to MRU slot 0 after codec and stream qualification",
+                 was_saved ? "promoted" : "saved new", ADDR_ARGS(s_active_peer), next.sinks[0].name);
+        log_sinks("updated");
     }
-    saved_peer_set(s_active_peer);
-    ESP_LOGI(TAG, "persisted output peer after codec and stream qualification");
+    s_rr_cursor = 0U;
+    exit_pairing("sink connected and qualified");
 }
 
 static void reject_active_peer(const char *reason)
 {
     ESP_LOGE(TAG, "%s; forgetting and disconnecting output peer", reason);
     if (saved_peer_matches(s_active_peer)) {
-        esp_err_t result = output_peer_store_clear();
+        output_sink_list_t next;
+        sinks_snapshot(&next);
+        (void)output_sink_list_remove(&next, s_active_peer);
+        esp_err_t result = output_peer_store_save_list(&next);
         if (result != ESP_OK) {
             ESP_LOGW(TAG, "could not clear rejected peer: %s", esp_err_to_name(result));
         } else {
-            saved_peer_clear();
+            sinks_commit(&next);
         }
     }
     (void)esp_bt_gap_remove_bond_device(s_active_peer);
@@ -759,13 +947,114 @@ static void handle_disconnected(const bt_event_t *event, uint32_t current_ms) {
     s_media_ack_timeout_count = 0U;
     s_format_ready = false;
     s_have_discovered_peer = false;
-    s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
+    s_next_action_ms = current_ms + (pairing_open() ? PAIRING_RETRY_MS
+                                                    : CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS);
     atomic_store_explicit(&s_peer_connected, false, memory_order_release);
     atomic_store_explicit(&s_audio_streaming, false, memory_order_release);
     atomic_store_explicit(&s_pcm_format, 0U, memory_order_release);
     output_control_invalidate_local_audio();
     set_pairing_visibility();
-    ESP_LOGW(TAG, "downstream A2DP peer disconnected");
+    ESP_LOGW(TAG, "downstream A2DP peer disconnected: " ADDR_FMT, ADDR_ARGS(event->address));
+}
+
+static void drop_active_link(uint32_t current_ms)
+{
+    avrcp_peer_update(false, NULL);
+    s_format_ready = false;
+    s_media_ack_pending = false;
+    s_media_ack_timeout_count = 0U;
+    s_have_discovered_peer = false;
+    atomic_store_explicit(&s_pcm_format, 0U, memory_order_release);
+    atomic_store_explicit(&s_audio_streaming, false, memory_order_release);
+    atomic_store_explicit(&s_peer_connected, false, memory_order_release);
+    output_control_invalidate_local_audio();
+    if (s_state == BT_STATE_CONNECTED && s_active_connection_valid) {
+        (void)esp_a2d_source_disconnect(s_active_peer);
+        s_state = BT_STATE_DISCONNECTING;
+        s_connect_deadline_ms = current_ms + CONNECT_TIMEOUT_MS;
+    } else if (s_state == BT_STATE_CONNECTING) {
+        (void)esp_a2d_source_disconnect(s_requested_peer);
+        s_state = BT_STATE_WAITING;
+        s_next_action_ms = current_ms + PAIRING_RETRY_MS;
+    } else if (s_state == BT_STATE_DISCOVERING) {
+        (void)esp_bt_gap_cancel_discovery();
+        s_state = BT_STATE_WAITING;
+        s_next_action_ms = current_ms + PAIRING_RETRY_MS;
+    }
+}
+
+static void enter_pairing(uint32_t current_ms, const char *why)
+{
+    output_sink_candidates_init(&s_candidates);
+    pin_fallback_set(NULL, false);
+    atomic_store_explicit(&s_pairing_deadline_ms, current_ms + PAIRING_WINDOW_MS,
+                          memory_order_release);
+    atomic_store_explicit(&s_pairing_open, true, memory_order_release);
+    drop_active_link(current_ms);
+    if (s_state == BT_STATE_WAITING) {
+        s_next_action_ms = current_ms;
+    }
+    set_pairing_visibility();
+    ESP_LOGI(TAG, "pairing mode on (%s) for %u s: discoverable as '%s' and scanning for sinks",
+             why, PAIRING_WINDOW_MS / 1000U, CONFIG_LARKBRIDGE_OUTPUT_DEVICE_NAME);
+}
+
+static void wipe_all_sinks(uint32_t current_ms)
+{
+    output_sink_list_t empty;
+    output_sink_list_init(&empty);
+    esp_err_t result = output_peer_store_clear();
+    if (result != ESP_OK) {
+        ESP_LOGW(TAG, "could not erase saved sinks: %s", esp_err_to_name(result));
+    }
+    sinks_commit(&empty);
+    s_rr_cursor = 0U;
+    int bond_count = esp_bt_gap_get_bond_device_num();
+    if (bond_count > 0) {
+        if (bond_count > 8) {
+            bond_count = 8;
+        }
+        esp_bd_addr_t bonds[8];
+        if (esp_bt_gap_get_bond_device_list(&bond_count, bonds) == ESP_OK) {
+            for (int i = 0; i < bond_count; ++i) {
+                (void)esp_bt_gap_remove_bond_device(bonds[i]);
+            }
+        }
+    }
+    drop_active_link(current_ms);
+    if (s_state == BT_STATE_WAITING) {
+        s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
+    }
+    set_pairing_visibility();
+    ESP_LOGW(TAG, "factory wipe: all saved sinks and Bluetooth bonds removed");
+}
+
+static void forget_sink(const bt_event_t *event, uint32_t current_ms)
+{
+    output_sink_list_t next;
+    esp_bd_addr_t address;
+    sinks_snapshot(&next);
+    int index = event->address_valid ? output_sink_list_find(&next, event->address) : event->index;
+    if (index < 0 || index >= (int)next.count) {
+        ESP_LOGW(TAG, "forget_sink: no such saved sink");
+        return;
+    }
+    (void)memcpy(address, next.sinks[index].addr, ESP_BD_ADDR_LEN);
+    (void)output_sink_list_remove_index(&next, (unsigned int)index);
+    esp_err_t result = output_peer_store_save_list(&next);
+    if (result != ESP_OK) {
+        ESP_LOGW(TAG, "forget_sink: persist failed: %s", esp_err_to_name(result));
+        return;
+    }
+    sinks_commit(&next);
+    s_rr_cursor = 0U;
+    (void)esp_bt_gap_remove_bond_device(address);
+    if (s_active_connection_valid && memcmp(s_active_peer, address, ESP_BD_ADDR_LEN) == 0) {
+        drop_active_link(current_ms);
+    }
+    set_pairing_visibility();
+    ESP_LOGI(TAG, "forgot sink " ADDR_FMT, ADDR_ARGS(address));
+    log_sinks("after forget");
 }
 
 static void handle_bt_event(const bt_event_t *event, uint32_t current_ms) {
@@ -778,7 +1067,17 @@ static void handle_bt_event(const bt_event_t *event, uint32_t current_ms) {
         }
         break;
     case BT_EVENT_DISCOVERY_STOPPED:
-        if (s_state == BT_STATE_DISCOVERING) {
+        if (s_state == BT_STATE_DISCOVERING && pairing_open()) {
+            ESP_LOGI(TAG, "pairing inquiry done: %u audio candidate(s)",
+                     (unsigned int)s_candidates.count);
+            for (unsigned int i = 0U; i < s_candidates.count; ++i) {
+                ESP_LOGI(TAG, "candidate %u: " ADDR_FMT " rssi=%d cod=0x%06lx", i,
+                         ADDR_ARGS(s_candidates.items[i].addr), (int)s_candidates.items[i].rssi,
+                         (unsigned long)s_candidates.items[i].cod);
+            }
+            s_state = BT_STATE_WAITING;
+            s_next_action_ms = current_ms;
+        } else if (s_state == BT_STATE_DISCOVERING) {
             if (s_have_discovered_peer) {
                 start_connection(s_discovered_peer, current_ms);
             } else {
@@ -879,51 +1178,41 @@ static void handle_bt_event(const bt_event_t *event, uint32_t current_ms) {
             s_next_media_attempt_ms = current_ms + MEDIA_RETRY_MS;
         }
         break;
-#if CONFIG_LARKBRIDGE_TEST_IMAGE
-    case BT_EVENT_TEST_FORGET: {
-        ESP_LOGW(TAG, "TEST: forgetting saved output peer and clearing BT bonds");
-        (void)output_peer_store_clear();
-        esp_bd_addr_t old_peer;
-        if (saved_peer_snapshot(old_peer)) {
-            (void)esp_bt_gap_remove_bond_device(old_peer);
+    case BT_EVENT_CANDIDATE:
+        if (s_state == BT_STATE_DISCOVERING && pairing_open()) {
+            (void)output_sink_candidates_offer(&s_candidates, event->address, event->rssi,
+                                               event->cod);
         }
-        saved_peer_clear();
-        int bond_count = esp_bt_gap_get_bond_device_num();
-        if (bond_count > 0) {
-            if (bond_count > 8) {
-                bond_count = 8;
-            }
-            esp_bd_addr_t bonds[8];
-            if (esp_bt_gap_get_bond_device_list(&bond_count, bonds) == ESP_OK) {
-                for (int i = 0; i < bond_count; ++i) {
-                    (void)esp_bt_gap_remove_bond_device(bonds[i]);
+        break;
+    case BT_EVENT_AUTH_FAILED:
+        if (pairing_open() && !pin_fallback_for(event->address)) {
+            pin_fallback_set(event->address, true);
+            for (unsigned int i = 0U; i < s_candidates.count; ++i) {
+                if (memcmp(s_candidates.items[i].addr, event->address, ESP_BD_ADDR_LEN) == 0) {
+                    s_candidates.items[i].attempted = false;
                 }
             }
+            ESP_LOGW(TAG, "auth failed for " ADDR_FMT "; retrying once with fallback PIN",
+                     ADDR_ARGS(event->address));
+        } else if (pin_fallback_for(event->address)) {
+            pin_fallback_set(NULL, false);
         }
-        avrcp_peer_update(false, NULL);
-        s_format_ready = false;
-        s_media_ack_pending = false;
-        s_media_ack_timeout_count = 0U;
-        s_have_discovered_peer = false;
-        atomic_store_explicit(&s_pcm_format, 0U, memory_order_release);
-        atomic_store_explicit(&s_audio_streaming, false, memory_order_release);
-        atomic_store_explicit(&s_peer_connected, false, memory_order_release);
-        output_control_invalidate_local_audio();
-        if (s_state == BT_STATE_CONNECTED && s_active_connection_valid) {
-            (void)esp_a2d_source_disconnect(s_active_peer);
-            s_state = BT_STATE_DISCONNECTING;
-            s_connect_deadline_ms = current_ms + CONNECT_TIMEOUT_MS;
-        } else if (s_state == BT_STATE_CONNECTING) {
-            (void)esp_a2d_source_disconnect(s_requested_peer);
-            s_state = BT_STATE_WAITING;
-            s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
-        } else {
-            s_state = BT_STATE_WAITING;
-            s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
-        }
-        set_pairing_visibility();
         break;
-    }
+    case BT_EVENT_PAIR_REQUEST:
+        enter_pairing(current_ms, "requested");
+        break;
+    case BT_EVENT_FACTORY_WIPE:
+        wipe_all_sinks(current_ms);
+        enter_pairing(current_ms, "factory wipe");
+        break;
+    case BT_EVENT_FORGET_SINK:
+        forget_sink(event, current_ms);
+        break;
+#if CONFIG_LARKBRIDGE_TEST_IMAGE
+    case BT_EVENT_TEST_FORGET:
+        ESP_LOGW(TAG, "TEST: forgetting saved output peers and clearing BT bonds");
+        wipe_all_sinks(current_ms);
+        break;
 #endif
     default:
         break;
@@ -941,10 +1230,35 @@ static void bluetooth_worker(void *context) {
             handle_bt_event(&event, now_ms());
         }
         current_ms = now_ms();
+        if (pairing_open() &&
+            (int32_t)(current_ms - atomic_load_explicit(&s_pairing_deadline_ms,
+                                                        memory_order_acquire)) >= 0) {
+            bool was_discovering = s_state == BT_STATE_DISCOVERING;
+            exit_pairing("window expired");
+            if (was_discovering) {
+                s_state = BT_STATE_WAITING;
+                s_next_action_ms = current_ms + PAIRING_RETRY_MS;
+            }
+        }
         if (s_state == BT_STATE_WAITING && (int32_t)(current_ms - s_next_action_ms) >= 0) {
-            esp_bd_addr_t saved_peer;
-            if (saved_peer_snapshot(saved_peer)) {
-                start_connection(saved_peer, current_ms);
+            output_sink_list_t sinks;
+            sinks_snapshot(&sinks);
+            if (pairing_open()) {
+                int next = output_sink_candidates_next(&s_candidates);
+                if (next >= 0) {
+                    ESP_LOGI(TAG, "pairing: trying candidate " ADDR_FMT " rssi=%d",
+                             ADDR_ARGS(s_candidates.items[next].addr),
+                             (int)s_candidates.items[next].rssi);
+                    start_connection(s_candidates.items[next].addr, current_ms);
+                } else {
+                    begin_discovery(current_ms);
+                }
+            } else if (sinks.count > 0U) {
+                unsigned int index = s_rr_cursor % sinks.count;
+                s_rr_cursor = output_sink_next_index(index, sinks.count);
+                ESP_LOGI(TAG, "reconnect: MRU slot %u " ADDR_FMT " '%s'", index,
+                         ADDR_ARGS(sinks.sinks[index].addr), sinks.sinks[index].name);
+                start_connection(sinks.sinks[index].addr, current_ms);
             } else if (CONFIG_LARKBRIDGE_OUTPUT_PEER_NAME[0] != '\0') {
                 begin_discovery(current_ms);
             } else {
@@ -954,7 +1268,8 @@ static void bluetooth_worker(void *context) {
                    (int32_t)(current_ms - s_connect_deadline_ms) >= 0) {
             ESP_LOGW(TAG, "A2DP connection attempt timed out");
             s_state = BT_STATE_WAITING;
-            s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
+            s_next_action_ms = current_ms + (pairing_open() ? PAIRING_RETRY_MS
+                                                            : CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS);
         } else if (s_state == BT_STATE_DISCONNECTING &&
                    (int32_t)(current_ms - s_connect_deadline_ms) >= 0) {
             ESP_LOGW(TAG, "A2DP disconnect timed out; releasing stale peer identity");
@@ -970,7 +1285,7 @@ static void bluetooth_worker(void *context) {
                        (int32_t)A2DP_PULL_STALL_MS) {
             recycle_active_connection("A2DP source stopped pulling audio; link presumed lost");
         } else if (s_state == BT_STATE_CONNECTED &&
-                   (!s_format_ready || !saved_peer_snapshot(NULL)) &&
+                   (!s_format_ready || !saved_peer_matches(s_active_peer)) &&
                    (int32_t)(current_ms - s_qualification_deadline_ms) >= 0) {
             recycle_active_connection("output peer did not qualify before timeout");
         } else if (s_state == BT_STATE_CONNECTED && s_media_ack_pending &&
@@ -1013,21 +1328,26 @@ esp_err_t output_bluetooth_start(void) {
     avrcp_peer_update(false, NULL);
     s_media_ack_pending = false;
     s_media_ack_timeout_count = 0U;
+    atomic_init(&s_pairing_open, false);
+    atomic_init(&s_pairing_deadline_ms, 0U);
+    output_sink_candidates_init(&s_candidates);
     s_event_queue = xQueueCreate(BT_EVENT_QUEUE_LENGTH, sizeof(bt_event_t));
     if (s_event_queue == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    esp_bd_addr_t saved_peer = {0};
-    bool have_saved_peer = false;
-    error = output_peer_store_load(saved_peer, &have_saved_peer);
+    output_sink_list_t loaded;
+    bool migrated = false;
+    error = output_peer_store_load_list(&loaded, &migrated);
     if (error != ESP_OK) {
-        ESP_LOGW(TAG, "cannot load saved peer: %s", esp_err_to_name(error));
-        saved_peer_clear();
-    } else if (have_saved_peer) {
-        saved_peer_set(saved_peer);
-    } else {
-        saved_peer_clear();
+        ESP_LOGW(TAG, "cannot load saved sinks: %s", esp_err_to_name(error));
+        output_sink_list_init(&loaded);
     }
+    sinks_commit(&loaded);
+    if (migrated) {
+        ESP_LOGI(TAG, "migrated legacy peer_bda " ADDR_FMT " into peer_list MRU slot 0",
+                 ADDR_ARGS(loaded.sinks[0].addr));
+    }
+    log_sinks(migrated ? "after legacy migration" : "loaded");
 
     error = esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
     if (error != ESP_OK) {
@@ -1068,6 +1388,25 @@ esp_err_t output_bluetooth_start(void) {
     }
     (void)esp_bt_gap_set_pin(ESP_BT_PIN_TYPE_FIXED, (uint8_t)pin_length, pin);
 
+    /* Head units such as the Honda CR-V list only phones when they search, so
+     * present as a smartphone offering audio + rendering services. */
+    esp_bt_cod_t class_of_device = {
+        .minor = 0x03, /* smartphone */
+        .major = ESP_BT_COD_MAJOR_DEV_PHONE,
+        .service = ESP_BT_COD_SRVC_AUDIO | ESP_BT_COD_SRVC_RENDERING,
+    };
+    error = esp_bt_gap_set_cod(class_of_device, ESP_BT_SET_COD_ALL);
+    if (error != ESP_OK) {
+        ESP_LOGW(TAG, "cannot set Class of Device: %s", esp_err_to_name(error));
+    } else {
+        esp_bt_cod_t applied = {0};
+        if (esp_bt_gap_get_cod(&applied) == ESP_OK) {
+            ESP_LOGI(TAG, "Class of Device major=0x%02x minor=0x%02x service=0x%03x",
+                     (unsigned int)applied.major, (unsigned int)applied.minor,
+                     (unsigned int)applied.service);
+        }
+    }
+
     error = esp_avrc_tg_register_callback(avrcp_callback);
     if (error != ESP_OK) {
         return error;
@@ -1095,8 +1434,53 @@ esp_err_t output_bluetooth_start(void) {
 
     atomic_store_explicit(&s_stack_ready, true, memory_order_release);
     ESP_LOGI(TAG, "Bluetooth Classic ready as '%s'%s", CONFIG_LARKBRIDGE_OUTPUT_DEVICE_NAME,
-             saved_peer_snapshot(NULL) ? "; saved peer loaded" : "; waiting for pairing");
+             saved_peer_snapshot(NULL) ? "; saved sinks loaded" : "; no saved sinks");
+    if (!saved_peer_snapshot(NULL) && CONFIG_LARKBRIDGE_OUTPUT_PEER_NAME[0] == '\0') {
+        (void)output_bluetooth_request_pairing();
+    }
     return ESP_OK;
+}
+
+static bool queue_control_event(const bt_event_t *event)
+{
+    return s_event_queue != NULL && xQueueSend(s_event_queue, event, 0U) == pdTRUE;
+}
+
+bool output_bluetooth_request_pairing(void)
+{
+    bt_event_t event = {.type = BT_EVENT_PAIR_REQUEST};
+    return queue_control_event(&event);
+}
+
+bool output_bluetooth_request_factory_wipe(void)
+{
+    bt_event_t event = {.type = BT_EVENT_FACTORY_WIPE};
+    return queue_control_event(&event);
+}
+
+bool output_bluetooth_forget_sink(int index, const uint8_t *address)
+{
+    bt_event_t event = {.type = BT_EVENT_FORGET_SINK, .index = index};
+    if (address != NULL) {
+        (void)memcpy(event.address, address, ESP_BD_ADDR_LEN);
+        event.address_valid = true;
+    }
+    return queue_control_event(&event);
+}
+
+void output_bluetooth_get_sinks(output_bluetooth_sinks_t *status)
+{
+    if (status == NULL) {
+        return;
+    }
+    sinks_snapshot(&status->sinks);
+    status->pairing = pairing_open();
+    uint32_t remaining =
+        atomic_load_explicit(&s_pairing_deadline_ms, memory_order_acquire) - now_ms();
+    status->pairing_remaining_ms =
+        status->pairing && (int32_t)remaining > 0 ? remaining : 0U;
+    status->connected = atomic_load_explicit(&s_peer_connected, memory_order_acquire);
+    status->streaming = output_bluetooth_audio_streaming();
 }
 
 bool output_bluetooth_stack_ready(void) {

@@ -1,4 +1,5 @@
 #include "bridge_link.h"
+#include "driver/gpio.h"
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_err.h"
@@ -6,12 +7,14 @@
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
 #include "output_audio.h"
 #include "output_bluetooth.h"
 #include "output_control.h"
+#include "output_sink_policy.h"
 #include "output_telemetry.h"
 
 #include <stdint.h>
@@ -42,6 +45,47 @@ static void log_identity_banner(void) {
              0
 #endif
     );
+}
+
+/* DevKitC BOOT button: GPIO0, active low, external 10k pull-up (internal pull-up
+ * enabled as well). No conflict with I2S (26/25/22) or the S31 UART (16/17). */
+#define BOOT_BUTTON_GPIO GPIO_NUM_0
+
+static bool boot_button_init(void) {
+    const gpio_config_t config = {
+        .pin_bit_mask = 1ULL << BOOT_BUTTON_GPIO,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    return gpio_config(&config) == ESP_OK;
+}
+
+static void boot_button_poll(output_button_t *button) {
+    bool pressed = gpio_get_level(BOOT_BUTTON_GPIO) == 0;
+    uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+    switch (output_button_update(button, pressed, now)) {
+    case OUTPUT_BUTTON_HINT_PAIR:
+        ESP_LOGI(TAG, "BOOT held 3 s: release now for pairing mode (keep holding to 10 s to wipe)");
+        break;
+    case OUTPUT_BUTTON_HINT_WIPE:
+        ESP_LOGW(TAG, "BOOT held 10 s: release now to WIPE all saved sinks and bonds");
+        break;
+    case OUTPUT_BUTTON_STUCK:
+        ESP_LOGW(TAG, "BOOT held 20 s: treating as stuck (serial DTR/RTS?) and ignoring");
+        break;
+    case OUTPUT_BUTTON_PAIR:
+        ESP_LOGI(TAG, "BOOT button: entering pairing mode");
+        (void)output_bluetooth_request_pairing();
+        break;
+    case OUTPUT_BUTTON_WIPE:
+        ESP_LOGW(TAG, "BOOT button: factory wipe of saved sinks, then pairing mode");
+        (void)output_bluetooth_request_factory_wipe();
+        break;
+    default:
+        break;
+    }
 }
 
 static esp_err_t initialize_nvs(void) {
@@ -90,8 +134,19 @@ void app_main(void) {
         ESP_LOGE(TAG, "telemetry initialization failed: %s", esp_err_to_name(telemetry_error));
     }
 
+    output_button_t boot_button;
+    bool button_ready = boot_button_init();
+    output_button_init(&boot_button, button_ready && gpio_get_level(BOOT_BUTTON_GPIO) == 0);
+    if (!button_ready) {
+        ESP_LOGW(TAG, "BOOT button GPIO unavailable; use the pair console command");
+    }
+
     for (;;) {
         uint8_t ready = 0U;
+
+        if (button_ready && bluetooth_error == ESP_OK) {
+            boot_button_poll(&boot_button);
+        }
 
         if (output_control_is_initialized()) {
             ready |= BRIDGE_READY_UART;

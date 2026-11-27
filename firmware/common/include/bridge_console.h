@@ -31,6 +31,10 @@ typedef enum {
     BRIDGE_CMD_TAP,
     BRIDGE_CMD_FAULT,
     BRIDGE_CMD_FORGET,
+    /* Output board sink management (release and test images). */
+    BRIDGE_CMD_PAIR,
+    BRIDGE_CMD_SINKS,
+    BRIDGE_CMD_FORGET_SINK,
 } bridge_console_command_t;
 
 typedef enum {
