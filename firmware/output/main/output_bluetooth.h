@@ -27,8 +27,6 @@ typedef struct {
 } output_bluetooth_sinks_t;
 
 void output_bluetooth_get_sinks(output_bluetooth_sinks_t *status);
-/* Increments once each time all remembered sinks are wiped (status LED). */
-uint32_t output_bluetooth_wipe_count(void);
 bool output_bluetooth_stack_ready(void);
 bool output_bluetooth_peer_connected(void);
 bool output_bluetooth_audio_streaming(void);

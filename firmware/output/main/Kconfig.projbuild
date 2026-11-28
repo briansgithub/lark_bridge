@@ -29,17 +29,6 @@ menu "LarkBridge output controller"
             Four-digit PIN used only when a downstream sink requests legacy
             pairing. Secure Simple Pairing uses no-input/no-output mode.
 
-    config LARKBRIDGE_OUTPUT_STATUS_LED_GPIO
-        int "Status LED GPIO (-1 = none)"
-        range -1 33
-        default 2
-        help
-            Active-high LED (to GND through ~330 ohm) for pairing feedback:
-            fast blink while pairing mode is open, three long flashes after a
-            factory wipe. The ESP32-DevKitC has no user LED of its own; GPIO2
-            is a strapping pin that must be low at reset, which an LED to GND
-            keeps. Must not be 16, 17, 22, 25, 26 or 0.
-
     config LARKBRIDGE_OUTPUT_I2S_BCLK_GPIO
         int "I2S bit-clock GPIO"
         range 0 39

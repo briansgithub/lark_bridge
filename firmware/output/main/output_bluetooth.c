@@ -98,7 +98,6 @@ static portMUX_TYPE s_avrcp_peer_mux = portMUX_INITIALIZER_UNLOCKED;
  * read from Bluedroid callbacks and telemetry under s_saved_peer_mux. */
 static output_sink_list_t s_sinks;
 static atomic_bool s_pairing_open;
-static atomic_uint s_wipe_count;
 static atomic_uint s_pairing_deadline_ms;
 static output_sink_candidates_t s_candidates;
 static unsigned int s_rr_cursor;
@@ -1066,7 +1065,6 @@ static void wipe_all_sinks(uint32_t current_ms)
         s_next_action_ms = current_ms + CONFIG_LARKBRIDGE_OUTPUT_RECONNECT_MS;
     }
     set_pairing_visibility();
-    atomic_fetch_add_explicit(&s_wipe_count, 1U, memory_order_acq_rel);
     ESP_LOGW(TAG, "factory wipe: all saved sinks and Bluetooth bonds removed");
 }
 
@@ -1498,11 +1496,6 @@ bool output_bluetooth_forget_sink(int index, const uint8_t *address)
         event.address_valid = true;
     }
     return queue_control_event(&event);
-}
-
-uint32_t output_bluetooth_wipe_count(void)
-{
-    return atomic_load_explicit(&s_wipe_count, memory_order_acquire);
 }
 
 void output_bluetooth_get_sinks(output_bluetooth_sinks_t *status)

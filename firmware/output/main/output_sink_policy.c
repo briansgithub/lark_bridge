@@ -289,31 +289,3 @@ output_button_action_t output_button_update(output_button_t *button, bool presse
     }
     return OUTPUT_BUTTON_NONE;
 }
-
-void output_led_init(output_led_t *led, uint32_t wipe_count)
-{
-    led->wipe_seen = wipe_count;
-    led->wipe_active = false;
-    led->wipe_start_ms = 0U;
-}
-
-bool output_led_update(output_led_t *led, bool pairing, uint32_t wipe_count, uint32_t now_ms)
-{
-    if (wipe_count != led->wipe_seen) {
-        led->wipe_seen = wipe_count;
-        led->wipe_active = true;
-        led->wipe_start_ms = now_ms;
-    }
-    if (led->wipe_active) {
-        const uint32_t period = OUTPUT_LED_WIPE_ON_MS + OUTPUT_LED_WIPE_OFF_MS;
-        uint32_t elapsed = now_ms - led->wipe_start_ms;
-        if (elapsed < period * OUTPUT_LED_WIPE_FLASHES) {
-            return (elapsed % period) < OUTPUT_LED_WIPE_ON_MS;
-        }
-        led->wipe_active = false;
-    }
-    if (pairing) {
-        return ((now_ms / OUTPUT_LED_PAIR_HALF_MS) % 2U) == 0U;
-    }
-    return false;
-}

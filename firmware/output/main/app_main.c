@@ -88,28 +88,6 @@ static void boot_button_poll(output_button_t *button) {
     }
 }
 
-#if CONFIG_LARKBRIDGE_OUTPUT_STATUS_LED_GPIO >= 0
-#if CONFIG_LARKBRIDGE_OUTPUT_STATUS_LED_GPIO == 0 || CONFIG_LARKBRIDGE_OUTPUT_STATUS_LED_GPIO == 16 ||     CONFIG_LARKBRIDGE_OUTPUT_STATUS_LED_GPIO == 17 || CONFIG_LARKBRIDGE_OUTPUT_STATUS_LED_GPIO == 22 ||     CONFIG_LARKBRIDGE_OUTPUT_STATUS_LED_GPIO == 25 || CONFIG_LARKBRIDGE_OUTPUT_STATUS_LED_GPIO == 26
-#error "status LED GPIO conflicts with BOOT, UART or I2S"
-#endif
-#define STATUS_LED_GPIO ((gpio_num_t)CONFIG_LARKBRIDGE_OUTPUT_STATUS_LED_GPIO)
-
-static bool status_led_init(void) {
-    const gpio_config_t config = {
-        .pin_bit_mask = 1ULL << STATUS_LED_GPIO,
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    if (gpio_config(&config) != ESP_OK) {
-        return false;
-    }
-    (void)gpio_set_level(STATUS_LED_GPIO, 0);
-    return true;
-}
-#endif
-
 static esp_err_t initialize_nvs(void) {
 #if CONFIG_LARKBRIDGE_OUTPUT_ERASE_BONDS_ON_BOOT
     esp_err_t erase_error = nvs_flash_erase();
@@ -162,12 +140,6 @@ void app_main(void) {
     if (!button_ready) {
         ESP_LOGW(TAG, "BOOT button GPIO unavailable; use the pair console command");
     }
-#if CONFIG_LARKBRIDGE_OUTPUT_STATUS_LED_GPIO >= 0
-    output_led_t status_led;
-    bool led_ready = status_led_init();
-    bool led_level = false;
-    output_led_init(&status_led, output_bluetooth_wipe_count());
-#endif
 
     for (;;) {
         uint8_t ready = 0U;
@@ -175,18 +147,6 @@ void app_main(void) {
         if (button_ready && bluetooth_error == ESP_OK) {
             boot_button_poll(&boot_button);
         }
-#if CONFIG_LARKBRIDGE_OUTPUT_STATUS_LED_GPIO >= 0
-        if (led_ready) {
-            output_bluetooth_sinks_t sinks;
-            output_bluetooth_get_sinks(&sinks);
-            bool level = output_led_update(&status_led, sinks.pairing, output_bluetooth_wipe_count(),
-                                           (uint32_t)(esp_timer_get_time() / 1000));
-            if (level != led_level) {
-                led_level = level;
-                (void)gpio_set_level(STATUS_LED_GPIO, level ? 1 : 0);
-            }
-        }
-#endif
 
         if (output_control_is_initialized()) {
             ready |= BRIDGE_READY_UART;
@@ -215,6 +175,6 @@ void app_main(void) {
                          : " muted");
             previous_ready = ready;
         }
-        vTaskDelay(pdMS_TO_TICKS(50U)); /* status LED + BOOT button sampling */
+        vTaskDelay(pdMS_TO_TICKS(100U));
     }
 }
