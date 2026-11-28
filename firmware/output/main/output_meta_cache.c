@@ -29,13 +29,15 @@ static void start_track(output_meta_cache_t *cache, uint8_t generation, uint32_t
     cache->generation = generation;
     memset(cache->text_length, 0, sizeof(cache->text_length));
     memset(cache->text, 0, sizeof(cache->text));
-    /* AVRCP 1.3: any value but all-ones means "a track is selected"; a fresh
-     * value per track lets head units that compare identifiers notice. */
+    /* TRACK_CHANGED identifier: our SDP record says AVRCP 1.6 with no browsing,
+     * and AVRCP 1.4+ requires such a target to report 0x0 while a track is
+     * selected (all-ones = none). A non-zero value reads as a browsing UID, and
+     * a 1.4+ head unit (e.g. the 2015 CR-V) then asks for metadata over the
+     * browsing channel we do not have instead of GetElementAttributes. The
+     * CHANGED notification itself tells the car to re-query. track_counter only
+     * counts tracks for diagnostics. */
     ++cache->track_counter;
-    if (cache->track_counter == OUTPUT_META_NO_TRACK) {
-        cache->track_counter = 1U;
-    }
-    cache->track_uid = cache->track_counter;
+    cache->track_uid = OUTPUT_META_TRACK_SELECTED;
     cache->track_change_pending = true;
     cache->track_change_due_ms = now_ms + OUTPUT_META_TRACK_DEBOUNCE_MS;
 }

@@ -52,7 +52,8 @@ int main(void)
     r = text(1U, BRIDGE_META_ATTR_TITLE, "LarkTest Song One");
     CHECK(output_meta_cache_apply(&c, &r, 1000U) == 0U);
     uint64_t uid1 = c.track_uid;
-    CHECK(uid1 != OUTPUT_META_NO_TRACK);
+    CHECK(uid1 == OUTPUT_META_TRACK_SELECTED); /* AVRCP 1.4+ without browsing */
+    CHECK(c.track_counter == 1U);
     CHECK(output_meta_cache_poll(&c, 1100U) == 0U);
     r = text(1U, BRIDGE_META_ATTR_ARTIST, "Test Artist A");
     CHECK(output_meta_cache_apply(&c, &r, 1120U) == 0U);
@@ -87,7 +88,7 @@ int main(void)
     /* Track 2: new generation resets old text so the car never sees a half update. */
     r = text(2U, BRIDGE_META_ATTR_TITLE, "LarkTest Song Two");
     CHECK(output_meta_cache_apply(&c, &r, 10000U) == 0U);
-    CHECK(c.track_uid != uid1 && c.track_uid != OUTPUT_META_NO_TRACK);
+    CHECK(c.track_uid == OUTPUT_META_TRACK_SELECTED && c.track_counter == 2U);
     CHECK(output_meta_cache_attr(&c, BRIDGE_META_ATTR_ARTIST, out, sizeof(out)) == 0U);
     r = text(2U, BRIDGE_META_ATTR_ARTIST, "Test Artist B");
     (void)output_meta_cache_apply(&c, &r, 10050U);
@@ -109,10 +110,10 @@ int main(void)
     r.kind = BRIDGE_META_KIND_CLEAR;
     CHECK((output_meta_cache_apply(&c, &r, 20010U) & OUTPUT_META_NOTIFY_TRACK) != 0U);
     CHECK(!c.track_change_pending);
-    /* A uid after clear differs from every earlier one. */
+    /* A track after clear is "selected" again (identifier 0). */
     r = text(5U, BRIDGE_META_ATTR_TITLE, "again");
     (void)output_meta_cache_apply(&c, &r, 30000U);
-    CHECK(c.track_uid != uid1 && c.track_uid != OUTPUT_META_NO_TRACK);
+    CHECK(c.track_uid == OUTPUT_META_TRACK_SELECTED);
 
     /* Attribute selection for GetElementAttributes. */
     uint8_t ids[8];
