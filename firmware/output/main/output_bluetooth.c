@@ -36,6 +36,11 @@
 /* Car UX feature 2: dual pairing mode (discoverable + CoD-filtered inquiry). */
 #define PAIRING_WINDOW_MS 45000U
 #define PAIRING_RETRY_MS 1000U
+/* Mazda fix: an inquiring radio barely answers other devices' inquiries, so a
+ * car that waits to be found (Mazda Connect) never saw us. Search briefly,
+ * then stay quiet (discoverable + connectable only) before the next search. */
+#define PAIRING_INQUIRY_UNITS 4U /* x 1.28 s = 5.12 s */
+#define PAIRING_LISTEN_MS 10000U
 #define NAME_CACHE_SIZE 8U
 
 typedef enum {
@@ -101,6 +106,7 @@ static atomic_bool s_pairing_open;
 static atomic_uint s_pairing_deadline_ms;
 static output_sink_candidates_t s_candidates;
 static unsigned int s_rr_cursor;
+static uint32_t s_pairing_next_inquiry_ms;
 /* Legacy PIN fallback (0000 -> 1234) for one candidate, under s_saved_peer_mux. */
 static bool s_pin_fallback_active;
 static esp_bd_addr_t s_pin_fallback_bda;
@@ -647,10 +653,20 @@ static void gap_callback(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *par
                                    allowed ? (uint8_t)length : 0U, pin);
         break;
     }
-    case ESP_BT_GAP_CFM_REQ_EVT:
-        (void)esp_bt_gap_ssp_confirm_reply(
-            parameter->cfm_req.bda,
-            saved_peer_allows(parameter->cfm_req.bda));
+    case ESP_BT_GAP_CFM_REQ_EVT: {
+        /* Numeric comparison: the car shows this number; we cannot, so accept
+         * it on the car's side while pairing mode (or first pairing) is open. */
+        bool accept = saved_peer_allows(parameter->cfm_req.bda);
+        ESP_LOGI(TAG, "SSP confirm %06lu from " ADDR_FMT ": %s",
+                 (unsigned long)parameter->cfm_req.num_val, ADDR_ARGS(parameter->cfm_req.bda),
+                 accept ? "accepted" : "rejected");
+        (void)esp_bt_gap_ssp_confirm_reply(parameter->cfm_req.bda, accept);
+        break;
+    }
+    case ESP_BT_GAP_KEY_NOTIF_EVT:
+        /* Car has a keypad only: it asks the user to type this passkey. */
+        ESP_LOGW(TAG, "SSP passkey for " ADDR_FMT ": %06lu (enter it on the car)",
+                 ADDR_ARGS(parameter->key_notif.bda), (unsigned long)parameter->key_notif.passkey);
         break;
     case ESP_BT_GAP_AUTH_CMPL_EVT:
         if (parameter->auth_cmpl.stat != ESP_BT_STATUS_SUCCESS) {
@@ -751,6 +767,14 @@ static void apply_class_of_device(const char *why) {
     }
 }
 
+static void set_io_capability(bool pairing) {
+    esp_bt_io_cap_t io_capability = pairing ? ESP_BT_IO_CAP_IO : ESP_BT_IO_CAP_NONE;
+    esp_err_t error = esp_bt_gap_set_security_param(ESP_BT_SP_IOCAP_MODE, &io_capability,
+                                                    sizeof(io_capability));
+    ESP_LOGI(TAG, "SSP IO capability %s: %s", pairing ? "DisplayYesNo (auto-confirm)" : "NoInputNoOutput",
+             esp_err_to_name(error));
+}
+
 static void set_pairing_visibility(void) {
     esp_err_t error = esp_bt_gap_set_scan_mode(
         ESP_BT_CONNECTABLE,
@@ -783,6 +807,9 @@ static void begin_discovery(uint32_t current_ms) {
     }
     if (units > 0x30U) {
         units = 0x30U;
+    }
+    if (pairing_open()) {
+        units = PAIRING_INQUIRY_UNITS;
     }
     s_have_discovered_peer = false;
     if (esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, (uint8_t)units, 0U) ==
@@ -860,6 +887,7 @@ static void exit_pairing(const char *why)
     }
     pin_fallback_set(NULL, false);
     output_sink_candidates_init(&s_candidates);
+    set_io_capability(false);
     if (s_state == BT_STATE_DISCOVERING) {
         (void)esp_bt_gap_cancel_discovery();
     }
@@ -1033,6 +1061,8 @@ static void enter_pairing(uint32_t current_ms, const char *why)
         s_next_action_ms = current_ms;
     }
     apply_class_of_device("on pairing");
+    set_io_capability(true);
+    s_pairing_next_inquiry_ms = current_ms;
     set_pairing_visibility();
     ESP_LOGI(TAG, "pairing mode on (%s) for %u s: discoverable as '%s' and scanning for sinks",
              why, PAIRING_WINDOW_MS / 1000U, CONFIG_LARKBRIDGE_OUTPUT_DEVICE_NAME);
@@ -1116,6 +1146,7 @@ static void handle_bt_event(const bt_event_t *event, uint32_t current_ms) {
             }
             s_state = BT_STATE_WAITING;
             s_next_action_ms = current_ms;
+            s_pairing_next_inquiry_ms = current_ms + PAIRING_LISTEN_MS;
         } else if (s_state == BT_STATE_DISCOVERING) {
             if (s_have_discovered_peer) {
                 start_connection(s_discovered_peer, current_ms);
@@ -1295,8 +1326,11 @@ static void bluetooth_worker(void *context) {
                              ADDR_ARGS(s_candidates.items[next].addr),
                              (int)s_candidates.items[next].rssi);
                     start_connection(s_candidates.items[next].addr, current_ms);
-                } else {
+                } else if ((int32_t)(current_ms - s_pairing_next_inquiry_ms) >= 0) {
                     begin_discovery(current_ms);
+                } else {
+                    /* Listen window: discoverable + connectable, no inquiry or page. */
+                    s_next_action_ms = s_pairing_next_inquiry_ms;
                 }
             } else if (sinks.count > 0U) {
                 unsigned int index = s_rr_cursor % sinks.count;
