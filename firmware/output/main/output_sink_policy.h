@@ -108,4 +108,24 @@ void output_button_init(output_button_t *button, bool pressed_at_boot);
 output_button_action_t output_button_update(output_button_t *button, bool pressed,
                                             uint32_t now_ms);
 
+
+/* Status LED patterns. Pairing mode: 2 Hz blink (250 ms on / 250 ms off) for
+ * the whole window. Wipe: 3 long flashes (600 ms on / 300 ms off) right after
+ * all remembered sinks are cleared; it takes priority over pairing. Otherwise
+ * the LED is off. */
+#define OUTPUT_LED_PAIR_HALF_MS 250U
+#define OUTPUT_LED_WIPE_ON_MS 600U
+#define OUTPUT_LED_WIPE_OFF_MS 300U
+#define OUTPUT_LED_WIPE_FLASHES 3U
+
+typedef struct {
+    uint32_t wipe_seen;      /* wipe counter value already acknowledged */
+    bool wipe_active;
+    uint32_t wipe_start_ms;
+} output_led_t;
+
+void output_led_init(output_led_t *led, uint32_t wipe_count);
+/* Returns true when the LED should be lit. wipe_count increments once per wipe. */
+bool output_led_update(output_led_t *led, bool pairing, uint32_t wipe_count, uint32_t now_ms);
+
 #endif

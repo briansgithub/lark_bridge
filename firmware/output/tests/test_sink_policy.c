@@ -231,10 +231,40 @@ static int test_button(void)
     return 0;
 }
 
+static int test_led(void)
+{
+    output_led_t led;
+    output_led_init(&led, 5U);
+    CHECK(!output_led_update(&led, false, 5U, 1000U)); /* idle: off */
+    /* Pairing: 2 Hz square wave. */
+    CHECK(output_led_update(&led, true, 5U, 1000U));
+    CHECK(!output_led_update(&led, true, 5U, 1250U));
+    CHECK(output_led_update(&led, true, 5U, 1500U));
+    CHECK(!output_led_update(&led, false, 5U, 1250U));
+    /* Wipe: 3 x (600 on / 300 off), overrides pairing, then back to pairing. */
+    CHECK(output_led_update(&led, true, 6U, 2000U));
+    CHECK(output_led_update(&led, true, 6U, 2599U));
+    CHECK(!output_led_update(&led, true, 6U, 2600U));
+    CHECK(!output_led_update(&led, true, 6U, 2899U));
+    CHECK(output_led_update(&led, true, 6U, 2900U));
+    CHECK(output_led_update(&led, true, 6U, 3800U + 599U));
+    CHECK(!output_led_update(&led, true, 6U, 4700U - 1U));
+    unsigned int on = 0U;
+    for (uint32_t t = 4700U; t < 5700U; t += 25U) {
+        on += output_led_update(&led, true, 6U, t) ? 1U : 0U;
+    }
+    CHECK(on > 15U && on < 25U); /* pairing blink resumed, ~50% duty */
+    CHECK(!output_led_update(&led, false, 6U, 6000U));
+    /* Wipe while idle, then off. */
+    CHECK(output_led_update(&led, false, 7U, 10000U));
+    CHECK(!output_led_update(&led, false, 7U, 12800U));
+    return 0;
+}
+
 int main(void)
 {
     if (test_mru() || test_blob_and_migration() || test_cod() || test_candidates() ||
-        test_round_robin() || test_button()) {
+        test_round_robin() || test_button() || test_led()) {
         return 1;
     }
     puts("output sink policy tests passed");
